@@ -1,0 +1,120 @@
+<div class="use-grid">
+  <!-- Left: live preview -->
+  <section class="use-left">
+    <h3>Selected variant</h3>
+    <app-html-preview
+      [html]="(html$ | async) || ''"
+      [loading]="loadingVariant">
+    </app-html-preview>
+  </section>
+
+  <!-- Right: Chat -->
+  <section class="use-right">
+    <h3>Assistant</h3>
+
+    <div class="chat">
+      <!-- Thread -->
+      <div
+        class="chat-msg"
+        *ngFor="let m of (messages$ | async) ?? []; let i = index; trackBy: trackByMsg">
+        <div class="bubble" [class.me]="m.role === 'user'">
+          <div class="who">{{ m.role === 'user' ? 'You' : 'Assistant' }}</div>
+          <div class="text" [innerText]="m.text"></div>
+
+          <!-- If assistant proposed edits, show Apply + optional manual patch -->
+          <ng-container *ngIf="m.role === 'assistant' && m.json?.edits?.length">
+            <div class="actions-row">
+              <button
+                mat-raised-button
+                color="primary"
+                class="apply-btn"
+                [disabled]="applyingIndex === i"
+                (click)="onApplyEdits(i)">
+                <mat-icon *ngIf="applyingIndex !== i">done</mat-icon>
+                <mat-progress-spinner
+                  *ngIf="applyingIndex === i"
+                  diameter="16"
+                  mode="indeterminate">
+                </mat-progress-spinner>
+                <span>Apply changes</span>
+              </button>
+            </div>
+
+            <!-- Collapsible advanced patch (no prefill; uses reactive form) -->
+            <details class="advanced">
+              <summary>Edit patch details</summary>
+              <form class="advanced-form"
+                    [formGroup]="getEditForm(i, m)"
+                    (ngSubmit)="onApplyManual(i)">
+                <div class="row">
+                  <label>Before context (10–40 chars)</label>
+                  <input type="text" formControlName="before" maxlength="80" />
+                </div>
+                <div class="row">
+                  <label>Find (minimal word or phrase) <span class="req">*</span></label>
+                  <input type="text" formControlName="find" required />
+                </div>
+                <div class="row">
+                  <label>After context (10–40 chars)</label>
+                  <input type="text" formControlName="after" maxlength="80" />
+                </div>
+                <div class="row">
+                  <label>Replace with <span class="req">*</span></label>
+                  <input type="text" formControlName="replace" required />
+                </div>
+
+                <div class="row note">
+                  <small>Tip: Use the smallest “find” (a word/short phrase) plus 10–40 chars of real context copied from the original text.</small>
+                </div>
+
+                <button
+                  type="submit"
+                  mat-raised-button
+                  color="primary"
+                  class="apply-btn"
+                  [disabled]="applyingIndex === i">
+                  <mat-icon *ngIf="applyingIndex !== i">done_all</mat-icon>
+                  <mat-progress-spinner
+                    *ngIf="applyingIndex === i"
+                    diameter="16"
+                    mode="indeterminate">
+                  </mat-progress-spinner>
+                  <span>Apply patch</span>
+                </button>
+              </form>
+            </details>
+          </ng-container>
+        </div>
+      </div>
+
+      <!-- Composer (reactive) -->
+      <div class="composer">
+        <mat-form-field appearance="outline" class="w100">
+          <textarea
+            matInput
+            [formControl]="input"
+            rows="3"
+            placeholder="Ask for ideas or request a change (e.g., ‘tighten the headline’)">
+          </textarea>
+        </mat-form-field>
+
+        <div class="send-row">
+          <button
+            mat-raised-button
+            color="primary"
+            (click)="onSend()"
+            [disabled]="sending || !input.value?.trim()">
+            <mat-icon *ngIf="!sending">send</mat-icon>
+            <mat-progress-spinner
+              *ngIf="sending"
+              diameter="16"
+              mode="indeterminate">
+            </mat-progress-spinner>
+            <span>Send</span>
+          </button>
+        </div>
+      </div>
+      <!-- /Composer -->
+    </div>
+  </section>
+</div>

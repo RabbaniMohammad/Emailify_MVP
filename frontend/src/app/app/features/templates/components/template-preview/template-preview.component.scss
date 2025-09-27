@@ -1,0 +1,82 @@
+.preview-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  height: 100%;
+}
+
+.preview-header h3 {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.preview-wrap {
+  position: relative;
+  border-radius: 0.5rem;   /* keep overlay + iframe edges aligned */
+  overflow: hidden;        /* hide overlay bleed */
+}
+
+/* Keep the preview in the viewport (tweak offset if your header size changes) */
+.preview-frame {
+  width: 100%;
+  height: calc(100vh - 180px);
+  min-height: 480px;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: inherit;
+  background: #fff;
+  display: block;
+}
+
+/* FULL-COVER skeleton overlay */
+.skeleton-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(238,238,238,0.95) 25%,
+    rgba(250,250,250,0.95) 50%,
+    rgba(238,238,238,0.95) 75%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.2s infinite linear;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-cover { animation: none; }
+}
+
+.placeholder,
+.error {
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  border-radius: 0.5rem;
+  border: 1px dashed rgba(0,0,0,0.12);
+}
+
+.error {
+  color: #b00020;
+  border-color: rgba(176, 0, 32, 0.25);
+}
+.actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+}
+
+.actions :where(button, a) {
+  box-shadow: 0 6px 18px rgba(0,0,0,.15);
+  border-radius: 9999px;
+}

@@ -1,0 +1,46 @@
+/* Tweak these two and everything follows */
+:host {
+  --field-h: 36px;   /* ← set 36/40/44 as you like */
+  --radius: 8px;
+}
+
+.search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Don't let the field stretch */
+.search-field { flex: 0 0 auto; }
+
+/* Make the field exactly --field-h tall and squared */
+:host ::ng-deep .search-field .mdc-text-field {
+  height: var(--field-h);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+/* Center text vertically with the shorter height */
+:host ::ng-deep .search-field .mdc-text-field__input {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* Remove the bottom line & focus overlay on filled appearance */
+:host ::ng-deep .search-field .mdc-line-ripple { display: none !important; }
+:host ::ng-deep .search-field .mat-mdc-form-field-focus-overlay { display: none !important; }
+
+/* Nicer spacing for the prefix icon */
+:host ::ng-deep .search-field .mat-mdc-form-field-icon-prefix { margin-left: 6px; margin-right: 8px; }
+:host ::ng-deep .search-field .mat-mdc-form-field-icon-prefix .mat-icon {
+  font-size: 18px; width: 18px; height: 18px; line-height: 18px;
+}
+
+/* Button matches height & radius exactly */
+.search-btn {
+  height: var(--field-h);
+  border-radius: var(--radius);
+  padding: 0 16px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}

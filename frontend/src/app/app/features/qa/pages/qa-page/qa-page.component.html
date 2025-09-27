@@ -1,0 +1,167 @@
+<div class="qa-grid" *ngIf="id$ | async as id">
+  <!-- Column 1: Original template -->
+  <section class="col col-1">
+    <h3>Original</h3>
+    <app-template-preview [id]="id" [name]="'Template ' + id"></app-template-preview>
+  </section>
+
+  <!-- Column 2: Actions + results -->
+  <section class="col col-2">
+    <h3>Tools</h3>
+
+    <div class="actions">
+      <button mat-raised-button color="primary"
+              (click)="onGenerateGolden(id)" [disabled]="goldenLoading">
+        <ng-container *ngIf="!goldenLoading; else goldenSpinner">
+          <mat-icon>auto_fix_high</mat-icon>
+          <span>Generate Golden Template</span>
+        </ng-container>
+        <ng-template #goldenSpinner>
+          <mat-progress-spinner diameter="16" mode="indeterminate"></mat-progress-spinner>
+        </ng-template>
+      </button>
+
+      <button mat-stroked-button color="primary"
+              (click)="onGenerateSubjects(id)" [disabled]="subjectsLoading">
+        <ng-container *ngIf="!subjectsLoading; else subjectsSpinner">
+          <mat-icon>lightbulb</mat-icon>
+          <span>Generate subjects</span>
+        </ng-container>
+        <ng-template #subjectsSpinner>
+          <mat-progress-spinner diameter="16" mode="indeterminate"></mat-progress-spinner>
+        </ng-template>
+      </button>
+    </div>
+
+    <button mat-stroked-button color="accent"
+            (click)="onGenerateVariants(id)"
+            [disabled]="variantsGenerating || goldenLoading || !(golden$ | async)?.html">
+    <ng-container *ngIf="!variantsGenerating; else vSpinner">
+        <mat-icon>auto_awesome</mat-icon>
+        <span>Generate variants</span>
+    </ng-container>
+    <ng-template #vSpinner>
+        <mat-progress-spinner diameter="16" mode="indeterminate"></mat-progress-spinner>
+    </ng-template>
+    </button>
+
+    <!-- Subjects -->
+    <ng-container *ngIf="subjects$ | async as subjects">
+      <div class="panel" *ngIf="subjects?.length; else noSubjects">
+        <h4>Subject ideas</h4>
+        <mat-chip-set>
+          <mat-chip *ngFor="let s of subjects; trackBy: trackByIndex">{{ s }}</mat-chip>
+        </mat-chip-set>
+      </div>
+      <ng-template #noSubjects>
+        <div class="panel" *ngIf="subjectsLoading">Generating subjects…</div>
+      </ng-template>
+    </ng-container>
+
+    <!-- Edits -->
+    <ng-container *ngIf="golden$ | async as golden">
+      <div class="panel" *ngIf="golden?.edits?.length">
+        <h4>Edits applied ({{ golden.edits.length }})</h4>
+        <ul class="edits">
+          <li *ngFor="let e of golden.edits; trackBy: trackByEdit">
+            <div class="ctx">
+              <span class="before">{{ e.before_context }}</span>
+              <span class="find">{{ e.find }}</span>
+              <span class="after">{{ e.after_context }}</span>
+            </div>
+            <div class="replace">→ {{ e.replace }}</div>
+            <div class="reason">{{ e.reason }}</div>
+          </li>
+        </ul>
+      </div>
+    </ng-container>
+
+    <!-- Suggestions -->
+    <ng-container *ngIf="suggestions$ | async as sug">
+    <div class="panel" *ngIf="(sug?.gibberish?.length || sug?.suggestions?.length)">
+        <h4>Suggestions</h4>
+
+        <div *ngIf="sug.gibberish?.length">
+        <h5>Possible gibberish</h5>
+        <ul>
+            <li *ngFor="let g of sug.gibberish">
+            <code>{{ g.text }}</code>
+            <span class="reason" *ngIf="g.reason"> — {{ g.reason }}</span>
+            </li>
+        </ul>
+        </div>
+
+        <div *ngIf="sug.suggestions?.length">
+        <h5>Improvements</h5>
+        <ul>
+            <li *ngFor="let s of sug.suggestions">{{ s }}</li>
+        </ul>
+        </div>
+    </div>
+
+    <div class="panel" *ngIf="suggestionsLoading">Analyzing suggestions…</div>
+    </ng-container>
+
+  </section>
+
+  <!-- Column 3: Golden preview -->
+  <section class="col col-3">
+    <h3>Golden Preview</h3>
+    <ng-container *ngIf="golden$ | async as golden">
+      <app-html-preview
+        [html]="golden?.html || ''"
+        [loading]="goldenLoading">
+      </app-html-preview>
+
+      <div *ngIf="!golden?.html && !goldenLoading" class="placeholder">
+        Generate Golden Template to see the result.
+      </div>
+    </ng-container>
+  </section>
+  <!-- ===== VARIANTS SECTION (stacked) ===== -->
+    <section class="variants" *ngIf="variants$ | async as vr">
+    <div class="variants-header">
+        <h3>Variants</h3>
+        <div class="progress" *ngIf="vr?.items?.length">
+        <span>{{ vr.items.length }}/{{ vr.target || 5 }}</span>
+        <mat-progress-spinner *ngIf="variantsGenerating" diameter="16" mode="indeterminate"></mat-progress-spinner>
+        </div>
+    </div>
+
+    <div class="variant-row" *ngFor="let v of vr.items; trackBy: trackByIndex">
+        <div class="v-col v-left">
+        <h4>Variant {{ v.no }}</h4>
+        <app-html-preview [html]="v.html" [loading]="false"></app-html-preview>
+                <div class="variant-actions">
+        <button mat-raised-button color="primary"
+                (click)="onUseVariant(id, vr.runId, v.no)">
+            Use template
+        </button>
+        </div>
+        </div>
+
+        <div class="v-col v-right">
+        <div class="panel">
+            <h4>What changed</h4>
+            <ul class="edits">
+            <li *ngFor="let c of v.changes; trackBy: trackByEdit">
+                <div class="ctx">
+                <span class="before">{{ c.before }}</span>
+                <span class="find">→</span>
+                <span class="after">{{ c.after }}</span>
+                </div>
+                <div class="reason" *ngIf="c.reason">{{ c.reason }}</div>
+            </li>
+            </ul>
+        </div>
+
+        <div class="panel" *ngIf="v.why?.length">
+            <h4>Why this should help</h4>
+            <ul>
+            <li *ngFor="let w of v.why; trackBy: trackByIndex">{{ w }}</li>
+            </ul>
+        </div>
+        </div>
+    </div>
+    </section>
+</div>

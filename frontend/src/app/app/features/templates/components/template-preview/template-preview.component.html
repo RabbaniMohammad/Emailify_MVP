@@ -1,0 +1,28 @@
+<div class="preview-root">
+  <div class="preview-header" *ngIf="name">
+    <h3>{{ name }}</h3>
+  </div>
+
+  <div *ngIf="!id" class="placeholder">Select a template to preview</div>
+
+  <div class="preview-wrap" *ngIf="id">
+    <!-- FULL overlay while the iframe loads -->
+    <div class="skeleton-cover" *ngIf="loading" aria-hidden="true"></div>
+
+    <!-- Actions (projected from parent) appear only when loaded -->
+    <div class="actions" *ngIf="!loading">
+      <ng-content select="[preview-actions]"></ng-content>
+    </div>
+
+    <iframe
+      class="preview-frame"
+      [src]="src"
+      (load)="onIframeLoad()"
+      (error)="onIframeError()"
+      sandbox="allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts"
+      referrerpolicy="no-referrer"
+    ></iframe>
+
+    <div *ngIf="error" class="error">{{ error }}</div>
+  </div>
+</div>

@@ -1,0 +1,10 @@
+<div class="search-wrap">
+  <mat-form-field appearance="fill"
+                  class="search-field"
+                  [style.width.px]="260">   <!-- ← tweak this number -->
+    <mat-icon matPrefix>search</mat-icon>
+    <input matInput [(ngModel)]="q" placeholder="Search templates" (keyup.enter)="go()">
+  </mat-form-field>
+
+  <button mat-flat-button color="primary" class="search-btn" (click)="go()">Search</button>
+</div>

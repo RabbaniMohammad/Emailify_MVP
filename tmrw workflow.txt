@@ -1,0 +1,30 @@
+emojies to the subjects 
+it gobbled the suggestion section 
+
+1st page 
+run test for the first template is not working 
+
+gibrish text in the suggestions
+
+subject need to be copied im not able to copy
+
+when clicked generate button it should automatically scroll down and loading effect has to be done 
+
+when refreshed in the 3rd page the figma template is not showing up
+
+apply edit is not working
+
+when refesh last page the template and chatbot not working
+
+
+free editing 
+
+link check 
+
+document check 
+
+css 
+
+meeting 
+
+push 

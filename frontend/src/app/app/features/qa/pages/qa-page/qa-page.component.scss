@@ -1,0 +1,131 @@
+/* Viewport offset (tweak if you have a fixed header) */
+:host {
+  --qa-top-offset: 180px;
+  display: block;
+}
+
+.qa-grid {
+  display: grid;
+  grid-template-columns: 1fr 360px 1fr;
+  gap: 16px;
+  align-items: start; /* keep columns aligned at the top */
+}
+
+/* allow children to scroll properly inside the grid cells */
+.col { min-height: 0; }
+
+.col h3 { margin: 0 0 8px 0; font-weight: 600; }
+
+/* make ONLY Column 2 scrollable within the viewport */
+.col-2 {
+  max-height: calc(100dvh - var(--qa-top-offset));
+  overflow-y: auto;
+  padding-right: 8px; /* space for scrollbar so content doesn't hug it */
+}
+
+@supports not (height: 100dvh) {
+  .col-2 {
+    max-height: calc(100vh - var(--qa-top-offset));
+  }
+}
+
+/* keep the action buttons visible while you scroll the panel */
+.col-2 .actions {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 12px;          /* reset top margin when sticky */
+  padding: 8px 0;
+  background: #fff;          /* white backdrop under chips/spinner */
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+/* original styles you had */
+.actions {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 12px; /* overridden for sticky inside .col-2 above */
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.04);
+  margin-bottom: 12px;
+}
+
+.placeholder {
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  border-radius: 0.5rem;
+  border: 1px dashed rgba(0,0,0,0.12);
+}
+
+.edits {
+  list-style: none;
+  padding: 0; margin: 0;
+}
+.edits li {
+  padding: 8px 0;
+  border-top: 1px dashed rgba(0,0,0,.08);
+}
+.edits li:first-child { border-top: 0; }
+
+.ctx { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.find { background: #fff3cd; padding: 0 2px; border-radius: 4px; }
+.before, .after { opacity: .6; }
+.replace { margin-top: 4px; font-weight: 600; }
+.reason { font-size: .85rem; opacity: .8; }
+
+/* ===== Variants ===== */
+.variants {
+  margin-top: 24px;
+}
+
+.variants-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.variant-row {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: start;
+}
+
+.v-col { min-height: 0; }
+
+.v-left h4, .v-right h4 { margin: 0 0 8px 0; font-weight: 600; }
+
+.ctx { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.find { margin: 0 6px; opacity: .7; }
+
+/* Make the Variants section span the full width of the 3-col grid */
+.qa-grid > .variants {
+  grid-column: 1 / -1;
+}
+
+/* Give the left preview a healthy min width next to the details panel */
+.variants .variant-row {
+  grid-template-columns: minmax(720px, 1fr) 420px; /* left grows, right fixed */
+}
+
+/* (Optional) On narrower screens, stack the two columns */
+@media (max-width: 1200px) {
+  .variants .variant-row {
+    grid-template-columns: 1fr;
+  }
+}
+.variant-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+

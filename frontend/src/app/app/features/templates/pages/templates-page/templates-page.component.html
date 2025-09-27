@@ -1,0 +1,41 @@
+<div
+  class="layout"
+  *ngIf="{
+    status: (status$ | async),
+    items: (items$ | async) ?? [],
+    selectedId: (selectedId$ | async),
+    selectedName: (selectedName$ | async),
+    error: (error$ | async)
+  } as vm"
+>
+  <section class="left">
+    <app-search-bar (search)="onSearch($event)"></app-search-bar>
+
+    <ng-container *ngIf="vm.status === 'loading'; else listTpl">
+      <div class="loading"><mat-spinner diameter="40"></mat-spinner></div>
+    </ng-container>
+
+    <ng-template #listTpl>
+      <app-template-list
+        [items]="vm.items"
+        [selectedId]="vm.selectedId ?? undefined"
+        [showActionForId]="runButtonItemId"
+        (select)="onSelect($event)"
+        (action)="onRunTests($event)">
+      </app-template-list>
+
+      <div *ngIf="vm.status === 'error'" class="error">
+        {{ vm.error }}
+      </div>
+    </ng-template>
+  </section>
+
+  <!-- RIGHT: the ONLY preview -->
+  <aside class="right">
+    <app-template-preview
+      [id]="vm.selectedId ?? undefined"
+      [name]="vm.selectedName ?? undefined"
+      (ready)="onPreviewReady($event)">
+    </app-template-preview>
+  </aside>
+</div>

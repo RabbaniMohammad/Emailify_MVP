@@ -1,0 +1,95 @@
+.use-grid {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 16px;
+  align-items: start;
+}
+
+.use-left h3, .use-right h3 {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(100dvh - 220px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.msg {
+  display: flex;
+}
+.msg.user {
+  justify-content: flex-end;
+}
+
+.bubble {
+  max-width: 100%;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.04);
+}
+
+.msg.user .bubble {
+  background: #f7fbff;
+  border-color: rgba(31, 131, 255, .25);
+}
+
+.role {
+  font-size: .75rem;
+  opacity: .65;
+  margin-bottom: 4px;
+}
+
+.text {
+  white-space: pre-wrap;
+  line-height: 1.35;
+}
+
+.edits-panel {
+  margin-top: 8px;
+  border-top: 1px dashed rgba(0,0,0,.08);
+  padding-top: 8px;
+}
+
+.edits-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.edits-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px 0;
+}
+.edits-list li {
+  padding: 6px 0;
+  border-top: 1px dashed rgba(0,0,0,.08);
+}
+.edits-list li:first-child { border-top: 0; }
+
+.ctx {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  background: #fffef2;
+  border: 1px solid #f1e7a0;
+  border-radius: 6px;
+  padding: 0 4px;
+}
+.arrow { margin: 0 6px; opacity: .7; }
+.reason { font-size: .85rem; opacity: .8; margin-top: 2px; }
+
+.composer {
+  margin-top: 10px;
+}
+
+.w100 { width: 100%; }
+
+@media (max-width: 1200px) {
+  .use-grid { grid-template-columns: 1fr; }
+  .chat { max-height: none; }
+}

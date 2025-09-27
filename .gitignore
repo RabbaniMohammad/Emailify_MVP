@@ -1,0 +1,89 @@
+# ---- Node / Package Managers ----
+node_modules/
+.npm/
+.pnp/
+.pnp.*           # Yarn PnP
+.eslintcache
+.npmrc           # if it might contain tokens
+.yarn/*
+!.yarn/patches/
+!.yarn/plugins/
+!.yarn/releases/
+!.yarn/sdks/
+!.yarn/versions/
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---- Build outputs (Angular / Node) ----
+dist/
+**/dist/
+build/
+**/build/
+.tmp/
+tmp/
+.cache/
+.angular/
+.angular/cache/
+
+# ---- Tests / Coverage ----
+coverage/
+.nyc_output/
+.jest/
+# Cypress
+cypress/videos/
+cypress/screenshots/
+# Playwright
+playwright-report/
+test-results/
+
+# ---- TypeScript ----
+*.tsbuildinfo
+
+# ---- Environment / Secrets ----
+.env
+.env.*.local
+.env.local
+*.env
+# If you keep example env files, whitelist them:
+!*.env.example
+!*.env.sample
+
+# ---- OS junk ----
+.DS_Store
+Thumbs.db
+
+# ---- Editors / IDEs ----
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.iml
+
+# ---- Misc tooling ----
+.sass-cache/
+.parcel-cache/
+stylelintcache
+.node_repl_history
+
+# ---- Storybook (if used) ----
+storybook-static/
+
+# ---- Serverless / Functions (if present) ----
+.serverless/
+.functions/
+
+# ---- Docker (optional) ----
+*.pid
+*.seed
+*.pid.lock
+
+# ---- Optional: ignore lockfiles (many teams commit these) ----
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml

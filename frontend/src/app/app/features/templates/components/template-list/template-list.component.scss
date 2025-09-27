@@ -1,0 +1,35 @@
+.count {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  margin: 0 0 8px 0;
+}
+
+:host ::ng-deep .mat-mdc-list-item {
+  border-radius: 12px;
+  margin: 8px 8px;
+  cursor: pointer;
+}
+
+.selected {
+  background: rgba(124, 58, 237, 0.14); /* purple tint like your screenshot */
+}
+
+.row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.name {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.run-btn {
+  flex: 0 0 auto;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+  border-radius: 9999px;
+}

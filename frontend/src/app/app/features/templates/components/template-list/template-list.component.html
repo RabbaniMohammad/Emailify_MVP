@@ -1,0 +1,25 @@
+<mat-nav-list class="tpl-list">
+  <div class="count">{{ items.length }} templates</div>
+
+  <mat-list-item
+    *ngFor="let item of items; trackBy: trackById"
+    (click)="onClick(item)"
+    [class.selected]="item.id === selectedId"
+  >
+    <div class="row">
+      <span class="name">{{ item.name || 'Untitled template' }}</span>
+
+      <button
+        *ngIf="item.id === showActionForId"
+        mat-raised-button
+        color="primary"
+        class="run-btn"
+        (click)="onAction(item, $event)"
+        aria-label="Run tests"
+      >
+        <mat-icon>play_arrow</mat-icon>
+        <span>Run tests</span>
+      </button>
+    </div>
+  </mat-list-item>
+</mat-nav-list>
