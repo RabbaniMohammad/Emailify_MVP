@@ -10,7 +10,16 @@
 
   <!-- Right: Chat -->
   <section class="use-right">
-    <h3>Assistant</h3>
+    <!-- Header row with Finalize button -->
+    <div class="flex items-center justify-between">
+      <h3>Assistant</h3>
+      <button
+        mat-raised-button
+        color="accent"
+        (click)="onFinalize()">
+        Finalize template
+      </button>
+    </div>
 
     <div class="chat">
       <!-- Thread -->
@@ -21,68 +30,69 @@
           <div class="who">{{ m.role === 'user' ? 'You' : 'Assistant' }}</div>
           <div class="text" [innerText]="m.text"></div>
 
-          <!-- If assistant proposed edits, show Apply + optional manual patch -->
+          <!-- Apply panel stays exactly as-is (no change to your existing logic) -->
           <ng-container *ngIf="m.role === 'assistant' && m.json?.edits?.length">
-            <div class="actions-row">
-              <button
-                mat-raised-button
-                color="primary"
-                class="apply-btn"
-                [disabled]="applyingIndex === i"
-                (click)="onApplyEdits(i)">
-                <mat-icon *ngIf="applyingIndex !== i">done</mat-icon>
-                <mat-progress-spinner
-                  *ngIf="applyingIndex === i"
-                  diameter="16"
-                  mode="indeterminate">
-                </mat-progress-spinner>
-                <span>Apply changes</span>
-              </button>
+            <div class="apply-panel">
+              <div class="apply-header">
+                <h4>Apply changes</h4>
+                <div class="actions-row">
+                  <button
+                    mat-stroked-button
+                    (click)="onClearEdits(i)"
+                    [disabled]="applyingIndex === i">
+                    Clear
+                  </button>
+                  <button
+                    mat-raised-button
+                    color="primary"
+                    class="apply-btn"
+                    [disabled]="applyingIndex === i"
+                    (click)="onApplyEdits(i)">
+                    <mat-icon *ngIf="applyingIndex !== i">done_all</mat-icon>
+                    <mat-progress-spinner
+                      *ngIf="applyingIndex === i"
+                      diameter="16"
+                      mode="indeterminate">
+                    </mat-progress-spinner>
+                    <span>Apply all</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="apply-list">
+                <div class="apply-item rounded-lg border p-3"
+                     *ngFor="let e of m.json!.edits; let j = index">
+                  <div class="label text-sm text-neutral-500 mb-1">Original</div>
+                  <div class="orig rounded bg-neutral-50 p-2 text-sm break-words">
+                    {{ e.find }}
+                  </div>
+
+                  <div class="label text-sm text-neutral-500 mt-3 mb-1">
+                    Suggested (you can edit)
+                  </div>
+                  <input
+                    class="w-full rounded border p-2"
+                    [value]="e.replace"
+                    #repInput />
+
+                  <div class="mt-3 flex gap-2">
+                    <button
+                      mat-stroked-button
+                      color="primary"
+                      (click)="onApplySingle(i, e, repInput.value)"
+                      [disabled]="applyingIndex === i">
+                      Apply
+                    </button>
+                    <button
+                      mat-button
+                      (click)="onSkipSingle(i, j)"
+                      [disabled]="applyingIndex === i">
+                      Skip
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-
-            <!-- Collapsible advanced patch (no prefill; uses reactive form) -->
-            <details class="advanced">
-              <summary>Edit patch details</summary>
-              <form class="advanced-form"
-                    [formGroup]="getEditForm(i, m)"
-                    (ngSubmit)="onApplyManual(i)">
-                <div class="row">
-                  <label>Before context (10–40 chars)</label>
-                  <input type="text" formControlName="before" maxlength="80" />
-                </div>
-                <div class="row">
-                  <label>Find (minimal word or phrase) <span class="req">*</span></label>
-                  <input type="text" formControlName="find" required />
-                </div>
-                <div class="row">
-                  <label>After context (10–40 chars)</label>
-                  <input type="text" formControlName="after" maxlength="80" />
-                </div>
-                <div class="row">
-                  <label>Replace with <span class="req">*</span></label>
-                  <input type="text" formControlName="replace" required />
-                </div>
-
-                <div class="row note">
-                  <small>Tip: Use the smallest “find” (a word/short phrase) plus 10–40 chars of real context copied from the original text.</small>
-                </div>
-
-                <button
-                  type="submit"
-                  mat-raised-button
-                  color="primary"
-                  class="apply-btn"
-                  [disabled]="applyingIndex === i">
-                  <mat-icon *ngIf="applyingIndex !== i">done_all</mat-icon>
-                  <mat-progress-spinner
-                    *ngIf="applyingIndex === i"
-                    diameter="16"
-                    mode="indeterminate">
-                  </mat-progress-spinner>
-                  <span>Apply patch</span>
-                </button>
-              </form>
-            </details>
           </ng-container>
         </div>
       </div>
@@ -118,3 +128,12 @@
     </div>
   </section>
 </div>
+
+<!-- ↓↓↓ Finalize section (scroll target) ↓↓↓ -->
+<section id="finalize" class="mt-8">
+  <h3>Finalize template</h3>
+  <p class="text-sm text-neutral-600">
+    You’re viewing the finalized version below. (Add any actions you want here later.)
+  </p>
+  <!-- Keep it lightweight for now; you can add controls here later -->
+</section>

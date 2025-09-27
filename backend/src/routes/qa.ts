@@ -151,10 +151,37 @@ function grammarSystemPrompt(): string {
 }
 
 /* ------------------------------------------------------------------ */
-/*             Ported robust apply (context-aware per node)           */
+/*             Entity-aware, context-aware text patching               */
 /* ------------------------------------------------------------------ */
 
 const ZWS = /[\u200B\u200C\u200D\uFEFF]/;
+
+// Minimal named entity table for the cases we care about in email copy
+const NAMED_ENT: Record<string, string> = {
+  nbsp: '\u00A0', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+  rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“',
+  hellip: '…', ndash: '–', mdash: '—',
+};
+
+function decodeHtmlEntityAt(raw: string, i: number): { ch: string; end: number } | null {
+  if (raw[i] !== '&') return null;
+  const semi = raw.indexOf(';', i + 1);
+  if (semi < 0 || semi - i > 31) return null; // sanity cap
+  const body = raw.slice(i + 1, semi);
+
+  if (body.startsWith('#x') || body.startsWith('#X')) {
+    const code = parseInt(body.slice(2), 16);
+    if (!Number.isNaN(code)) return { ch: String.fromCodePoint(code), end: semi };
+    return null;
+  }
+  if (body.startsWith('#')) {
+    const code = parseInt(body.slice(1), 10);
+    if (!Number.isNaN(code)) return { ch: String.fromCodePoint(code), end: semi };
+    return null;
+  }
+  const named = NAMED_ENT[body];
+  return named ? { ch: named, end: semi } : null;
+}
 
 function normalizeChar(ch: string): string {
   if (ZWS.test(ch)) return '';
@@ -166,40 +193,68 @@ function normalizeChar(ch: string): string {
   return ch;
 }
 
-function normalizeAndMap(raw: string): { norm: string; map: number[] } {
-  const map: number[] = [];
+/** Build normalized string with precise RAW span mapping per character.
+ *  - Decodes entities (&rsquo;, &#160;, &#x2019;) to single chars before normalization.
+ *  - Collapses all whitespace to single spaces (with coalescing).
+ */
+function normalizeAndMap(rawIn: string): { norm: string; mapStart: number[]; mapEnd: number[] } {
+  const raw = String(rawIn || '');
+  const mapStart: number[] = [];
+  const mapEnd: number[] = [];
   let norm = '';
   let lastWasSpace = false;
 
   for (let i = 0; i < raw.length; i++) {
-    let ch = normalizeChar(raw[i]);
-    if (ch === '') continue;
+    let end = i + 1;
+    let chOut: string;
+
+    if (raw[i] === '&') {
+      const dec = decodeHtmlEntityAt(raw, i);
+      if (dec) { chOut = dec.ch; end = dec.end + 1; } else { chOut = raw[i]; }
+    } else {
+      chOut = raw[i];
+    }
+
+    let ch = normalizeChar(chOut);
+    if (ch === '') { i = end - 1; continue; }
+
     if (/\s/.test(ch)) ch = ' ';
     if (ch === ' ') {
-      if (lastWasSpace) continue;
+      if (lastWasSpace) { i = end - 1; continue; }
       lastWasSpace = true;
     } else {
       lastWasSpace = false;
     }
-    map[norm.length] = i;
+
+    mapStart[norm.length] = i;
+    mapEnd[norm.length] = end; // exclusive end in RAW
     norm += ch;
+    i = end - 1;
   }
-  return { norm, map };
+
+  return { norm, mapStart, mapEnd };
 }
 
 function normalizeOnly(s: string): string {
   return normalizeAndMap(String(s || '')).norm;
 }
 
-function mapNormSpanToRawSpan(map: number[], startN: number, lenN: number, rawLength: number) {
+function mapNormSpanToRawSpan(
+  mapStart: number[],
+  mapEnd: number[],
+  startN: number,
+  lenN: number,
+  rawLength: number
+) {
   if (startN < 0 || lenN <= 0) return null;
-  const rawStart = map[startN];
-  if (typeof rawStart !== 'number') return null;
-  const endNMinus1 = startN + lenN - 1;
-  let rawEndInclusive = map[endNMinus1];
-  if (typeof rawEndInclusive !== 'number') return null;
-  const rawEndExclusive = Math.min(rawEndInclusive + 1, rawLength);
-  return { start: rawStart, end: rawEndExclusive };
+  const rawStart = mapStart[startN];
+  const endN = startN + lenN - 1;
+  const rawEndExclusive = mapEnd[endN];
+  if (typeof rawStart !== 'number' || typeof rawEndExclusive !== 'number') return null;
+  return {
+    start: Math.max(0, rawStart),
+    end: Math.min(rawLength, rawEndExclusive),
+  };
 }
 
 function findWithContextSpan(haystack: string, needle: string, beforeCtx: string, afterCtx: string) {
@@ -217,7 +272,7 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
     i = raw.indexOf(nRaw, i + 1);
   }
 
-  // 2) normalized match + normalized context
+  // 2) normalized match + normalized context (entity-aware)
   const H = normalizeAndMap(raw);
   const nNeedle = normalizeOnly(nRaw);
   const nBefore = normalizeOnly(bRaw);
@@ -228,7 +283,7 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
     const okBefore = nBefore ? H.norm.slice(Math.max(0, ni - nBefore.length), ni).endsWith(nBefore) : true;
     const okAfter  = nAfter  ? H.norm.slice(ni + nNeedle.length, ni + nNeedle.length + nAfter.length).startsWith(nAfter) : true;
     if (okBefore && okAfter) {
-      const span = mapNormSpanToRawSpan(H.map, ni, nNeedle.length, raw.length);
+      const span = mapNormSpanToRawSpan(H.mapStart, H.mapEnd, ni, nNeedle.length, raw.length);
       if (span) return span;
     }
     ni = H.norm.indexOf(nNeedle, ni + 1);
@@ -247,7 +302,7 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
       const startN = biN + nBefore.length;
       const jN = H.norm.indexOf(nNeedle, startN);
       if (jN >= 0) {
-        const span2 = mapNormSpanToRawSpan(H.map, jN, nNeedle.length, raw.length);
+        const span2 = mapNormSpanToRawSpan(H.mapStart, H.mapEnd, jN, nNeedle.length, raw.length);
         if (span2) return span2;
       }
     }
@@ -265,7 +320,7 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
       const endN = aiN;
       const jN = H.norm.lastIndexOf(nNeedle, endN);
       if (jN >= 0) {
-        const span3 = mapNormSpanToRawSpan(H.map, jN, nNeedle.length, raw.length);
+        const span3 = mapNormSpanToRawSpan(H.mapStart, H.mapEnd, jN, nNeedle.length, raw.length);
         if (span3) return span3;
       }
     }
@@ -275,11 +330,11 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
 }
 
 function deniedParents(): Set<string> {
-  // also deny editing inside anchor tags
-  return new Set(['style', 'script', 'title', 'svg', 'a']);
+  // Allow <a> so CTA/link text can be edited; still block script/style/title/svg
+  return new Set(['style', 'script', 'title', 'svg']);
 }
 
-/** Apply grammar/SEO edits INSIDE TEXT NODES ONLY (never tags/attrs).  Skips anchors. */
+/** Apply grammar/SEO edits INSIDE TEXT NODES ONLY (never tags/attrs). */
 function applyContextEdits(
   html: string,
   edits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string }>
@@ -302,8 +357,6 @@ function applyContextEdits(
   $('body *').each((_: any, el: any) => {
     const tag = (el as any).tagName?.toLowerCase?.() || '';
     if (deny.has(tag)) return;
-    // Skip anything that lives inside a link
-    if ($(el).closest('a').length) return;
 
     $(el).contents().each((__: any, node: any) => {
       if ((node as any).type !== 'text') return;
@@ -336,8 +389,7 @@ function applyContextEdits(
 /* ------------------------------------------------------------------ */
 
 // Gentle fallback when the model sent too-wide 'find' and context didn't match.
-// Swaps a meaningful word inside the 'find' with 'replace' (text nodes only),
-// while avoiding <a> and anything inside links.
+// Swaps a meaningful word inside the 'find' with 'replace' (text nodes only).
 function applyLooseWordFallback(
   html: string,
   edits: Array<{ find: string; replace: string; reason?: string }>
@@ -349,8 +401,6 @@ function applyLooseWordFallback(
 
   $('body *').each((_: any, el: any) => {
     const tag = el?.tagName?.toLowerCase?.() || '';
-    if (tag === 'a') return;
-    if ($(el).parents('a').length) return;
 
     $(el).contents().each((__: any, node: any) => {
       if (node?.type !== 'text') return;
@@ -826,7 +876,7 @@ router.post('/variants/:runId/chat/apply', async (req: Request, res: Response) =
     const edits = Array.isArray(req.body?.edits) ? req.body.edits : [];
     if (!html) return res.status(400).json({ code: 'CHAT_APPLY_BAD_REQUEST', message: 'html is required' });
 
-    // 1) strict, context-aware apply (text nodes only, anchor-safe)
+    // 1) strict, context-aware apply (text nodes only, with entity-aware matching)
     const strict = applyContextEdits(html, edits);
     let best = strict;
 

@@ -63,7 +63,7 @@ export class UseVariantPageComponent {
   // Only the clicked message shows spinner
   applyingIndex: number | null = null;
 
-  // Per-message manual edit forms (shown only if you reveal in the template)
+  // Per-message manual edit forms (kept hidden by default / optional)
   private editForms = new Map<number, FormGroup>();
 
   constructor() {
@@ -88,7 +88,7 @@ export class UseVariantPageComponent {
 
         const intro: ChatTurn = {
           role: 'assistant',
-          text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line. If you want edits but auto-apply misses, use the Manual patch below.',
+          text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line.',
           json: null,
           ts: Date.now(),
         };
@@ -109,7 +109,7 @@ export class UseVariantPageComponent {
 
         const intro: ChatTurn = {
           role: 'assistant',
-          text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line. If you want edits but auto-apply misses, use the Manual patch below.',
+          text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line.',
           json: null,
           ts: Date.now(),
         };
@@ -171,6 +171,7 @@ export class UseVariantPageComponent {
     }
   }
 
+  /** Apply ALL edits in a given assistant message (uses each edit's current `replace`). */
   async onApplyEdits(turnIndex: number) {
     if (this.applyingIndex !== null) return;
     this.applyingIndex = turnIndex;
@@ -179,22 +180,24 @@ export class UseVariantPageComponent {
     const no = Number(this.ar.snapshot.paramMap.get('no')!);
 
     const turn = this.messagesSubject.value[turnIndex];
-    const edits = turn?.json?.edits || [];
+    const edits = (turn?.json?.edits || []).slice();
     if (!edits.length) { this.applyingIndex = null; return; }
 
     try {
       const currentHtml = this.htmlSubject.value;
 
-      // ✅ correct signature: (runId, html, edits)
       const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, edits));
       const newHtml = resp?.html || currentHtml;
       const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
 
       this.htmlSubject.next(newHtml);
 
+      // Clear edits from this message after apply-all (they've been processed)
+      this.updateMessageEdits(turnIndex, []);
+
       const noteText = numChanges > 0
-        ? `Applied ${edits.length} edit(s) (${numChanges} change(s) matched).`
-        : `No matching text found. If you want, open the Manual patch and enter the smallest exact “find” plus surrounding text.`;
+        ? `Applied ${numChanges} change(s).`
+        : `No matching text found.`;
 
       const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
       const msgs = [...this.messagesSubject.value, appliedNote];
@@ -206,16 +209,84 @@ export class UseVariantPageComponent {
       this.applyingIndex = null;
     }
   }
+   
+  onFinalize() {
+    const el = document.getElementById('finalize');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
-  // Manual patch (explicit find/before/after/replace) — kept but blank by default
+  /** Apply a SINGLE edit with an optional user-edited replacement from the input field. */
+  async onApplySingle(turnIndex: number, edit: GoldenEdit, replacement: string) {
+    if (this.applyingIndex !== null) return;
+    this.applyingIndex = turnIndex;
+
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+
+    // keep contexts but override the replace text from the input box
+    const patch: GoldenEdit = {
+      ...edit,
+      replace: (replacement ?? '').trim() || edit.replace,
+    };
+
+    try {
+      const currentHtml = this.htmlSubject.value;
+      const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, [patch]));
+      const newHtml = resp?.html || currentHtml;
+      const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
+
+      this.htmlSubject.next(newHtml);
+
+      // If matched, remove the applied edit from the list in that message
+      if (numChanges > 0) {
+        this.removeSingleEdit(turnIndex, edit);
+      }
+
+      const noteText = numChanges > 0
+        ? `Applied: "${patch.find}" → "${patch.replace}".`
+        : `No matching text found.`;
+
+      const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
+      const msgs = [...this.messagesSubject.value, appliedNote];
+      this.messagesSubject.next(msgs);
+      this.persistThread(runId, no, newHtml, msgs);
+    } catch (e) {
+      console.error('apply single edit error', e);
+    } finally {
+      this.applyingIndex = null;
+    }
+  }
+
+  /** Skip (remove) a single proposed edit from a message without applying. */
+  onSkipSingle(turnIndex: number, editIndex: number) {
+    const turn = this.messagesSubject.value[turnIndex];
+    const edits = (turn?.json?.edits || []).slice();
+    if (!edits.length) return;
+
+    edits.splice(editIndex, 1);
+    this.updateMessageEdits(turnIndex, edits);
+    // optional: persist immediately
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    this.persistThread(runId, no, this.htmlSubject.value, this.messagesSubject.value);
+  }
+
+  /** Clear all proposed edits from a specific assistant message. */
+  onClearEdits(turnIndex: number) {
+    this.updateMessageEdits(turnIndex, []);
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    this.persistThread(runId, no, this.htmlSubject.value, this.messagesSubject.value);
+  }
+
+  // Manual patch (explicit find/before/after/replace) — optional/hidden
   getEditForm(i: number, _m: ChatTurn): FormGroup {
     let fg = this.editForms.get(i);
     if (!fg) {
-      // ⬇️ BLANK defaults; customers won’t see anything prefilled
       fg = new FormGroup({
-        before:  new FormControl<string>('', []), // not required: we allow apply without showing these to customers
+        before:  new FormControl<string>('', []),
         find:    new FormControl<string>('', [Validators.required, Validators.minLength(1)]),
-        after:   new FormControl<string>('', []), // not required
+        after:   new FormControl<string>('', []),
         replace: new FormControl<string>('', [Validators.required, Validators.minLength(1)]),
         reason:  new FormControl<string>('Manual patch', []),
       });
@@ -245,7 +316,6 @@ export class UseVariantPageComponent {
     try {
       const currentHtml = this.htmlSubject.value;
 
-      // ✅ correct signature: (runId, html, edits)
       const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, [edit]));
       const newHtml = resp?.html || currentHtml;
       const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
@@ -254,7 +324,7 @@ export class UseVariantPageComponent {
 
       const noteText = numChanges > 0
         ? `Applied manual patch: "${edit.find}" → "${edit.replace}".`
-        : `Manual patch matched 0 places. Try a smaller “find” (word/short phrase) and add 10–40 chars of context from the original.`;
+        : `Manual patch matched 0 places. Try a smaller word/phrase and add a bit of surrounding context.`;
 
       const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
       const msgs = [...this.messagesSubject.value, appliedNote];
@@ -264,6 +334,30 @@ export class UseVariantPageComponent {
       console.error('manual apply error', e);
     } finally {
       this.applyingIndex = null;
+    }
+  }
+
+  private updateMessageEdits(turnIndex: number, edits: GoldenEdit[]) {
+    const list = this.messagesSubject.value.slice();
+    const turn = { ...list[turnIndex] };
+    const json = this.toAssistantJson(turn.json || {});
+    json.edits = edits.slice();
+    turn.json = json;
+    list[turnIndex] = turn;
+    this.messagesSubject.next(list);
+  }
+
+  private removeSingleEdit(turnIndex: number, edit: GoldenEdit) {
+    const turn = this.messagesSubject.value[turnIndex];
+    const edits = (turn?.json?.edits || []).slice();
+    const idx = edits.findIndex(e =>
+      e.find === edit.find &&
+      e.before_context === edit.before_context &&
+      e.after_context === edit.after_context
+    );
+    if (idx >= 0) {
+      edits.splice(idx, 1);
+      this.updateMessageEdits(turnIndex, edits);
     }
   }
 
