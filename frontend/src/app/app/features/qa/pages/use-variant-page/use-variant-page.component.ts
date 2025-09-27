@@ -10,6 +10,7 @@ import {
   GoldenEdit,
   ChatAssistantJson,
   ChatIntent,
+  SnapResult, // for finalize/snapshots
 } from '../../services/qa.service';
 import { HtmlPreviewComponent } from '../../components/html-preview/html-preview.component';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -66,9 +67,19 @@ export class UseVariantPageComponent {
   // Per-message manual edit forms (kept hidden by default / optional)
   private editForms = new Map<number, FormGroup>();
 
+  // ---------------- Finalize / Screenshots state (non-disruptive) ----------------
+  private snapsSubject = new BehaviorSubject<SnapResult[]>([]);
+  readonly snaps$ = this.snapsSubject.asObservable();
+
+  // track per-URL loading states so UI can show per-card spinners when you wire it up
+  private snapping = new Map<string, boolean>();
+  get isFinalizing() { return this._isFinalizing; }
+  private _isFinalizing = false;
+
   constructor() {
     // Load variant and chat thread (rehydrate)
     this.runId$.subscribe(async (runId) => {
+      const templateId = this.ar.snapshot.paramMap.get('id')!;
       const no = Number(this.ar.snapshot.paramMap.get('no')!);
 
       // 1) Chat cache (has currentHtml + thread)
@@ -77,6 +88,9 @@ export class UseVariantPageComponent {
         this.htmlSubject.next(cachedThread.html);
         this.messagesSubject.next(cachedThread.messages || []);
         this.loadingVariant = false;
+
+        // also rehydrate snaps cache (so finalize section shows persisted items)
+        this.snapsSubject.next(this.qa.getSnapsCached(templateId, no, runId));
         return;
       }
 
@@ -95,6 +109,9 @@ export class UseVariantPageComponent {
         const thread: ChatThread = { html: item.html, messages: [intro] };
         this.messagesSubject.next(thread.messages);
         this.qa.saveChat(runId, no, thread);
+
+        // hydrate snaps cache
+        this.snapsSubject.next(this.qa.getSnapsCached(templateId, no, runId));
 
         this.loadingVariant = false;
         return;
@@ -125,10 +142,23 @@ export class UseVariantPageComponent {
         };
         this.messagesSubject.next([intro]);
       } finally {
+        // hydrate snaps cache even if thread not found (in case user finalized earlier)
+        this.snapsSubject.next(this.qa.getSnapsCached(templateId, no, runId));
         this.loadingVariant = false;
       }
     });
   }
+
+  onSnapUrl(raw: string) {
+    const url = (raw || '').trim();
+    if (!url) return;
+    const templateId = this.ar.snapshot.paramMap.get('id')!;
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    this.captureOne(templateId, no, runId, url);
+  }
+
+  trackBySnap = (_: number, s: SnapResult) => (s.finalUrl || s.url || String(s.ts));
 
   async onSend() {
     const message = (this.input.value || '').trim();
@@ -209,10 +239,49 @@ export class UseVariantPageComponent {
       this.applyingIndex = null;
     }
   }
-   
+
   onFinalize() {
+    // Scroll to the section
     const el = document.getElementById('finalize');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Kick off screenshot captures (idempotent; safe to call again)
+    const templateId = this.ar.snapshot.paramMap.get('id')!;
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+
+    if (!runId || this._isFinalizing) {
+      // still ensure cache is visible
+      this.snapsSubject.next(this.qa.getSnapsCached(templateId, no, runId));
+      return;
+    }
+
+    this._isFinalizing = true;
+
+    // 1) seed from cache so UI can show previous results immediately
+    const cached = this.qa.getSnapsCached(templateId, no, runId);
+    this.snapsSubject.next(cached || []);
+
+    // 2) extract unique https? links from current HTML
+    const html = this.htmlSubject.value || '';
+    const urls = this.extractHttpLinks(html);
+
+    // 3) fire each capture independently; each result updates the list immediately
+    urls.forEach((u) => this.captureOne(templateId, no, runId, u));
+  }
+
+  /** Optionally call this to re-test a single URL (e.g., if user edits/pastes a new link). */
+  onRetestUrl(url: string) {
+    const templateId = this.ar.snapshot.paramMap.get('id')!;
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    if (!runId || !url) return;
+    this.captureOne(templateId, no, runId, url);
+  }
+
+  /** Quick query to know if a specific URL is loading (for per-card spinners if you add them). */
+  isSnapping(url: string): boolean {
+    return !!this.snapping.get(url.toLowerCase());
   }
 
   /** Apply a SINGLE edit with an optional user-edited replacement from the input field. */
@@ -389,4 +458,59 @@ export class UseVariantPageComponent {
 
   // Stable key so adding messages doesn’t shuffle indices
   trackByMsg = (_: number, m: ChatTurn) => m.ts;
+
+  // ----------------------------- helpers: finalize -----------------------------
+  private extractHttpLinks(html: string): string[] {
+    const out: string[] = [];
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const anchors = Array.from(doc.querySelectorAll('a[href]'));
+      for (const a of anchors) {
+        const href = (a.getAttribute('href') || '').trim();
+        if (!href) continue;
+        // only http(s) links; skip mailto:, tel:, anchors, etc.
+        if (/^https?:\/\//i.test(href)) {
+          out.push(href);
+        }
+      }
+    } catch {
+      // fallback: very simple regex scan if DOMParser fails
+      const rx = /href\s*=\s*["'](https?:\/\/[^"']+)["']/gi;
+      let m: RegExpExecArray | null;
+      while ((m = rx.exec(html))) out.push(m[1]);
+    }
+    // dedupe while preserving order
+    const seen = new Set<string>();
+    return out.filter(u => (seen.has(u.toLowerCase()) ? false : (seen.add(u.toLowerCase()), true)));
+  }
+
+  private captureOne(templateId: string, no: number, runId: string, url: string) {
+    const key = url.toLowerCase();
+    if (this.snapping.get(key)) return; // already in progress
+    this.snapping.set(key, true);
+
+    this.qa.snapUrl(templateId, no, runId, url).subscribe({
+      next: ({ snap, snaps }) => {
+        // snaps already persisted in service; reflect latest list to UI
+        this.snapsSubject.next(snaps);
+        this.snapping.set(key, false);
+      },
+      error: (err) => {
+        console.error('snapshot error', err);
+        // push a synthetic error entry so UI can reflect failure
+        const errorSnap: SnapResult = {
+          url,
+          ok: false,
+          error: (err?.message || 'Capture failed'),
+          ts: Date.now(),
+        };
+        const list = [errorSnap, ...this.snapsSubject.value];
+        this.snapsSubject.next(list);
+
+        // persist error list scoped to template+variant+run
+        this.qa.saveSnaps(templateId, no, runId, list);
+        this.snapping.set(key, false);
+      },
+    });
+  }
 }

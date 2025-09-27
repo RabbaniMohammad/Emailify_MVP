@@ -3,11 +3,17 @@ import mailchimp from '@mailchimp/mailchimp_marketing';
 import OpenAI from 'openai';
 import * as cheerio from 'cheerio';
 import { randomUUID } from 'crypto';
+import puppeteer from 'puppeteer'; // ⬅️ ADDED
+import type { Browser } from 'puppeteer';
+
+// let browser: Browser | null = null;
 
 const router = Router();
 const MC: any = mailchimp as any;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 
 /* ------------------------------------------------------------------ */
 /*                       Helpers & safe typings                        */
@@ -892,5 +898,52 @@ router.post('/variants/:runId/chat/apply', async (req: Request, res: Response) =
     res.status(500).json({ code: 'CHAT_APPLY_ERROR', message: errMsg(err) });
   }
 });
+
+/* ------------------------------------------------------------------ */
+/*                          Headless screenshot                        */
+/* ------------------------------------------------------------------ */
+
+/** POST /api/qa/snap  body: { url } → { url, ok, status?, finalUrl?, dataUrl?, error? } */
+/** POST /api/qa/snap  body: { url } → { url, ok, status?, finalUrl?, dataUrl?, error? } */
+router.post('/snap', async (req: Request, res: Response) => {
+  const url = String(req.body?.url || '').trim();
+  if (!/^https?:\/\//i.test(url)) {
+    return res.status(400).json({ url, ok: false, error: 'Invalid URL' });
+  }
+
+  let browser: Browser | null = null;
+  try {
+    browser = await puppeteer.launch({
+      headless: true, // ✅ boolean, not "new"
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      // If Chromium didn't download (e.g., corporate proxy), set this env var:
+      // PUPPETEER_EXECUTABLE_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+    });
+
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1200, height: 800, deviceScaleFactor: 1 });
+    await page.setUserAgent('Mozilla/5.0 (compatible; Variant-Snap/1.0)');
+
+    const resp = await page.goto(url, { waitUntil: 'networkidle2', timeout: 25_000 }).catch(() => null);
+    await delay(500);
+
+    const buf = (await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })) as Buffer;
+    const dataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
+
+    res.json({
+      url,
+      ok: !resp || resp.status() < 400,
+      status: resp?.status(),
+      finalUrl: page.url(),
+      dataUrl,
+    });
+  } catch (err: unknown) {
+    res.status(500).json({ url, ok: false, error: errMsg(err) });
+  } finally {
+    try { await browser?.close(); } catch {}
+  }
+});
+
 
 export default router;

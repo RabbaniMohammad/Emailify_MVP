@@ -1,6 +1,7 @@
+// src/app/services/qa.service.ts
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { map, of, tap } from 'rxjs';
+import { catchError, map, of, tap, throwError } from 'rxjs';
 
 /* ----------------------------- Golden types ----------------------------- */
 export type GoldenEdit = {
@@ -54,6 +55,26 @@ export type ChatThread = {
   messages: ChatTurn[];    // chat transcript
 };
 
+/* ------------------------------ Snap types ------------------------------ */
+export type SnapResult = {
+  url: string;
+  ok: boolean;
+  status?: number;
+  finalUrl?: string;
+  dataUrl?: string;  // data:image/jpeg;base64,...
+  error?: string;
+  ts: number;        // when captured (ms)
+};
+
+type SnapApiResponse = {
+  url: string;
+  ok: boolean;
+  status?: number;
+  finalUrl?: string;
+  dataUrl?: string;
+  error?: string;
+};
+
 @Injectable({ providedIn: 'root' })
 export class QaService {
   private http = inject(HttpClient);
@@ -66,6 +87,11 @@ export class QaService {
   private kRunData(runId: string) { return `qa:variants:run:${runId}`; }
 
   private kChat(runId: string, no: number) { return `qa:chat:${runId}:${no}`; }
+
+  // Per-template+variant+run snapshots (prevents bleed across templates)
+  private kSnaps(templateId: string, no: number, runId: string) {
+    return `qa:snaps:${templateId}:${no}:${runId}`;
+  }
 
   /* --------------------------- Golden / Subjects -------------------------- */
   getGoldenCached(id: string) {
@@ -116,9 +142,13 @@ export class QaService {
     } catch { return null; }
   }
 
+  private setRunIdForTemplate(templateId: string, runId: string) {
+    try { localStorage.setItem(this.kRunId(templateId), runId); } catch {}
+  }
+
   saveVariantsRun(templateId: string, run: VariantsRun) {
     try {
-      localStorage.setItem(this.kRunId(templateId), run.runId);
+      this.setRunIdForTemplate(templateId, run.runId);
       localStorage.setItem(this.kRunData(run.runId), JSON.stringify(run));
     } catch {}
   }
@@ -126,16 +156,41 @@ export class QaService {
   startVariants(templateId: string, goldenHtml: string, target = 5) {
     return this.http.post<{ runId: string; target: number }>(
       `/api/qa/${templateId}/variants/start`, { html: goldenHtml, target }
+    ).pipe(
+      tap(({ runId, target }) => {
+        // seed local cache for convenience
+        const run: VariantsRun = { runId, target, items: [] };
+        this.saveVariantsRun(templateId, run);
+      })
     );
   }
 
   nextVariant(runId: string) {
-    return this.http.post<VariantItem>(`/api/qa/variants/${runId}/next`, {});
+    return this.http.post<VariantItem>(`/api/qa/variants/${runId}/next`, {}).pipe(
+      tap((item) => {
+        // Merge into cached run if present
+        const cached = this.getVariantsRunById(runId);
+        if (cached) {
+          const idx = cached.items.findIndex(i => i.no === item.no);
+          if (idx >= 0) cached.items[idx] = item;
+          else cached.items.push(item);
+          try { localStorage.setItem(this.kRunData(runId), JSON.stringify(cached)); } catch {}
+        }
+      })
+    );
   }
 
   getVariantsStatus(runId: string) {
     return this.http.get<{ runId: string; templateId: string; target: number; count: number; items: VariantItem[] }>(
       `/api/qa/variants/${runId}/status`
+    ).pipe(
+      catchError((e) => {
+        // If the server restarted or id is wrong, surface a helpful error
+        if (e?.status === 404) {
+          return throwError(() => new Error('Run not found (server restarted or bad runId). Start a new run.'));
+        }
+        return throwError(() => e);
+      })
     );
   }
 
@@ -170,6 +225,58 @@ export class QaService {
     return this.http.post<{ html: string; changes: Array<{ before: string; after: string; parent: string; reason?: string }> }>(
       `/api/qa/variants/${runId}/chat/apply`,
       { html, edits }
+    );
+  }
+
+  /* ------------------------------ Snapshots ------------------------------- */
+  /** Get snapshot list for a specific template + variant + run (persisted). */
+  getSnapsCached(templateId: string, no: number, runId: string): SnapResult[] {
+    try {
+      const raw = localStorage.getItem(this.kSnaps(templateId, no, runId));
+      const list = raw ? (JSON.parse(raw) as SnapResult[]) : [];
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Save/overwrite snapshot list for a specific template + variant + run. */
+  saveSnaps(templateId: string, no: number, runId: string, snaps: SnapResult[]) {
+    try { localStorage.setItem(this.kSnaps(templateId, no, runId), JSON.stringify(snaps)); } catch {}
+  }
+
+  /** Insert or replace a single snapshot by URL (prefers finalUrl match if present). */
+  addOrReplaceSnap(templateId: string, no: number, runId: string, snap: SnapResult): SnapResult[] {
+    const list = this.getSnapsCached(templateId, no, runId);
+    const key = (snap.finalUrl || snap.url).toLowerCase();
+    const idx = list.findIndex(s => ((s.finalUrl || s.url).toLowerCase() === key));
+    if (idx >= 0) list[idx] = snap;
+    else list.unshift(snap); // newest first
+    this.saveSnaps(templateId, no, runId, list);
+    return list;
+  }
+
+  /** Call backend to capture a screenshot for URL; persists the result. */
+  snapUrl(templateId: string, no: number, runId: string, url: string) {
+    return this.http.post<SnapApiResponse>(`/api/qa/snap`, { url }).pipe(
+      map((resp) => {
+        const snap: SnapResult = { ...resp, ts: Date.now() };
+        const snaps = this.addOrReplaceSnap(templateId, no, runId, snap);
+        return { snap, snaps };
+      }),
+      catchError((e) => {
+        const snap: SnapResult = {
+          url,
+          ok: false,
+          status: e?.status,
+          finalUrl: undefined,
+          dataUrl: undefined,
+          error: e?.message || 'Snap failed',
+          ts: Date.now(),
+        };
+        const snaps = this.addOrReplaceSnap(templateId, no, runId, snap);
+        return of({ snap, snaps });
+      })
     );
   }
 }

@@ -30,7 +30,7 @@
           <div class="who">{{ m.role === 'user' ? 'You' : 'Assistant' }}</div>
           <div class="text" [innerText]="m.text"></div>
 
-          <!-- Apply panel stays exactly as-is (no change to your existing logic) -->
+          <!-- Apply panel (keeps UI minimal; no before/after contexts shown) -->
           <ng-container *ngIf="m.role === 'assistant' && m.json?.edits?.length">
             <div class="apply-panel">
               <div class="apply-header">
@@ -133,7 +133,72 @@
 <section id="finalize" class="mt-8">
   <h3>Finalize template</h3>
   <p class="text-sm text-neutral-600">
-    You’re viewing the finalized version below. (Add any actions you want here later.)
+    Review and validate links with live screenshots. Each capture is added as soon as it finishes.
   </p>
-  <!-- Keep it lightweight for now; you can add controls here later -->
+
+  <div class="finalize-grid">
+    <!-- Left column: links -> screenshots -->
+    <div class="col">
+      <div class="row header">
+        <h4>Links & screenshots</h4>
+
+        <!-- Quick tester -->
+        <div class="inline-form">
+          <input
+            placeholder="Paste a link to test…"
+            #newUrl
+            (keyup.enter)="onSnapUrl(newUrl.value); newUrl.value=''" />
+          <button
+            mat-raised-button
+            color="primary"
+            (click)="onSnapUrl(newUrl.value); newUrl.value=''">
+            Capture
+          </button>
+        </div>
+      </div>
+
+      <div class="snaps" *ngIf="(snaps$ | async) as snaps">
+        <div *ngIf="!snaps.length" class="empty">
+          No screenshots yet. Click “Finalize template” to capture all links from this variant, or paste a link above.
+        </div>
+
+        <div class="snap-card" *ngFor="let s of snaps; trackBy: trackBySnap">
+          <div class="snap-head">
+            <div class="url">
+              <a [href]="s.finalUrl || s.url" target="_blank" rel="noopener">{{ s.finalUrl || s.url }}</a>
+              <span class="chip" [class.ok]="s.ok" [class.fail]="!s.ok">
+                {{ s.ok ? 'OK' : 'Fail' }}<ng-container *ngIf="s.status"> · {{ s.status }}</ng-container>
+              </span>
+            </div>
+            <div class="ts">{{ s.ts | date:'short' }}</div>
+          </div>
+
+          <div class="snap-body">
+            <ng-container *ngIf="s.dataUrl; else loadingOrError">
+              <img [src]="s.dataUrl" alt="Screenshot" />
+            </ng-container>
+            <ng-template #loadingOrError>
+              <div class="snap-skel" *ngIf="!s.error">
+                <mat-progress-spinner diameter="24" mode="indeterminate"></mat-progress-spinner>
+                <span>Capturing…</span>
+              </div>
+              <div class="snap-err" *ngIf="s.error">
+                <mat-icon>error_outline</mat-icon>
+                <span>{{ s.error }}</span>
+              </div>
+            </ng-template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right column: guidance -->
+    <div class="col">
+      <h4>Validation</h4>
+      <p class="text-sm text-neutral-600">
+        If a link seems wrong, paste a corrected URL above — it will be tested and added immediately.
+      </p>
+      <div class="hint">Refresh-safe: screenshots are stored per run and reloaded on page open.</div>
+    </div>
+  </div>
 </section>

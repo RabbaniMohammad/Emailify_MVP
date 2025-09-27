@@ -10,7 +10,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import logger from 'jet-logger';
 
 import BaseRouter from '@src/routes';
-import templatesRouter from '@src/routes/templates'; // <- Mailchimp templates API
+import templatesRouter from '@src/routes/templates'; // Mailchimp templates API
+import qaRouter from '@src/routes/qa';               // ✅ QA routes (use alias for consistency)
 
 import Paths from '@src/common/constants/Paths';
 import ENV from '@src/common/constants/ENV';
@@ -28,9 +29,9 @@ const app = express();
 
 /** ******** Middleware ******** **/
 
-// Basic middleware
-app.use(express.json());
+// Body parsers (single json() with a sensible limit)
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '5mb' })); // bumped for larger HTML payloads
 
 // Compression
 app.use(compression());
@@ -70,11 +71,12 @@ mailchimp.setConfig({
 
 /** ******** Routes ******** **/
 
-// Existing base router (whatever your template already exposes)
-app.use(Paths.Base, BaseRouter);
-
-// Mailchimp templates API
+// Core API routers
 app.use('/api/templates', templatesRouter);
+app.use('/api/qa', qaRouter); // ✅ mounts /api/qa/* (chat, apply, snap, etc.)
+
+// Existing base router (kept intact)
+app.use(Paths.Base, BaseRouter);
 
 // Health check
 app.get('/health', (_: Request, res: Response) => {
