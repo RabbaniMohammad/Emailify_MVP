@@ -88,10 +88,11 @@ export class QaService {
 
   private kChat(runId: string, no: number) { return `qa:chat:${runId}:${no}`; }
 
-  // Per-template+variant+run snapshots (prevents bleed across templates)
-  private kSnaps(templateId: string, no: number, runId: string) {
-    return `qa:snaps:${templateId}:${no}:${runId}`;
-  }
+  // Per-run snapshots
+  private kSnaps(runId: string) { return `qa:snaps:${runId}`; }
+
+  // NEW: per-run valid links list
+  private kValidLinks(runId: string) { return `qa:validlinks:${runId}`; }
 
   /* --------------------------- Golden / Subjects -------------------------- */
   getGoldenCached(id: string) {
@@ -158,7 +159,6 @@ export class QaService {
       `/api/qa/${templateId}/variants/start`, { html: goldenHtml, target }
     ).pipe(
       tap(({ runId, target }) => {
-        // seed local cache for convenience
         const run: VariantsRun = { runId, target, items: [] };
         this.saveVariantsRun(templateId, run);
       })
@@ -168,7 +168,6 @@ export class QaService {
   nextVariant(runId: string) {
     return this.http.post<VariantItem>(`/api/qa/variants/${runId}/next`, {}).pipe(
       tap((item) => {
-        // Merge into cached run if present
         const cached = this.getVariantsRunById(runId);
         if (cached) {
           const idx = cached.items.findIndex(i => i.no === item.no);
@@ -185,7 +184,6 @@ export class QaService {
       `/api/qa/variants/${runId}/status`
     ).pipe(
       catchError((e) => {
-        // If the server restarted or id is wrong, surface a helpful error
         if (e?.status === 404) {
           return throwError(() => new Error('Run not found (server restarted or bad runId). Start a new run.'));
         }
@@ -219,9 +217,7 @@ export class QaService {
     );
   }
 
-  /** Apply assistant (or manual) edits to current HTML. */
   applyChatEdits(runId: string, html: string, edits: GoldenEdit[]) {
-    // Note: backend doesn't need the variant number for apply
     return this.http.post<{ html: string; changes: Array<{ before: string; after: string; parent: string; reason?: string }> }>(
       `/api/qa/variants/${runId}/chat/apply`,
       { html, edits }
@@ -229,10 +225,9 @@ export class QaService {
   }
 
   /* ------------------------------ Snapshots ------------------------------- */
-  /** Get snapshot list for a specific template + variant + run (persisted). */
-  getSnapsCached(templateId: string, no: number, runId: string): SnapResult[] {
+  getSnapsCached(runId: string): SnapResult[] {
     try {
-      const raw = localStorage.getItem(this.kSnaps(templateId, no, runId));
+      const raw = localStorage.getItem(this.kSnaps(runId));
       const list = raw ? (JSON.parse(raw) as SnapResult[]) : [];
       return Array.isArray(list) ? list : [];
     } catch {
@@ -240,28 +235,25 @@ export class QaService {
     }
   }
 
-  /** Save/overwrite snapshot list for a specific template + variant + run. */
-  saveSnaps(templateId: string, no: number, runId: string, snaps: SnapResult[]) {
-    try { localStorage.setItem(this.kSnaps(templateId, no, runId), JSON.stringify(snaps)); } catch {}
+  saveSnaps(runId: string, snaps: SnapResult[]) {
+    try { localStorage.setItem(this.kSnaps(runId), JSON.stringify(snaps)); } catch {}
   }
 
-  /** Insert or replace a single snapshot by URL (prefers finalUrl match if present). */
-  addOrReplaceSnap(templateId: string, no: number, runId: string, snap: SnapResult): SnapResult[] {
-    const list = this.getSnapsCached(templateId, no, runId);
+  addOrReplaceSnap(runId: string, snap: SnapResult): SnapResult[] {
+    const list = this.getSnapsCached(runId);
     const key = (snap.finalUrl || snap.url).toLowerCase();
     const idx = list.findIndex(s => ((s.finalUrl || s.url).toLowerCase() === key));
     if (idx >= 0) list[idx] = snap;
-    else list.unshift(snap); // newest first
-    this.saveSnaps(templateId, no, runId, list);
+    else list.unshift(snap);
+    this.saveSnaps(runId, list);
     return list;
   }
 
-  /** Call backend to capture a screenshot for URL; persists the result. */
-  snapUrl(templateId: string, no: number, runId: string, url: string) {
+  snapUrl(runId: string, url: string) {
     return this.http.post<SnapApiResponse>(`/api/qa/snap`, { url }).pipe(
       map((resp) => {
         const snap: SnapResult = { ...resp, ts: Date.now() };
-        const snaps = this.addOrReplaceSnap(templateId, no, runId, snap);
+        const snaps = this.addOrReplaceSnap(runId, snap);
         return { snap, snaps };
       }),
       catchError((e) => {
@@ -274,9 +266,33 @@ export class QaService {
           error: e?.message || 'Snap failed',
           ts: Date.now(),
         };
-        const snaps = this.addOrReplaceSnap(templateId, no, runId, snap);
+        const snaps = this.addOrReplaceSnap(runId, snap);
         return of({ snap, snaps });
       })
     );
+  }
+
+  /* ------------------------- Valid Links (per run) ------------------------ */
+  getValidLinks(runId: string): string[] {
+    try {
+      const raw = localStorage.getItem(this.kValidLinks(runId));
+      const list = raw ? (JSON.parse(raw) as string[]) : [];
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
+  saveValidLinks(runId: string, links: string[]) {
+    try {
+      const clean = Array.from(
+        new Set(
+          (links || [])
+            .map((s) => String(s || '').trim())
+            .filter((s) => !!s)
+        )
+      );
+      localStorage.setItem(this.kValidLinks(runId), JSON.stringify(clean));
+    } catch {}
   }
 }

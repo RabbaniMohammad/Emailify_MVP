@@ -175,7 +175,7 @@
 
           <div class="snap-body">
             <ng-container *ngIf="s.dataUrl; else loadingOrError">
-              <img [src]="s.dataUrl" alt="Screenshot" />
+              <img class="snap-thumb" [src]="s.dataUrl" alt="Screenshot" />
             </ng-container>
             <ng-template #loadingOrError>
               <div class="snap-skel" *ngIf="!s.error">
@@ -188,17 +188,71 @@
               </div>
             </ng-template>
           </div>
+
+          <div class="snap-actions">
+            <button mat-stroked-button color="primary"
+                    (click)="onRetestUrl(s.finalUrl || s.url)"
+                    [disabled]="isSnapping(s.finalUrl || s.url)">
+              Retest
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Right column: guidance -->
+    <!-- Right column: upload & validation -->
     <div class="col">
       <h4>Validation</h4>
       <p class="text-sm text-neutral-600">
-        If a link seems wrong, paste a corrected URL above — it will be tested and added immediately.
+        Upload a CSV/XLSX with a column named <strong>valid links</strong>.
+        We’ll compare it to the links found in this variant’s HTML.
       </p>
-      <div class="hint">Refresh-safe: screenshots are stored per run and reloaded on page open.</div>
+
+      <!-- Upload control -->
+      <div class="inline-form" style="margin-bottom:10px">
+        <input type="file" accept=".csv,.xlsx,.xls"
+               (change)="onValidLinksUpload($event)" />
+        <small class="text-sm text-neutral-500">Header must be exactly: <code>valid links</code></small>
+      </div>
+
+      <!-- File summary -->
+      <div *ngIf="(validLinks$ | async) as vlinks">
+        <div class="text-sm" *ngIf="vlinks.length; else noFile">
+          Loaded {{ vlinks.length }} link(s) from file.
+        </div>
+        <ng-template #noFile>
+          <div class="text-sm text-neutral-500">No file loaded yet.</div>
+        </ng-template>
+      </div>
+
+      <!-- Comparison list -->
+      <div *ngIf="(linkChecks$ | async) as checks">
+        <div *ngIf="checks.length; else noChecks">
+          <div class="edits-title">Results</div>
+          <ul class="edits-list">
+            <li *ngFor="let c of checks">
+              <mat-icon
+                [ngClass]="{ 'text-green-600': (c.inHtml && c.inFile), 'text-red-600': (!c.inHtml && c.inFile) }">
+                {{ (c.inHtml && c.inFile) ? 'check_circle' : (!c.inHtml && c.inFile) ? 'cancel' : 'help_outline' }}
+              </mat-icon>
+              <a [href]="c.url" target="_blank" rel="noopener">{{ c.url }}</a>
+              <span class="reason" *ngIf="c.inFile && !c.inHtml"> — not found in HTML</span>
+              <span class="reason" *ngIf="!c.inFile && c.inHtml"> — extra link in HTML</span>
+              <button class="ml-2" mat-button color="primary"
+                      (click)="onRetestUrl(c.url)">Capture</button>
+            </li>
+          </ul>
+        </div>
+        <ng-template #noChecks>
+          <div class="text-sm text-neutral-500">Upload a file to see results.</div>
+        </ng-template>
+      </div>
+
+      <p class="text-sm text-neutral-600" style="margin-top:12px">
+        If a link seems wrong, paste a corrected URL in the box on the left — it will be tested and added immediately.
+        <br />
+        Refresh-safe: screenshots are stored per run and reloaded on page open.
+      </p>
     </div>
   </div>
 </section>

@@ -306,3 +306,28 @@
   .chat { max-height: none; }
   .finalize-grid { grid-template-columns: 1fr; }
 }
+
+/* Validation panel */
+.val-panel {
+  margin: 10px 0 14px;
+  padding: 10px;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 10px;
+  background: #fff;
+}
+.val-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.val-title { font-weight: 600; }
+.val-status { margin-top: 8px; }
+.val-summary { font-size: .9rem; margin-bottom: 6px; }
+.val-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.val-list li { display: flex; align-items: center; gap: 8px; }
+.val-url { word-break: break-all; flex: 1; }
+.val-ok { color: #16a34a; }
+.val-bad { color: #dc2626; }
+.val-note { font-size: .8rem; color: #666; margin-top: 8px; }
+

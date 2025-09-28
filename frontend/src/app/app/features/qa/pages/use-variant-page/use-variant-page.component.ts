@@ -1,7 +1,7 @@
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
-import { BehaviorSubject, firstValueFrom, map, shareReplay } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, map, shareReplay, combineLatest } from 'rxjs';
 import { FormControl, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import {
   QaService,
@@ -10,7 +10,7 @@ import {
   GoldenEdit,
   ChatAssistantJson,
   ChatIntent,
-  SnapResult, // for finalize/snapshots
+  SnapResult,
 } from '../../services/qa.service';
 import { HtmlPreviewComponent } from '../../components/html-preview/html-preview.component';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -23,6 +23,9 @@ type AssistantPayload = {
   assistantText: string;
   json: ChatAssistantJson;
 };
+
+// For link/file comparison UI
+type LinkCheck = { url: string; inFile: boolean; inHtml: boolean };
 
 @Component({
   selector: 'app-use-variant-page',
@@ -67,19 +70,51 @@ export class UseVariantPageComponent {
   // Per-message manual edit forms (kept hidden by default / optional)
   private editForms = new Map<number, FormGroup>();
 
-  // ---------------- Finalize / Screenshots state (non-disruptive) ----------------
+  // ---------------- Finalize / Screenshots state ----------------
   private snapsSubject = new BehaviorSubject<SnapResult[]>([]);
   readonly snaps$ = this.snapsSubject.asObservable();
 
-  // track per-URL loading states so UI can show per-card spinners when you wire it up
+  // track per-URL loading states so UI can show per-card spinners
   private snapping = new Map<string, boolean>();
   get isFinalizing() { return this._isFinalizing; }
   private _isFinalizing = false;
 
+  // ---------------- Upload & validation (CSV/XLSX) ----------------
+  private validLinksSubject = new BehaviorSubject<string[]>([]);
+  readonly validLinks$ = this.validLinksSubject.asObservable();
+
+  // links found inside current HTML
+  private htmlLinks$ = this.html$.pipe(map(html => this.extractHttpLinks(html)));
+
+  // comparison output used by the template
+  readonly linkChecks$ = combineLatest([this.validLinks$, this.htmlLinks$]).pipe(
+    map(([fileLinks, htmlLinks]) => {
+      const norm = (u: string) => u.trim().toLowerCase();
+      const fset = new Set(fileLinks.map(norm));
+      const hset = new Set(htmlLinks.map(norm));
+      const union: string[] = [];
+
+      for (const u of fileLinks) if (!union.map(norm).includes(norm(u))) union.push(u);
+      for (const u of htmlLinks) if (!union.map(norm).includes(norm(u))) union.push(u);
+
+      const checks: LinkCheck[] = union.map(u => ({
+        url: u,
+        inFile: fset.has(norm(u)),
+        inHtml: hset.has(norm(u)),
+      }));
+      // Sort: mismatches first
+      checks.sort((a, b) => {
+        const aw = (a.inFile && a.inHtml) ? 1 : 0;
+        const bw = (b.inFile && b.inHtml) ? 1 : 0;
+        return aw - bw;
+      });
+      return checks;
+    })
+  );
+
   constructor() {
     // Load variant and chat thread (rehydrate)
     this.runId$.subscribe(async (runId) => {
-      const templateId = this.ar.snapshot.paramMap.get('id')!;
       const no = Number(this.ar.snapshot.paramMap.get('no')!);
 
       // 1) Chat cache (has currentHtml + thread)
@@ -90,7 +125,7 @@ export class UseVariantPageComponent {
         this.loadingVariant = false;
 
         // also rehydrate snaps cache (so finalize section shows persisted items)
-        this.snapsSubject.next(this.qa.getSnapsCached(templateId, no, runId));
+        this.snapsSubject.next(this.qa.getSnapsCached(runId));
         return;
       }
 
@@ -111,7 +146,7 @@ export class UseVariantPageComponent {
         this.qa.saveChat(runId, no, thread);
 
         // hydrate snaps cache
-        this.snapsSubject.next(this.qa.getSnapsCached(templateId, no, runId));
+        this.snapsSubject.next(this.qa.getSnapsCached(runId));
 
         this.loadingVariant = false;
         return;
@@ -143,23 +178,13 @@ export class UseVariantPageComponent {
         this.messagesSubject.next([intro]);
       } finally {
         // hydrate snaps cache even if thread not found (in case user finalized earlier)
-        this.snapsSubject.next(this.qa.getSnapsCached(templateId, no, runId));
+        this.snapsSubject.next(this.qa.getSnapsCached(runId));
         this.loadingVariant = false;
       }
     });
   }
 
-  onSnapUrl(raw: string) {
-    const url = (raw || '').trim();
-    if (!url) return;
-    const templateId = this.ar.snapshot.paramMap.get('id')!;
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
-    this.captureOne(templateId, no, runId, url);
-  }
-
-  trackBySnap = (_: number, s: SnapResult) => (s.finalUrl || s.url || String(s.ts));
-
+  // ---------------- Chat actions ----------------
   async onSend() {
     const message = (this.input.value || '').trim();
     if (!message || this.sending) return;
@@ -240,26 +265,22 @@ export class UseVariantPageComponent {
     }
   }
 
+  // ---------------- Finalize & screenshots ----------------
   onFinalize() {
     // Scroll to the section
     const el = document.getElementById('finalize');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    // Kick off screenshot captures (idempotent; safe to call again)
-    const templateId = this.ar.snapshot.paramMap.get('id')!;
     const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
-
     if (!runId || this._isFinalizing) {
-      // still ensure cache is visible
-      this.snapsSubject.next(this.qa.getSnapsCached(templateId, no, runId));
+      this.snapsSubject.next(this.qa.getSnapsCached(runId));
       return;
     }
 
     this._isFinalizing = true;
 
     // 1) seed from cache so UI can show previous results immediately
-    const cached = this.qa.getSnapsCached(templateId, no, runId);
+    const cached = this.qa.getSnapsCached(runId);
     this.snapsSubject.next(cached || []);
 
     // 2) extract unique https? links from current HTML
@@ -267,145 +288,112 @@ export class UseVariantPageComponent {
     const urls = this.extractHttpLinks(html);
 
     // 3) fire each capture independently; each result updates the list immediately
-    urls.forEach((u) => this.captureOne(templateId, no, runId, u));
+    urls.forEach((u) => this.captureOne(runId, u));
   }
 
-  /** Optionally call this to re-test a single URL (e.g., if user edits/pastes a new link). */
   onRetestUrl(url: string) {
-    const templateId = this.ar.snapshot.paramMap.get('id')!;
     const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
     if (!runId || !url) return;
-    this.captureOne(templateId, no, runId, url);
+    this.captureOne(runId, url);
   }
 
-  /** Quick query to know if a specific URL is loading (for per-card spinners if you add them). */
   isSnapping(url: string): boolean {
     return !!this.snapping.get(url.toLowerCase());
   }
 
-  /** Apply a SINGLE edit with an optional user-edited replacement from the input field. */
-  async onApplySingle(turnIndex: number, edit: GoldenEdit, replacement: string) {
-    if (this.applyingIndex !== null) return;
-    this.applyingIndex = turnIndex;
-
+  onSnapUrl(raw: string) {
+    const url = (raw || '').trim();
+    if (!url) return;
     const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    this.captureOne(runId, url);
+  }
 
-    // keep contexts but override the replace text from the input box
-    const patch: GoldenEdit = {
-      ...edit,
-      replace: (replacement ?? '').trim() || edit.replace,
-    };
+  // ---------------- Upload: CSV/XLSX of "valid links" ----------------
+  async onValidLinksUpload(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input?.files?.[0];
+    if (!file) return;
 
-    try {
-      const currentHtml = this.htmlSubject.value;
-      const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, [patch]));
-      const newHtml = resp?.html || currentHtml;
-      const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
+    const name = file.name.toLowerCase();
 
-      this.htmlSubject.next(newHtml);
-
-      // If matched, remove the applied edit from the list in that message
-      if (numChanges > 0) {
-        this.removeSingleEdit(turnIndex, edit);
+    // XLSX path (optional). Falls back to CSV if lib is missing or fails.
+    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+      try {
+        // dynamic import so build doesn’t require the package
+        const XLSX: any = await import('xlsx').catch(() => null);
+        if (XLSX) {
+          const buf = await file.arrayBuffer();
+          const wb = XLSX.read(buf, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+          this.consumeValidLinksRows(rows);
+          input.value = '';
+          return;
+        }
+      } catch (err) {
+        console.warn('xlsx parse failed, trying CSV fallback', err);
       }
-
-      const noteText = numChanges > 0
-        ? `Applied: "${patch.find}" → "${patch.replace}".`
-        : `No matching text found.`;
-
-      const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
-      const msgs = [...this.messagesSubject.value, appliedNote];
-      this.messagesSubject.next(msgs);
-      this.persistThread(runId, no, newHtml, msgs);
-    } catch (e) {
-      console.error('apply single edit error', e);
-    } finally {
-      this.applyingIndex = null;
     }
+
+    // CSV fallback
+    const text = await file.text();
+    const rows = this.parseCsv(text);
+    this.consumeValidLinksRows(rows);
+    input.value = '';
   }
 
-  /** Skip (remove) a single proposed edit from a message without applying. */
-  onSkipSingle(turnIndex: number, editIndex: number) {
-    const turn = this.messagesSubject.value[turnIndex];
-    const edits = (turn?.json?.edits || []).slice();
-    if (!edits.length) return;
-
-    edits.splice(editIndex, 1);
-    this.updateMessageEdits(turnIndex, edits);
-    // optional: persist immediately
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
-    this.persistThread(runId, no, this.htmlSubject.value, this.messagesSubject.value);
-  }
-
-  /** Clear all proposed edits from a specific assistant message. */
-  onClearEdits(turnIndex: number) {
-    this.updateMessageEdits(turnIndex, []);
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
-    this.persistThread(runId, no, this.htmlSubject.value, this.messagesSubject.value);
-  }
-
-  // Manual patch (explicit find/before/after/replace) — optional/hidden
-  getEditForm(i: number, _m: ChatTurn): FormGroup {
-    let fg = this.editForms.get(i);
-    if (!fg) {
-      fg = new FormGroup({
-        before:  new FormControl<string>('', []),
-        find:    new FormControl<string>('', [Validators.required, Validators.minLength(1)]),
-        after:   new FormControl<string>('', []),
-        replace: new FormControl<string>('', [Validators.required, Validators.minLength(1)]),
-        reason:  new FormControl<string>('Manual patch', []),
-      });
-      this.editForms.set(i, fg);
+  /** Convert parsed rows to a list of URLs from the "valid links" column. */
+  private consumeValidLinksRows(rows: any[][]) {
+    if (!rows?.length) {
+      this.validLinksSubject.next([]);
+      return;
     }
-    return fg;
-  }
-
-  async onApplyManual(i: number) {
-    if (this.applyingIndex !== null) return;
-    this.applyingIndex = i;
-
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
-    const fg = this.getEditForm(i, this.messagesSubject.value[i]);
-
-    if (fg.invalid) { fg.markAllAsTouched(); this.applyingIndex = null; return; }
-
-    const edit: GoldenEdit = {
-      before_context: fg.value.before || '',
-      find: fg.value.find!,
-      after_context: fg.value.after || '',
-      replace: fg.value.replace!,
-      reason: fg.value.reason || 'Manual patch',
-    };
-
-    try {
-      const currentHtml = this.htmlSubject.value;
-
-      const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, [edit]));
-      const newHtml = resp?.html || currentHtml;
-      const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
-
-      this.htmlSubject.next(newHtml);
-
-      const noteText = numChanges > 0
-        ? `Applied manual patch: "${edit.find}" → "${edit.replace}".`
-        : `Manual patch matched 0 places. Try a smaller word/phrase and add a bit of surrounding context.`;
-
-      const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
-      const msgs = [...this.messagesSubject.value, appliedNote];
-      this.messagesSubject.next(msgs);
-      this.persistThread(runId, no, newHtml, msgs);
-    } catch (e) {
-      console.error('manual apply error', e);
-    } finally {
-      this.applyingIndex = null;
+    const header = (rows[0] || []).map((c: any) => String(c ?? '').trim().toLowerCase());
+    const idx = header.findIndex(h => h === 'valid links'); // exact header name (case-insensitive)
+    if (idx < 0) {
+      console.warn('No "valid links" column found.');
+      this.validLinksSubject.next([]);
+      return;
     }
+    const out: string[] = [];
+    for (const row of rows.slice(1)) {
+      const raw = String((row?.[idx] ?? '')).trim();
+      if (raw && /^https?:\/\//i.test(raw)) out.push(raw);
+    }
+    this.validLinksSubject.next(this.dedupe(out));
   }
 
+  /** Simple CSV parser with quotes support. Returns rows of cells. */
+  private parseCsv(text: string): string[][] {
+    const s = text.replace(/^\uFEFF/, ''); // strip BOM
+    const rows: string[][] = [];
+    let i = 0, cur = '', row: string[] = [], inQ = false;
+
+    while (i < s.length) {
+      const ch = s[i];
+      if (inQ) {
+        if (ch === '"') {
+          if (s[i + 1] === '"') { cur += '"'; i += 2; continue; }
+          inQ = false; i++; continue;
+        }
+        cur += ch; i++; continue;
+      } else {
+        if (ch === '"') { inQ = true; i++; continue; }
+        if (ch === ',') { row.push(cur.trim()); cur = ''; i++; continue; }
+        if (ch === '\r' || ch === '\n') {
+          row.push(cur.trim()); cur = '';
+          rows.push(row); row = [];
+          if (ch === '\r' && s[i + 1] === '\n') i++;
+          i++; continue;
+        }
+        cur += ch; i++; continue;
+      }
+    }
+    row.push(cur.trim()); rows.push(row);
+    return rows;
+  }
+
+  // ---------------- Helpers ----------------
   private updateMessageEdits(turnIndex: number, edits: GoldenEdit[]) {
     const list = this.messagesSubject.value.slice();
     const turn = { ...list[turnIndex] };
@@ -459,7 +447,7 @@ export class UseVariantPageComponent {
   // Stable key so adding messages doesn’t shuffle indices
   trackByMsg = (_: number, m: ChatTurn) => m.ts;
 
-  // ----------------------------- helpers: finalize -----------------------------
+  // Extract links for screenshots & comparison. Emails should use <a>, so we scope to anchors.
   private extractHttpLinks(html: string): string[] {
     const out: string[] = [];
     try {
@@ -468,36 +456,39 @@ export class UseVariantPageComponent {
       for (const a of anchors) {
         const href = (a.getAttribute('href') || '').trim();
         if (!href) continue;
-        // only http(s) links; skip mailto:, tel:, anchors, etc.
-        if (/^https?:\/\//i.test(href)) {
-          out.push(href);
-        }
+        if (/^https?:\/\//i.test(href)) out.push(href);
       }
     } catch {
-      // fallback: very simple regex scan if DOMParser fails
       const rx = /href\s*=\s*["'](https?:\/\/[^"']+)["']/gi;
       let m: RegExpExecArray | null;
       while ((m = rx.exec(html))) out.push(m[1]);
     }
-    // dedupe while preserving order
-    const seen = new Set<string>();
-    return out.filter(u => (seen.has(u.toLowerCase()) ? false : (seen.add(u.toLowerCase()), true)));
+    return this.dedupe(out);
   }
 
-  private captureOne(templateId: string, no: number, runId: string, url: string) {
+  private dedupe(list: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const u of list) {
+      const k = u.trim().toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k); out.push(u);
+    }
+    return out;
+  }
+
+  private captureOne(runId: string, url: string) {
     const key = url.toLowerCase();
     if (this.snapping.get(key)) return; // already in progress
     this.snapping.set(key, true);
 
-    this.qa.snapUrl(templateId, no, runId, url).subscribe({
+    this.qa.snapUrl(runId, url).subscribe({
       next: ({ snap, snaps }) => {
-        // snaps already persisted in service; reflect latest list to UI
         this.snapsSubject.next(snaps);
         this.snapping.set(key, false);
       },
       error: (err) => {
         console.error('snapshot error', err);
-        // push a synthetic error entry so UI can reflect failure
         const errorSnap: SnapResult = {
           url,
           ok: false,
@@ -506,11 +497,125 @@ export class UseVariantPageComponent {
         };
         const list = [errorSnap, ...this.snapsSubject.value];
         this.snapsSubject.next(list);
-
-        // persist error list scoped to template+variant+run
-        this.qa.saveSnaps(templateId, no, runId, list);
+        this.qa.saveSnaps(runId, list);
         this.snapping.set(key, false);
       },
     });
+  }
+
+  // Manual patch (explicit find/before/after/replace) — optional/hidden
+  getEditForm(i: number, _m: ChatTurn): FormGroup {
+    let fg = this.editForms.get(i);
+    if (!fg) {
+      fg = new FormGroup({
+        before:  new FormControl<string>('', []),
+        find:    new FormControl<string>('', [Validators.required, Validators.minLength(1)]),
+        after:   new FormControl<string>('', []),
+        replace: new FormControl<string>('', [Validators.required, Validators.minLength(1)]),
+        reason:  new FormControl<string>('Manual patch', []),
+      });
+      this.editForms.set(i, fg);
+    }
+    return fg;
+  }
+
+  async onApplySingle(turnIndex: number, edit: GoldenEdit, replacement: string) {
+    if (this.applyingIndex !== null) return;
+    this.applyingIndex = turnIndex;
+
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+
+    const patch: GoldenEdit = {
+      ...edit,
+      replace: (replacement ?? '').trim() || edit.replace,
+    };
+
+    try {
+      const currentHtml = this.htmlSubject.value;
+      const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, [patch]));
+      const newHtml = resp?.html || currentHtml;
+      const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
+
+      this.htmlSubject.next(newHtml);
+
+      if (numChanges > 0) {
+        this.removeSingleEdit(turnIndex, edit);
+      }
+
+      const noteText = numChanges > 0
+        ? `Applied: "${patch.find}" → "${patch.replace}".`
+        : `No matching text found.`;
+
+      const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
+      const msgs = [...this.messagesSubject.value, appliedNote];
+      this.messagesSubject.next(msgs);
+      this.persistThread(runId, no, newHtml, msgs);
+    } catch (e) {
+      console.error('apply single edit error', e);
+    } finally {
+      this.applyingIndex = null;
+    }
+  }
+
+  onSkipSingle(turnIndex: number, editIndex: number) {
+    const turn = this.messagesSubject.value[turnIndex];
+    const edits = (turn?.json?.edits || []).slice();
+    if (!edits.length) return;
+
+    edits.splice(editIndex, 1);
+    this.updateMessageEdits(turnIndex, edits);
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    this.persistThread(runId, no, this.htmlSubject.value, this.messagesSubject.value);
+  }
+
+  onClearEdits(turnIndex: number) {
+    this.updateMessageEdits(turnIndex, []);
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    this.persistThread(runId, no, this.htmlSubject.value, this.messagesSubject.value);
+  }
+
+  async onApplyManual(i: number) {
+    if (this.applyingIndex !== null) return;
+    this.applyingIndex = i;
+
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    const fg = this.getEditForm(i, this.messagesSubject.value[i]);
+
+    if (fg.invalid) { fg.markAllAsTouched(); this.applyingIndex = null; return; }
+
+    const edit: GoldenEdit = {
+      before_context: fg.value.before || '',
+      find: fg.value.find!,
+      after_context: fg.value.after || '',
+      replace: fg.value.replace!,
+      reason: fg.value.reason || 'Manual patch',
+    };
+
+    try {
+      const currentHtml = this.htmlSubject.value;
+
+      const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, [edit]));
+      const newHtml = resp?.html || currentHtml;
+      const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
+
+      this.htmlSubject.next(newHtml);
+
+      const noteText = numChanges > 0
+        ? `Applied manual patch: "${edit.find}" → "${edit.replace}".`
+        : `Manual patch matched 0 places. Try a smaller word/phrase and add a bit of surrounding context.`;
+
+      const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
+      const msgs = [...this.messagesSubject.value, appliedNote];
+      this.messagesSubject.next(msgs);
+      this.persistThread(runId, no, newHtml, msgs);
+    } catch (e) {
+      console.error('manual apply error', e);
+    } finally {
+      this.applyingIndex = null;
+    }
   }
 }
