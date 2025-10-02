@@ -1,167 +1,379 @@
-<div class="qa-grid" *ngIf="id$ | async as id">
-  <!-- Column 1: Original template -->
-  <section class="col col-1">
-    <h3>Original</h3>
-    <app-template-preview [id]="id" [name]="'Template ' + id"></app-template-preview>
-  </section>
+<div class="qa-page-wrapper" *ngIf="id$ | async as id">
+  <!-- Animated Background -->
+  <div class="page-background">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+  </div>
 
-  <!-- Column 2: Actions + results -->
-  <section class="col col-2">
-    <h3>Tools</h3>
-
-    <div class="actions">
-      <button mat-raised-button color="primary"
-              (click)="onGenerateGolden(id)" [disabled]="goldenLoading">
-        <ng-container *ngIf="!goldenLoading; else goldenSpinner">
-          <mat-icon>auto_fix_high</mat-icon>
-          <span>Generate Golden Template</span>
-        </ng-container>
-        <ng-template #goldenSpinner>
-          <mat-progress-spinner diameter="16" mode="indeterminate"></mat-progress-spinner>
-        </ng-template>
-      </button>
-
-      <button mat-stroked-button color="primary"
-              (click)="onGenerateSubjects(id)" [disabled]="subjectsLoading">
-        <ng-container *ngIf="!subjectsLoading; else subjectsSpinner">
-          <mat-icon>lightbulb</mat-icon>
-          <span>Generate subjects</span>
-        </ng-container>
-        <ng-template #subjectsSpinner>
-          <mat-progress-spinner diameter="16" mode="indeterminate"></mat-progress-spinner>
-        </ng-template>
-      </button>
-    </div>
-
-    <button mat-stroked-button color="accent"
-            (click)="onGenerateVariants(id)"
-            [disabled]="variantsGenerating || goldenLoading || !(golden$ | async)?.html">
-    <ng-container *ngIf="!variantsGenerating; else vSpinner">
-        <mat-icon>auto_awesome</mat-icon>
-        <span>Generate variants</span>
-    </ng-container>
-    <ng-template #vSpinner>
-        <mat-progress-spinner diameter="16" mode="indeterminate"></mat-progress-spinner>
-    </ng-template>
-    </button>
-
-    <!-- Subjects -->
-    <ng-container *ngIf="subjects$ | async as subjects">
-      <div class="panel" *ngIf="subjects?.length; else noSubjects">
-        <h4>Subject ideas</h4>
-        <mat-chip-set>
-          <mat-chip *ngFor="let s of subjects; trackBy: trackByIndex">{{ s }}</mat-chip>
-        </mat-chip-set>
+  <div class="qa-grid" style="margin-top: 2rem;">
+    <!-- Column 1: Original Template -->
+    <section class="col col-1 glass-card" [@fadeInUp] style="height: 800px !important; min-height: 800px !important; display: flex; flex-direction: column;">
+      <div class="card-header">
+        <div class="header-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <h3 class="section-title">Original Template</h3>
+        <div class="title-underline"></div>
       </div>
-      <ng-template #noSubjects>
-        <div class="panel" *ngIf="subjectsLoading">Generating subjects…</div>
-      </ng-template>
-    </ng-container>
-
-    <!-- Edits -->
-    <ng-container *ngIf="golden$ | async as golden">
-      <div class="panel" *ngIf="golden?.edits?.length">
-        <h4>Edits applied ({{ golden.edits.length }})</h4>
-        <ul class="edits">
-          <li *ngFor="let e of golden.edits; trackBy: trackByEdit">
-            <div class="ctx">
-              <span class="before">{{ e.before_context }}</span>
-              <span class="find">{{ e.find }}</span>
-              <span class="after">{{ e.after_context }}</span>
-            </div>
-            <div class="replace">→ {{ e.replace }}</div>
-            <div class="reason">{{ e.reason }}</div>
-          </li>
-        </ul>
+      <div class="card-content" style="flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column;">
+        <app-template-preview
+          [id]="id"
+          [name]="'Template ' + id"
+          [allowScripts]="true"
+          [hideHeader]="true"
+          style="flex: 1; height: 100%; min-height: 500px;">
+        </app-template-preview>
       </div>
-    </ng-container>
-
-    <!-- Suggestions -->
-    <ng-container *ngIf="suggestions$ | async as sug">
-    <div class="panel" *ngIf="(sug?.gibberish?.length || sug?.suggestions?.length)">
-        <h4>Suggestions</h4>
-
-        <div *ngIf="sug.gibberish?.length">
-        <h5>Possible gibberish</h5>
-        <ul>
-            <li *ngFor="let g of sug.gibberish">
-            <code>{{ g.text }}</code>
-            <span class="reason" *ngIf="g.reason"> — {{ g.reason }}</span>
-            </li>
-        </ul>
-        </div>
-
-        <div *ngIf="sug.suggestions?.length">
-        <h5>Improvements</h5>
-        <ul>
-            <li *ngFor="let s of sug.suggestions">{{ s }}</li>
-        </ul>
-        </div>
-    </div>
-
-    <div class="panel" *ngIf="suggestionsLoading">Analyzing suggestions…</div>
-    </ng-container>
-
-  </section>
-
-  <!-- Column 3: Golden preview -->
-  <section class="col col-3">
-    <h3>Golden Preview</h3>
-    <ng-container *ngIf="golden$ | async as golden">
-      <app-html-preview
-        [html]="golden?.html || ''"
-        [loading]="goldenLoading">
-      </app-html-preview>
-
-      <div *ngIf="!golden?.html && !goldenLoading" class="placeholder">
-        Generate Golden Template to see the result.
-      </div>
-    </ng-container>
-  </section>
-  <!-- ===== VARIANTS SECTION (stacked) ===== -->
-    <section class="variants" *ngIf="variants$ | async as vr">
-    <div class="variants-header">
-        <h3>Variants</h3>
-        <div class="progress" *ngIf="vr?.items?.length">
-        <span>{{ vr.items.length }}/{{ vr.target || 5 }}</span>
-        <mat-progress-spinner *ngIf="variantsGenerating" diameter="16" mode="indeterminate"></mat-progress-spinner>
-        </div>
-    </div>
-
-    <div class="variant-row" *ngFor="let v of vr.items; trackBy: trackByIndex">
-        <div class="v-col v-left">
-        <h4>Variant {{ v.no }}</h4>
-        <app-html-preview [html]="v.html" [loading]="false"></app-html-preview>
-                <div class="variant-actions">
-        <button mat-raised-button color="primary"
-                (click)="onUseVariant(id, vr.runId, v.no)">
-            Use template
-        </button>
-        </div>
-        </div>
-
-        <div class="v-col v-right">
-        <div class="panel">
-            <h4>What changed</h4>
-            <ul class="edits">
-            <li *ngFor="let c of v.changes; trackBy: trackByEdit">
-                <div class="ctx">
-                <span class="before">{{ c.before }}</span>
-                <span class="find">→</span>
-                <span class="after">{{ c.after }}</span>
-                </div>
-                <div class="reason" *ngIf="c.reason">{{ c.reason }}</div>
-            </li>
-            </ul>
-        </div>
-
-        <div class="panel" *ngIf="v.why?.length">
-            <h4>Why this should help</h4>
-            <ul>
-            <li *ngFor="let w of v.why; trackBy: trackByIndex">{{ w }}</li>
-            </ul>
-        </div>
-        </div>
-    </div>
     </section>
+
+    <!-- Column 2: Actions + Results -->
+    <section class="col col-2 glass-card" [@fadeInUp] style="height: 800px !important; min-height: 800px !important; display: flex; flex-direction: column;">
+      <div class="card-header sticky-header">
+        <div class="header-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+          </svg>
+        </div>
+        <h3 class="section-title">AI Tools & Analysis</h3>
+        <div class="title-underline"></div>
+      </div>
+
+      <div class="scrollable-content" style="flex: 1; overflow-y: auto; min-height: 0;">
+        <!-- Primary Actions -->
+        <div class="actions-group">
+          <button 
+            mat-raised-button 
+            class="modern-btn primary-btn"
+            (click)="onGenerateGolden(id)" 
+            [disabled]="goldenLoading"
+            [class.loading]="goldenLoading">
+            <span class="btn-content" *ngIf="!goldenLoading">
+              <span class="btn-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+              </span>
+              <span class="btn-text">Generate Golden</span>
+              <span class="btn-shimmer"></span>
+            </span>
+            <span class="spinner-container" *ngIf="goldenLoading">
+              <span class="modern-spinner"></span>
+              <span class="btn-text-loading">Generating...</span>
+            </span>
+          </button>
+
+          <button 
+            mat-stroked-button 
+            class="modern-btn secondary-btn"
+            (click)="onGenerateSubjects(id)" 
+            [disabled]="subjectsLoading"
+            [class.loading]="subjectsLoading">
+            <span class="btn-content" *ngIf="!subjectsLoading">
+              <span class="btn-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+              </span>
+              <span class="btn-text">Generate Subjects</span>
+            </span>
+            <span class="spinner-container" *ngIf="subjectsLoading">
+              <span class="modern-spinner"></span>
+              <span class="btn-text-loading">Analyzing...</span>
+            </span>
+          </button>
+        </div>
+
+        <!-- Variants Action -->
+        <div class="variants-action">
+          <button 
+            mat-raised-button 
+            class="modern-btn accent-btn"
+            (click)="onGenerateVariants(id)"
+            [disabled]="variantsGenerating || goldenLoading || !(golden$ | async)?.html"
+            [class.loading]="variantsGenerating">
+            <span class="btn-content" *ngIf="!variantsGenerating">
+              <span class="btn-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+                </svg>
+              </span>
+              <span class="btn-text">Generate Variants</span>
+              <span class="btn-glow"></span>
+            </span>
+            <span class="spinner-container" *ngIf="variantsGenerating">
+              <span class="modern-spinner"></span>
+              <span class="btn-text-loading">Creating Variants...</span>
+            </span>
+          </button>
+        </div>
+
+        <!-- Subjects Panel -->
+        <ng-container *ngIf="subjects$ | async as subjects">
+          <div class="info-panel subjects-panel" *ngIf="subjects?.length" [@slideIn]>
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+              </div>
+              <h4>Subject Ideas</h4>
+              <span class="count-badge">{{ subjects.length }}</span>
+            </div>
+            <div class="chip-container">
+              <div class="modern-chip" *ngFor="let s of subjects; trackBy: trackByIndex" [@chipAnimation]>
+                <span class="chip-dot"></span>
+                <span class="chip-text">{{ s }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="loading-panel" *ngIf="subjectsLoading && !subjects?.length" [@pulse]>
+            <div class="loading-spinner"></div>
+            <span>Generating subject ideas...</span>
+          </div>
+        </ng-container>
+
+        <!-- Edits Panel -->
+        <ng-container *ngIf="golden$ | async as golden">
+          <div class="info-panel edits-panel" *ngIf="golden?.edits?.length" [@slideIn]>
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+              </div>
+              <h4>Applied Edits</h4>
+              <span class="count-badge">{{ golden.edits.length }}</span>
+            </div>
+            <ul class="edits-list">
+              <li *ngFor="let e of golden.edits; trackBy: trackByEdit" class="edit-item" [@listAnimation]>
+                <div class="edit-context">
+                  <code class="context-before">{{ e.before_context }}</code>
+                  <code class="context-find">{{ e.find }}</code>
+                  <code class="context-after">{{ e.after_context }}</code>
+                </div>
+                <div class="edit-replace">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon">
+                    <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                  </svg>
+                  <span>{{ e.replace }}</span>
+                </div>
+                <div class="edit-reason" *ngIf="e.reason">{{ e.reason }}</div>
+              </li>
+            </ul>
+          </div>
+        </ng-container>
+
+        <!-- Suggestions Panel -->
+        <ng-container *ngIf="suggestions$ | async as sug">
+          <div class="info-panel suggestions-panel" *ngIf="(sug?.gibberish?.length || sug?.suggestions?.length)" [@slideIn]>
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+              <h4>AI Suggestions</h4>
+            </div>
+
+            <div *ngIf="sug.gibberish?.length" class="suggestion-section">
+              <h5 class="section-subtitle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                Possible Issues
+              </h5>
+              <ul class="suggestion-list">
+                <li *ngFor="let g of sug.gibberish" class="suggestion-item warning" [@listAnimation]>
+                  <span class="warning-icon">⚠</span>
+                  <div class="suggestion-content">
+                    <code class="gibberish-text">{{ g.text }}</code>
+                    <span class="suggestion-reason" *ngIf="g.reason">{{ g.reason }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <div *ngIf="sug.suggestions?.length" class="suggestion-section">
+              <h5 class="section-subtitle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                Improvements
+              </h5>
+              <ul class="suggestion-list">
+                <li *ngFor="let s of sug.suggestions" class="suggestion-item success" [@listAnimation]>
+                  <span class="success-icon">✓</span>
+                  <span class="suggestion-text">{{ s }}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="loading-panel" *ngIf="suggestionsLoading" [@pulse]>
+            <div class="loading-spinner"></div>
+            <span>Analyzing suggestions...</span>
+          </div>
+        </ng-container>
+      </div>
+    </section>
+
+    <!-- Column 3: Golden Preview -->
+    <section class="col col-3 glass-card" [@fadeInUp] style="height: 800px !important; min-height: 800px !important; display: flex; flex-direction: column;">
+      <div class="card-header">
+        <div class="header-icon golden-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+          </svg>
+        </div>
+        <h3 class="section-title">Golden Preview</h3>
+        <div class="title-underline golden"></div>
+      </div>
+      <div class="card-content preview-content" style="flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column;">
+        <ng-container *ngIf="golden$ | async as golden">
+          <app-html-preview
+            [html]="golden?.html || ''"
+            [loading]="goldenLoading"
+            [allowScripts]="true"
+            style="flex: 1; min-height: 0; height: 100%;">
+          </app-html-preview>
+
+          <div *ngIf="!golden?.html && !goldenLoading" class="empty-state" [@fadeIn] style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+              </svg>
+            </div>
+            <h4>No Golden Template Yet</h4>
+            <p>Generate the Golden Template to see the optimized result</p>
+          </div>
+        </ng-container>
+      </div>
+    </section>
+  </div>
+
+  <!-- Variants Section -->
+  <section class="variants-section" *ngIf="variants$ | async as vr" [@expandIn]>
+    <div class="variants-header-main">
+      <div class="variants-title-group">
+        <div class="header-icon variants-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <h3 class="section-title">Generated Variants</h3>
+        <div class="title-underline variants"></div>
+      </div>
+      <div class="variants-progress" *ngIf="vr?.items?.length">
+        <span class="progress-text">{{ vr.items.length }} / {{ vr.target || 5 }}</span>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" [style.width.%]="(vr.items.length / (vr.target || 5)) * 100"></div>
+        </div>
+        <div class="spinner-small" *ngIf="variantsGenerating"></div>
+      </div>
+    </div>
+
+    <div class="variants-grid">
+      <!-- Actual variant cards FIRST -->
+      <div class="variant-card glass-card" *ngFor="let v of vr.items; trackBy: trackByIndex" [@variantAnimation]>
+        <div class="variant-left">
+          <div class="variant-header">
+            <span class="variant-number">Variant {{ v.no }}</span>
+            <div class="variant-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 13l4 4L19 7"/>
+              </svg>
+              Ready
+            </div>
+          </div>
+          
+          <div class="variant-preview">
+            <app-html-preview
+              [html]="v.html"
+              [loading]="false"
+              [allowScripts]="true">
+            </app-html-preview>
+          </div>
+
+          <div class="variant-actions">
+          <button 
+            mat-raised-button 
+            class="modern-btn use-btn"
+            (click)="onUseVariant(id, vr.runId, v.no)">
+            <span style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>Use This Template</span>
+            </span>
+          </button>
+          </div>
+        </div>
+
+        <div class="variant-right">
+          <div class="info-panel changes-panel">
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M8 7h12M8 12h12M8 17h12M3 7h.01M3 12h.01M3 17h.01"/>
+                </svg>
+              </div>
+              <h4>What Changed</h4>
+            </div>
+            <ul class="changes-list">
+              <li *ngFor="let c of v.changes; trackBy: trackByEdit" class="change-item">
+                <div class="change-content">
+                  <code class="change-before">{{ c.before }}</code>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="change-arrow">
+                    <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                  </svg>
+                  <code class="change-after">{{ c.after }}</code>
+                </div>
+                <div class="change-reason" *ngIf="c.reason">{{ c.reason }}</div>
+              </li>
+            </ul>
+          </div>
+
+          <div class="info-panel benefits-panel" *ngIf="v.why?.length">
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+              </div>
+              <h4>Why This Helps</h4>
+            </div>
+            <ul class="benefits-list">
+              <li *ngFor="let w of v.why; trackBy: trackByIndex" class="benefit-item">
+                <span class="benefit-icon">✓</span>
+                <span>{{ w }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Skeleton loading cards AFTER actual variants -->
+      <div class="variant-skeleton glass-card" 
+           *ngFor="let placeholder of getSkeletonArray(vr?.target || 5, vr?.items?.length || 0); trackBy: trackByIndex" 
+           [@variantAnimation]>
+        <div class="skeleton-content">
+          <div class="skeleton-header">
+            <div class="skeleton-title"></div>
+            <div class="skeleton-badge"></div>
+          </div>
+          <div class="skeleton-preview">
+            <div class="skeleton-lines">
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line short"></div>
+            </div>
+          </div>
+          <div class="skeleton-button"></div>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>

@@ -1,258 +1,315 @@
-<div class="use-grid">
-  <!-- Left: live preview -->
-  <section class="use-left">
-    <h3>Selected variant</h3>
-    <app-html-preview
-      [html]="(html$ | async) || ''"
-      [loading]="loadingVariant">
-    </app-html-preview>
-  </section>
-
-  <!-- Right: Chat -->
-  <section class="use-right">
-    <!-- Header row with Finalize button -->
-    <div class="flex items-center justify-between">
-      <h3>Assistant</h3>
-      <button
-        mat-raised-button
-        color="accent"
-        (click)="onFinalize()">
-        Finalize template
-      </button>
-    </div>
-
-    <div class="chat">
-      <!-- Thread -->
-      <div
-        class="chat-msg"
-        *ngFor="let m of (messages$ | async) ?? []; let i = index; trackBy: trackByMsg">
-        <div class="bubble" [class.me]="m.role === 'user'">
-          <div class="who">{{ m.role === 'user' ? 'You' : 'Assistant' }}</div>
-          <div class="text" [innerText]="m.text"></div>
-
-          <!-- Apply panel (keeps UI minimal; no before/after contexts shown) -->
-          <ng-container *ngIf="m.role === 'assistant' && m.json?.edits?.length">
-            <div class="apply-panel">
-              <div class="apply-header">
-                <h4>Apply changes</h4>
-                <div class="actions-row">
-                  <button
-                    mat-stroked-button
-                    (click)="onClearEdits(i)"
-                    [disabled]="applyingIndex === i">
-                    Clear
-                  </button>
-                  <button
-                    mat-raised-button
-                    color="primary"
-                    class="apply-btn"
-                    [disabled]="applyingIndex === i"
-                    (click)="onApplyEdits(i)">
-                    <mat-icon *ngIf="applyingIndex !== i">done_all</mat-icon>
-                    <mat-progress-spinner
-                      *ngIf="applyingIndex === i"
-                      diameter="16"
-                      mode="indeterminate">
-                    </mat-progress-spinner>
-                    <span>Apply all</span>
-                  </button>
-                </div>
-              </div>
-
-              <div class="apply-list">
-                <div class="apply-item rounded-lg border p-3"
-                     *ngFor="let e of m.json!.edits; let j = index">
-                  <div class="label text-sm text-neutral-500 mb-1">Original</div>
-                  <div class="orig rounded bg-neutral-50 p-2 text-sm break-words">
-                    {{ e.find }}
-                  </div>
-
-                  <div class="label text-sm text-neutral-500 mt-3 mb-1">
-                    Suggested (you can edit)
-                  </div>
-                  <input
-                    class="w-full rounded border p-2"
-                    [value]="e.replace"
-                    #repInput />
-
-                  <div class="mt-3 flex gap-2">
-                    <button
-                      mat-stroked-button
-                      color="primary"
-                      (click)="onApplySingle(i, e, repInput.value)"
-                      [disabled]="applyingIndex === i">
-                      Apply
-                    </button>
-                    <button
-                      mat-button
-                      (click)="onSkipSingle(i, j)"
-                      [disabled]="applyingIndex === i">
-                      Skip
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </ng-container>
-        </div>
-      </div>
-
-      <!-- Composer (reactive) -->
-      <div class="composer">
-        <mat-form-field appearance="outline" class="w100">
-          <textarea
-            matInput
-            [formControl]="input"
-            rows="3"
-            placeholder="Ask for ideas or request a change (e.g., ‘tighten the headline’)">
-          </textarea>
-        </mat-form-field>
-
-        <div class="send-row">
-          <button
-            mat-raised-button
-            color="primary"
-            (click)="onSend()"
-            [disabled]="sending || !input.value?.trim()">
-            <mat-icon *ngIf="!sending">send</mat-icon>
-            <mat-progress-spinner
-              *ngIf="sending"
-              diameter="16"
-              mode="indeterminate">
-            </mat-progress-spinner>
-            <span>Send</span>
-          </button>
-        </div>
-      </div>
-      <!-- /Composer -->
-    </div>
-  </section>
+<!-- Animated Background -->
+<div class="page-background">
+  <div class="gradient-orb orb-1"></div>
+  <div class="gradient-orb orb-2"></div>
+  <div class="gradient-orb orb-3"></div>
 </div>
 
-<!-- ↓↓↓ Finalize section (scroll target) ↓↓↓ -->
-<section id="finalize" class="mt-8">
-  <h3>Finalize template</h3>
-  <p class="text-sm text-neutral-600">
-    Review and validate links with live screenshots. Each capture is added as soon as it finishes.
-  </p>
+<div class="use-variant-wrapper">
+  <div class="use-grid">
+    <!-- Left: live preview -->
+    <section class="use-left glass-card">
+      <div class="section-header">
+        <h3>Selected Variant</h3>
+      </div>
+      <div class="preview-wrapper">
+        <app-html-preview
+          [html]="(html$ | async) || ''"
+          [loading]="loadingVariant">
+        </app-html-preview>
+      </div>
+    </section>
 
-  <div class="finalize-grid">
-    <!-- Left column: links -> screenshots -->
-    <div class="col">
-      <div class="row header">
-        <h4>Links & screenshots</h4>
+    <!-- Right: Chat -->
+    <section class="use-right glass-card">
+      <div class="section-header">
+        <h3>AI Assistant</h3>
+        <button
+          mat-raised-button
+          class="finalize-btn"
+          (click)="onFinalize()">
+          Finalize
+        </button>
+      </div>
 
-        <!-- Quick tester -->
-        <div class="inline-form">
-          <input
-            placeholder="Paste a link to test…"
-            #newUrl
-            (keyup.enter)="onSnapUrl(newUrl.value); newUrl.value=''" />
+      <div class="chat-container">
+        <div class="chat-messages" #chatMessages>
+          <div
+            class="chat-msg"
+            *ngFor="let m of (messages$ | async) ?? []; let i = index; trackBy: trackByMsg">
+            <div class="bubble" [class.me]="m.role === 'user'">
+              <div class="who">{{ m.role === 'user' ? 'YOU' : 'AI ASSISTANT' }}</div>
+              <div class="text" [innerText]="m.text"></div>
+
+              <ng-container *ngIf="m.role === 'assistant' && m.json?.edits?.length">
+                <div class="apply-panel">
+                  <div class="apply-header">
+                    <h4>Suggested Changes ({{ m.json?.edits?.length || 0 }})</h4>
+                    <div class="actions-row">
+                      <button
+                        mat-button
+                        class="clear-btn"
+                        (click)="onClearEdits(i)"
+                        [disabled]="applyingIndex === i">
+                        Clear
+                      </button>
+                      <button
+                        mat-raised-button
+                        class="apply-all-btn"
+                        [disabled]="applyingIndex === i"
+                        (click)="onApplyEdits(i)">
+                        <mat-progress-spinner
+                          *ngIf="applyingIndex === i"
+                          diameter="16"
+                          mode="indeterminate">
+                        </mat-progress-spinner>
+                        <span>{{ applyingIndex === i ? 'Applying...' : 'Apply All' }}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="apply-list">
+                    <div class="apply-item"
+                         *ngFor="let e of m.json!.edits; let j = index">
+                      <div class="edit-row">
+                        <div class="edit-col">
+                          <div class="label">Original</div>
+                          <div class="orig">{{ e.find }}</div>
+                        </div>
+                        <div class="arrow-col">→</div>
+                        <div class="edit-col">
+                          <div class="label">Replacement</div>
+                          <input
+                            type="text"
+                            class="replacement-input"
+                            [value]="e.replace"
+                            #repInput />
+                        </div>
+                      </div>
+
+                      <div class="edit-actions">
+                        <button
+                          mat-stroked-button
+                          class="apply-single-btn"
+                          (click)="onApplySingle(i, e, repInput.value)"
+                          [disabled]="applyingIndex === i">
+                          Apply
+                        </button>
+                        <button
+                          mat-button
+                          class="skip-btn"
+                          (click)="onSkipSingle(i, j)"
+                          [disabled]="applyingIndex === i">
+                          Skip
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </ng-container>
+            </div>
+          </div>
+        </div>
+
+        <div class="composer">
+          <textarea
+            class="message-input"
+            [formControl]="input"
+            placeholder="Ask for changes or ideas..."
+            rows="2"
+            (keydown)="handleKeyDown($event)">
+          </textarea>
           <button
             mat-raised-button
-            color="primary"
-            (click)="onSnapUrl(newUrl.value); newUrl.value=''">
-            Capture
+            class="send-btn"
+            (click)="onSend()"
+            [disabled]="sending || !input.value.trim()">
+            <mat-progress-spinner
+              *ngIf="sending"
+              diameter="18"
+              mode="indeterminate">
+            </mat-progress-spinner>
+            <svg *ngIf="!sending" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
           </button>
         </div>
       </div>
+    </section>
+  </div>
 
-      <div class="snaps" *ngIf="(snaps$ | async) as snaps">
-        <div *ngIf="!snaps.length" class="empty">
-          No screenshots yet. Click “Finalize template” to capture all links from this variant, or paste a link above.
-        </div>
+  <!-- Finalize section -->
+  <section id="finalize" class="finalize-section glass-card">
+    <div class="finalize-header">
+      <div class="header-content">
+        <h3>Finalize & Validate</h3>
+        <p>Capture screenshots and validate links against your source file</p>
+      </div>
+    </div>
 
-        <div class="snap-card" *ngFor="let s of snaps; trackBy: trackBySnap">
-          <div class="snap-head">
-            <div class="url">
-              <a [href]="s.finalUrl || s.url" target="_blank" rel="noopener">{{ s.finalUrl || s.url }}</a>
-              <span class="chip" [class.ok]="s.ok" [class.fail]="!s.ok">
-                {{ s.ok ? 'OK' : 'Fail' }}<ng-container *ngIf="s.status"> · {{ s.status }}</ng-container>
-              </span>
-            </div>
-            <div class="ts">{{ s.ts | date:'short' }}</div>
-          </div>
-
-          <div class="snap-body">
-            <ng-container *ngIf="s.dataUrl; else loadingOrError">
-              <img class="snap-thumb" [src]="s.dataUrl" alt="Screenshot" />
-            </ng-container>
-            <ng-template #loadingOrError>
-              <div class="snap-skel" *ngIf="!s.error">
-                <mat-progress-spinner diameter="24" mode="indeterminate"></mat-progress-spinner>
-                <span>Capturing…</span>
-              </div>
-              <div class="snap-err" *ngIf="s.error">
-                <mat-icon>error_outline</mat-icon>
-                <span>{{ s.error }}</span>
-              </div>
-            </ng-template>
-          </div>
-
-          <div class="snap-actions">
-            <button mat-stroked-button color="primary"
-                    (click)="onRetestUrl(s.finalUrl || s.url)"
-                    [disabled]="isSnapping(s.finalUrl || s.url)">
-              Retest
+    <div class="finalize-grid">
+      <!-- Left: Screenshots -->
+      <div class="screenshots-col">
+        <div class="col-header">
+          <h4>Link Screenshots</h4>
+          <div class="quick-capture">
+            <input
+              type="text"
+              placeholder="Paste URL to test"
+              #newUrl
+              (keyup.enter)="captureUrl(newUrl)" />
+            <button
+              mat-icon-button
+              class="capture-btn"
+              (click)="captureUrl(newUrl)"
+              matTooltip="Capture Screenshot">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
             </button>
           </div>
         </div>
+
+        <div class="snaps-list" *ngIf="(snaps$ | async) as snaps">
+          <div *ngIf="!snaps.length" class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+              <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <p>No screenshots yet</p>
+            <small>Click "Finalize" or paste a URL above</small>
+          </div>
+
+          <div class="snap-item" *ngFor="let s of snaps; trackBy: trackBySnap">
+            <div class="snap-preview" (click)="openImageModal(s)" style="cursor: pointer;">
+              <ng-container *ngIf="s.dataUrl; else snapLoading">
+                <img [src]="s.dataUrl" alt="Screenshot" />
+              </ng-container>
+              <ng-template #snapLoading>
+                <div class="snap-loading" *ngIf="!s.error">
+                  <mat-progress-spinner diameter="24" mode="indeterminate"></mat-progress-spinner>
+                </div>
+                <div class="snap-error" *ngIf="s.error">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                  <span>Failed</span>
+                </div>
+              </ng-template>
+            </div>
+            <div class="snap-info">
+              <div class="snap-url-container">
+                <a [href]="s.finalUrl || s.url" target="_blank" class="snap-url">
+                  {{ s.finalUrl || s.url }}
+                </a>
+                <div class="snap-meta">
+                  <span class="status-badge" [class.ok]="s.ok" [class.fail]="!s.ok">
+                    {{ s.ok ? 'OK' : 'Failed' }}
+                    <ng-container *ngIf="s.status"> · {{ s.status }}</ng-container>
+                  </span>
+                </div>
+              </div>
+              <button
+                mat-button
+                class="retest-btn"
+                (click)="onRetestUrl(s.finalUrl || s.url)"
+                [disabled]="isSnapping(s.finalUrl || s.url)">
+                Retest
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Validation -->
+      <div class="validation-col">
+        <div class="col-header">
+          <h4>Link Validation</h4>
+        </div>
+
+        <div class="upload-section">
+          <label class="upload-label">
+            <input type="file" accept=".csv,.xlsx,.xls" (change)="onValidLinksUpload($event)" hidden />
+            <div class="upload-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              <span>Upload CSV/Excel</span>
+              <small>Must have "valid links" column</small>
+            </div>
+          </label>
+
+          <div *ngIf="(validLinks$ | async) as vlinks" class="upload-status">
+            <div *ngIf="vlinks.length" class="status-success">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              {{ vlinks.length }} valid link(s) loaded
+            </div>
+          </div>
+        </div>
+
+        <div class="validation-results" *ngIf="(linkChecks$ | async) as checks">
+          <div *ngIf="checks.length" class="results-header">
+            <h5>Validation Results</h5>
+            <span class="count">{{ checks.length }} link(s)</span>
+          </div>
+
+          <div class="validation-grid" *ngIf="checks.length">
+            <div class="validation-item" *ngFor="let c of checks"
+                 [class.valid]="c.inHtml && c.inFile"
+                 [class.invalid]="!c.inHtml || !c.inFile">
+              <div class="validation-status">
+                <svg *ngIf="c.inHtml && c.inFile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <svg *ngIf="!c.inHtml && c.inFile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <svg *ngIf="c.inHtml && !c.inFile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+              </div>
+              <div class="validation-content">
+                <a [href]="c.url" target="_blank" class="validation-url">{{ c.url }}</a>
+                <div class="validation-reason" *ngIf="c.inFile && !c.inHtml">Missing from HTML</div>
+                <div class="validation-reason" *ngIf="!c.inFile && c.inHtml">Extra link in HTML</div>
+              </div>
+              <button
+                mat-icon-button
+                class="capture-mini-btn"
+                (click)="onRetestUrl(c.url)"
+                matTooltip="Capture">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div *ngIf="!checks.length" class="no-results">
+            Upload a file to see validation results
+          </div>
+        </div>
       </div>
     </div>
-
-    <!-- Right column: upload & validation -->
-    <div class="col">
-      <h4>Validation</h4>
-      <p class="text-sm text-neutral-600">
-        Upload a CSV/XLSX with a column named <strong>valid links</strong>.
-        We’ll compare it to the links found in this variant’s HTML.
-      </p>
-
-      <!-- Upload control -->
-      <div class="inline-form" style="margin-bottom:10px">
-        <input type="file" accept=".csv,.xlsx,.xls"
-               (change)="onValidLinksUpload($event)" />
-        <small class="text-sm text-neutral-500">Header must be exactly: <code>valid links</code></small>
+  </section>
+  <!-- Fullscreen Image Modal -->
+  <!-- Add this right before the closing </div> of use-variant-wrapper -->
+  <div class="image-modal" *ngIf="selectedImage" (click)="closeImageModal()">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <button class="modal-close" (click)="closeImageModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <img [src]="selectedImage.dataUrl" [alt]="selectedImage.url" />
+      <div class="modal-info">
+        <a [href]="selectedImage.url" target="_blank">{{ selectedImage.url }}</a>
       </div>
-
-      <!-- File summary -->
-      <div *ngIf="(validLinks$ | async) as vlinks">
-        <div class="text-sm" *ngIf="vlinks.length; else noFile">
-          Loaded {{ vlinks.length }} link(s) from file.
-        </div>
-        <ng-template #noFile>
-          <div class="text-sm text-neutral-500">No file loaded yet.</div>
-        </ng-template>
-      </div>
-
-      <!-- Comparison list -->
-      <div *ngIf="(linkChecks$ | async) as checks">
-        <div *ngIf="checks.length; else noChecks">
-          <div class="edits-title">Results</div>
-          <ul class="edits-list">
-            <li *ngFor="let c of checks">
-              <mat-icon
-                [ngClass]="{ 'text-green-600': (c.inHtml && c.inFile), 'text-red-600': (!c.inHtml && c.inFile) }">
-                {{ (c.inHtml && c.inFile) ? 'check_circle' : (!c.inHtml && c.inFile) ? 'cancel' : 'help_outline' }}
-              </mat-icon>
-              <a [href]="c.url" target="_blank" rel="noopener">{{ c.url }}</a>
-              <span class="reason" *ngIf="c.inFile && !c.inHtml"> — not found in HTML</span>
-              <span class="reason" *ngIf="!c.inFile && c.inHtml"> — extra link in HTML</span>
-              <button class="ml-2" mat-button color="primary"
-                      (click)="onRetestUrl(c.url)">Capture</button>
-            </li>
-          </ul>
-        </div>
-        <ng-template #noChecks>
-          <div class="text-sm text-neutral-500">Upload a file to see results.</div>
-        </ng-template>
-      </div>
-
-      <p class="text-sm text-neutral-600" style="margin-top:12px">
-        If a link seems wrong, paste a corrected URL in the box on the left — it will be tested and added immediately.
-        <br />
-        Refresh-safe: screenshots are stored per run and reloaded on page open.
-      </p>
     </div>
   </div>
-</section>
+</div>

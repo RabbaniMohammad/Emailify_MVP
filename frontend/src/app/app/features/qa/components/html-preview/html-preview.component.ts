@@ -1,6 +1,6 @@
-import { Component, Input, OnChanges, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, OnChanges, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 @Component({
   selector: 'app-html-preview',
@@ -8,8 +8,27 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
   imports: [CommonModule],
   template: `
     <div class="preview-wrap">
-      <div class="skeleton-cover" *ngIf="loading || internalLoading" aria-hidden="true"></div>
-      <iframe class="preview-frame" [src]="src" (load)="internalLoading=false"></iframe>
+      <div class="skeleton-cover" *ngIf="loading" aria-hidden="true"></div>
+
+      <!-- NG0910 fix: two static iframes -->
+      <iframe
+        *ngIf="allowScripts; else safeIframe"
+        class="preview-frame"
+        [attr.srcdoc]="safeSrcdoc"
+        sandbox="allow-same-origin allow-scripts"
+        referrerpolicy="no-referrer"
+        (load)="loading=false">
+      </iframe>
+
+      <ng-template #safeIframe>
+        <iframe
+          class="preview-frame"
+          [attr.srcdoc]="safeSrcdoc"
+          sandbox="allow-same-origin"
+          referrerpolicy="no-referrer"
+          (load)="loading=false">
+        </iframe>
+      </ng-template>
     </div>
   `,
   styles: [`
@@ -20,31 +39,47 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class HtmlPreviewComponent implements OnChanges, OnDestroy {
+export class HtmlPreviewComponent implements OnChanges {
   @Input() html = '';
   @Input() loading = false;
 
-  src: SafeResourceUrl | null = null;
-  internalLoading = false;
-  private objectUrl: string | null = null;
+  /** Optional: turn on to silence the console message locally. */
+  @Input() allowScripts = false;
+
+  safeSrcdoc: SafeHtml | null = null;
 
   constructor(private s: DomSanitizer) {}
 
   ngOnChanges() {
-    // reset overlay each time html changes
-    this.internalLoading = !!this.html;
-    this.revoke();
-    if (!this.html) { this.src = null; return; }
-    const blob = new Blob([this.html], { type: 'text/html' });
-    this.objectUrl = URL.createObjectURL(blob);
-    this.src = this.s.bypassSecurityTrustResourceUrl(this.objectUrl);
+    this.loading = !!this.html;
+    const doc = this.ensureDoc(this.html || '');
+    const cleaned = this.stripDangerousBits(doc);
+    this.safeSrcdoc = this.s.bypassSecurityTrustHtml(cleaned);
   }
 
-  ngOnDestroy() {
-    this.revoke();
+  private ensureDoc(bodyOrDoc: string): string {
+    const html = String(bodyOrDoc || '');
+    const hasDoc = /<body[\s>]/i.test(html) || /<\/html>/i.test(html);
+    if (hasDoc) return html;
+    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' + html + '</body></html>';
   }
 
-  private revoke() {
-    if (this.objectUrl) { URL.revokeObjectURL(this.objectUrl); this.objectUrl = null; }
+  private stripDangerousBits(docHtml: string): string {
+    try {
+      const doc = new DOMParser().parseFromString(docHtml, 'text/html');
+      doc.querySelectorAll('script, iframe, base').forEach(n => n.remove());
+      doc.querySelectorAll<HTMLElement>('*').forEach(el => {
+        for (let i = el.attributes.length - 1; i >= 0; i--) {
+          const a = el.attributes.item(i);
+          if (a && /^on/i.test(a.name)) el.removeAttribute(a.name);
+        }
+      });
+      return '<!doctype html>\n' + doc.documentElement.outerHTML;
+    } catch {
+      return docHtml
+        .replace(/<script[\s\S]*?<\/script>/gi,'')
+        .replace(/<base[\s\S]*?>/gi,'')
+        .replace(/<iframe[\s\S]*?<\/iframe>/gi,'');
+    }
   }
 }

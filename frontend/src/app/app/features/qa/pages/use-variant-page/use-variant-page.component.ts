@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, AfterViewInit, OnInit, HostListener  } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { BehaviorSubject, firstValueFrom, map, shareReplay, combineLatest } from 'rxjs';
@@ -18,6 +18,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { ViewChild, ElementRef } from '@angular/core';
+
 
 type AssistantPayload = {
   assistantText: string;
@@ -44,9 +46,11 @@ type LinkCheck = { url: string; inFile: boolean; inHtml: boolean };
   styleUrls: ['./use-variant-page.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class UseVariantPageComponent {
+export class UseVariantPageComponent implements AfterViewInit, OnInit {
   private ar = inject(ActivatedRoute);
   private qa = inject(QaService);
+  private cdr = inject(ChangeDetectorRef);
+  // private zone = inject(NgZone);
 
   readonly templateId$ = this.ar.paramMap.pipe(map(p => p.get('id')!), shareReplay(1));
   readonly runId$      = this.ar.paramMap.pipe(map(p => p.get('runId')!), shareReplay(1));
@@ -86,6 +90,13 @@ export class UseVariantPageComponent {
   // links found inside current HTML
   private htmlLinks$ = this.html$.pipe(map(html => this.extractHttpLinks(html)));
 
+  @ViewChild('chatMessages') private chatMessagesRef!: ElementRef;
+  private scrollAnimation: number | null = null;
+  private loadingTimeout?: number;
+
+  // Add after existing properties
+  selectedImage: SnapResult | null = null;
+
   // comparison output used by the template
   readonly linkChecks$ = combineLatest([this.validLinks$, this.htmlLinks$]).pipe(
     map(([fileLinks, htmlLinks]) => {
@@ -112,82 +123,232 @@ export class UseVariantPageComponent {
     })
   );
 
+  ngOnInit() {
+    // Reset scroll position immediately when component initializes
+    window.scrollTo(0, 0);
+  }
+
   constructor() {
+    // Set a maximum loading time of 10 seconds as safety timeout
+    this.loadingTimeout = window.setTimeout(() => {
+      if (this.loadingVariant) {
+        console.warn('Loading timeout reached, forcing completion');
+        this.loadingVariant = false;
+        this.cdr.detectChanges();
+      }
+    }, 10000);
+
     // Load variant and chat thread (rehydrate)
     this.runId$.subscribe(async (runId) => {
       const no = Number(this.ar.snapshot.paramMap.get('no')!);
 
-      // 1) Chat cache (has currentHtml + thread)
-      const cachedThread = this.qa.getChatCached(runId, no);
-      if (cachedThread?.html) {
-        this.htmlSubject.next(cachedThread.html);
-        this.messagesSubject.next(cachedThread.messages || []);
-        this.loadingVariant = false;
-
-        // also rehydrate snaps cache (so finalize section shows persisted items)
-        this.snapsSubject.next(this.qa.getSnapsCached(runId));
-        return;
-      }
-
-      // 2) Variants run cache (localStorage)
-      const run = this.qa.getVariantsRunById(runId);
-      const item = run?.items?.find(it => it.no === no) || null;
-      if (item?.html) {
-        this.htmlSubject.next(item.html);
-
-        const intro: ChatTurn = {
-          role: 'assistant',
-          text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line.',
-          json: null,
-          ts: Date.now(),
-        };
-        const thread: ChatThread = { html: item.html, messages: [intro] };
-        this.messagesSubject.next(thread.messages);
-        this.qa.saveChat(runId, no, thread);
-
-        // hydrate snaps cache
-        this.snapsSubject.next(this.qa.getSnapsCached(runId));
-
-        this.loadingVariant = false;
-        return;
-      }
-
-      // 3) Fallback → backend (may 404 after server restarts)
       try {
-        const status = await firstValueFrom(this.qa.getVariantsStatus(runId));
-        const fromApi = status.items.find(it => it.no === no) || null;
-        const html = fromApi?.html || '';
-        this.htmlSubject.next(html);
+        // 1) Chat cache (has currentHtml + thread)
+        const cachedThread = this.qa.getChatCached(runId, no);
+        if (cachedThread?.html) {
+          this.htmlSubject.next(cachedThread.html);
+          this.messagesSubject.next(cachedThread.messages || []);
+          this.snapsSubject.next(this.qa.getSnapsCached(runId));
+          return; // Early return, finally block will handle loading state
+        }
 
-        const intro: ChatTurn = {
-          role: 'assistant',
-          text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line.',
-          json: null,
-          ts: Date.now(),
-        };
-        const thread: ChatThread = { html, messages: [intro] };
-        this.messagesSubject.next(thread.messages);
-        this.qa.saveChat(runId, no, thread);
-      } catch {
-        const intro: ChatTurn = {
-          role: 'assistant',
-          text: 'I couldn’t restore this variant from the server. If you go back and reopen it from the Variants list, I’ll pick it up.',
-          json: null,
-          ts: Date.now(),
-        };
-        this.messagesSubject.next([intro]);
-      } finally {
-        // hydrate snaps cache even if thread not found (in case user finalized earlier)
+        // 2) Variants run cache (localStorage)
+        const run = this.qa.getVariantsRunById(runId);
+        const item = run?.items?.find(it => it.no === no) || null;
+        if (item?.html) {
+          this.htmlSubject.next(item.html);
+
+          const intro: ChatTurn = {
+            role: 'assistant',
+            text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line.',
+            json: null,
+            ts: Date.now(),
+          };
+          const thread: ChatThread = { html: item.html, messages: [intro] };
+          this.messagesSubject.next(thread.messages);
+          this.qa.saveChat(runId, no, thread);
+          this.snapsSubject.next(this.qa.getSnapsCached(runId));
+          return; // Early return, finally block will handle loading state
+        }
+
+        // 3) Fallback → backend (may 404 after server restarts)
+        try {
+          const status = await firstValueFrom(this.qa.getVariantsStatus(runId));
+          const fromApi = status.items.find(it => it.no === no) || null;
+          const html = fromApi?.html || '';
+          this.htmlSubject.next(html);
+
+          const intro: ChatTurn = {
+            role: 'assistant',
+            text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line.',
+            json: null,
+            ts: Date.now(),
+          };
+          const thread: ChatThread = { html, messages: [intro] };
+          this.messagesSubject.next(thread.messages);
+          this.qa.saveChat(runId, no, thread);
+        } catch (apiError) {
+          console.error('Failed to load from API:', apiError);
+          const intro: ChatTurn = {
+            role: 'assistant',
+            text: "I couldn't restore this variant from the server. If you go back and reopen it from the Variants list, I'll pick it up.",
+            json: null,
+            ts: Date.now(),
+          };
+          this.messagesSubject.next([intro]);
+        }
+
         this.snapsSubject.next(this.qa.getSnapsCached(runId));
+      } catch (error) {
+        console.error('Error during component initialization:', error);
+        // Ensure we have at least an error message
+        const errorMessage: ChatTurn = {
+          role: 'assistant',
+          text: 'An error occurred while loading this variant. Please try refreshing the page.',
+          json: null,
+          ts: Date.now(),
+        };
+        this.messagesSubject.next([errorMessage]);
+        this.snapsSubject.next([]);
+      } finally {
+        // ALWAYS set loading to false and clear timeout
         this.loadingVariant = false;
+        if (this.loadingTimeout) {
+          clearTimeout(this.loadingTimeout);
+          this.loadingTimeout = undefined;
+        }
+        this.cdr.detectChanges();
+        
+        // Position chat at bottom while maintaining scroll capability
+        this.positionChatAtBottom();
       }
     });
+  }
+
+  openImageModal(snap: SnapResult): void {
+    // console.log('Clicked image:', snap.url, snap.dataUrl);
+    if (snap.dataUrl) {
+      this.selectedImage = snap;
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  closeImageModal(): void {
+    // console.log('Closing modal');
+    this.selectedImage = null;
+    document.body.style.overflow = 'auto';
+  }
+
+  // Optional: Close modal with Escape key
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscapeKey(event: KeyboardEvent): void {
+    if (this.selectedImage) {
+      this.closeImageModal();
+    }
+  }
+
+  ngAfterViewInit() {
+    try {
+      const chatElement = this.chatMessagesRef?.nativeElement;
+      if (chatElement) {
+        // Stop animation when user manually scrolls
+        chatElement.addEventListener('wheel', () => {
+          if (this.scrollAnimation) {
+            cancelAnimationFrame(this.scrollAnimation);
+            this.scrollAnimation = null;
+          }
+        });
+        
+        chatElement.addEventListener('touchmove', () => {
+          if (this.scrollAnimation) {
+            cancelAnimationFrame(this.scrollAnimation);
+            this.scrollAnimation = null;
+          }
+        });
+      }
+
+      // Ensure scroll position is at top for main page
+      window.scrollTo(0, 0);
+      
+      // Position chat at bottom while maintaining scroll capability
+      this.positionChatAtBottom();
+    } catch (error) {
+      console.error('Error in ngAfterViewInit:', error);
+    }
+  }
+
+  // Proper method to position at bottom while maintaining scroll capability
+  private positionChatAtBottom(): void {
+    setTimeout(() => {
+      const element = this.chatMessagesRef?.nativeElement;
+      if (element && element.scrollHeight > 0) {
+        // Temporarily disable smooth scrolling for instant positioning
+        element.style.scrollBehavior = 'auto';
+        element.scrollTop = element.scrollHeight;
+        
+        // Re-enable smooth scrolling after positioning
+        setTimeout(() => {
+          element.style.scrollBehavior = 'smooth';
+        }, 50);
+        
+        console.log('Chat positioned at bottom with scroll capability maintained');
+      }
+    }, 50);
+  }
+
+  // ---------------- Scroll methods ----------------
+  scrollToTop(): void {
+    this.smoothScrollTo(0);
+  }
+
+  scrollToBottom(): void {
+    const element = this.chatMessagesRef?.nativeElement || document.querySelector('.chat-messages');
+    if (element) {
+      this.smoothScrollTo(element.scrollHeight);
+    }
+  }
+
+  private smoothScrollTo(targetPosition: number): void {
+    const element = this.chatMessagesRef?.nativeElement || document.querySelector('.chat-messages');
+    if (!element) return;
+
+    // Cancel any ongoing animation
+    if (this.scrollAnimation) {
+      cancelAnimationFrame(this.scrollAnimation);
+    }
+
+    const startPosition = element.scrollTop;
+    const distance = targetPosition - startPosition;
+    const duration = 800;
+    let startTime: number | null = null;
+
+    const animateScroll = (currentTime: number) => {
+      if (startTime === null) startTime = currentTime;
+      const timeElapsed = currentTime - startTime;
+      const progress = Math.min(timeElapsed / duration, 1);
+
+      // Easing function for smooth animation
+      const ease = progress < 0.5 
+        ? 2 * progress * progress 
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+      element.scrollTop = startPosition + distance * ease;
+
+      if (progress < 1) {
+        this.scrollAnimation = requestAnimationFrame(animateScroll);
+      } else {
+        this.scrollAnimation = null;
+      }
+    };
+
+    this.scrollAnimation = requestAnimationFrame(animateScroll);
   }
 
   // ---------------- Chat actions ----------------
   async onSend() {
     const message = (this.input.value || '').trim();
     if (!message || this.sending) return;
+    this.input.setValue('');
     this.sending = true;
 
     const runId = this.ar.snapshot.paramMap.get('runId')!;
@@ -204,6 +365,8 @@ export class UseVariantPageComponent {
       const msgs = [...this.messagesSubject.value, userTurn];
       this.messagesSubject.next(msgs);
       this.persistThread(runId, no, html, msgs);
+      
+      setTimeout(() => this.scrollToBottom(), 50);
 
       const resp = await firstValueFrom(this.qa.sendChatMessage(runId, no, html, hist, message)) as AssistantPayload;
 
@@ -217,8 +380,8 @@ export class UseVariantPageComponent {
       const msgs2 = [...this.messagesSubject.value, assistantTurn];
       this.messagesSubject.next(msgs2);
       this.persistThread(runId, no, html, msgs2);
-
-      this.input.setValue('');
+      
+      setTimeout(() => this.scrollToBottom(), 50);
     } catch (e) {
       console.error('chat send error', e);
     } finally {
@@ -226,7 +389,6 @@ export class UseVariantPageComponent {
     }
   }
 
-  /** Apply ALL edits in a given assistant message (uses each edit's current `replace`). */
   async onApplyEdits(turnIndex: number) {
     if (this.applyingIndex !== null) return;
     this.applyingIndex = turnIndex;
@@ -240,14 +402,11 @@ export class UseVariantPageComponent {
 
     try {
       const currentHtml = this.htmlSubject.value;
-
       const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, edits));
       const newHtml = resp?.html || currentHtml;
       const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
 
       this.htmlSubject.next(newHtml);
-
-      // Clear edits from this message after apply-all (they've been processed)
       this.updateMessageEdits(turnIndex, []);
 
       const noteText = numChanges > 0
@@ -258,6 +417,8 @@ export class UseVariantPageComponent {
       const msgs = [...this.messagesSubject.value, appliedNote];
       this.messagesSubject.next(msgs);
       this.persistThread(runId, no, newHtml, msgs);
+      
+      setTimeout(() => this.scrollToBottom(), 50);
     } catch (e) {
       console.error('apply edits error', e);
     } finally {
@@ -265,9 +426,23 @@ export class UseVariantPageComponent {
     }
   }
 
+  handleEnterKey(event: KeyboardEvent): void {
+    if (!event.shiftKey) {
+      event.preventDefault();
+      this.onSend();
+    }
+  }
+
+  captureUrl(inputElement: HTMLInputElement): void {
+    const url = inputElement.value.trim();
+    if (url) {
+      this.onSnapUrl(url);
+      inputElement.value = '';
+    }
+  }
+
   // ---------------- Finalize & screenshots ----------------
   onFinalize() {
-    // Scroll to the section
     const el = document.getElementById('finalize');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -278,16 +453,11 @@ export class UseVariantPageComponent {
     }
 
     this._isFinalizing = true;
-
-    // 1) seed from cache so UI can show previous results immediately
     const cached = this.qa.getSnapsCached(runId);
     this.snapsSubject.next(cached || []);
 
-    // 2) extract unique https? links from current HTML
     const html = this.htmlSubject.value || '';
     const urls = this.extractHttpLinks(html);
-
-    // 3) fire each capture independently; each result updates the list immediately
     urls.forEach((u) => this.captureOne(runId, u));
   }
 
@@ -308,6 +478,13 @@ export class UseVariantPageComponent {
     this.captureOne(runId, url);
   }
 
+  handleKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.onSend();
+    }
+  }
+
   // ---------------- Upload: CSV/XLSX of "valid links" ----------------
   async onValidLinksUpload(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -316,10 +493,8 @@ export class UseVariantPageComponent {
 
     const name = file.name.toLowerCase();
 
-    // XLSX path (optional). Falls back to CSV if lib is missing or fails.
     if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
       try {
-        // dynamic import so build doesn’t require the package
         const XLSX: any = await import('xlsx').catch(() => null);
         if (XLSX) {
           const buf = await file.arrayBuffer();
@@ -335,21 +510,19 @@ export class UseVariantPageComponent {
       }
     }
 
-    // CSV fallback
     const text = await file.text();
     const rows = this.parseCsv(text);
     this.consumeValidLinksRows(rows);
     input.value = '';
   }
 
-  /** Convert parsed rows to a list of URLs from the "valid links" column. */
   private consumeValidLinksRows(rows: any[][]) {
     if (!rows?.length) {
       this.validLinksSubject.next([]);
       return;
     }
     const header = (rows[0] || []).map((c: any) => String(c ?? '').trim().toLowerCase());
-    const idx = header.findIndex(h => h === 'valid links'); // exact header name (case-insensitive)
+    const idx = header.findIndex(h => h === 'valid links');
     if (idx < 0) {
       console.warn('No "valid links" column found.');
       this.validLinksSubject.next([]);
@@ -363,9 +536,8 @@ export class UseVariantPageComponent {
     this.validLinksSubject.next(this.dedupe(out));
   }
 
-  /** Simple CSV parser with quotes support. Returns rows of cells. */
   private parseCsv(text: string): string[][] {
-    const s = text.replace(/^\uFEFF/, ''); // strip BOM
+    const s = text.replace(/^\uFEFF/, '');
     const rows: string[][] = [];
     let i = 0, cur = '', row: string[] = [], inQ = false;
 
@@ -444,10 +616,9 @@ export class UseVariantPageComponent {
     return { intent, ideas, edits, targets, notes };
   }
 
-  // Stable key so adding messages doesn’t shuffle indices
-  trackByMsg = (_: number, m: ChatTurn) => m.ts;
+  trackBySnap = (_: number, s: SnapResult) => (s?.finalUrl || s?.url || String(s?.ts || '0'));
+  trackByMsg = (_: number, m: ChatTurn) => m?.ts ?? _;
 
-  // Extract links for screenshots & comparison. Emails should use <a>, so we scope to anchors.
   private extractHttpLinks(html: string): string[] {
     const out: string[] = [];
     try {
@@ -479,7 +650,7 @@ export class UseVariantPageComponent {
 
   private captureOne(runId: string, url: string) {
     const key = url.toLowerCase();
-    if (this.snapping.get(key)) return; // already in progress
+    if (this.snapping.get(key)) return;
     this.snapping.set(key, true);
 
     this.qa.snapUrl(runId, url).subscribe({
@@ -503,7 +674,6 @@ export class UseVariantPageComponent {
     });
   }
 
-  // Manual patch (explicit find/before/after/replace) — optional/hidden
   getEditForm(i: number, _m: ChatTurn): FormGroup {
     let fg = this.editForms.get(i);
     if (!fg) {
@@ -597,7 +767,6 @@ export class UseVariantPageComponent {
 
     try {
       const currentHtml = this.htmlSubject.value;
-
       const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, [edit]));
       const newHtml = resp?.html || currentHtml;
       const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
