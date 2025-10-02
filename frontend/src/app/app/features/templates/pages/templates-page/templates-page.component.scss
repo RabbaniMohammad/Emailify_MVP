@@ -1,23 +1,26 @@
 .layout {
-  display: grid;
-  grid-template-columns: minmax(320px, 400px) 1fr;
-  gap: 0;
+  display: flex;
   height: calc(100vh - 64px); // Full viewport minus toolbar
+  gap: 0;
   overflow: hidden;
   padding: 0;
 }
 
 .left {
-  min-width: 320px;
+  width: 450px; // Increased width for template list
+  min-width: 450px; // Prevent shrinking
+  flex-shrink: 0; // Don't let it get smaller
   height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-right: 2px solid #e2e8f0;
+  // padding:0px;
 }
 
 .right {
+  flex: 1; // Takes remaining space
   height: 100%;
   overflow: hidden;
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
@@ -43,20 +46,34 @@
   box-shadow: 0 2px 8px rgba(220, 38, 38, 0.1);
 }
 
+// Ensure search bar doesn't take too much space
+app-search-bar {
+  flex-shrink: 0;
+}
+
+// Ensure template list can grow and scroll
+app-template-list {
+  flex: 1;
+  min-height: 0; // Critical for flex scrolling
+  overflow: hidden; // Let the component handle its own scrolling
+}
+
 // Responsive Design
 @media (max-width: 1024px) {
-  .layout {
-    grid-template-columns: minmax(280px, 350px) 1fr;
+  .left {
+    width: 350px;
+    min-width: 350px;
   }
 }
 
 @media (max-width: 768px) {
   .layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    flex-direction: column;
   }
 
   .left {
+    width: 100%;
+    min-width: auto;
     height: auto;
     max-height: 50vh;
     border-right: none;

@@ -16,12 +16,12 @@
     </ng-container>
 
     <ng-template #listTpl>
-      <app-template-list
+      <app-template-list 
         [items]="vm.items"
-        [selectedId]="vm.selectedId ?? undefined"
+        [selectedId]="vm.selectedId"
         [showActionForId]="runButtonItemId"
-        (select)="onSelect($event)"
-        (action)="onRunTests($event)">
+        (itemClick)="onSelect($event)"
+        (actionClick)="onRunTests($event.id)">
       </app-template-list>
 
       <div *ngIf="vm.status === 'error'" class="error">
