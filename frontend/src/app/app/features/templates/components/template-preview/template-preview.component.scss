@@ -19,7 +19,7 @@
 .preview-root {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
   overflow: hidden;
   position: relative;
@@ -50,16 +50,17 @@
   }
 }
 
-// Ultra Modern Glassmorphic Header - Fully Responsive
+// Ultra Modern Glassmorphic Header - Compact & Responsive
 .preview-header {
   position: relative;
   background: linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%);
-  padding: 1.25rem 2rem;
+  padding: clamp(0.75rem, 2vw, 1rem) clamp(1rem, 3vw, 1.5rem);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   overflow: hidden;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
   min-height: auto;
+  flex-shrink: 0;
 
   .header-content {
     position: relative;
@@ -67,7 +68,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1rem;
+    gap: clamp(0.5rem, 2vw, 0.75rem);
     max-width: 1400px;
     margin: 0 auto;
   }
@@ -479,6 +480,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  // min-height: 600px;
   position: relative;
   margin: 0;
   background: white;
@@ -1158,59 +1160,62 @@
 
 @media (max-width: 768px) {
   .preview-root {
-    height: 100vh;
-    overflow: hidden;
+    height: 100%;
   }
 
   .preview-header {
-    padding: 0.875rem 1rem;
+    padding: clamp(0.5rem, 1.5vw, 0.75rem) clamp(0.75rem, 2vw, 1rem);
     min-height: auto;
 
     .header-content {
-      gap: 0.75rem;
+      gap: clamp(0.375rem, 1.5vw, 0.5rem);
     }
 
     .template-title {
-      font-size: 1.25rem;
+      font-size: clamp(1rem, 3.5vw, 1.25rem);
       text-align: center;
+      line-height: 1.2;
+      margin: 0;
     }
 
     .template-meta {
-      gap: 0.5rem;
+      gap: clamp(0.25rem, 1vw, 0.375rem);
       flex-wrap: wrap;
       justify-content: center;
 
       .status-badge,
       .template-id,
       .performance-badge-inline {
-        font-size: 0.75rem;
-        padding: 0.375rem 0.75rem;
+        font-size: clamp(0.625rem, 2vw, 0.75rem);
+        padding: clamp(0.25rem, 1vw, 0.375rem) clamp(0.5rem, 2vw, 0.75rem);
+        border-radius: clamp(12px, 3vw, 16px);
       }
 
       .status-badge .status-indicator {
-        width: 6px;
-        height: 6px;
+        width: clamp(5px, 1.5vw, 6px);
+        height: clamp(5px, 1.5vw, 6px);
       }
 
       .performance-badge-inline svg {
-        width: 10px;
-        height: 10px;
+        width: clamp(8px, 2vw, 10px);
+        height: clamp(8px, 2vw, 10px);
       }
     }
 
     .action-buttons {
       flex-wrap: wrap;
       justify-content: center;
-      gap: 0.5rem;
+      gap: clamp(0.25rem, 1vw, 0.375rem);
 
       .action-btn {
-        padding: 0.5rem 0.875rem;
-        font-size: 0.75rem;
+        padding: clamp(0.375rem, 1.5vw, 0.5rem) clamp(0.5rem, 2vw, 0.75rem);
+        font-size: clamp(0.625rem, 2vw, 0.75rem);
         min-width: auto;
+        border-radius: clamp(6px, 2vw, 8px);
 
         svg {
-          width: 14px;
-          height: 14px;
+          width: clamp(12px, 3vw, 14px);
+          height: clamp(12px, 3vw, 14px);
         }
 
         span {
@@ -1224,17 +1229,17 @@
     }
 
     .view-mode-toggle {
-      padding: 3px;
-      border-radius: 8px;
+      padding: clamp(2px, 0.5vw, 3px);
+      border-radius: clamp(6px, 2vw, 8px);
 
       .mode-btn {
-        padding: 0.375rem 0.5rem;
-        font-size: 0.7rem;
-        border-radius: 6px;
+        padding: clamp(0.25rem, 1vw, 0.375rem) clamp(0.375rem, 1.5vw, 0.5rem);
+        font-size: clamp(0.6rem, 1.8vw, 0.7rem);
+        border-radius: clamp(4px, 1.5vw, 6px);
 
         svg {
-          width: 10px;
-          height: 10px;
+          width: clamp(8px, 2.5vw, 10px);
+          height: clamp(8px, 2.5vw, 10px);
         }
 
         span {
@@ -1325,38 +1330,57 @@
 
 @media (max-width: 480px) {
   .preview-header {
-    padding: 0.75rem 0.875rem;
+    padding: clamp(0.375rem, 1vw, 0.5rem) clamp(0.75rem, 2vw, 0.875rem);
 
     .template-title {
-      font-size: 1.125rem;
+      font-size: clamp(0.875rem, 3vw, 1.125rem);
+      line-height: 1.1;
     }
 
     .template-meta {
-      gap: 0.375rem;
+      gap: clamp(0.1875rem, 0.75vw, 0.25rem);
 
       .status-badge,
       .template-id,
       .performance-badge-inline {
-        font-size: 0.6875rem;
-        padding: 0.25rem 0.625rem;
+        font-size: clamp(0.5625rem, 1.8vw, 0.6875rem);
+        padding: clamp(0.1875rem, 0.75vw, 0.25rem) clamp(0.375rem, 1.5vw, 0.625rem);
+        border-radius: clamp(8px, 2vw, 12px);
+      }
+
+      .status-badge .status-indicator {
+        width: clamp(4px, 1vw, 5px);
+        height: clamp(4px, 1vw, 5px);
+      }
+
+      .performance-badge-inline svg {
+        width: clamp(6px, 1.5vw, 8px);
+        height: clamp(6px, 1.5vw, 8px);
       }
     }
 
     .action-buttons .action-btn {
-      padding: 0.375rem 0.625rem;
+      padding: clamp(0.25rem, 1vw, 0.375rem) clamp(0.375rem, 1.5vw, 0.625rem);
+      border-radius: clamp(4px, 1.5vw, 6px);
       
       svg {
-        width: 12px;
-        height: 12px;
+        width: clamp(10px, 2.5vw, 12px);
+        height: clamp(10px, 2.5vw, 12px);
       }
     }
 
-    .view-mode-toggle .mode-btn {
-      padding: 0.25rem 0.375rem;
-      
-      svg {
-        width: 8px;
-        height: 8px;
+    .view-mode-toggle {
+      padding: clamp(1px, 0.3vw, 2px);
+      border-radius: clamp(4px, 1.5vw, 6px);
+
+      .mode-btn {
+        padding: clamp(0.1875rem, 0.75vw, 0.25rem) clamp(0.25rem, 1vw, 0.375rem);
+        border-radius: clamp(3px, 1vw, 4px);
+        
+        svg {
+          width: clamp(6px, 2vw, 8px);
+          height: clamp(6px, 2vw, 8px);
+        }
       }
     }
   }
@@ -1396,6 +1420,48 @@
     &.tablet-mode .iframe-container {
       width: 100vw;
       border-radius: 4px;
+    }
+  }
+}
+
+// Compact mode for when used as sub-component
+.preview-root.compact {
+  .preview-header {
+    padding: clamp(0.5rem, 1.5vw, 0.75rem) clamp(0.75rem, 2vw, 1rem);
+    
+    .header-content {
+      gap: clamp(0.375rem, 1vw, 0.5rem);
+    }
+    
+    .template-title {
+      font-size: clamp(1rem, 3vw, 1.25rem);
+    }
+    
+    .template-meta {
+      gap: clamp(0.25rem, 1vw, 0.375rem);
+      
+      .status-badge,
+      .template-id,
+      .performance-badge-inline {
+        font-size: clamp(0.625rem, 2vw, 0.75rem);
+        padding: clamp(0.25rem, 1vw, 0.375rem) clamp(0.5rem, 1.5vw, 0.75rem);
+      }
+    }
+    
+    .action-buttons .action-btn {
+      padding: clamp(0.375rem, 1vw, 0.5rem) clamp(0.5rem, 1.5vw, 0.75rem);
+      font-size: clamp(0.625rem, 2vw, 0.75rem);
+    }
+    
+    .view-mode-toggle .mode-btn {
+      padding: clamp(0.25rem, 1vw, 0.375rem) clamp(0.375rem, 1.5vw, 0.5rem);
+      font-size: clamp(0.6rem, 1.8vw, 0.7rem);
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .preview-header {
+      padding: clamp(0.375rem, 1vw, 0.5rem) clamp(0.5rem, 1.5vw, 0.75rem);
     }
   }
 }

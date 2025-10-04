@@ -1,9 +1,10 @@
 .layout {
   display: flex;
-  height: calc(100vh - 64px); // Full viewport minus toolbar
+  height: calc(100vh - 20px); // Increased height (was 64px, now 20px)
   gap: 0;
   overflow: hidden;
   padding: 0;
+  position: relative;
 }
 
 .left {
@@ -16,7 +17,6 @@
   overflow: hidden;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-right: 2px solid #e2e8f0;
-  // padding:0px;
 }
 
 .right {
@@ -49,6 +49,7 @@
 // Ensure search bar doesn't take too much space
 app-search-bar {
   flex-shrink: 0;
+  margin-bottom: 1rem; // Add some spacing
 }
 
 // Ensure template list can grow and scroll
@@ -59,28 +60,95 @@ app-template-list {
 }
 
 // Responsive Design
+@media (max-width: 1200px) {
+  .layout {
+    height: calc(100vh - 10px); // Even more height on smaller screens
+  }
+}
+
 @media (max-width: 1024px) {
   .left {
-    width: 350px;
-    min-width: 350px;
+    width: 380px;
+    min-width: 380px;
+  }
+  
+  .layout {
+    height: calc(100vh - 10px);
   }
 }
 
 @media (max-width: 768px) {
   .layout {
+    flex-direction: row; // Keep as row, don't switch to column
+    height: 100vh;
+  }
+
+  .left {
+    width: 45%;
+    min-width: 300px;
+    height: 100%;
+    max-height: none; 
+    border-right: none;
+    border-bottom: 2px solid #e2e8f0;
+    overflow: hidden;
+  }
+
+  .right {
+    width: 55%;
+    flex: none;
+    height: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .layout {
+    height: 100vh;
+  }
+  
+  .left {
+    height: 40vh;
+    max-height: 40vh;
+  }
+  
+  .right {
+    height: 60vh;
+  }
+}
+
+@media (max-width: 635px) {
+  .layout {
     flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .left {
     width: 100%;
     min-width: auto;
-    height: auto;
-    max-height: 50vh;
+    height: 40vh;
+    max-height: 40vh;
     border-right: none;
     border-bottom: 2px solid #e2e8f0;
+    overflow: hidden;
+    flex-shrink: 0; // Critical - prevents shrinking
   }
 
   .right {
-    height: 50vh;
+    width: 100%;
+    height: 60vh;
+    max-height: 60vh; // Add this constraint
+    overflow: hidden;
+    flex-shrink: 0; // Critical - prevents shrinking
+  }
+}
+
+@media (max-width: 768px) and (min-width: 636px) {
+  .left {
+    width: 45%;
+    min-width: 300px;
+  }
+
+  .right {
+    width: 55%;
   }
 }
