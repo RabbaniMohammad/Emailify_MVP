@@ -17,7 +17,7 @@ import passport from '@src/config/passport';
 import BaseRouter from '@src/routes';
 import templatesRouter from '@src/routes/templates';
 import qaRouter from '@src/routes/qa';
-import authRouter from '@src/routes/auth';
+import authRouter  from '@src/routes/auth';
 
 import Paths from '@src/common/constants/Paths';
 import ENV from '@src/common/constants/ENV';
@@ -26,6 +26,9 @@ import { RouteError } from '@src/common/util/route-errors';
 import { NodeEnvs } from '@src/common/constants';
 
 import mailchimp from '@mailchimp/mailchimp_marketing';
+
+// admin 
+import adminRouter from '@src/routes/admin';
 
 /******************************************************************************
                                 Setup
@@ -89,6 +92,10 @@ mailchimp.setConfig({
 
 // Auth routes (must be before other API routes)
 app.use('/api/auth', authRouter);
+
+
+// Admin Routes 
+app.use('/api/admin', adminRouter);
 
 // Core API routers
 app.use('/api/templates', templatesRouter);

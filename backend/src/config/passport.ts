@@ -8,7 +8,7 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || '';
 
 if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_CALLBACK_URL) {
-  logger.err('❌ Missing Google OAuth environment variables');
+  logger.err('Missing Google OAuth environment variables');
   process.exit(1);
 }
 
@@ -26,9 +26,8 @@ passport.use(
       done: VerifyCallback
     ) => {
       try {
-        logger.info(`🔐 Google OAuth callback for: ${profile.emails?.[0]?.value}`);
+        logger.info(`Google OAuth callback for: ${profile.emails?.[0]?.value}`);
 
-        // Extract profile data
         const googleId = profile.id;
         const email = profile.emails?.[0]?.value;
         const name = profile.displayName;
@@ -38,41 +37,42 @@ passport.use(
           return done(new Error('No email provided by Google'), undefined);
         }
 
-        // Find or create user
         let user = await User.findOne({ googleId });
 
         if (user) {
-          // Update existing user
-          logger.info(`👤 Existing user logged in: ${email}`);
+          // Existing user - just update info and return
+          logger.info(`Existing user: ${email}`);
           user.name = name;
           user.picture = picture;
           await user.updateLastLogin();
+          return done(null, user);
         } else {
-          // Create new user
-          logger.info(`🆕 Creating new user: ${email}`);
+          // New user - create with pending approval
+          logger.info(`Creating new user (pending approval): ${email}`);
           user = await User.create({
             googleId,
             email,
             name,
             picture,
+            role: 'user',
+            isApproved: false,
+            isActive: true,
           });
+          
+          return done(null, user);
         }
-
-        return done(null, user);
       } catch (error) {
-        logger.err('❌ Google OAuth error:', error);
+        logger.err('Google OAuth error:', error);
         return done(error as Error, undefined);
       }
     }
   )
 );
 
-// Serialize user for session
 passport.serializeUser((user: any, done) => {
   done(null, user._id);
 });
 
-// Deserialize user from session
 passport.deserializeUser(async (id: string, done) => {
   try {
     const user = await User.findById(id);

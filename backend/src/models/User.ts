@@ -1,14 +1,18 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema, Types } from 'mongoose';
 
 export interface IUser extends Document {
   googleId: string;
   email: string;
   name: string;
   picture?: string;
+  role: 'super_admin' | 'admin' | 'user';
+  isActive: boolean;
+  isApproved: boolean;
+  approvedBy?: Types.ObjectId;
+  approvedAt?: Date;
   createdAt: Date;
   lastLogin: Date;
-  isActive: boolean;
-  updateLastLogin(): Promise<IUser>;  // ← Add this method signature
+  updateLastLogin(): Promise<IUser>;
 }
 
 const UserSchema = new Schema<IUser>({
@@ -35,6 +39,26 @@ const UserSchema = new Schema<IUser>({
     type: String,
     default: '',
   },
+  role: {
+    type: String,
+    enum: ['super_admin', 'admin', 'user'],
+    default: 'user',
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
+  },
+  isApproved: {
+    type: Boolean,
+    default: false,
+  },
+  approvedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  approvedAt: {
+    type: Date,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -43,13 +67,8 @@ const UserSchema = new Schema<IUser>({
     type: Date,
     default: Date.now,
   },
-  isActive: {
-    type: Boolean,
-    default: true,
-  },
 });
 
-// Update lastLogin on each authentication
 UserSchema.methods.updateLastLogin = function() {
   this.lastLogin = new Date();
   return this.save();

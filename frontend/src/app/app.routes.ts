@@ -4,11 +4,13 @@ import { QaPageComponent } from './app/features/qa/pages/qa-page/qa-page.compone
 import { AuthPageComponent } from './app/features/auth/pages/auth-page/auth-page.component';
 import { AuthCallbackComponent } from './app/features/auth/pages/auth-page/auth-callback.component';
 import { authGuard } from './app/core/guards/auth.guard';
+import { PendingApprovalComponent } from './app/features/auth/pages/auth-page/pending-approval.component';
 
 export const routes: Routes = [
   // Public routes
   { path: 'auth', component: AuthPageComponent },
   { path: 'auth/callback', component: AuthCallbackComponent },
+  { path: 'auth/pending', component: PendingApprovalComponent },
   
   // Protected routes
   { 

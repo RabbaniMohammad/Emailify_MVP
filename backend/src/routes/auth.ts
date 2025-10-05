@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import passport from '@src/config/passport';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken, TokenPayload } from '@src/services/authService';
 import { authenticate } from '@src/middleware/auth';
@@ -16,45 +16,63 @@ router.get('/google', passport.authenticate('google', {
 // Google OAuth callback
 router.get(
   '/google/callback',
-  passport.authenticate('google', { 
-    session: false,
-    failureRedirect: `${process.env.FRONTEND_URL}/auth?error=google_auth_failed` 
-  }),
-  (req: Request, res: Response) => {
-    try {
-      const user = req.user as any;
+  (req: Request, res: Response, next: NextFunction) => {
+    passport.authenticate('google', { session: false }, async (err: any, user: any, info: any) => {
+      try {
+        // Handle passport errors
+        if (err) {
+          logger.err('Passport error:', err);
+          if (err.message.includes('pending admin approval') || err.message.includes('pending approval')) {
+            return res.redirect(`${process.env.FRONTEND_URL}/auth/pending`);
+          }
+          if (err.message.includes('created')) {
+            return res.redirect(`${process.env.FRONTEND_URL}/auth/pending`);
+          }
+          return res.redirect(`${process.env.FRONTEND_URL}/auth?error=authentication_failed`);
+        }
 
-      if (!user) {
-        return res.redirect(`${process.env.FRONTEND_URL}/auth?error=no_user`);
+        if (!user) {
+          return res.redirect(`${process.env.FRONTEND_URL}/auth?error=no_user`);
+        }
+
+        // Check approval status
+        if (!user.isApproved) {
+          logger.warn(`⏳ Unapproved user login attempt: ${user.email}`);
+          return res.redirect(`${process.env.FRONTEND_URL}/auth/pending`);
+        }
+
+        if (!user.isActive) {
+          logger.warn(`🚫 Inactive user login attempt: ${user.email}`);
+          return res.redirect(`${process.env.FRONTEND_URL}/auth?error=account_deactivated`);
+        }
+
+        logger.info(`✅ User authenticated: ${user.email}`);
+
+        // Generate tokens
+        const accessToken = generateAccessToken(user);
+        const refreshToken = generateRefreshToken(user);
+
+        // Set cookies
+        res.cookie('accessToken', accessToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 60 * 60 * 1000,
+        });
+
+        res.cookie('refreshToken', refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        res.redirect(`${process.env.FRONTEND_URL}/auth/callback?success=true`);
+      } catch (error) {
+        logger.err('OAuth callback error:', error);
+        res.redirect(`${process.env.FRONTEND_URL}/auth?error=callback_failed`);
       }
-
-      logger.info(`✅ User authenticated: ${user.email}`);
-
-      // Generate tokens
-      const accessToken = generateAccessToken(user);
-      const refreshToken = generateRefreshToken(user);
-
-      // Set httpOnly cookies
-      res.cookie('accessToken', accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 1000, // 1 hour
-      });
-
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
-
-      // Redirect to frontend
-      res.redirect(`${process.env.FRONTEND_URL}/auth/callback?success=true`);
-    } catch (error) {
-      logger.err('OAuth callback error:', error);
-      res.redirect(`${process.env.FRONTEND_URL}/auth?error=callback_failed`);
-    }
+    })(req, res, next);
   }
 );
 
@@ -104,7 +122,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 1000, // 1 hour
+      maxAge: 60 * 60 * 1000,
     });
 
     res.json({ message: 'Token refreshed' });
