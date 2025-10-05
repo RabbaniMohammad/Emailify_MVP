@@ -4,8 +4,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject, firstValueFrom, map, shareReplay } from 'rxjs';
 import { trigger, state, style, transition, animate, query, stagger } from '@angular/animations';
 import { QaService, GoldenResult, VariantItem, VariantsRun } from '../../services/qa.service';
-import { TemplatePreviewComponent } from '../../../templates/components/template-preview/template-preview.component';
 import { HtmlPreviewComponent } from '../../components/html-preview/html-preview.component';
+import { TemplatesPageComponent } from '../../../templates/pages/templates-page/templates-page.component';
 import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
@@ -21,8 +21,8 @@ type SuggestionResult = {
   standalone: true,
   imports: [
     CommonModule,
-    TemplatePreviewComponent,
     HtmlPreviewComponent,
+    TemplatesPageComponent,
     MatButtonModule,
     MatChipsModule,
     MatIconModule,
@@ -31,7 +31,6 @@ type SuggestionResult = {
   templateUrl: './qa-page.component.html',
   styleUrls: ['./qa-page.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  // encapsulation: ViewEncapsulation.None,
   animations: [
     // Fade in and slide up animation
     trigger('fadeInUp', [

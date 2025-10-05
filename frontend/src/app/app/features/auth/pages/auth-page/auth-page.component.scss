@@ -1,0 +1,634 @@
+// Design system variables (matching templates-page)
+:root {
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --accent-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  --glass-bg: rgba(255, 255, 255, 0.15);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --shadow-medium: 0 16px 64px rgba(0, 0, 0, 0.15);
+  --animation-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --animation-smooth: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+// Main Container
+.auth-container {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-gradient);
+  overflow: hidden;
+}
+
+// Background Effects
+.background-effects {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+
+  .floating-shapes {
+    position: relative;
+    width: 100%;
+    height: 100%;
+
+    .shape {
+      position: absolute;
+      background: var(--accent-gradient);
+      border-radius: 50%;
+      opacity: 0.1;
+      filter: blur(60px);
+      animation: float-shapes 15s ease-in-out infinite;
+
+      &.shape-1 {
+        width: 300px;
+        height: 300px;
+        top: 10%;
+        left: 5%;
+        animation-delay: 0s;
+      }
+
+      &.shape-2 {
+        width: 200px;
+        height: 200px;
+        top: 60%;
+        right: 10%;
+        animation-delay: -5s;
+      }
+
+      &.shape-3 {
+        width: 400px;
+        height: 400px;
+        bottom: 10%;
+        left: 15%;
+        animation-delay: -10s;
+      }
+
+      &.shape-4 {
+        width: 250px;
+        height: 250px;
+        top: 5%;
+        right: 20%;
+        animation-delay: -7.5s;
+      }
+    }
+  }
+
+  .grid-pattern {
+    position: absolute;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 50px 50px;
+    animation: grid-move 30s linear infinite;
+  }
+}
+
+// Main Content
+.auth-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  max-width: 1400px;
+  height: 90vh;
+  max-height: 800px;
+  margin: 0 2rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  box-shadow: var(--shadow-medium);
+  overflow: hidden;
+  animation: slideInUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+// Left Side: Branding
+.auth-branding {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 4rem;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: 
+      radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .branding-content {
+    position: relative;
+    z-index: 2;
+    max-width: 500px;
+  }
+
+  .logo-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 3rem;
+
+    .logo-icon {
+      width: 48px;
+      height: 48px;
+      color: white;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+    }
+
+    .logo-text {
+      font-size: 2rem;
+      font-weight: 900;
+      color: white;
+      margin: 0;
+      letter-spacing: -0.02em;
+    }
+  }
+
+  .branding-text {
+    margin-bottom: 3rem;
+
+    h2 {
+      font-size: 2.5rem;
+      font-weight: 900;
+      color: white;
+      margin: 0 0 1rem 0;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+    }
+
+    p {
+      font-size: 1.125rem;
+      color: rgba(255, 255, 255, 0.9);
+      line-height: 1.6;
+      margin: 0;
+      font-weight: 500;
+    }
+  }
+
+  .feature-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      animation: slideInLeft 0.6s ease;
+      animation-fill-mode: both;
+
+      &:nth-child(1) { animation-delay: 0.2s; }
+      &:nth-child(2) { animation-delay: 0.3s; }
+      &:nth-child(3) { animation-delay: 0.4s; }
+
+      svg {
+        width: 24px;
+        height: 24px;
+        color: white;
+        flex-shrink: 0;
+      }
+
+      span {
+        font-size: 1rem;
+        font-weight: 600;
+        color: white;
+      }
+    }
+  }
+}
+
+// Right Side: Auth Form
+.auth-form-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  background: #ffffff;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  animation: fadeIn 0.8s ease;
+  animation-delay: 0.3s;
+  animation-fill-mode: both;
+
+  .auth-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+
+    h2 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #1e293b;
+      margin: 0 0 0.75rem 0;
+      letter-spacing: -0.02em;
+    }
+
+    p {
+      font-size: 1rem;
+      color: #64748b;
+      margin: 0;
+      font-weight: 500;
+    }
+  }
+
+  .error-alert {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 2px solid rgba(239, 68, 68, 0.3);
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    animation: shake 0.4s ease;
+
+    svg {
+      width: 20px;
+      height: 20px;
+      color: #ef4444;
+      flex-shrink: 0;
+    }
+
+    span {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #dc2626;
+    }
+  }
+
+  .google-btn {
+    width: 100%;
+    padding: 1rem 1.5rem;
+    background: white;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all var(--animation-smooth);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      opacity: 0;
+      transition: opacity var(--animation-smooth);
+    }
+
+    &:hover:not(:disabled) {
+      border-color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(102, 126, 234, 0.25);
+
+      &::before {
+        opacity: 0.05;
+      }
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .google-btn-content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.875rem;
+
+      .google-icon {
+        width: 24px;
+        height: 24px;
+        flex-shrink: 0;
+      }
+
+      span {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #1e293b;
+      }
+    }
+
+    .loading-spinner {
+      display: flex;
+      justify-content: center;
+
+      .spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid #e2e8f0;
+        border-top-color: #667eea;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+    }
+  }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 2rem 0;
+    position: relative;
+
+    &::before,
+    &::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e2e8f0;
+    }
+
+    span {
+      font-size: 0.8125rem;
+      color: #94a3b8;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+  }
+
+  .trust-indicators {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: #f8fafc;
+      border-radius: 8px;
+
+      svg {
+        width: 18px;
+        height: 18px;
+        color: #10b981;
+        flex-shrink: 0;
+      }
+
+      span {
+        font-size: 0.875rem;
+        color: #475569;
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+// Animations
+@keyframes float-shapes {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  33% {
+    transform: translate(-30px, -30px) rotate(120deg);
+  }
+  66% {
+    transform: translate(30px, 30px) rotate(240deg);
+  }
+}
+
+@keyframes grid-move {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(50px, 50px);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(60px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+// Responsive Design
+@media (max-width: 1024px) {
+  .auth-content {
+    flex-direction: column;
+    height: auto;
+    max-height: none;
+    margin: 1rem;
+  }
+
+  .auth-branding {
+    padding: 3rem 2rem;
+
+    .branding-text h2 {
+      font-size: 2rem;
+    }
+  }
+
+  .auth-form-section {
+    padding: 3rem 2rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .auth-content {
+    border-radius: 16px;
+  }
+
+  .auth-branding {
+    padding: 2rem 1.5rem;
+
+    .logo-container {
+      margin-bottom: 2rem;
+
+      .logo-icon {
+        width: 40px;
+        height: 40px;
+      }
+
+      .logo-text {
+        font-size: 1.5rem;
+      }
+    }
+
+    .branding-text {
+      margin-bottom: 2rem;
+
+      h2 {
+        font-size: 1.75rem;
+      }
+
+      p {
+        font-size: 1rem;
+      }
+    }
+
+    .feature-list {
+      gap: 1rem;
+
+      .feature-item {
+        padding: 0.875rem;
+
+        svg {
+          width: 20px;
+          height: 20px;
+        }
+
+        span {
+          font-size: 0.9375rem;
+        }
+      }
+    }
+  }
+
+  .auth-form-section {
+    padding: 2rem 1.5rem;
+  }
+
+  .auth-card {
+    .auth-header {
+      margin-bottom: 2rem;
+
+      h2 {
+        font-size: 1.75rem;
+      }
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-container {
+    padding: 0;
+  }
+
+  .auth-content {
+    margin: 0;
+    border-radius: 0;
+    height: 100vh;
+  }
+
+  .auth-branding {
+    padding: 1.5rem 1rem;
+
+    .branding-text h2 {
+      font-size: 1.5rem;
+    }
+
+    .feature-list .feature-item {
+      font-size: 0.875rem;
+    }
+  }
+
+  .auth-form-section {
+    padding: 1.5rem 1rem;
+  }
+}
+
+// Dark Mode Support
+@media (prefers-color-scheme: dark) {
+  .auth-form-section {
+    background: #0f172a;
+  }
+
+  .auth-card {
+    .auth-header {
+      h2 {
+        color: #f1f5f9;
+      }
+
+      p {
+        color: #94a3b8;
+      }
+    }
+
+    .google-btn {
+      background: #1e293b;
+      border-color: #334155;
+
+      .google-btn-content span {
+        color: #f1f5f9;
+      }
+
+      &:hover:not(:disabled) {
+        border-color: #667eea;
+        background: #1e293b;
+      }
+    }
+
+    .divider {
+      &::before,
+      &::after {
+        background: #334155;
+      }
+
+      span {
+        color: #64748b;
+      }
+    }
+
+    .trust-indicators .trust-item {
+      background: #1e293b;
+
+      span {
+        color: #cbd5e1;
+      }
+    }
+  }
+}

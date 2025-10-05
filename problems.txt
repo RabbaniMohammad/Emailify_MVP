@@ -1,0 +1,2 @@
+why the fronend requested for GET /api/templates?limit=100&offset=0 200 1158.966 ms - 315
+GET /api/templates?limit=100&offset=0 200 1363.367 ms - 315 even before logged in 

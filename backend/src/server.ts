@@ -1,17 +1,23 @@
 // Load env early
 import 'dotenv/config';
 
+import mongoose from 'mongoose';
 import morgan from 'morgan';
 import path from 'path';
 import helmet from 'helmet';
 import compression from 'compression';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import express, { Request, Response, NextFunction } from 'express';
 import logger from 'jet-logger';
 
+import connectDB from '@src/config/database';
+import passport from '@src/config/passport';
+
 import BaseRouter from '@src/routes';
-import templatesRouter from '@src/routes/templates'; // Mailchimp templates API
-import qaRouter from '@src/routes/qa';               // ✅ QA routes (use alias for consistency)
+import templatesRouter from '@src/routes/templates';
+import qaRouter from '@src/routes/qa';
+import authRouter from '@src/routes/auth';
 
 import Paths from '@src/common/constants/Paths';
 import ENV from '@src/common/constants/ENV';
@@ -27,16 +33,22 @@ import mailchimp from '@mailchimp/mailchimp_marketing';
 
 const app = express();
 
+// Connect to MongoDB
+connectDB();
+
 /** ******** Middleware ******** **/
 
-// Body parsers (single json() with a sensible limit)
+// Body parsers
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json({ limit: '5mb' })); // bumped for larger HTML payloads
+app.use(express.json({ limit: '5mb' }));
+
+// Cookie parser
+app.use(cookieParser());
 
 // Compression
 app.use(compression());
 
-// CORS (allow Angular dev origin by default)
+// CORS
 const allowed = (process.env.ALLOWED_ORIGINS || 'http://localhost:4200')
   .split(',')
   .map((s) => s.trim())
@@ -48,6 +60,7 @@ app.use(
       if (!origin || allowed.includes(origin)) return cb(null, true);
       return cb(new Error('Not allowed by CORS'));
     },
+    credentials: true, // Important for cookies
   }),
 );
 
@@ -56,31 +69,38 @@ if (ENV.NodeEnv === NodeEnvs.Dev) {
   app.use(morgan('dev'));
 }
 
-// Security (enable Helmet in production unless explicitly disabled)
+// Security
 if (ENV.NodeEnv === NodeEnvs.Production) {
   if (!process.env.DISABLE_HELMET) {
     app.use(helmet());
   }
 }
 
-// --- Mailchimp SDK config (reads from .env) ---
+// Initialize Passport
+app.use(passport.initialize());
+
+// Mailchimp SDK config
 mailchimp.setConfig({
   apiKey: process.env.MAILCHIMP_API_KEY ?? '',
-  server: process.env.MAILCHIMP_DC ?? '', // e.g., 'us21'
+  server: process.env.MAILCHIMP_DC ?? '',
 });
 
 /** ******** Routes ******** **/
 
+// Auth routes (must be before other API routes)
+app.use('/api/auth', authRouter);
+
 // Core API routers
 app.use('/api/templates', templatesRouter);
-app.use('/api/qa', qaRouter); // ✅ mounts /api/qa/* (chat, apply, snap, etc.)
+app.use('/api/qa', qaRouter);
 
-// Existing base router (kept intact)
+// Existing base router
 app.use(Paths.Base, BaseRouter);
 
 // Health check
 app.get('/health', (_: Request, res: Response) => {
-  res.json({ ok: true });
+  const mongoStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  res.json({ ok: true, mongodb: mongoStatus });
 });
 
 /** ******** Error handler ******** **/
@@ -91,12 +111,12 @@ app.use((err: Error, _: Request, res: Response, next: NextFunction) => {
   let status = HttpStatusCodes.BAD_REQUEST;
   if (err instanceof RouteError) {
     status = err.status;
-    res.status(status).json({ error: err.message });
   }
+  res.status(status).json({ error: err.message });
   return next(err);
 });
 
-/** ******** Static/demo pages from template ******** **/
+/** ******** Static/demo pages ******** **/
 
 const viewsDir = path.join(__dirname, 'views');
 app.set('views', viewsDir);
@@ -111,12 +131,10 @@ app.get('/users', (_: Request, res: Response) => {
 
 app.get('/api/ping', async (_req, res) => {
   try {
-    // @ts-ignore: ping may be missing in types
     const pong = await (mailchimp as any).ping.get();
     res.json({ ok: true, pong });
   } catch (e: any) {
     const status = e?.status || e?.response?.status || 500;
-    // eslint-disable-next-line no-console
     console.error('Mailchimp ping error:', status, e?.message || e?.response?.text);
     res.status(status).json({ ok: false, message: e?.message || e?.response?.text || 'Ping failed' });
   }
@@ -129,16 +147,11 @@ app.get('/api/ping', async (_req, res) => {
 const port = Number(process.env.PORT ?? 3000);
 app.set('port', port);
 app.listen(port, () => {
-  // eslint-disable-next-line no-console
   console.log(`✅ API listening on http://localhost:${port}`);
 });
 
-// (optional) crash hardening
+// Crash hardening
 process.on('unhandledRejection', (err) => console.error('Unhandled Rejection:', err));
 process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
-
-/******************************************************************************
-                                Export default
-******************************************************************************/
 
 export default app;

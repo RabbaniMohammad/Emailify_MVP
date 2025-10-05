@@ -1,16 +1,34 @@
 import { Routes } from '@angular/router';
 import { TemplatesPageComponent } from './app/features/templates/pages/templates-page/templates-page.component';
-
-import { QaPageComponent } from './app/features/qa/pages/qa-page/qa-page.component'
+import { QaPageComponent } from './app/features/qa/pages/qa-page/qa-page.component';
+import { AuthPageComponent } from './app/features/auth/pages/auth-page/auth-page.component';
+import { AuthCallbackComponent } from './app/features/auth/pages/auth-page/auth-callback.component';
+import { authGuard } from './app/core/guards/auth.guard';
 
 export const routes: Routes = [
-  { path: '', component: TemplatesPageComponent },
-  { path: 'qa/:id', component: QaPageComponent },
+  // Public routes
+  { path: 'auth', component: AuthPageComponent },
+  { path: 'auth/callback', component: AuthCallbackComponent },
+  
+  // Protected routes
   { 
-  path: 'qa/:id/use/:runId/:no',
-  loadComponent: () =>
-    import('./app/features/qa/pages/use-variant-page/use-variant-page.component')
-      .then(m => m.UseVariantPageComponent)
-    },
-    { path: '**', redirectTo: '' },
+    path: '', 
+    component: TemplatesPageComponent,
+    canActivate: [authGuard]
+  },
+  { 
+    path: 'qa/:id', 
+    component: QaPageComponent,
+    canActivate: [authGuard]
+  },
+  { 
+    path: 'qa/:id/use/:runId/:no',
+    loadComponent: () =>
+      import('./app/features/qa/pages/use-variant-page/use-variant-page.component')
+        .then(m => m.UseVariantPageComponent),
+    canActivate: [authGuard]
+  },
+  
+  // Wildcard
+  { path: '**', redirectTo: '' },
 ];

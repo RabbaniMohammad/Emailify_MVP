@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, PLATFORM_ID, inject } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 
 @Injectable({
   providedIn: 'root'
@@ -8,9 +9,14 @@ export class PreviewCacheService {
   private readonly STORAGE_KEY = 'template_preview_cache';
   private readonly MAX_CACHE_SIZE = 50;
   private readonly CACHE_EXPIRY = 3600000; // 1 hour in milliseconds
+  
+  private platformId = inject(PLATFORM_ID);
+  private isBrowser = isPlatformBrowser(this.platformId);
 
   constructor() {
-    this.loadFromStorage();
+    if (this.isBrowser) {
+      this.loadFromStorage();
+    }
   }
 
   /**
@@ -33,7 +39,9 @@ export class PreviewCacheService {
     }
 
     this.cache.set(id, html);
-    this.persistToStorage();
+    if (this.isBrowser) {
+      this.persistToStorage();
+    }
   }
 
   /**
@@ -41,7 +49,9 @@ export class PreviewCacheService {
    */
   clear(id: string): void {
     this.cache.delete(id);
-    this.persistToStorage();
+    if (this.isBrowser) {
+      this.persistToStorage();
+    }
   }
 
   /**
@@ -49,13 +59,17 @@ export class PreviewCacheService {
    */
   clearAll(): void {
     this.cache.clear();
-    this.removeFromStorage();
+    if (this.isBrowser) {
+      this.removeFromStorage();
+    }
   }
 
   /**
    * Get cached item from persisted storage
    */
   getPersisted(id: string): string | null {
+    if (!this.isBrowser) return null;
+    
     try {
       const stored = localStorage.getItem(`${this.STORAGE_KEY}_${id}`);
       if (!stored) return null;
@@ -80,6 +94,8 @@ export class PreviewCacheService {
    * Persist current cache to localStorage
    */
   private persistToStorage(): void {
+    if (!this.isBrowser) return;
+    
     try {
       const timestamp = Date.now();
       this.cache.forEach((html, id) => {
@@ -97,6 +113,8 @@ export class PreviewCacheService {
    * Load cache from localStorage on initialization
    */
   private loadFromStorage(): void {
+    if (!this.isBrowser) return;
+    
     try {
       const now = Date.now();
       const keys = Object.keys(localStorage);
@@ -132,6 +150,8 @@ export class PreviewCacheService {
    * Remove all persisted cache from localStorage
    */
   private removeFromStorage(): void {
+    if (!this.isBrowser) return;
+    
     try {
       const keys = Object.keys(localStorage);
       keys.forEach(key => {
@@ -148,6 +168,8 @@ export class PreviewCacheService {
    * Clean up old cache entries from localStorage
    */
   private cleanupOldCache(): void {
+    if (!this.isBrowser) return;
+    
     try {
       const now = Date.now();
       const keys = Object.keys(localStorage);

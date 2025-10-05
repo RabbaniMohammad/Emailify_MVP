@@ -18,14 +18,16 @@
         <h3 class="section-title">Original Template</h3>
         <div class="title-underline"></div>
       </div>
-      <div class="card-content" style="flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column;">
-        <app-template-preview
-          [id]="id"
-          [name]="'Template ' + id"
-          [allowScripts]="true"
-          [hideHeader]="true"
-          style="flex: 1; height: 100%; min-height: 500px;">
-        </app-template-preview>
+      <div class="card-content" style="flex: 1; overflow: hidden; min-height: 0; display: flex; flex-direction: column;">
+        <!-- Create a simplified preview container that mimics the template preview -->
+        <div class="template-preview-container" style="flex: 1; height: 100%; min-height: 500px; background: white; border-radius: 8px; overflow: hidden;">
+          <app-html-preview
+            [html]="'Loading template...'"
+            [loading]="true"
+            [allowScripts]="true"
+            style="flex: 1; height: 100%; min-height: 500px;">
+          </app-html-preview>
+        </div>
       </div>
     </section>
 
