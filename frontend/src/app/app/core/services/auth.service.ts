@@ -9,9 +9,11 @@ export interface User {
   email: string;
   name: string;
   picture?: string;
+  role: 'super_admin' | 'admin' | 'user';  
   createdAt: string;
   lastLogin: string;
   isActive: boolean;
+  isApproved: boolean;
 }
 
 @Injectable({

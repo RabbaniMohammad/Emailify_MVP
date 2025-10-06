@@ -37,13 +37,38 @@ router.get(
 
         // Check approval status
         if (!user.isApproved) {
-          logger.warn(`⏳ Unapproved user login attempt: ${user.email}`);
-          return res.redirect(`${process.env.FRONTEND_URL}/auth/pending`);
+            logger.warn(`⏳ Unapproved user login attempt: ${user.email}`);
+            return res.redirect(`${process.env.FRONTEND_URL}/auth/pending`);
         }
 
         if (!user.isActive) {
-          logger.warn(`🚫 Inactive user login attempt: ${user.email}`);
-          return res.redirect(`${process.env.FRONTEND_URL}/auth?error=account_deactivated`);
+            logger.warn(`🚫 Deactivated user login attempt: ${user.email}`);
+            // Send to a dedicated deactivated page instead
+            return res.send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                <title>Account Deactivated</title>
+                <style>
+                    body { font-family: system-ui; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f8fafc; }
+                    .container { text-align: center; padding: 2rem; }
+                    .icon { font-size: 64px; margin-bottom: 1rem; }
+                    h1 { color: #dc2626; margin: 0 0 1rem 0; }
+                    p { color: #64748b; margin: 0 0 1.5rem 0; }
+                    button { background: #667eea; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-weight: 600; }
+                    button:hover { background: #5568d3; }
+                </style>
+                </head>
+                <body>
+                <div class="container">
+                    <div class="icon">🚫</div>
+                    <h1>Account Deactivated</h1>
+                    <p>Your account has been deactivated. Please contact an administrator.</p>
+                    <button onclick="window.close()">Close</button>
+                </div>
+                </body>
+                </html>
+            `);
         }
 
         logger.info(`✅ User authenticated: ${user.email}`);

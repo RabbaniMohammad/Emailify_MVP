@@ -3,3 +3,6 @@ GET /api/templates?limit=100&offset=0 200 1363.367 ms - 315 even before logged i
 
 
 http://localhost:4200/auth?returnUrl=%2F can we able show as login or sign-in..?
+
+
+why the flickering happening 

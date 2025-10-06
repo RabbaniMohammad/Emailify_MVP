@@ -115,6 +115,53 @@ router.post('/users/:userId/promote', authenticate, requireSuperAdmin, async (re
   }
 });
 
+// Delete user permanently (super admin only)
+router.delete('/users/:userId', authenticate, requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const currentUser = (req as any).currentUser;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.role === 'super_admin') {
+      return res.status(403).json({ error: 'Cannot delete super admin' });
+    }
+
+    await User.findByIdAndDelete(userId);
+
+    logger.info(`🗑️ User deleted: ${user.email} by ${currentUser.email}`);
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    logger.err('Delete user error:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// Reactivate user (admin only)
+router.post('/users/:userId/reactivate', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const currentUser = (req as any).currentUser;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    user.isActive = true;
+    await user.save();
+
+    logger.info(`✅ User reactivated: ${user.email} by ${currentUser.email}`);
+    res.json({ message: 'User reactivated', user });
+  } catch (error) {
+    logger.err('Reactivate user error:', error);
+    res.status(500).json({ error: 'Failed to reactivate user' });
+  }
+});
+
 // Demote admin (super admin only)
 router.post('/users/:userId/demote', authenticate, requireSuperAdmin, async (req: Request, res: Response) => {
   try {
