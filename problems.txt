@@ -6,3 +6,9 @@ http://localhost:4200/auth?returnUrl=%2F can we able show as login or sign-in..?
 
 
 why the flickering happening 
+
+Real-time Updates
+Multi-Device
+Multi-Device
+
+should not have to be hold the animation

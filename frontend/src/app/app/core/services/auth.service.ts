@@ -79,6 +79,18 @@ export class AuthService {
       );
   }
 
+  handleAuthSuccess(user: any): void {
+    // Update the current user
+    this.currentUserSubject.next(user);
+    
+    // Store user in localStorage (if not already done)
+    try {
+        localStorage.setItem('user', JSON.stringify(user));
+    } catch (error) {
+        console.error('Failed to store user in localStorage', error);
+    }
+    }
+
   /**
    * Initiate Google OAuth login (opens popup)
    */

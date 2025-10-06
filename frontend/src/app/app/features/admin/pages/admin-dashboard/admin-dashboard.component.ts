@@ -15,6 +15,8 @@ import { MatDividerModule } from '@angular/material/divider';
 import { BehaviorSubject, Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
 
+import { AdminEventService } from '../../../../core/services/admin-event.service';
+
 @Component({
   selector: 'app-admin-dashboard',
   standalone: true,
@@ -39,6 +41,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
+  private adminEventService = inject(AdminEventService);
 
   private allUsersSubject = new BehaviorSubject<AdminUser[]>([]);
   readonly allUsers$ = this.allUsersSubject.asObservable();
@@ -106,6 +109,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         this.showSuccess(`${user.name} approved successfully`);
         this.loadAllUsers();
         this.loadPendingUsers();
+        this.adminEventService.triggerRefresh();
       },
       error: (error) => {
         this.showError(error.error?.error || 'Failed to approve user');
@@ -123,6 +127,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         this.showSuccess(`${user.name}'s request rejected`);
         this.loadAllUsers();
         this.loadPendingUsers();
+        this.adminEventService.triggerRefresh();
       },
       error: (error) => {
         this.showError(error.error?.error || 'Failed to reject user');
@@ -196,6 +201,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         this.showSuccess(`${user.name} permanently deleted`);
         this.loadAllUsers();
         this.loadPendingUsers();
+        this.adminEventService.triggerRefresh();
       },
       error: (error) => {
         this.showError(error.error?.error || 'Failed to delete user');

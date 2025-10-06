@@ -17,7 +17,10 @@
     <div class="toolbar-spacer"></div>
 
     <!-- Add this admin button -->
-  <button class="admin-nav-btn" (click)="navigateToAdmin()">
+  <button 
+    *ngIf="isAdmin()" 
+    class="admin-nav-btn" 
+    (click)="navigateToAdmin()">
     <mat-icon>shield</mat-icon>
     <span>Admin</span>
     <span class="notification-badge" *ngIf="(pendingCount$ | async) as count">{{ count }}</span>

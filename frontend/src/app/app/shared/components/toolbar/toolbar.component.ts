@@ -1,14 +1,15 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';  
-import { RouterModule } from '@angular/router';
+import { RouterModule, Router } from '@angular/router';
 import { TemplatesService } from '../../../core/services/templates.service';
 import { AuthService } from '../../../../app/core/services/auth.service';
 import { AdminService } from '../../../core/services/admin.service';
-import { map, shareReplay } from 'rxjs/operators';
-import { Router } from '@angular/router';
+import { AdminEventService } from '../../../core/services/admin-event.service';
+import { map, shareReplay, switchMap, takeUntil } from 'rxjs/operators';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 @Component({
   selector: 'app-toolbar',
@@ -17,26 +18,35 @@ import { Router } from '@angular/router';
   templateUrl: './toolbar.component.html',
   styleUrls: ['./toolbar.component.scss'],
 })
-export class ToolbarComponent implements OnInit {
+export class ToolbarComponent implements OnInit, OnDestroy {
   private svc = inject(TemplatesService);
   private authService = inject(AuthService);
   private adminService = inject(AdminService);
-
+  private adminEventService = inject(AdminEventService);
   private router = inject(Router);
 
-  pendingCount$ = this.adminService.getPendingUsers().pipe(
+  // Use a trigger subject to force refresh
+  private refreshTrigger$ = new BehaviorSubject<void>(undefined);
+  private destroy$ = new Subject<void>();  // ← Add this
+  
+  pendingCount$ = this.refreshTrigger$.pipe(
+    switchMap(() => this.adminService.getPendingUsers()),
     map(response => response.users.length),
     shareReplay(1)
   );
 
   ngOnInit(): void {
-    // Refresh pending count every minute
-    setInterval(() => {
-      this.pendingCount$ = this.adminService.getPendingUsers().pipe(
-        map(response => response.users.length),
-        shareReplay(1)
-      );
-    }, 60000);
+    // Refresh count when admin actions occur
+    this.adminEventService.refreshPendingCount
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.refreshTrigger$.next();
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   isAdmin(): boolean {
@@ -45,10 +55,11 @@ export class ToolbarComponent implements OnInit {
   }
 
   navigateToAdmin(): void {
-    // Force reload by navigating away and back
-    this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
-      this.router.navigate(['/admin']);
-    });
+    // Just refresh the count
+    this.refreshTrigger$.next();
+    
+    // Simple navigation
+    this.router.navigate(['/admin']);
   }
 
   refresh(): void {
