@@ -30,113 +30,36 @@ router.get(
         return res.redirect(`${process.env.FRONTEND_URL}/auth?error=no_user`);
       }
 
-      // Check approval status
-        if (!user.isApproved) {
-            logger.warn(`⏳ Unapproved user login attempt: ${user.email}`);
-            return res.send(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                <title>Pending Approval</title>
-                <style>
-                    body {
-                    margin: 0;
-                    padding: 1.5rem;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    min-height: 100vh;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    box-sizing: border-box;
-                    }
-                    .container {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 3rem 2rem;
-                    max-width: 500px;
-                    width: 100%;
-                    text-align: center;
-                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                    }
-                    .icon {
-                    width: 80px;
-                    height: 80px;
-                    margin: 0 auto 1.5rem;
-                    background: #fef3c7;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 40px;
-                    }
-                    h1 {
-                    font-size: 1.75rem;
-                    font-weight: 700;
-                    color: #1e293b;
-                    margin: 0 0 1rem 0;
-                    }
-                    p {
-                    font-size: 1rem;
-                    color: #64748b;
-                    line-height: 1.6;
-                    margin: 0 0 2rem 0;
-                    }
-                    button {
-                    background: #667eea;
-                    color: white;
-                    border: none;
-                    padding: 0.875rem 2rem;
-                    border-radius: 8px;
-                    font-size: 1rem;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                    }
-                    button:hover {
-                    background: #5568d3;
-                    transform: translateY(-2px);
-                    }
-                </style>
-                </head>
-                <body>
-                <div class="container">
-                    <div class="icon">⏳</div>
-                    <h1>Account Pending Approval</h1>
-                    <p>Your account has been created successfully and is currently awaiting approval from an administrator.</p>
-                    <button onclick="window.close()">Back to Sign In</button>
-                </div>
-                </body>
-                </html>
-            `);
-            }
-
-        if (!user.isActive) {
+      // Check if user is deactivated first
+      if (!user.isActive) {
         logger.warn(`🚫 Deactivated user login attempt: ${user.email}`);
         return res.send(`
-            <!DOCTYPE html>
-            <html>
-            <head>
+          <!DOCTYPE html>
+          <html>
+          <head>
             <title>Account Deactivated</title>
             <style>
-                body {
+              body {
                 margin: 0;
+                padding: 1.5rem;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 min-height: 100vh;
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                }
-                .container {
+                box-sizing: border-box;
+              }
+              .container {
                 background: white;
                 border-radius: 16px;
                 padding: 3rem 2rem;
                 max-width: 500px;
+                width: 100%;
                 text-align: center;
                 box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                }
-                .icon {
+              }
+              .icon {
                 width: 80px;
                 height: 80px;
                 margin: 0 auto 1.5rem;
@@ -146,20 +69,20 @@ router.get(
                 align-items: center;
                 justify-content: center;
                 font-size: 40px;
-                }
-                h1 {
+              }
+              h1 {
                 font-size: 1.75rem;
                 font-weight: 700;
                 color: #1e293b;
                 margin: 0 0 1rem 0;
-                }
-                p {
+              }
+              p {
                 font-size: 1rem;
                 color: #64748b;
                 line-height: 1.6;
                 margin: 0 0 2rem 0;
-                }
-                button {
+              }
+              button {
                 background: #667eea;
                 color: white;
                 border: none;
@@ -169,26 +92,107 @@ router.get(
                 font-weight: 600;
                 cursor: pointer;
                 transition: all 0.2s ease;
-                }
-                button:hover {
+              }
+              button:hover {
                 background: #5568d3;
                 transform: translateY(-2px);
-                }
+              }
             </style>
-            </head>
-            <body>
+          </head>
+          <body>
             <div class="container">
-                <div class="icon">🚫</div>
-                <h1>Account Deactivated</h1>
-                <p>Your account has been deactivated. Please contact an administrator.</p>
-                <button onclick="window.close()">Back to Sign In</button>
+              <div class="icon">🚫</div>
+              <h1>Account Deactivated</h1>
+              <p>Your account has been deactivated. Please contact an administrator.</p>
+              <button onclick="window.close()">Close</button>
             </div>
-            </body>
-            </html>
+          </body>
+          </html>
         `);
-        }
+      }
 
-      // Generate tokens
+      // Check approval status - DON'T generate tokens for unapproved users
+      if (!user.isApproved) {
+        logger.warn(`⏳ Unapproved user login attempt: ${user.email}`);
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Pending Approval</title>
+            <style>
+              body {
+                margin: 0;
+                padding: 1.5rem;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                box-sizing: border-box;
+              }
+              .container {
+                background: white;
+                border-radius: 16px;
+                padding: 3rem 2rem;
+                max-width: 500px;
+                width: 100%;
+                text-align: center;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+              }
+              .icon {
+                width: 80px;
+                height: 80px;
+                margin: 0 auto 1.5rem;
+                background: #fef3c7;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 40px;
+              }
+              h1 {
+                font-size: 1.75rem;
+                font-weight: 700;
+                color: #1e293b;
+                margin: 0 0 1rem 0;
+              }
+              p {
+                font-size: 1rem;
+                color: #64748b;
+                line-height: 1.6;
+                margin: 0 0 2rem 0;
+              }
+              button {
+                background: #667eea;
+                color: white;
+                border: none;
+                padding: 0.875rem 2rem;
+                border-radius: 8px;
+                font-size: 1rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+              }
+              button:hover {
+                background: #5568d3;
+                transform: translateY(-2px);
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="icon">⏳</div>
+              <h1>Account Pending Approval</h1>
+              <p>Your account has been created successfully and is currently awaiting approval from an administrator. You'll receive access once an admin reviews your request.</p>
+              <button onclick="window.close()">Close</button>
+            </div>
+          </body>
+          </html>
+        `);
+      }
+
+      // User is approved and active - generate tokens
       const accessToken = generateAccessToken(user);
       const refreshToken = generateRefreshToken(user);
 
@@ -274,8 +278,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
     // Get user
     const user = await User.findById(payload.userId);
-    if (!user || !user.isActive) {
-      return res.status(401).json({ error: 'User not found or inactive' });
+    if (!user || !user.isActive || !user.isApproved) {
+      return res.status(401).json({ error: 'User not found, inactive, or not approved' });
     }
 
     // Generate new access token

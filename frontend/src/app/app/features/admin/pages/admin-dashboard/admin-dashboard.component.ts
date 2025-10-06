@@ -56,6 +56,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   
   private routerSub?: Subscription;
   private refreshSub?: Subscription;
+  private navigationRefreshSub?: Subscription;
 
   ngOnInit(): void {
     this.loadData();
@@ -65,11 +66,18 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       console.log('Admin event triggered - refreshing data');
       this.loadData();
     });
+
+    // Subscribe to navigation refresh events (when clicking admin button)
+    this.navigationRefreshSub = this.adminEventService.navigationRefresh$.subscribe(() => {
+      console.log('Navigation refresh triggered - loading fresh data');
+      this.loadData();
+    });
   }
 
   ngOnDestroy(): void {
     this.routerSub?.unsubscribe();
     this.refreshSub?.unsubscribe();
+    this.navigationRefreshSub?.unsubscribe();
   }
 
   private loadData(): void {
@@ -239,16 +247,13 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   }
 
   getAvatarUrl(user: AdminUser): string {
-    // If user has a valid picture, return it
     if (user.picture && user.picture.startsWith('http')) {
       return user.picture;
     }
-    // Otherwise generate initials avatar
     return this.getInitialsAvatar(user.name);
   }
 
   getAvatarSrc(user: AdminUser): string {
-    // Try Google picture first, fallback to initials
     if (user.picture && user.picture.startsWith('http')) {
       return user.picture;
     }

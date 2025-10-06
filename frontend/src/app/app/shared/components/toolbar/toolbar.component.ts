@@ -8,8 +8,8 @@ import { TemplatesService } from '../../../core/services/templates.service';
 import { AuthService } from '../../../../app/core/services/auth.service';
 import { AdminService } from '../../../core/services/admin.service';
 import { AdminEventService } from '../../../core/services/admin-event.service';
-import { map, shareReplay, switchMap, takeUntil } from 'rxjs/operators';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { map, shareReplay, switchMap, takeUntil, startWith, tap } from 'rxjs/operators';
+import { BehaviorSubject, Subject, interval, timer } from 'rxjs';
 
 @Component({
   selector: 'app-toolbar',
@@ -25,28 +25,73 @@ export class ToolbarComponent implements OnInit, OnDestroy {
   private adminEventService = inject(AdminEventService);
   private router = inject(Router);
 
-  // Use a trigger subject to force refresh
-  private refreshTrigger$ = new BehaviorSubject<void>(undefined);
-  private destroy$ = new Subject<void>();  // ← Add this
+  private destroy$ = new Subject<void>();
+  private manualRefresh$ = new Subject<void>();
   
-  pendingCount$ = this.refreshTrigger$.pipe(
-    switchMap(() => this.adminService.getPendingUsers()),
-    map(response => response.users.length),
-    shareReplay(1)
-  );
+  // Observable that emits the pending count
+  pendingCount$ = new BehaviorSubject<number>(0);
 
   ngOnInit(): void {
-    // Refresh count when admin actions occur
+    // Only set up polling if user is admin
+    if (!this.isAdmin()) {
+      return;
+    }
+
+    console.log('🔍 Toolbar: Setting up admin badge polling');
+
+    // Create polling stream that combines:
+    // 1. Immediate first fetch (startWith)
+    // 2. Auto-refresh every 30 seconds
+    // 3. Manual refresh triggers
+    // 4. Admin action triggers
+    timer(0, 30000).pipe(
+      startWith(0),
+      tap(() => console.log('🔄 Fetching pending count...')),
+      switchMap(() => this.adminService.getPendingUsers()),
+      map(response => {
+        const count = response.users.length;
+        console.log(`✅ Pending count: ${count}`);
+        return count;
+      }),
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (count) => this.pendingCount$.next(count),
+      error: (err) => console.error('❌ Error fetching pending count:', err)
+    });
+
+    // Also refresh on manual triggers (admin actions)
     this.adminEventService.refreshPendingCount
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
-        this.refreshTrigger$.next();
+        console.log('🔔 Manual refresh triggered');
+        this.fetchPendingCount();
+      });
+    
+    this.adminEventService.refresh$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        console.log('🔔 Admin action refresh triggered');
+        this.fetchPendingCount();
       });
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    this.pendingCount$.complete();
+  }
+
+  private fetchPendingCount(): void {
+    this.adminService.getPendingUsers()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          const count = response.users.length;
+          console.log(`🔄 Manual fetch - Pending count: ${count}`);
+          this.pendingCount$.next(count);
+        },
+        error: (err) => console.error('❌ Error in manual fetch:', err)
+      });
   }
 
   isAdmin(): boolean {
@@ -55,10 +100,12 @@ export class ToolbarComponent implements OnInit, OnDestroy {
   }
 
   navigateToAdmin(): void {
-    // Just refresh the count
-    this.refreshTrigger$.next();
+    console.log('🚀 Navigating to admin page');
+    // Trigger immediate refresh
+    this.fetchPendingCount();
+    this.adminEventService.triggerNavigationRefresh();
     
-    // Simple navigation
+    // Navigate to admin
     this.router.navigate(['/admin']);
   }
 
