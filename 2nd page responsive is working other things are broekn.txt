@@ -27,3 +27,8 @@ Client secret: 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
 secret key 1: 5b48be631b8d3bd692053226d77a67a35b54f36affd43398be76bbbd308db4fe
 secret key 2: f84dd62218da9287420034fb7f822f0832aa4232d4739ef9a15d2d53b61baef6
 secret key 3: 2620e76886c698d5fcad5bf6181d0a960c74d760cb6e14c5f0e4bdfaba6c5b2d
+
+
+https://cloud.mongodb.com/v2/68e27cb64522930397ac3ea1#/clusters/connect?clusterId=emailtool-cluster
+
+https://console.cloud.google.com/auth/clients?project=our-spanner-474214-i3

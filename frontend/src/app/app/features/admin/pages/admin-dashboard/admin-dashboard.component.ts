@@ -55,22 +55,21 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   displayedColumns = ['picture', 'name', 'email', 'role', 'status', 'createdAt', 'actions'];
   
   private routerSub?: Subscription;
+  private refreshSub?: Subscription;
 
   ngOnInit(): void {
     this.loadData();
     
-    // Reload data when navigating to this route
-    // this.routerSub = this.router.events.pipe(
-    //   filter(event => event instanceof NavigationEnd)
-    // ).subscribe(() => {
-    //   if (this.router.url === '/admin') {
-    //     this.loadData();
-    //   }
-    // });
+    // Subscribe to admin events to refresh data when other admins make changes
+    this.refreshSub = this.adminEventService.refresh$.subscribe(() => {
+      console.log('Admin event triggered - refreshing data');
+      this.loadData();
+    });
   }
 
   ngOnDestroy(): void {
     this.routerSub?.unsubscribe();
+    this.refreshSub?.unsubscribe();
   }
 
   private loadData(): void {
@@ -136,12 +135,30 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   }
 
   deactivateUser(user: AdminUser): void {
-    if (!confirm(`Deactivate ${user.name}?`)) return;
+    const isDeactivatingSelf = this.isCurrentUser(user);
+    
+    const message = isDeactivatingSelf 
+      ? `Deactivate your own account? You will be logged out immediately.`
+      : `Deactivate ${user.name}?`;
+    
+    if (!confirm(message)) return;
 
     this.adminService.deactivateUser(user._id).subscribe({
       next: (response) => {
         this.showSuccess(`${user.name} deactivated`);
-        this.loadAllUsers();
+        
+        // If deactivating yourself, logout immediately
+        if (isDeactivatingSelf) {
+          this.authService.logout().subscribe({
+            next: () => {
+              this.router.navigate(['/auth']);
+            }
+          });
+        } else {
+          // If deactivating another user, refresh the list
+          this.loadAllUsers();
+          this.adminEventService.triggerRefresh();
+        }
       },
       error: (error) => {
         this.showError(error.error?.error || 'Failed to deactivate user');
@@ -156,6 +173,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       next: (response) => {
         this.showSuccess(`${user.name} promoted to admin`);
         this.loadAllUsers();
+        this.adminEventService.triggerRefresh();
       },
       error: (error) => {
         this.showError(error.error?.error || 'Failed to promote user');
@@ -167,15 +185,16 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     if (!confirm(`Reactivate ${user.name}?`)) return;
 
     this.adminService.reactivateUser(user._id).subscribe({
-        next: (response) => {
+      next: (response) => {
         this.showSuccess(`${user.name} reactivated`);
         this.loadAllUsers();
-        },
-        error: (error) => {
+        this.adminEventService.triggerRefresh();
+      },
+      error: (error) => {
         this.showError(error.error?.error || 'Failed to reactivate user');
-        }
+      }
     });
-    }
+  }
 
   demoteAdmin(user: AdminUser): void {
     if (!confirm(`Demote ${user.name} to regular user?`)) return;
@@ -184,6 +203,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       next: (response) => {
         this.showSuccess(`${user.name} demoted to user`);
         this.loadAllUsers();
+        this.adminEventService.triggerRefresh();
       },
       error: (error) => {
         this.showError(error.error?.error || 'Failed to demote user');
@@ -216,29 +236,29 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   isCurrentUser(user: AdminUser): boolean {
     const currentUser = this.authService.currentUserValue;
     return currentUser?._id === user._id;
-    }
+  }
 
-    getAvatarUrl(user: AdminUser): string {
+  getAvatarUrl(user: AdminUser): string {
     // If user has a valid picture, return it
     if (user.picture && user.picture.startsWith('http')) {
-        return user.picture;
+      return user.picture;
     }
     // Otherwise generate initials avatar
     return this.getInitialsAvatar(user.name);
-    }
+  }
 
-    getAvatarSrc(user: AdminUser): string {
+  getAvatarSrc(user: AdminUser): string {
     // Try Google picture first, fallback to initials
     if (user.picture && user.picture.startsWith('http')) {
-        return user.picture;
+      return user.picture;
     }
     return this.getInitialsAvatar(user.name);
-    }
+  }
 
-    handleImageError(event: Event, userName: string): void {
+  handleImageError(event: Event, userName: string): void {
     const img = event.target as HTMLImageElement;
     img.src = this.getInitialsAvatar(userName);
-    }
+  }
 
   private getInitialsAvatar(name: string): string {
     const initials = name

@@ -1,7 +1,7 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, tap, catchError, of, firstValueFrom , map } from 'rxjs';
+import { BehaviorSubject, Observable, tap, catchError, of, firstValueFrom, map, interval, Subscription } from 'rxjs';
 
 export interface User {
   _id: string;
@@ -19,7 +19,7 @@ export interface User {
 @Injectable({
   providedIn: 'root'
 })
-export class AuthService {
+export class AuthService implements OnDestroy {
   private http = inject(HttpClient);
   private router = inject(Router);
 
@@ -30,9 +30,82 @@ export class AuthService {
   public isAuthenticated$ = this.isAuthenticatedSubject.asObservable();
 
   private authCheckComplete = false;
+  private statusCheckSubscription?: Subscription;
 
   constructor() {
     // Don't call checkAuthStatus here - it causes race conditions
+  }
+
+  ngOnDestroy(): void {
+    this.stopStatusMonitoring();
+  }
+
+  /**
+   * Start monitoring user status (call after successful login)
+   */
+  startStatusMonitoring(): void {
+    // Stop any existing monitoring
+    this.stopStatusMonitoring();
+
+    // Check status every 30 seconds
+    this.statusCheckSubscription = interval(30000).subscribe(() => {
+      if (this.isAuthenticatedSubject.value) {
+        this.checkUserStatus();
+      }
+    });
+  }
+
+  /**
+   * Stop monitoring user status
+   */
+  stopStatusMonitoring(): void {
+    if (this.statusCheckSubscription) {
+      this.statusCheckSubscription.unsubscribe();
+      this.statusCheckSubscription = undefined;
+    }
+  }
+
+  /**
+   * Check if current user is still active and approved
+   */
+  private checkUserStatus(): void {
+    this.http.get<{ user: User }>('/api/auth/me', { withCredentials: true })
+      .subscribe({
+        next: (response) => {
+          const user = response.user;
+          
+          // Check if user is deactivated or not approved
+          if (!user.isActive || !user.isApproved) {
+            console.warn('User account status changed - logging out');
+            this.logout().subscribe({
+              next: () => {
+                this.router.navigate(['/auth'], {
+                  queryParams: {
+                    error: !user.isActive ? 'account_deactivated' : 'pending_approval'
+                  },
+                  replaceUrl: true
+                });
+              }
+            });
+          } else {
+            // Update user data
+            this.currentUserSubject.next(user);
+          }
+        },
+        error: (error) => {
+          // If 401 or 403, user session is invalid
+          if (error.status === 401 || error.status === 403) {
+            this.logout().subscribe({
+              next: () => {
+                this.router.navigate(['/auth'], {
+                  queryParams: { error: 'session_expired' },
+                  replaceUrl: true
+                });
+              }
+            });
+          }
+        }
+      });
   }
 
   /**
@@ -51,6 +124,10 @@ export class AuthService {
       this.currentUserSubject.next(response.user);
       this.isAuthenticatedSubject.next(true);
       this.authCheckComplete = true;
+      
+      // Start monitoring after successful auth
+      this.startStatusMonitoring();
+      
       return true;
     } catch (error) {
       this.currentUserSubject.next(null);
@@ -82,14 +159,18 @@ export class AuthService {
   handleAuthSuccess(user: any): void {
     // Update the current user
     this.currentUserSubject.next(user);
+    this.isAuthenticatedSubject.next(true);
+    
+    // Start monitoring
+    this.startStatusMonitoring();
     
     // Store user in localStorage (if not already done)
     try {
-        localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('user', JSON.stringify(user));
     } catch (error) {
-        console.error('Failed to store user in localStorage', error);
+      console.error('Failed to store user in localStorage', error);
     }
-    }
+  }
 
   /**
    * Initiate Google OAuth login (opens popup)
@@ -125,23 +206,27 @@ export class AuthService {
   /**
    * Logout user
    */
-  logout(): void {
-    this.http.post('/api/auth/logout', {}, { withCredentials: true })
-      .subscribe({
+  logout(): Observable<any> {
+    // Stop monitoring
+    this.stopStatusMonitoring();
+    
+    return this.http.post('/api/auth/logout', {}, { withCredentials: true }).pipe(
+      tap({
         next: () => {
           this.currentUserSubject.next(null);
           this.isAuthenticatedSubject.next(false);
           this.authCheckComplete = false;
-          this.router.navigate(['/auth']);
+          localStorage.removeItem('user');
         },
         error: (error) => {
           console.error('Logout error:', error);
           this.currentUserSubject.next(null);
           this.isAuthenticatedSubject.next(false);
           this.authCheckComplete = false;
-          this.router.navigate(['/auth']);
+          localStorage.removeItem('user');
         }
-      });
+      })
+    );
   }
 
   /**

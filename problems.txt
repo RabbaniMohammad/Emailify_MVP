@@ -12,3 +12,21 @@ Multi-Device
 Multi-Device
 
 should not have to be hold the animation
+
+
+tmrw
+now working on the admin button when clicked the number is showing but the pending only getting shown when refresh manually and also deactivate is not working when deactivate and refreshed the user still able to access the application
+
+
+note this is AI please check before continuing
+button checking as well not only the link checking
+adding more no of previews not only mobile display 
+adding info to template that should contain all the info
+
+back and front page navigation it should have to be seamless no refresh because its angular
+
+chatbot telling jokes 
+Ideas:
+- Why don't scientists trust atoms? Because they make up everything!
+
+it should be more determinitic
