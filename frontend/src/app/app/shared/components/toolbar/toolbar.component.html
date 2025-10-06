@@ -1,5 +1,6 @@
-<mat-toolbar color="primary" class="modern-toolbar gradient-bar">
-  <div class="toolbar-content">
+<mat-toolbar class="modern-toolbar">
+  <div class="toolbar-container">
+    <!-- Left: Brand -->
     <div class="brand-section" (click)="refresh()" title="Refresh">
       <div class="brand-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -8,22 +9,75 @@
         </svg>
       </div>
       <span class="brand-name">MailChimp Figma</span>
-      <div class="brand-badge">
-        <span class="status-dot"></span>
-        <span>Active</span>
-      </div>
     </div>
-    
+
     <div class="toolbar-spacer"></div>
 
-    <!-- Add this admin button -->
-  <button 
-    *ngIf="isAdmin()" 
-    class="admin-nav-btn" 
-    (click)="navigateToAdmin()">
-    <mat-icon>shield</mat-icon>
-    <span>Admin</span>
-    <span class="notification-badge" *ngIf="(pendingCount$ | async) as count">{{ count }}</span>
-  </button>
+    <!-- Right: Navigation Arrows + User Menu -->
+    <div class="right-section">
+      <!-- Navigation Arrows -->
+      <div class="nav-arrows">
+        <button class="arrow-btn" (click)="goBack()" [disabled]="!canGoBack()" title="Previous">
+          <mat-icon>arrow_back_ios</mat-icon>
+        </button>
+        <button class="arrow-btn" (click)="goForward()" [disabled]="!canGoForward()" title="Next">
+          <mat-icon>arrow_forward_ios</mat-icon>
+        </button>
+      </div>
+
+      <!-- User Menu -->
+      <div class="user-section" *ngIf="currentUser$ | async as user">
+        <button class="user-menu-btn" [matMenuTriggerFor]="userMenu" #menuTrigger="matMenuTrigger">
+          <div class="user-avatar">
+            <img *ngIf="user.picture" [src]="user.picture" [alt]="user.name" (error)="handleImageError($event, user.name)">
+            <div *ngIf="!user.picture" class="avatar-initials">
+              {{ getInitials(user.name) }}
+            </div>
+          </div>
+          <span class="user-name">{{ user.name }}</span>
+          <mat-icon class="dropdown-icon" [class.open]="menuTrigger.menuOpen">expand_more</mat-icon>
+        </button>
+
+        <mat-menu #userMenu="matMenu" class="modern-user-dropdown" xPosition="before">
+          <div class="dropdown-content" (click)="$event.stopPropagation()">
+            <!-- Admin Button -->
+            <button 
+              *ngIf="isAdmin()" 
+              mat-menu-item 
+              class="menu-item admin-item"
+              (click)="navigateToAdmin()">
+              <div class="menu-item-icon admin-icon">
+                <mat-icon [matBadge]="(pendingCount$ | async) || 0" 
+                          [matBadgeHidden]="!(pendingCount$ | async)"
+                          matBadgeColor="warn" 
+                          matBadgeSize="small">
+                  admin_panel_settings
+                </mat-icon>
+              </div>
+              <div class="menu-item-content">
+                <span class="menu-item-title">Admin Dashboard</span>
+                <span class="menu-item-subtitle" *ngIf="(pendingCount$ | async) as count">
+                  {{ count }} pending approval{{ count !== 1 ? 's' : '' }}
+                </span>
+              </div>
+              <mat-icon class="menu-item-arrow">chevron_right</mat-icon>
+            </button>
+
+            <mat-divider *ngIf="isAdmin()"></mat-divider>
+
+            <!-- Logout Button -->
+            <button mat-menu-item class="menu-item logout-item" (click)="logout()">
+              <div class="menu-item-icon logout-icon">
+                <mat-icon>logout</mat-icon>
+              </div>
+              <div class="menu-item-content">
+                <span class="menu-item-title">Logout</span>
+                <span class="menu-item-subtitle">Sign out of your account</span>
+              </div>
+            </button>
+          </div>
+        </mat-menu>
+      </div>
+    </div>
   </div>
 </mat-toolbar>

@@ -29,4 +29,19 @@ chatbot telling jokes
 Ideas:
 - Why don't scientists trust atoms? Because they make up everything!
 
-it should be more determinitic
+it should be more deterministic
+
+
+currently we are fixing these 
+1. I have asked for a back and forth arrows because there many pages out there. If you need the files of those pages I will it to you 
+2. no need to show super admin the navbar just show the photo and name and the arrow on the button should not turn when hovered but should turn down when clicked 
+3. No need to show duplicate information when clicked on the button just show logout for now thats it 
+4. make the navbar responsive and remove the templates button and add left and right arrows for seamless navigation 
+5. those arrows should be to the left of the photo and name
+
+
+
+
+right now R 
+the logout design is not that good 
+the front arrow is not working but the back arrow is working

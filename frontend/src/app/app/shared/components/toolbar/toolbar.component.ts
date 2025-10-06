@@ -1,20 +1,32 @@
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, Location } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';  
-import { RouterModule, Router } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatBadgeModule } from '@angular/material/badge';
+import { MatDividerModule } from '@angular/material/divider';
+import { RouterModule, Router, NavigationEnd } from '@angular/router';
 import { TemplatesService } from '../../../core/services/templates.service';
 import { AuthService } from '../../../../app/core/services/auth.service';
 import { AdminService } from '../../../core/services/admin.service';
 import { AdminEventService } from '../../../core/services/admin-event.service';
-import { map, shareReplay, switchMap, takeUntil, startWith, tap } from 'rxjs/operators';
-import { BehaviorSubject, Subject, interval, timer } from 'rxjs';
+import { map, takeUntil, startWith, tap, switchMap, filter } from 'rxjs/operators';
+import { BehaviorSubject, Subject, timer } from 'rxjs';
 
 @Component({
   selector: 'app-toolbar',
   standalone: true,
-  imports: [CommonModule, MatToolbarModule, MatButtonModule, RouterModule, MatIconModule],
+  imports: [
+    CommonModule, 
+    MatToolbarModule, 
+    MatButtonModule, 
+    RouterModule, 
+    MatIconModule,
+    MatMenuModule,
+    MatBadgeModule,
+    MatDividerModule
+  ],
   templateUrl: './toolbar.component.html',
   styleUrls: ['./toolbar.component.scss'],
 })
@@ -24,26 +36,28 @@ export class ToolbarComponent implements OnInit, OnDestroy {
   private adminService = inject(AdminService);
   private adminEventService = inject(AdminEventService);
   private router = inject(Router);
+  private location = inject(Location);
 
   private destroy$ = new Subject<void>();
-  private manualRefresh$ = new Subject<void>();
   
-  // Observable that emits the pending count
   pendingCount$ = new BehaviorSubject<number>(0);
+  currentUser$ = this.authService.currentUser$;
+  activeRoute$ = new BehaviorSubject<string>('');
 
   ngOnInit(): void {
-    // Only set up polling if user is admin
+    this.router.events.pipe(
+      filter(event => event instanceof NavigationEnd),
+      takeUntil(this.destroy$)
+    ).subscribe((event: any) => {
+      this.activeRoute$.next(event.urlAfterRedirects);
+    });
+    
+    this.activeRoute$.next(this.router.url);
+
     if (!this.isAdmin()) {
       return;
     }
 
-    console.log('🔍 Toolbar: Setting up admin badge polling');
-
-    // Create polling stream that combines:
-    // 1. Immediate first fetch (startWith)
-    // 2. Auto-refresh every 30 seconds
-    // 3. Manual refresh triggers
-    // 4. Admin action triggers
     timer(0, 30000).pipe(
       startWith(0),
       tap(() => console.log('🔄 Fetching pending count...')),
@@ -59,18 +73,15 @@ export class ToolbarComponent implements OnInit, OnDestroy {
       error: (err) => console.error('❌ Error fetching pending count:', err)
     });
 
-    // Also refresh on manual triggers (admin actions)
     this.adminEventService.refreshPendingCount
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
-        console.log('🔔 Manual refresh triggered');
         this.fetchPendingCount();
       });
     
     this.adminEventService.refresh$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
-        console.log('🔔 Admin action refresh triggered');
         this.fetchPendingCount();
       });
   }
@@ -87,11 +98,35 @@ export class ToolbarComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (response) => {
           const count = response.users.length;
-          console.log(`🔄 Manual fetch - Pending count: ${count}`);
           this.pendingCount$.next(count);
         },
         error: (err) => console.error('❌ Error in manual fetch:', err)
       });
+  }
+
+  canGoBack(): boolean {
+    const currentRoute = this.router.url;
+    // Don't allow back on home page or auth pages
+    return currentRoute !== '/' && 
+           !currentRoute.includes('/auth') && 
+           window.history.length > 1;
+  }
+
+  canGoForward(): boolean {
+    // Forward is rarely useful in SPAs, keep disabled
+    return false;
+  }
+
+  goBack(): void {
+    // Only navigate back if we're not on protected routes
+    const currentRoute = this.router.url;
+    if (currentRoute !== '/' && !currentRoute.includes('/auth')) {
+      this.location.back();
+    }
+  }
+
+  goForward(): void {
+    this.location.forward();
   }
 
   isAdmin(): boolean {
@@ -99,14 +134,46 @@ export class ToolbarComponent implements OnInit, OnDestroy {
     return user?.role === 'admin' || user?.role === 'super_admin';
   }
 
+  isActive(route: string): boolean {
+    const currentRoute = this.activeRoute$.value;
+    if (route === '/') {
+      return currentRoute === '/';
+    }
+    return currentRoute.startsWith(route);
+  }
+
   navigateToAdmin(): void {
-    console.log('🚀 Navigating to admin page');
-    // Trigger immediate refresh
     this.fetchPendingCount();
     this.adminEventService.triggerNavigationRefresh();
-    
-    // Navigate to admin
     this.router.navigate(['/admin']);
+  }
+
+  navigateTo(route: string): void {
+    this.router.navigate([route]);
+  }
+
+  getInitials(name: string): string {
+    return name
+      .trim()
+      .split(' ')
+      .filter(n => n.length > 0)
+      .map(n => n[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  }
+
+  handleImageError(event: Event, userName: string): void {
+    const img = event.target as HTMLImageElement;
+    img.style.display = 'none';
+  }
+
+  logout(): void {
+    this.authService.logout().subscribe({
+      next: () => {
+        this.router.navigate(['/auth']);
+      }
+    });
   }
 
   refresh(): void {
