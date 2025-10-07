@@ -40,93 +40,134 @@ export class ToolbarComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
   
+  // Navigation tracking
+  private navigationHistory: string[] = [];
+  private currentIndex = -1;
+  private isNavigating = false; // Prevent double navigation
+  
   pendingCount$ = new BehaviorSubject<number>(0);
   currentUser$ = this.authService.currentUser$;
   activeRoute$ = new BehaviorSubject<string>('');
 
+  // Public observables for template
+  canGoBack$ = new BehaviorSubject<boolean>(false);
+  canGoForward$ = new BehaviorSubject<boolean>(false);
+
   ngOnInit(): void {
+    // Initialize with current route
+    const currentUrl = this.router.url;
+    this.navigationHistory = [currentUrl];
+    this.currentIndex = 0;
+    this.activeRoute$.next(currentUrl);
+    this.updateNavigationState();
+
+    // Track navigation
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd),
+      filter(() => !this.isNavigating), // Ignore programmatic navigation
       takeUntil(this.destroy$)
     ).subscribe((event: any) => {
-      this.activeRoute$.next(event.urlAfterRedirects);
+      const url = event.urlAfterRedirects;
+      this.activeRoute$.next(url);
+      
+      // Remove forward history when user navigates normally
+      if (this.currentIndex < this.navigationHistory.length - 1) {
+        this.navigationHistory = this.navigationHistory.slice(0, this.currentIndex + 1);
+      }
+      
+      // Add new page to history
+      this.navigationHistory.push(url);
+      this.currentIndex = this.navigationHistory.length - 1;
+      
+      this.updateNavigationState();
+      console.log('Navigation history:', this.navigationHistory);
+      console.log('Current index:', this.currentIndex);
     });
-    
-    this.activeRoute$.next(this.router.url);
 
+    // Admin pending count polling
     if (!this.isAdmin()) {
       return;
     }
 
     timer(0, 30000).pipe(
       startWith(0),
-      tap(() => console.log('🔄 Fetching pending count...')),
       switchMap(() => this.adminService.getPendingUsers()),
-      map(response => {
-        const count = response.users.length;
-        console.log(`✅ Pending count: ${count}`);
-        return count;
-      }),
+      map(response => response.users.length),
       takeUntil(this.destroy$)
     ).subscribe({
       next: (count) => this.pendingCount$.next(count),
-      error: (err) => console.error('❌ Error fetching pending count:', err)
+      error: (err) => console.error('Error fetching pending count:', err)
     });
 
     this.adminEventService.refreshPendingCount
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.fetchPendingCount();
-      });
+      .subscribe(() => this.fetchPendingCount());
     
     this.adminEventService.refresh$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.fetchPendingCount();
-      });
+      .subscribe(() => this.fetchPendingCount());
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
     this.pendingCount$.complete();
+    this.canGoBack$.complete();
+    this.canGoForward$.complete();
+  }
+
+  private updateNavigationState(): void {
+    this.canGoBack$.next(this.currentIndex > 0);
+    this.canGoForward$.next(this.currentIndex < this.navigationHistory.length - 1);
   }
 
   private fetchPendingCount(): void {
     this.adminService.getPendingUsers()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (response) => {
-          const count = response.users.length;
-          this.pendingCount$.next(count);
-        },
-        error: (err) => console.error('❌ Error in manual fetch:', err)
+        next: (response) => this.pendingCount$.next(response.users.length),
+        error: (err) => console.error('Error in manual fetch:', err)
       });
   }
 
   canGoBack(): boolean {
-    const currentRoute = this.router.url;
-    // Don't allow back on home page or auth pages
-    return currentRoute !== '/' && 
-           !currentRoute.includes('/auth') && 
-           window.history.length > 1;
+    return this.canGoBack$.value;
   }
 
   canGoForward(): boolean {
-    // Forward is rarely useful in SPAs, keep disabled
-    return false;
+    return this.canGoForward$.value;
   }
 
   goBack(): void {
-    // Only navigate back if we're not on protected routes
-    const currentRoute = this.router.url;
-    if (currentRoute !== '/' && !currentRoute.includes('/auth')) {
-      this.location.back();
-    }
+    if (!this.canGoBack()) return;
+    
+    this.isNavigating = true;
+    this.currentIndex--;
+    const previousUrl = this.navigationHistory[this.currentIndex];
+    
+    console.log('Going back to:', previousUrl);
+    
+    this.router.navigateByUrl(previousUrl).then(() => {
+      this.activeRoute$.next(previousUrl);
+      this.updateNavigationState();
+      this.isNavigating = false;
+    });
   }
 
   goForward(): void {
-    this.location.forward();
+    if (!this.canGoForward()) return;
+    
+    this.isNavigating = true;
+    this.currentIndex++;
+    const nextUrl = this.navigationHistory[this.currentIndex];
+    
+    console.log('Going forward to:', nextUrl);
+    
+    this.router.navigateByUrl(nextUrl).then(() => {
+      this.activeRoute$.next(nextUrl);
+      this.updateNavigationState();
+      this.isNavigating = false;
+    });
   }
 
   isAdmin(): boolean {
@@ -140,6 +181,48 @@ export class ToolbarComponent implements OnInit, OnDestroy {
       return currentRoute === '/';
     }
     return currentRoute.startsWith(route);
+  }
+
+  getAvatarSrc(user: any): string {
+  if (user.picture && user.picture.trim() !== '') {
+    return user.picture;
+  }
+  return this.getInitialsAvatar(user.name);
+}
+
+  handleImageError(event: Event, userName: string): void {
+    const img = event.target as HTMLImageElement;
+    img.src = this.getInitialsAvatar(userName);
+  }
+
+  private getInitialsAvatar(name: string): string {
+    const initials = name
+      .trim()
+      .split(' ')
+      .filter(n => n.length > 0)
+      .map(n => n[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = 80;
+    canvas.height = 80;
+    const ctx = canvas.getContext('2d')!;
+    
+    const gradient = ctx.createLinearGradient(0, 0, 80, 80);
+    gradient.addColorStop(0, '#667eea');
+    gradient.addColorStop(1, '#764ba2');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 80, 80);
+    
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 32px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(initials, 40, 40);
+    
+    return canvas.toDataURL();
   }
 
   navigateToAdmin(): void {
@@ -161,11 +244,6 @@ export class ToolbarComponent implements OnInit, OnDestroy {
       .slice(0, 2)
       .join('')
       .toUpperCase();
-  }
-
-  handleImageError(event: Event, userName: string): void {
-    const img = event.target as HTMLImageElement;
-    img.style.display = 'none';
   }
 
   logout(): void {

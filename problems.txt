@@ -31,6 +31,7 @@ Ideas:
 
 it should be more deterministic
 
+{"error":"connect ETIMEDOUT 89.192.9.178:27017"} (any error it should show a custom error)
 
 currently we are fixing these 
 1. I have asked for a back and forth arrows because there many pages out there. If you need the files of those pages I will it to you 
