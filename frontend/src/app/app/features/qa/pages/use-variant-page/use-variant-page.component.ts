@@ -1,7 +1,8 @@
 import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, AfterViewInit, OnInit, OnDestroy, HostListener  } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
-import { BehaviorSubject, firstValueFrom, map, shareReplay, combineLatest, Subscription } from 'rxjs';
+import { trigger, transition, style, animate } from '@angular/animations';
+import { BehaviorSubject, firstValueFrom, map, shareReplay, combineLatest, Subscription, Observable  } from 'rxjs';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import {
   QaService,
@@ -48,6 +49,17 @@ type LinkCheck = { url: string; inFile: boolean; inHtml: boolean };
   templateUrl: './use-variant-page.component.html',
   styleUrls: ['./use-variant-page.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  animations: [
+    trigger('fadeInOut', [
+      transition(':enter', [
+        style({ opacity: 0 }),
+        animate('150ms ease-in', style({ opacity: 1 }))
+      ]),
+      transition(':leave', [
+        animate('100ms ease-out', style({ opacity: 0 }))
+      ])
+    ])
+  ]
 })
 export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy {
   private ar = inject(ActivatedRoute);
@@ -65,8 +77,8 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   private messagesSubject = new BehaviorSubject<ChatTurn[]>([]);
   readonly messages$ = this.messagesSubject.asObservable();
 
-  private editorOpenSubject = new BehaviorSubject<boolean>(false);
-  readonly editorOpen$ = this.editorOpenSubject.asObservable();
+  private editorOpenSubject!: BehaviorSubject<boolean>;
+  readonly editorOpen$!: Observable<boolean>;
 
   input = new FormControl<string>('', { nonNullable: true });
   loadingVariant = true;
@@ -79,6 +91,8 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
 
   private snapping = new Map<string, boolean>();
   get isFinalizing() { return this._isFinalizing; }
+  get isEditorOpen(): boolean { return this.editorOpenSubject.value; }
+  get editorOpenSync(): boolean { return this.editorOpenSubject.value; }
   private _isFinalizing = false;
 
   private validLinksSubject = new BehaviorSubject<string[]>([]);
@@ -125,16 +139,9 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   ngOnInit() {
     window.scrollTo(0, 0);
     
-    // Set up editor state key and restore state
+    // Set up reactive subscription for future route changes
     combineLatest([this.runId$, this.no$]).subscribe(([runId, no]) => {
       this.editorStateKey = `editor_state_${runId}_${no}`;
-      
-      // Restore editor state if it was open
-      const wasEditorOpen = this.restoreEditorState();
-      if (wasEditorOpen) {
-        this.editorOpenSubject.next(true);
-        this.cdr.markForCheck();
-      }
     });
   }
 
@@ -149,6 +156,21 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   }
 
   constructor() {
+    // ✅ RESTORE STATE FIRST - before any template rendering
+    const runId = this.ar.snapshot.paramMap.get('runId');
+    const no = this.ar.snapshot.paramMap.get('no');
+
+    if (runId && no) {
+      this.editorStateKey = `editor_state_${runId}_${no}`;
+      const wasEditorOpen = this.restoreEditorState();
+      this.editorOpenSubject = new BehaviorSubject<boolean>(wasEditorOpen);
+    } else {
+      this.editorOpenSubject = new BehaviorSubject<boolean>(false);
+    }
+
+    this.editorOpen$ = this.editorOpenSubject.asObservable();
+
+    // Now continue with existing constructor code
     this.loadingTimeout = window.setTimeout(() => {
       if (this.loadingVariant) {
         console.warn('Loading timeout reached, forcing completion');
@@ -241,13 +263,13 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   openEditor(): void {
     this.editorOpenSubject.next(true);
     this.saveEditorState(true);
-    this.cdr.markForCheck();
+    this.cdr.detectChanges(); // Force immediate update
   }
 
   closeEditor(): void {
     this.editorOpenSubject.next(false);
     this.saveEditorState(false);
-    this.cdr.markForCheck();
+    this.cdr.detectChanges(); // Force immediate update
   }
 
   // Handle editor close event from child component

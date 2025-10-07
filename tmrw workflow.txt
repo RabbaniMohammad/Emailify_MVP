@@ -16,6 +16,8 @@ apply edit is not working
 
 when refesh last page the template and chatbot not working
 
+when we go back and come still those aren't working
+
 
 free editing 
 

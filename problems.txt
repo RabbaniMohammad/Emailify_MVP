@@ -58,3 +58,8 @@ the front arrow is not working but the back arrow is working
 length
 : 
 2   and An error occurred during authentication. Please try again.
+
+
+
+
+just update the claude with these files thats it

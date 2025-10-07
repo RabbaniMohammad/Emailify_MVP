@@ -345,13 +345,13 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
   onRevert(): void {
     if (!this.editor || !this.hasUnsavedChanges) return;
 
-    if (confirm('Discard all changes and revert to original?')) {
+    // if (confirm('Discard all changes and revert to original?')) {
       this.editor.setValue(this.originalHtml);
       this.hasUnsavedChanges = false;
       this.clearAutoSave();
       this.cdr.markForCheck();
       this.showInfo('Changes reverted');
-    }
+    // }
   }
 
   onClose(): void {
