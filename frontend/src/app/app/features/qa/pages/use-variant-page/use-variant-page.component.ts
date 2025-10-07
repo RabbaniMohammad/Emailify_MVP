@@ -1,8 +1,8 @@
-import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, AfterViewInit, OnInit, HostListener  } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, AfterViewInit, OnInit, OnDestroy, HostListener  } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
-import { BehaviorSubject, firstValueFrom, map, shareReplay, combineLatest } from 'rxjs';
-import { FormControl, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { BehaviorSubject, firstValueFrom, map, shareReplay, combineLatest, Subscription } from 'rxjs';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import {
   QaService,
   ChatTurn,
@@ -13,20 +13,21 @@ import {
   SnapResult,
 } from '../../services/qa.service';
 import { HtmlPreviewComponent } from '../../components/html-preview/html-preview.component';
+import { HtmlEditorComponent } from '../../components/html-editor/html-editor.component';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { ViewChild, ElementRef } from '@angular/core';
-
 
 type AssistantPayload = {
   assistantText: string;
   json: ChatAssistantJson;
 };
 
-// For link/file comparison UI
 type LinkCheck = { url: string; inFile: boolean; inHtml: boolean };
 
 @Component({
@@ -36,68 +37,67 @@ type LinkCheck = { url: string; inFile: boolean; inHtml: boolean };
     CommonModule,
     ReactiveFormsModule,
     HtmlPreviewComponent,
+    HtmlEditorComponent,
     MatProgressSpinnerModule,
     MatButtonModule,
     MatIconModule,
     MatInputModule,
     MatFormFieldModule,
+    MatTooltipModule,
   ],
   templateUrl: './use-variant-page.component.html',
   styleUrls: ['./use-variant-page.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class UseVariantPageComponent implements AfterViewInit, OnInit {
+export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy {
   private ar = inject(ActivatedRoute);
   private qa = inject(QaService);
   private cdr = inject(ChangeDetectorRef);
-  // private zone = inject(NgZone);
+  private snackBar = inject(MatSnackBar);
 
   readonly templateId$ = this.ar.paramMap.pipe(map(p => p.get('id')!), shareReplay(1));
   readonly runId$      = this.ar.paramMap.pipe(map(p => p.get('runId')!), shareReplay(1));
   readonly no$         = this.ar.paramMap.pipe(map(p => Number(p.get('no')!)), shareReplay(1));
 
-  // current HTML used for the LEFT preview and chat operations
   private htmlSubject = new BehaviorSubject<string>('');
   readonly html$ = this.htmlSubject.asObservable();
 
-  // chat state
   private messagesSubject = new BehaviorSubject<ChatTurn[]>([]);
   readonly messages$ = this.messagesSubject.asObservable();
+
+  private editorOpenSubject = new BehaviorSubject<boolean>(false);
+  readonly editorOpen$ = this.editorOpenSubject.asObservable();
 
   input = new FormControl<string>('', { nonNullable: true });
   loadingVariant = true;
   sending = false;
 
-  // Only the clicked message shows spinner
   applyingIndex: number | null = null;
 
-  // Per-message manual edit forms (kept hidden by default / optional)
-  private editForms = new Map<number, FormGroup>();
-
-  // ---------------- Finalize / Screenshots state ----------------
   private snapsSubject = new BehaviorSubject<SnapResult[]>([]);
   readonly snaps$ = this.snapsSubject.asObservable();
 
-  // track per-URL loading states so UI can show per-card spinners
   private snapping = new Map<string, boolean>();
   get isFinalizing() { return this._isFinalizing; }
   private _isFinalizing = false;
 
-  // ---------------- Upload & validation (CSV/XLSX) ----------------
   private validLinksSubject = new BehaviorSubject<string[]>([]);
   readonly validLinks$ = this.validLinksSubject.asObservable();
 
-  // links found inside current HTML
   private htmlLinks$ = this.html$.pipe(map(html => this.extractHttpLinks(html)));
 
   @ViewChild('chatMessages') private chatMessagesRef!: ElementRef;
   private scrollAnimation: number | null = null;
   private loadingTimeout?: number;
 
-  // Add after existing properties
   selectedImage: SnapResult | null = null;
+  
+  // Editor state persistence
+  private editorStateKey = '';
+  private routerSub?: Subscription;
+  private refreshSub?: Subscription;
+  private navigationRefreshSub?: Subscription;
 
-  // comparison output used by the template
   readonly linkChecks$ = combineLatest([this.validLinks$, this.htmlLinks$]).pipe(
     map(([fileLinks, htmlLinks]) => {
       const norm = (u: string) => u.trim().toLowerCase();
@@ -113,7 +113,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
         inFile: fset.has(norm(u)),
         inHtml: hset.has(norm(u)),
       }));
-      // Sort: mismatches first
       checks.sort((a, b) => {
         const aw = (a.inFile && a.inHtml) ? 1 : 0;
         const bw = (b.inFile && b.inHtml) ? 1 : 0;
@@ -124,35 +123,52 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
   );
 
   ngOnInit() {
-    // Reset scroll position immediately when component initializes
     window.scrollTo(0, 0);
+    
+    // Set up editor state key and restore state
+    combineLatest([this.runId$, this.no$]).subscribe(([runId, no]) => {
+      this.editorStateKey = `editor_state_${runId}_${no}`;
+      
+      // Restore editor state if it was open
+      const wasEditorOpen = this.restoreEditorState();
+      if (wasEditorOpen) {
+        this.editorOpenSubject.next(true);
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.routerSub?.unsubscribe();
+    this.refreshSub?.unsubscribe();
+    this.navigationRefreshSub?.unsubscribe();
+    
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout);
+    }
   }
 
   constructor() {
-    // Set a maximum loading time of 10 seconds as safety timeout
     this.loadingTimeout = window.setTimeout(() => {
       if (this.loadingVariant) {
         console.warn('Loading timeout reached, forcing completion');
         this.loadingVariant = false;
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
       }
     }, 10000);
 
-    // Load variant and chat thread (rehydrate)
     this.runId$.subscribe(async (runId) => {
       const no = Number(this.ar.snapshot.paramMap.get('no')!);
 
       try {
-        // 1) Chat cache (has currentHtml + thread)
         const cachedThread = this.qa.getChatCached(runId, no);
         if (cachedThread?.html) {
           this.htmlSubject.next(cachedThread.html);
           this.messagesSubject.next(cachedThread.messages || []);
           this.snapsSubject.next(this.qa.getSnapsCached(runId));
-          return; // Early return, finally block will handle loading state
+          return;
         }
 
-        // 2) Variants run cache (localStorage)
         const run = this.qa.getVariantsRunById(runId);
         const item = run?.items?.find(it => it.no === no) || null;
         if (item?.html) {
@@ -168,10 +184,9 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
           this.messagesSubject.next(thread.messages);
           this.qa.saveChat(runId, no, thread);
           this.snapsSubject.next(this.qa.getSnapsCached(runId));
-          return; // Early return, finally block will handle loading state
+          return;
         }
 
-        // 3) Fallback → backend (may 404 after server restarts)
         try {
           const status = await firstValueFrom(this.qa.getVariantsStatus(runId));
           const fromApi = status.items.find(it => it.no === no) || null;
@@ -201,7 +216,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
         this.snapsSubject.next(this.qa.getSnapsCached(runId));
       } catch (error) {
         console.error('Error during component initialization:', error);
-        // Ensure we have at least an error message
         const errorMessage: ChatTurn = {
           role: 'assistant',
           text: 'An error occurred while loading this variant. Please try refreshing the page.',
@@ -211,22 +225,97 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
         this.messagesSubject.next([errorMessage]);
         this.snapsSubject.next([]);
       } finally {
-        // ALWAYS set loading to false and clear timeout
         this.loadingVariant = false;
         if (this.loadingTimeout) {
           clearTimeout(this.loadingTimeout);
           this.loadingTimeout = undefined;
         }
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
         
-        // Position chat at bottom while maintaining scroll capability
         this.positionChatAtBottom();
       }
     });
   }
 
+  // EDITOR METHODS - UPDATED TO PERSIST STATE
+  openEditor(): void {
+    this.editorOpenSubject.next(true);
+    this.saveEditorState(true);
+    this.cdr.markForCheck();
+  }
+
+  closeEditor(): void {
+    this.editorOpenSubject.next(false);
+    this.saveEditorState(false);
+    this.cdr.markForCheck();
+  }
+
+  // Handle editor close event from child component
+  onEditorClose(): void {
+    this.closeEditor();
+  }
+
+  // Handle save from editor WITHOUT closing
+  onEditorSave(newHtml: string): void {
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+
+    // Update HTML
+    this.htmlSubject.next(newHtml);
+
+    // Save thread with updated HTML
+    const thread: ChatThread = {
+      html: newHtml,
+      messages: this.messagesSubject.value
+    };
+    this.qa.saveChat(runId, no, thread);
+
+    // DON'T close editor - keep it open for more edits
+    // this.closeEditor(); // ← REMOVED - this was causing the issue
+    
+    // Show success message
+    this.showSuccess('Template updated successfully!');
+    
+    // Mark for check to update the preview
+    this.cdr.markForCheck();
+  }
+
+  // Save editor state to sessionStorage
+  private saveEditorState(isOpen: boolean): void {
+    try {
+      if (this.editorStateKey) {
+        sessionStorage.setItem(this.editorStateKey, isOpen.toString());
+      }
+    } catch (error) {
+      console.warn('Failed to save editor state:', error);
+    }
+  }
+
+  // Restore editor state from sessionStorage
+  private restoreEditorState(): boolean {
+    try {
+      if (this.editorStateKey) {
+        const saved = sessionStorage.getItem(this.editorStateKey);
+        return saved === 'true';
+      }
+    } catch (error) {
+      console.warn('Failed to restore editor state:', error);
+    }
+    return false;
+  }
+
+  // Optional: Toggle editor state
+  toggleEditor(): void {
+    const currentState = this.editorOpenSubject.value;
+    if (currentState) {
+      this.closeEditor();
+    } else {
+      this.openEditor();
+    }
+  }
+
+  // IMAGE MODAL METHODS
   openImageModal(snap: SnapResult): void {
-    // console.log('Clicked image:', snap.url, snap.dataUrl);
     if (snap.dataUrl) {
       this.selectedImage = snap;
       document.body.style.overflow = 'hidden';
@@ -234,12 +323,10 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
   }
 
   closeImageModal(): void {
-    // console.log('Closing modal');
     this.selectedImage = null;
     document.body.style.overflow = 'auto';
   }
 
-  // Optional: Close modal with Escape key
   @HostListener('document:keydown.escape', ['$event'])
   onEscapeKey(event: KeyboardEvent): void {
     if (this.selectedImage) {
@@ -248,55 +335,48 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
   }
 
   ngAfterViewInit() {
-    try {
-      const chatElement = this.chatMessagesRef?.nativeElement;
-      if (chatElement) {
-        // Stop animation when user manually scrolls
-        chatElement.addEventListener('wheel', () => {
-          if (this.scrollAnimation) {
-            cancelAnimationFrame(this.scrollAnimation);
-            this.scrollAnimation = null;
-          }
-        });
-        
-        chatElement.addEventListener('touchmove', () => {
-          if (this.scrollAnimation) {
-            cancelAnimationFrame(this.scrollAnimation);
-            this.scrollAnimation = null;
-          }
-        });
-      }
+    setTimeout(() => {
+      try {
+        const chatElement = this.chatMessagesRef?.nativeElement;
+        if (chatElement) {
+          chatElement.addEventListener('wheel', () => {
+            if (this.scrollAnimation) {
+              cancelAnimationFrame(this.scrollAnimation);
+              this.scrollAnimation = null;
+            }
+          });
+          
+          chatElement.addEventListener('touchmove', () => {
+            if (this.scrollAnimation) {
+              cancelAnimationFrame(this.scrollAnimation);
+              this.scrollAnimation = null;
+            }
+          });
+        }
 
-      // Ensure scroll position is at top for main page
-      window.scrollTo(0, 0);
-      
-      // Position chat at bottom while maintaining scroll capability
-      this.positionChatAtBottom();
-    } catch (error) {
-      console.error('Error in ngAfterViewInit:', error);
-    }
+        window.scrollTo(0, 0);
+        
+        this.positionChatAtBottom();
+      } catch (error) {
+        console.error('Error in ngAfterViewInit:', error);
+      }
+    }, 0);
   }
 
-  // Proper method to position at bottom while maintaining scroll capability
   private positionChatAtBottom(): void {
     setTimeout(() => {
       const element = this.chatMessagesRef?.nativeElement;
       if (element && element.scrollHeight > 0) {
-        // Temporarily disable smooth scrolling for instant positioning
         element.style.scrollBehavior = 'auto';
         element.scrollTop = element.scrollHeight;
         
-        // Re-enable smooth scrolling after positioning
         setTimeout(() => {
           element.style.scrollBehavior = 'smooth';
         }, 50);
-        
-        console.log('Chat positioned at bottom with scroll capability maintained');
       }
     }, 50);
   }
 
-  // ---------------- Scroll methods ----------------
   scrollToTop(): void {
     this.smoothScrollTo(0);
   }
@@ -312,7 +392,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
     const element = this.chatMessagesRef?.nativeElement || document.querySelector('.chat-messages');
     if (!element) return;
 
-    // Cancel any ongoing animation
     if (this.scrollAnimation) {
       cancelAnimationFrame(this.scrollAnimation);
     }
@@ -327,7 +406,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
       const timeElapsed = currentTime - startTime;
       const progress = Math.min(timeElapsed / duration, 1);
 
-      // Easing function for smooth animation
       const ease = progress < 0.5 
         ? 2 * progress * progress 
         : 1 - Math.pow(-2 * progress + 2, 2) / 2;
@@ -344,7 +422,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
     this.scrollAnimation = requestAnimationFrame(animateScroll);
   }
 
-  // ---------------- Chat actions ----------------
   async onSend() {
     const message = (this.input.value || '').trim();
     if (!message || this.sending) return;
@@ -441,7 +518,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
     }
   }
 
-  // ---------------- Finalize & screenshots ----------------
   onFinalize() {
     const el = document.getElementById('finalize');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -485,7 +561,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
     }
   }
 
-  // ---------------- Upload: CSV/XLSX of "valid links" ----------------
   async onValidLinksUpload(e: Event) {
     const input = e.target as HTMLInputElement;
     const file = input?.files?.[0];
@@ -565,7 +640,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
     return rows;
   }
 
-  // ---------------- Helpers ----------------
   private updateMessageEdits(turnIndex: number, edits: GoldenEdit[]) {
     const list = this.messagesSubject.value.slice();
     const turn = { ...list[turnIndex] };
@@ -674,21 +748,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
     });
   }
 
-  getEditForm(i: number, _m: ChatTurn): FormGroup {
-    let fg = this.editForms.get(i);
-    if (!fg) {
-      fg = new FormGroup({
-        before:  new FormControl<string>('', []),
-        find:    new FormControl<string>('', [Validators.required, Validators.minLength(1)]),
-        after:   new FormControl<string>('', []),
-        replace: new FormControl<string>('', [Validators.required, Validators.minLength(1)]),
-        reason:  new FormControl<string>('Manual patch', []),
-      });
-      this.editForms.set(i, fg);
-    }
-    return fg;
-  }
-
   async onApplySingle(turnIndex: number, edit: GoldenEdit, replacement: string) {
     if (this.applyingIndex !== null) return;
     this.applyingIndex = turnIndex;
@@ -747,44 +806,12 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit {
     this.persistThread(runId, no, this.htmlSubject.value, this.messagesSubject.value);
   }
 
-  async onApplyManual(i: number) {
-    if (this.applyingIndex !== null) return;
-    this.applyingIndex = i;
-
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
-    const fg = this.getEditForm(i, this.messagesSubject.value[i]);
-
-    if (fg.invalid) { fg.markAllAsTouched(); this.applyingIndex = null; return; }
-
-    const edit: GoldenEdit = {
-      before_context: fg.value.before || '',
-      find: fg.value.find!,
-      after_context: fg.value.after || '',
-      replace: fg.value.replace!,
-      reason: fg.value.reason || 'Manual patch',
-    };
-
-    try {
-      const currentHtml = this.htmlSubject.value;
-      const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, [edit]));
-      const newHtml = resp?.html || currentHtml;
-      const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
-
-      this.htmlSubject.next(newHtml);
-
-      const noteText = numChanges > 0
-        ? `Applied manual patch: "${edit.find}" → "${edit.replace}".`
-        : `Manual patch matched 0 places. Try a smaller word/phrase and add a bit of surrounding context.`;
-
-      const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
-      const msgs = [...this.messagesSubject.value, appliedNote];
-      this.messagesSubject.next(msgs);
-      this.persistThread(runId, no, newHtml, msgs);
-    } catch (e) {
-      console.error('manual apply error', e);
-    } finally {
-      this.applyingIndex = null;
-    }
+  private showSuccess(message: string): void {
+    this.snackBar.open(message, 'Close', {
+      duration: 3000,
+      panelClass: ['success-snackbar'],
+      horizontalPosition: 'center',
+      verticalPosition: 'bottom',
+    });
   }
 }

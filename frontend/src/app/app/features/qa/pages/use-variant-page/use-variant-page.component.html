@@ -5,12 +5,22 @@
   <div class="gradient-orb orb-3"></div>
 </div>
 
-<div class="use-variant-wrapper">
+<div class="use-variant-wrapper" [class.editor-mode]="editorOpen$ | async">
   <div class="use-grid">
     <!-- Left: live preview -->
-    <section class="use-left glass-card">
+    <section class="use-left glass-card" [class.minimized]="editorOpen$ | async">
       <div class="section-header">
         <h3>Selected Variant</h3>
+        <!-- NEW: Open Editor Button -->
+        <button 
+          mat-icon-button 
+          class="editor-toggle-btn"
+          (click)="openEditor()" 
+          *ngIf="!(editorOpen$ | async)"
+          [matTooltip]="'Use this editor for minor updates. For major changes, use Figma'"
+          matTooltipPosition="below">
+          <mat-icon>edit_note</mat-icon>
+        </button>
       </div>
       <div class="preview-wrapper">
         <app-html-preview
@@ -20,121 +30,132 @@
       </div>
     </section>
 
-    <!-- Right: Chat -->
-    <section class="use-right glass-card">
-      <div class="section-header">
-        <h3>AI Assistant</h3>
-        <button
-          mat-raised-button
-          class="finalize-btn"
-          (click)="onFinalize()">
-          Finalize
-        </button>
-      </div>
-
-      <div class="chat-container">
-        <div class="chat-messages" #chatMessages>
-          <div
-            class="chat-msg"
-            *ngFor="let m of (messages$ | async) ?? []; let i = index; trackBy: trackByMsg">
-            <div class="bubble" [class.me]="m.role === 'user'">
-              <div class="who">{{ m.role === 'user' ? 'YOU' : 'AI ASSISTANT' }}</div>
-              <div class="text" [innerText]="m.text"></div>
-
-              <ng-container *ngIf="m.role === 'assistant' && m.json?.edits?.length">
-                <div class="apply-panel">
-                  <div class="apply-header">
-                    <h4>Suggested Changes ({{ m.json?.edits?.length || 0 }})</h4>
-                    <div class="actions-row">
-                      <button
-                        mat-button
-                        class="clear-btn"
-                        (click)="onClearEdits(i)"
-                        [disabled]="applyingIndex === i">
-                        Clear
-                      </button>
-                      <button
-                        mat-raised-button
-                        class="apply-all-btn"
-                        [disabled]="applyingIndex === i"
-                        (click)="onApplyEdits(i)">
-                        <mat-progress-spinner
-                          *ngIf="applyingIndex === i"
-                          diameter="16"
-                          mode="indeterminate">
-                        </mat-progress-spinner>
-                        <span>{{ applyingIndex === i ? 'Applying...' : 'Apply All' }}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="apply-list">
-                    <div class="apply-item"
-                         *ngFor="let e of m.json!.edits; let j = index">
-                      <div class="edit-row">
-                        <div class="edit-col">
-                          <div class="label">Original</div>
-                          <div class="orig">{{ e.find }}</div>
-                        </div>
-                        <div class="arrow-col">→</div>
-                        <div class="edit-col">
-                          <div class="label">Replacement</div>
-                          <input
-                            type="text"
-                            class="replacement-input"
-                            [value]="e.replace"
-                            #repInput />
-                        </div>
-                      </div>
-
-                      <div class="edit-actions">
-                        <button
-                          mat-stroked-button
-                          class="apply-single-btn"
-                          (click)="onApplySingle(i, e, repInput.value)"
-                          [disabled]="applyingIndex === i">
-                          Apply
-                        </button>
-                        <button
-                          mat-button
-                          class="skip-btn"
-                          (click)="onSkipSingle(i, j)"
-                          [disabled]="applyingIndex === i">
-                          Skip
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </ng-container>
-            </div>
-          </div>
-        </div>
-
-        <div class="composer">
-          <textarea
-            class="message-input"
-            [formControl]="input"
-            placeholder="Ask for changes or ideas..."
-            rows="2"
-            (keydown)="handleKeyDown($event)">
-          </textarea>
+    <!-- Right: Chat OR Editor -->
+    <section class="use-right glass-card" [class.editor-expanded]="editorOpen$ | async">
+      <!-- Chat Interface (hidden when editor open) -->
+      <div class="chat-section" *ngIf="!(editorOpen$ | async)">
+        <div class="section-header">
+          <h3>AI Assistant</h3>
           <button
             mat-raised-button
-            class="send-btn"
-            (click)="onSend()"
-            [disabled]="sending || !input.value.trim()">
-            <mat-progress-spinner
-              *ngIf="sending"
-              diameter="18"
-              mode="indeterminate">
-            </mat-progress-spinner>
-            <svg *ngIf="!sending" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-            </svg>
+            class="finalize-btn"
+            (click)="onFinalize()">
+            Finalize
           </button>
         </div>
+
+        <div class="chat-container">
+          <div class="chat-messages" #chatMessages>
+            <div
+              class="chat-msg"
+              *ngFor="let m of (messages$ | async) ?? []; let i = index; trackBy: trackByMsg">
+              <div class="bubble" [class.me]="m.role === 'user'">
+                <div class="who">{{ m.role === 'user' ? 'YOU' : 'AI ASSISTANT' }}</div>
+                <div class="text" [innerText]="m.text"></div>
+
+                <ng-container *ngIf="m.role === 'assistant' && m.json?.edits?.length">
+                  <div class="apply-panel">
+                    <div class="apply-header">
+                      <h4>Suggested Changes ({{ m.json?.edits?.length || 0 }})</h4>
+                      <div class="actions-row">
+                        <button
+                          mat-button
+                          class="clear-btn"
+                          (click)="onClearEdits(i)"
+                          [disabled]="applyingIndex === i">
+                          Clear
+                        </button>
+                        <button
+                          mat-raised-button
+                          class="apply-all-btn"
+                          [disabled]="applyingIndex === i"
+                          (click)="onApplyEdits(i)">
+                          <mat-progress-spinner
+                            *ngIf="applyingIndex === i"
+                            diameter="16"
+                            mode="indeterminate">
+                          </mat-progress-spinner>
+                          <span>{{ applyingIndex === i ? 'Applying...' : 'Apply All' }}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="apply-list">
+                      <div class="apply-item"
+                           *ngFor="let e of m.json!.edits; let j = index">
+                        <div class="edit-row">
+                          <div class="edit-col">
+                            <div class="label">Original</div>
+                            <div class="orig">{{ e.find }}</div>
+                          </div>
+                          <div class="arrow-col">→</div>
+                          <div class="edit-col">
+                            <div class="label">Replacement</div>
+                            <input
+                              type="text"
+                              class="replacement-input"
+                              [value]="e.replace"
+                              #repInput />
+                          </div>
+                        </div>
+
+                        <div class="edit-actions">
+                          <button
+                            mat-stroked-button
+                            class="apply-single-btn"
+                            (click)="onApplySingle(i, e, repInput.value)"
+                            [disabled]="applyingIndex === i">
+                            Apply
+                          </button>
+                          <button
+                            mat-button
+                            class="skip-btn"
+                            (click)="onSkipSingle(i, j)"
+                            [disabled]="applyingIndex === i">
+                            Skip
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </ng-container>
+              </div>
+            </div>
+          </div>
+
+          <div class="composer">
+            <textarea
+              class="message-input"
+              [formControl]="input"
+              placeholder="Ask for changes or ideas..."
+              rows="2"
+              (keydown)="handleKeyDown($event)">
+            </textarea>
+            <button
+              mat-raised-button
+              class="send-btn"
+              (click)="onSend()"
+              [disabled]="sending || !input.value.trim()">
+              <mat-progress-spinner
+                *ngIf="sending"
+                diameter="18"
+                mode="indeterminate">
+              </mat-progress-spinner>
+              <svg *ngIf="!sending" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
+
+      <!-- HTML Editor (shown when editor open) - FIXED EVENT BINDINGS -->
+      <app-html-editor 
+        *ngIf="editorOpen$ | async"
+        [initialHtml]="(html$ | async) || ''"
+        (htmlChanged)="onEditorSave($event)"
+        (editorClosed)="onEditorClose()">
+      </app-html-editor>
     </section>
   </div>
 
@@ -295,8 +316,8 @@
       </div>
     </div>
   </section>
+
   <!-- Fullscreen Image Modal -->
-  <!-- Add this right before the closing </div> of use-variant-wrapper -->
   <div class="image-modal" *ngIf="selectedImage" (click)="closeImageModal()">
     <div class="modal-backdrop"></div>
     <div class="modal-content" (click)="$event.stopPropagation()">

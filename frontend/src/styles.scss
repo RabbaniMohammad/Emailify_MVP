@@ -4,3 +4,34 @@
 
 html, body { height: 100%; }
 body { margin: 0; font-family: Roboto, 'Helvetica Neue', sans-serif; }
+
+// Snackbar Custom Styles
+.success-snackbar {
+  background: #10b981 !important;
+  color: white !important;
+  font-weight: 600;
+  
+  .mat-simple-snack-bar-content {
+    font-size: 0.9375rem;
+  }
+}
+
+.error-snackbar {
+  background: #ef4444 !important;
+  color: white !important;
+  font-weight: 600;
+  
+  .mat-simple-snack-bar-content {
+    font-size: 0.9375rem;
+  }
+}
+
+.info-snackbar {
+  background: #3b82f6 !important;
+  color: white !important;
+  font-weight: 600;
+  
+  .mat-simple-snack-bar-content {
+    font-size: 0.9375rem;
+  }
+}

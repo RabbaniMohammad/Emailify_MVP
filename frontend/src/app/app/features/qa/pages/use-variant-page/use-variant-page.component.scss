@@ -364,6 +364,17 @@
   flex-direction: column;
   animation: slide-in-right 0.8s ease forwards;
   max-height: calc(100vh - 150px); // Match left column
+  min-height: 550px;
+  height: 100%;
+
+  &.editor-expanded {
+    app-html-editor {
+      display: flex;
+      flex: 1;
+      height: 100%;
+      min-height: 0;
+    }
+  }
   
   .chat-container {
     flex: 1;
@@ -2518,6 +2529,156 @@
     svg {
       width: 18px;
       height: 18px;
+    }
+  }
+}
+
+
+
+// Editor Mode Layout
+.use-variant-wrapper {
+  &.editor-mode {
+    .use-grid {
+      grid-template-columns: 350px 1fr;
+      transition: grid-template-columns 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      
+      @media (max-width: 1200px) {
+        grid-template-columns: 1fr;
+      }
+    }
+  }
+}
+
+// Minimized Preview
+.use-left {
+  &.minimized {
+    .preview-wrapper {
+      max-height: 400px;
+      overflow: hidden;
+      position: relative;
+      
+      &::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 60px;
+        background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.95));
+        pointer-events: none;
+      }
+    }
+  }
+}
+
+// Editor Toggle Button (in preview header)
+.editor-toggle-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 10px !important;
+  transition: all 0.3s ease !important;
+  position: relative !important;
+  overflow: hidden !important;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.3s ease;
+  }
+  
+  mat-icon {
+    font-size: 22px;
+    width: 22px;
+    height: 22px;
+    position: relative;
+    z-index: 2;
+  }
+  
+  &:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4) !important;
+    
+    &::before {
+      left: 100%;
+    }
+  }
+  
+  &:active {
+    transform: translateY(0) scale(1);
+  }
+}
+
+// Editor Expanded State
+.use-right {
+  &.editor-expanded {
+    animation: expand-editor 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    
+    app-html-editor {
+      animation: fade-in 0.5s ease forwards;
+      animation-delay: 0.2s;
+      opacity: 0;
+    }
+  }
+}
+
+// Chat Section (hide when editor is open)
+.chat-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  animation: fade-in 0.3s ease forwards;
+}
+
+// Editor Animations
+@keyframes expand-editor {
+  from {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// Responsive Editor Layout
+@media (max-width: 1200px) {
+  .use-variant-wrapper.editor-mode {
+    .use-left {
+      display: none; // Hide preview on smaller screens when editor is open
+    }
+    
+    .use-right {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .editor-toggle-btn {
+    width: 36px !important;
+    height: 36px !important;
+    
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
     }
   }
 }
