@@ -116,7 +116,7 @@
   grid-template-columns: 1fr 400px 1fr;
   gap: 1.5rem;
   margin-bottom: 2rem;
-  margin-top: 0.3 !important;
+  margin-top: 0.2rem !important;
   align-items: start;
 }
 
@@ -145,6 +145,7 @@
   flex-direction: column;
 
   &.col-2 {
+    position: relative;
     max-height: calc(100vh - 4rem);
     display: flex;
     flex-direction: column;
@@ -474,7 +475,7 @@
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: var(--radius-lg);
   padding: 1.25rem;
-  margin-bottom: 1rem;
+  // margin-bottom: 1rem;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   transition: all var(--transition-normal);
 
@@ -1565,5 +1566,160 @@
       max-width: none !important;
       margin: 0 !important;
     }
+  }
+}
+
+// Golden Loading State
+.golden-loading-state {
+  .golden-loader {
+    position: relative;
+    margin-bottom: 2rem;
+  }
+
+  .golden-spinner {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 1rem;
+    display: flex; /* Add this */
+    align-items: center; /* Add this */
+    justify-content: center; /* Add this */
+
+    .spinner-ring {
+      position: absolute;
+      border: 3px solid transparent;
+      border-radius: 50%;
+      animation: golden-spin 2s linear infinite;
+
+      &:nth-child(1) {
+        width: 80px;
+        height: 80px;
+        border-top-color: #fbbf24;
+        border-right-color: #fbbf24;
+        animation-delay: 0s;
+      }
+
+      &:nth-child(2) {
+        width: 60px;
+        height: 60px;
+        top: 10px;
+        left: 10px;
+        border-top-color: #f59e0b;
+        border-left-color: #f59e0b;
+        animation-delay: -0.4s;
+        animation-direction: reverse;
+      }
+
+      &:nth-child(3) {
+        width: 40px;
+        height: 40px;
+        top: 20px;
+        left: 20px;
+        border-top-color: #d97706;
+        border-bottom-color: #d97706;
+        animation-delay: -0.8s;
+      }
+    }
+  }
+
+.golden-icon-container {
+  position: absolute;
+  top: 24px; /* (80px - 32px) / 2 = 24px */
+  left: 24px; /* (80px - 32px) / 2 = 24px */
+  /* Remove transform completely */
+  width: 32px;
+  height: 32px;
+  background: var(--gradient-golden);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+  z-index: 10;
+
+  svg {
+    width: 18px;
+    height: 18px;
+    color: white;
+    animation: float-icon 2s ease-in-out infinite;
+  }
+}
+
+  .loading-text {
+    text-align: center;
+
+    h4 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.25rem;
+      font-weight: 700;
+      background: var(--gradient-golden);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    p {
+      margin: 0;
+      font-size: 0.9375rem;
+      color: #6b7280;
+      line-height: 1.6;
+    }
+  }
+}
+
+@keyframes golden-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+// Centered Loading Overlay
+// .loading-panel.centered-overlay {
+//   position: absolute !important;
+//   top: 0 !important;
+//   left: 0 !important;
+//   right: 0 !important;
+//   bottom: 0 !important;
+//   background: rgba(255, 255, 255, 0.95) !important;
+//   backdrop-filter: blur(10px) !important;
+//   z-index: 20 !important;
+//   display: flex !important;
+//   flex-direction: column !important;
+//   align-items: center !important;
+//   justify-content: center !important;
+//   border-radius: var(--radius-xl) !important;
+//   margin: 0 !important;
+//   padding: 2rem !important;
+//   border: none !important;
+//   box-shadow: none !important;
+// }
+
+.secondary-btn.loading {
+  .spinner-container {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    
+    .modern-spinner {
+      margin-right: 0.5rem !important;
+    }
+    
+    .btn-text-loading {
+      text-align: center !important;
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+  }
+}
+
+
+.secondary-btn .spinner-container {
+  justify-content: center !important;
+  text-align: center !important;
+  
+  .btn-text-loading {
+    text-align: center !important;
   }
 }

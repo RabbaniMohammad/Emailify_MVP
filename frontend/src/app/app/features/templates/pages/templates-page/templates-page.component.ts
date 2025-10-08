@@ -106,6 +106,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   // Component state
   searchQuery = '';
   runButtonItemId?: string;
+  loadingTemplateId: string | null = null; // Track which template is loading
   
   // Track if current selection was user-initiated or auto-restored
   private userInitiatedSelection = false;
@@ -138,12 +139,12 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           // Clear preview when nothing selected
           this.safeSrcdoc = null;
           this.runButtonItemId = undefined;
+          this.loadingTemplateId = null;
           this.cdr.markForCheck();
         }
       });
 
-    // ✅ FIX: Always load templates on init
-    // The service will handle caching internally
+    // Always load templates on init
     console.log('🔍 Component init - loading templates');
     
     // Check if we have items already loaded
@@ -169,19 +170,16 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   // Search functionality
   onSearch(query: string): void {
     this.searchQuery = query;
-    
-    // ✅ FIX: Always call search to handle both cached and fresh data
-    // The service will handle cache lookup internally
     this.svc.search(query);
   }
 
   // Template list methods
   onSelect(item: TemplateItem): void {
-    // ✅ IMMEDIATELY hide button from previous template
+    // IMMEDIATELY hide button from previous template
     this.runButtonItemId = undefined;
     
     this.svc.select(item.id, item.name);
-    // ✅ Mark as user-initiated selection
+    // Mark as user-initiated selection
     this.userInitiatedSelection = true;
     
     try {
@@ -198,6 +196,10 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   }
 
   onClick(item: TemplateItem): void {
+    // Prevent clicking the template that's currently loading
+    if (item.id === this.loadingTemplateId) {
+      return;
+    }
     this.onSelect(item);
   }
 
@@ -249,16 +251,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  // onIframeLoad(): void {
-  //   this.loading = false;
-  //   const currentId = this.svc.snapshot.selectedId;
-  //   if (currentId) {
-  //     // ✅ Show button when iframe finishes loading (fresh content)
-  //     this.showRunButton(currentId);
-  //   }
-  //   this.cdr.markForCheck();
-  // }
-
   // Utility methods for scrolling
   scrollToItem(itemId: string): void {
     if (!this.scrollContainer) return;
@@ -293,7 +285,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ✅ FIXED: Private method for template loading
+  // Private method for template loading
   private loadTemplateContent(id: string): void {
     console.log('🔵 START loadTemplateContent, id:', id);
     
@@ -304,24 +296,26 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
     if (!id) {
       this.loading = false;
+      this.loadingTemplateId = null;
       console.log('⚪ No ID - loading set to FALSE');
       this.cdr.markForCheck();
       return;
     }
 
-    // ✅ ALWAYS show loading first
+    // Always show loading first
     this.loading = true;
-    console.log('🟢 Loading set to TRUE');
+    console.log('🟢 Loading set to TRUE for template:', id);
     this.cdr.markForCheck();
 
     // Check cache first
     const cached = this.cache.get(id) || this.cache.getPersisted(id);
-    console.log('📦 Cache check:', cached ? 'HIT' : 'MISS');
+    console.log('🔦 Cache check:', cached ? 'HIT' : 'MISS');
     
     if (cached) {
-      console.log('⏱️ Using cached content, waiting 300ms...');
+      // DON'T set loadingTemplateId for cached content - no API call needed
+      console.log('⏱️ Using cached content, waiting 100ms...');
       setTimeout(() => {
-        console.log('✅ 300ms passed, setting HTML');
+        console.log('✅ 100ms passed, setting HTML');
         if (this.svc.snapshot.selectedId !== id) {
           console.log('⚠️ User switched, aborting');
           return;
@@ -337,6 +331,10 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // ONLY set loadingTemplateId when making fresh API call
+    this.loadingTemplateId = id;
+    console.log('🔒 Template locked for API call:', id);
+
     // Fresh content path
     console.log('🌐 Fetching fresh content from API...');
     this.fetchSub = this.http
@@ -347,6 +345,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           const currentId = this.svc.snapshot.selectedId;
           if (currentId !== id) {
             console.log('⚠️ User switched during fetch, aborting');
+            this.loadingTemplateId = null;
             return;
           }
           
@@ -362,6 +361,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
         error: (e) => {
           console.log('❌ API error:', e);
           this.loading = false;
+          this.loadingTemplateId = null; // Clear on error
           this.previewError = e?.message || 'Failed to load preview.';
           this.cdr.markForCheck();
         },
@@ -371,7 +371,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   onIframeLoad(): void {
     console.log('🎬 onIframeLoad called');
     
-    // ✅ FIX: Only clear loading if we actually have content to show
+    // Only clear loading if we actually have content to show
     if (!this.safeSrcdoc) {
       console.log('⚠️ Iframe loaded but no content yet - ignoring');
       return;
@@ -379,6 +379,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     
     console.log('✅ Iframe loaded with content - setting loading to FALSE');
     this.loading = false;
+    this.loadingTemplateId = null; // Clear loading template when done
     const currentId = this.svc.snapshot.selectedId;
     if (currentId) {
       this.showRunButton(currentId);

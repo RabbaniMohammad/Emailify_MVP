@@ -10,6 +10,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { HttpClient } from '@angular/common/http';
+import { TemplatesService } from '../../../../core/services/templates.service';
+import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
 
 type SuggestionResult = {
   gibberish: Array<{ text: string; reason: string }>;
@@ -116,6 +119,12 @@ export class QaPageComponent {
   private ar = inject(ActivatedRoute);
   private qa = inject(QaService);
   private router = inject(Router);
+  private http = inject(HttpClient);
+  private templatesService = inject(TemplatesService);
+  private previewCache = inject(PreviewCacheService);
+  
+  templateHtml = '';
+  templateLoading = true;
 
   // Route id
   readonly id$ = this.ar.paramMap.pipe(map(p => p.get('id')!), shareReplay(1));
@@ -150,12 +159,13 @@ export class QaPageComponent {
       const prevRun = this.qa.getVariantsRunCached(id);
       if (prevRun) this.variantsSubject.next(prevRun);
       this.variantsRunId = prevRun?.runId || null;
+      this.loadOriginalTemplate(id);
     });
   }
 
   getSkeletonArray(target: number, currentCount: number): number[] {
-  const remaining = target - currentCount;
-  return Array(Math.max(0, remaining)).fill(0);
+    const remaining = target - currentCount;
+    return Array(Math.max(0, remaining)).fill(0);
   }
   
   // Generate Golden Template
@@ -176,6 +186,48 @@ export class QaPageComponent {
     });
   }
 
+  private loadOriginalTemplate(templateId: string) {
+    console.log('Loading template from cache/service:', templateId);
+    this.templateLoading = true;
+    this.templateHtml = ''; // Clear any previous content
+    
+    // First try to get from preview cache
+    const cachedHtml = this.previewCache.get(templateId) || this.previewCache.getPersisted(templateId);
+    
+    if (cachedHtml) {
+      console.log('Found template in cache');
+      this.templateHtml = cachedHtml;
+      this.templateLoading = false;
+      return;
+    }
+    
+    // If not in cache, get from templates service
+    const currentState = this.templatesService.snapshot;
+    const template = currentState.items.find(item => item.id === templateId);
+    
+    if (template?.content) {
+      console.log('Found template in service');
+      this.templateHtml = template.content;
+      this.templateLoading = false;
+      return;
+    }
+    
+    // Fallback: fetch from API only if not available anywhere else
+    console.log('Template not found in cache or service, fetching from API');
+    this.http.get(`/api/templates/${templateId}/raw`, { responseType: 'text' })
+      .subscribe({
+        next: (html) => {
+          console.log('Template loaded from API');
+          this.templateHtml = html;
+          this.templateLoading = false;
+        },
+        error: (error) => {
+          console.error('Failed to load template:', error);
+          this.templateHtml = 'Failed to load template';
+          this.templateLoading = false;
+        }
+      });
+  }
 
   // Generate Subject Ideas
   onGenerateSubjects(id: string) {
@@ -196,7 +248,26 @@ export class QaPageComponent {
     if (this.suggestionsLoading) return;
     this.suggestionsLoading = true;
     this.qa.generateSuggestions(id).subscribe({
-      next: (res) => this.suggestionsSubject.next(res),
+      next: (res) => {
+        this.suggestionsSubject.next(res);
+        
+        // Auto-scroll within the middle column's scrollable area
+        setTimeout(() => {
+          const scrollableContent = document.querySelector('.col-2 .scrollable-content');
+          const suggestionsPanel = document.querySelector('.suggestions-panel');
+          
+          if (scrollableContent && suggestionsPanel) {
+            const containerRect = scrollableContent.getBoundingClientRect();
+            const suggestionRect = suggestionsPanel.getBoundingClientRect();
+            const scrollTop = suggestionRect.top - containerRect.top + scrollableContent.scrollTop;
+            
+            scrollableContent.scrollTo({
+              top: scrollTop - 20, // 20px offset from top
+              behavior: 'smooth'
+            });
+          }
+        }, 300);
+      },
       error: (e) => { 
         console.error('suggestions error', e); 
         this.suggestionsLoading = false; 

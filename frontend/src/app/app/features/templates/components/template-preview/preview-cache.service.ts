@@ -3,7 +3,8 @@ import { CacheService } from '../../../../core/services/cache.service';
 
 
 const CACHE_PREFIX = 'template-preview-';
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes for template HTML content
+// const CACHE_TTL = 15 * 60 * 1000; // 15 minutes for template HTML content
+const CACHE_TTL = Number.MAX_SAFE_INTEGER;
 
 /**
  * Service for caching template preview HTML

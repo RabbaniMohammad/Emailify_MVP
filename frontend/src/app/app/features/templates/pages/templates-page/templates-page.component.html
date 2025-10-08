@@ -65,12 +65,12 @@
         <div class="scroll-container" #scrollContainer>
           <mat-nav-list class="tpl-list">
             <mat-list-item
-              *ngFor="let item of vm.items; trackBy: trackById; let i = index"
+              *ngFor="let item of vm.items; trackBy: trackById"
               (click)="onClick(item)"
               [class.selected]="item.id === vm.selectedId"
+              [class.disabled]="item.id === loadingTemplateId"
               [attr.data-item-id]="item.id"
-              class="template-item"
-            >
+              class="template-item">
               <div class="item-wrapper">
                 <div class="item-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
