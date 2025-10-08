@@ -2,8 +2,6 @@ import {
   Component, 
   OnInit, 
   OnDestroy, 
-  OnChanges,
-  SimpleChanges,
   ViewChild, 
   ElementRef,
   ChangeDetectorRef,
@@ -26,8 +24,8 @@ import {
   transition, 
   animate 
 } from '@angular/animations';
-import { Observable, BehaviorSubject, Subject, Subscription } from 'rxjs';
-import { takeUntil, map } from 'rxjs/operators';
+import { Subject, Subscription } from 'rxjs';
+import { takeUntil, map, distinctUntilChanged } from 'rxjs/operators';
 import { TemplatesService, TemplatesState } from '../../../../core/services/templates.service';
 import { PreviewCacheService } from '../../components/template-preview/preview-cache.service';
 
@@ -36,7 +34,6 @@ export interface TemplateItem {
   id: string;
   name: string;
   content?: string;
-  // Add other properties as needed
 }
 
 export type ViewMode = 'desktop' | 'tablet' | 'mobile';
@@ -108,7 +105,10 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   // Component state
   searchQuery = '';
   runButtonItemId?: string;
-  private clickedThisSelection = false;
+  
+  // Track if current selection was user-initiated or auto-restored
+  private userInitiatedSelection = false;
+  private isInitialLoad = true;
 
   // Preview state
   isFullscreen = false;
@@ -125,25 +125,43 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     // Subscribe to selected item changes to load content
-    let previousId: string | null = null;
-    
-    this.selectedId$.pipe(takeUntil(this.destroy$)).subscribe(id => {
-      // Only load if the ID actually changed
-      if (id && id !== previousId) {
-        previousId = id;
-        this.loadTemplateContent(id);
-      }
-    });
+    this.selectedId$
+      .pipe(
+        takeUntil(this.destroy$),
+        distinctUntilChanged()
+      )
+      .subscribe(id => {
+        if (id) {
+          this.loadTemplateContent(id);
+        } else {
+          // Clear preview when nothing selected
+          this.safeSrcdoc = null;
+          this.runButtonItemId = undefined;
+          this.cdr.markForCheck();
+        }
+      });
 
-    // Restore last selection (button won't show until a fresh click)
+    // Restore last selection from localStorage
     try {
       const id = localStorage.getItem('lastTemplateId');
       const name = localStorage.getItem('lastTemplateName') || '';
-      if (id) this.svc.select(id, name);
+      if (id) {
+        this.svc.select(id, name);
+        // Mark that this is initial restore, not user click
+        this.userInitiatedSelection = false;
+      }
     } catch {}
 
-    if (!this.svc.snapshot.items.length) this.svc.search('');
+    // Load templates if not already loaded
+    if (!this.svc.snapshot.items.length) {
+      this.svc.search('');
+    }
     this.svc.refresh();
+    
+    // After initial setup, mark as no longer initial load
+    setTimeout(() => {
+      this.isInitialLoad = false;
+    }, 0);
   }
 
   ngOnDestroy(): void {
@@ -155,31 +173,28 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   // Search functionality
   onSearch(query: string): void {
     this.searchQuery = query;
-
-    // // Clear selection when searching using the service
-    // if (query && query.trim()) {
-    //   this.svc.select('', ''); // or however your service clears selection
-    //   // OR if your service has a clear method:
-    //   // this.svc.clearSelection();
-    // }
-
     this.svc.search(query);
   }
 
   // Template list methods
   onSelect(item: TemplateItem): void {
+    // ✅ IMMEDIATELY hide button from previous template
+    this.runButtonItemId = undefined;
+    
     this.svc.select(item.id, item.name);
-    this.runButtonItemId = undefined;   // hide until loaded
-    this.clickedThisSelection = true;   // require a user click
+    // ✅ Mark as user-initiated selection
+    this.userInitiatedSelection = true;
     
     try {
       localStorage.setItem('lastTemplateId', item.id);
       localStorage.setItem('lastTemplateName', item.name || '');
     } catch {}
+    
+    // Trigger change detection to update UI immediately
+    this.cdr.markForCheck();
   }
 
   onRunTests(id: string): void {
-    // TODO: integrate with your QA rail; placeholder action:
     this.router.navigate(['/qa', id]);
   }
 
@@ -196,12 +211,12 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     return item.id;
   }
 
-  // Preview methods
-  onPreviewReady(loadedId: string): void {
+  // Preview methods - SIMPLIFIED LOGIC
+  private showRunButton(templateId: string): void {
     const current = this.svc.snapshot.selectedId;
-    if (this.clickedThisSelection && loadedId === current) {
-      this.runButtonItemId = loadedId;  // show button on this row
-      this.clickedThisSelection = false;
+    if (templateId === current) {
+      this.runButtonItemId = templateId;
+      this.cdr.markForCheck();
     }
   }
 
@@ -237,11 +252,12 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
   onIframeLoad(): void {
     this.loading = false;
-    this.cdr.markForCheck();
     const currentId = this.svc.snapshot.selectedId;
     if (currentId) {
-      this.onPreviewReady(currentId);
+      // ✅ Show button when iframe finishes loading (fresh content)
+      this.showRunButton(currentId);
     }
+    this.cdr.markForCheck();
   }
 
   // Utility methods for scrolling
@@ -278,50 +294,34 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Debug method - remove after testing
-  checkScrollStatus(): void {
-    if (!this.scrollContainer) {
-      console.log('❌ No scroll container found');
-      return;
-    }
-
-    const container = this.scrollContainer.nativeElement;
-    const computedStyle = window.getComputedStyle(container);
-    
-    console.log('🔍 Scroll Debug Info:', {
-      overflowY: computedStyle.overflowY,
-      overflowX: computedStyle.overflowX,
-      height: computedStyle.height,
-      scrollHeight: container.scrollHeight,
-      clientHeight: container.clientHeight,
-      isScrollable: container.scrollHeight > container.clientHeight,
-      itemCount: this.items$.pipe(map(items => items.length))
-    });
-  }
-
-  // Test method - remove after testing
-  addTestItems(): void {
-    // This would need to be implemented through your service
-    // Can't directly manipulate items in this architecture
-    console.log('Test items would be added through TemplatesService');
-  }
-
   // Private methods for template loading
   private loadTemplateContent(id: string): void {
     this.previewError = undefined;
     this.loading = false;
     this.safeSrcdoc = null;
     this.fetchSub?.unsubscribe();
+    
+    // ✅ Clear the button immediately when switching templates
+    this.runButtonItemId = undefined;
 
     if (!id) return;
 
+    // Check cache first
     const cached = this.cache.get(id) || this.cache.getPersisted(id);
+    
     if (cached) {
+      // ✅ CACHED CONTENT PATH
       this.setFromHtml(cached);
+      
+      // Show button immediately for cached content
+      // (because iframe won't trigger load event when srcdoc doesn't change)
+      this.showRunButton(id);
+      
       this.cdr.markForCheck();
       return;
     }
 
+    // ✅ FRESH CONTENT PATH - Load from API
     this.loading = true;
     this.cdr.markForCheck();
     
@@ -329,10 +329,15 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
       .get(`/api/templates/${id}/raw`, { responseType: 'text' })
       .subscribe({
         next: (text) => {
-          if (!id) return;
+          const currentId = this.svc.snapshot.selectedId;
+          // Only process if this is still the selected template
+          if (currentId !== id) return;
+          
           const html = text || '';
           this.cache.set(id, html);
           this.setFromHtml(html);
+          
+          // Note: Button will show via onIframeLoad() when iframe finishes rendering
           this.cdr.markForCheck();
         },
         error: (e) => {
@@ -353,6 +358,10 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     setTimeout(() => {
       if (this.loading) {
         this.loading = false;
+        const currentId = this.svc.snapshot.selectedId;
+        if (currentId) {
+          this.showRunButton(currentId);
+        }
         this.cdr.markForCheck();
       }
     }, 3000);
