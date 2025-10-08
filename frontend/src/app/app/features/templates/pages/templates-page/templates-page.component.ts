@@ -141,22 +141,17 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
         }
       });
 
-    // Restore last selection from localStorage
-    try {
-      const id = localStorage.getItem('lastTemplateId');
-      const name = localStorage.getItem('lastTemplateName') || '';
-      if (id) {
-        this.svc.select(id, name);
-        // Mark that this is initial restore, not user click
-        this.userInitiatedSelection = false;
-      }
-    } catch {}
-
-    // Load templates if not already loaded
-    if (!this.svc.snapshot.items.length) {
-      this.svc.search('');
+    // ✅ FIX: Always load templates on init
+    // The service will handle caching internally
+    console.log('🔍 Component init - loading templates');
+    
+    // Check if we have items already loaded
+    if (this.svc.snapshot.items.length === 0) {
+      console.log('📋 No items in state, calling search');
+      this.svc.search(''); // Will use cache or fetch fresh
+    } else {
+      console.log('✅ Items already in state:', this.svc.snapshot.items.length);
     }
-    this.svc.refresh();
     
     // After initial setup, mark as no longer initial load
     setTimeout(() => {

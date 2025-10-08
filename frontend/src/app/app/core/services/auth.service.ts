@@ -1,7 +1,8 @@
 import { Injectable, inject, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, tap, catchError, of, firstValueFrom, map, interval, Subscription } from 'rxjs';
+import { BehaviorSubject, Observable, tap, catchError, of, firstValueFrom, interval, Subscription, map } from 'rxjs';
+import { CacheService } from './cache.service';
 
 export interface User {
   _id: string;
@@ -22,6 +23,7 @@ export interface User {
 export class AuthService implements OnDestroy {
   private http = inject(HttpClient);
   private router = inject(Router);
+  private cache = inject(CacheService);
 
   private currentUserSubject = new BehaviorSubject<User | null>(null);
   public currentUser$ = this.currentUserSubject.asObservable();
@@ -143,7 +145,7 @@ export class AuthService implements OnDestroy {
   getCurrentUser(): Observable<User> {
     return this.http.get<{ user: User }>('/api/auth/me', { withCredentials: true })
       .pipe(
-        tap(response => {
+        tap((response: { user: User }) => {
           this.currentUserSubject.next(response.user);
           this.isAuthenticatedSubject.next(true);
         }),
@@ -152,7 +154,7 @@ export class AuthService implements OnDestroy {
           this.isAuthenticatedSubject.next(false);
           return of(null as any);
         }),
-        map(response => response?.user)
+        map((response: { user: User } | null) => response?.user as User)
       );
   }
 
@@ -163,13 +165,6 @@ export class AuthService implements OnDestroy {
     
     // Start monitoring
     this.startStatusMonitoring();
-    
-    // Store user in localStorage (if not already done)
-    try {
-      localStorage.setItem('user', JSON.stringify(user));
-    } catch (error) {
-      console.error('Failed to store user in localStorage', error);
-    }
   }
 
   /**
@@ -213,20 +208,35 @@ export class AuthService implements OnDestroy {
     return this.http.post('/api/auth/logout', {}, { withCredentials: true }).pipe(
       tap({
         next: () => {
-          this.currentUserSubject.next(null);
-          this.isAuthenticatedSubject.next(false);
-          this.authCheckComplete = false;
-          localStorage.removeItem('user');
+          this.clearAuthState();
         },
         error: (error) => {
           console.error('Logout error:', error);
-          this.currentUserSubject.next(null);
-          this.isAuthenticatedSubject.next(false);
-          this.authCheckComplete = false;
-          localStorage.removeItem('user');
+          // Clear state even on error
+          this.clearAuthState();
         }
       })
     );
+  }
+
+  /**
+   * Clear all authentication state and caches
+   */
+  private clearAuthState(): void {
+    // Clear auth state
+    this.currentUserSubject.next(null);
+    this.isAuthenticatedSubject.next(false);
+    this.authCheckComplete = false;
+
+    // ✅ PRODUCTION FIX: Clear all user-specific caches
+    // This clears:
+    // - All sessionStorage (templates list, search results, selected template)
+    // - User-specific localStorage items (template-, user-, last- prefixes)
+    // - Memory cache
+    // But keeps: General app preferences (theme, language, etc.)
+    this.cache.clearUserData(['template-', 'user-', 'last-', 'selected-']);
+
+    console.info('🧹 All user caches cleared on logout');
   }
 
   /**
