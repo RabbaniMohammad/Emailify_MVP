@@ -78,7 +78,9 @@ export class TemplatesService {
   search(query: string = ''): void {
     const trimmedQuery = query.trim().toLowerCase();
     
+    // ✅ Prevent duplicate searches while loading
     if (this.currentSearchQuery === trimmedQuery && this.snapshot.status === 'loading') {
+      console.log('⏭️ Search already in progress, skipping');
       return;
     }
 
@@ -89,31 +91,42 @@ export class TemplatesService {
       ? `${CACHE_KEYS.SEARCH_PREFIX}${trimmedQuery}`
       : CACHE_KEYS.TEMPLATES_LIST;
 
+    // ✅ Check cache FIRST - instant results, no loading state
     const cached = this.cache.get<TemplateItem[]>(cacheKey);
     
-    if (cached && cached.length > 0 && !queryChanged) {
-      console.log('✅ Using cached templates:', cached.length);
+    if (cached && cached.length > 0) {
+      console.log('✅ Instant cache hit:', cached.length, 'templates');
+      // ✅ Set status to 'success' immediately - no loading state!
       this.updateState({ items: cached, status: 'success', error: null });
       return;
     }
 
+    // ✅ Try filtering from full list if searching
     if (trimmedQuery) {
       const allTemplates = this.cache.get<TemplateItem[]>(CACHE_KEYS.TEMPLATES_LIST);
       
       if (allTemplates && allTemplates.length > 0) {
+        console.log('🔍 Filtering from cache...');
+        
+        // ✅ Filter instantly without loading state
         const filtered = allTemplates.filter(item => 
           item.name?.toLowerCase().includes(trimmedQuery) ||
           item.id?.toLowerCase().includes(trimmedQuery)
         );
         
-        console.log('✅ Filtered from cache:', filtered.length, 'of', allTemplates.length);
+        console.log('✅ Filtered instantly:', filtered.length, 'of', allTemplates.length);
+        
+        // Cache the filtered results
         this.cache.set(cacheKey, filtered, CACHE_TTL.SEARCH, 'session');
+        
+        // ✅ Update state immediately - no loading!
         this.updateState({ items: filtered, status: 'success', error: null });
         return;
       }
     }
 
-    console.log('📡 Fetching templates from backend...');
+    // ✅ Only show loading if we need to fetch from API
+    console.log('📡 No cache - fetching from backend...');
     this.fetchTemplates(trimmedQuery, cacheKey);
   }
 
@@ -139,6 +152,7 @@ export class TemplatesService {
   }
 
   private fetchTemplates(query: string, cacheKey: string): void {
+    // ✅ Only set loading state when actually fetching
     this.updateState({ status: 'loading', error: null });
 
     this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates')
@@ -146,6 +160,7 @@ export class TemplatesService {
         tap(response => {
           let items = response.items || [];
           
+          // ✅ Filter efficiently
           if (query) {
             const lowerQuery = query.toLowerCase();
             items = items.filter(item => 
@@ -165,47 +180,18 @@ export class TemplatesService {
           this.updateState({ items, status: 'success', error: null });
         }),
         catchError(error => {
-          console.error('Failed to fetch templates:', error);
+          console.error('❌ Failed to fetch templates:', error);
           
           const stale = this.cache.getStale<TemplateItem[]>(cacheKey);
           
           if (stale && stale.length > 0) {
-            console.warn('Using stale cache due to network error');
+            console.warn('⚠️ Using stale cache due to network error');
             this.updateState({ items: stale, status: 'success', error: 'Showing cached data (offline)' });
           } else {
             this.updateState({ status: 'error', error: error.message || 'Failed to load templates' });
           }
           
           return throwError(() => error);
-        })
-      )
-      .subscribe();
-  }
-
-  private fetchTemplatesInBackground(query: string, cacheKey: string): void {
-    this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates')
-      .pipe(
-        tap(response => {
-          let items = response.items || [];
-          
-          if (query) {
-            const lowerQuery = query.toLowerCase();
-            items = items.filter(item => 
-              item.name?.toLowerCase().includes(lowerQuery) ||
-              item.id?.toLowerCase().includes(lowerQuery)
-            );
-          }
-          
-          const ttl = query ? CACHE_TTL.SEARCH : CACHE_TTL.LIST;
-          this.cache.set(cacheKey, items, ttl, 'session');
-          
-          if (JSON.stringify(items) !== JSON.stringify(this.snapshot.items)) {
-            this.updateState({ items, status: 'success', error: null });
-          }
-        }),
-        catchError(error => {
-          console.warn('Background refresh failed:', error);
-          return of(null);
         })
       )
       .subscribe();
