@@ -17,6 +17,90 @@ const TEMPLATES_DIR = path.join(process.cwd(), 'templates');
 fs.ensureDirSync(TEMPLATES_DIR);
 
 /**
+ * POST /api/generate
+ * Simple one-shot template generation (no conversation)
+ */
+router.post('/', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { prompt } = req.body;
+    const userId = (req as any).tokenPayload?.userId;
+
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ 
+        code: 'INVALID_PROMPT', 
+        message: 'Prompt is required' 
+      });
+    }
+
+    logger.info(`🎨 Quick generation for user ${userId}`);
+
+    // Generate template using Claude (with 5 retries)
+    const result = await generateTemplate({
+      prompt: prompt.trim(),
+      conversationHistory: [],
+      userId,
+    });
+
+    // Convert MJML to HTML
+    const conversion = convertMjmlToHtml(result.mjmlCode);
+
+    if (conversion.errors.length > 0 && !conversion.html) {
+      return res.status(400).json({
+        success: false,
+        code: 'MJML_CONVERSION_ERROR',
+        message: 'Failed to convert MJML to HTML',
+        errors: conversion.errors,
+        mjml: result.mjmlCode,
+      });
+    }
+
+    logger.info(`✅ Quick generation completed (attempts: ${result.attemptsUsed})`);
+
+    res.json({
+      success: true,
+      mjml: result.mjmlCode,
+      html: conversion.html,
+      message: result.hadErrors 
+        ? `Template generated successfully after ${result.attemptsUsed} attempts`
+        : 'Template generated successfully',
+      attemptsUsed: result.attemptsUsed,
+      hadErrors: result.hadErrors,
+      errors: conversion.errors,
+    });
+  } catch (error: any) {
+    logger.err('❌ Quick generation error:', error);
+    
+    // ⭐ SPECIAL HANDLING FOR OVERLOAD
+    if (error.message?.includes('overloaded') || error.status === 529) {
+      return res.status(503).json({
+        success: false,
+        code: 'API_OVERLOADED',
+        message: 'Claude AI is currently experiencing high demand. Please try again in a moment.',
+        retryAfter: 10, // seconds
+      });
+    }
+    
+    // ⭐ SPECIAL HANDLING FOR TIMEOUT
+    if (error.message?.includes('timeout')) {
+      return res.status(408).json({
+        success: false,
+        code: 'REQUEST_TIMEOUT',
+        message: error.message,
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      code: 'GENERATION_ERROR',
+      message: error.message || 'Failed to generate template',
+    });
+  }
+});
+
+
+
+
+/**
  * POST /api/generate/start
  * Start a new template generation conversation
  */
@@ -69,6 +153,20 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
 
     logger.info(`✅ Conversation created: ${conversationId}`);
 
+    // ⭐ DEBUG: Log what we're sending
+    logger.info(`📤 Sending response:`);
+    logger.info(`- MJML length: ${result.mjmlCode.length} chars`);
+    logger.info(`- HTML length: ${conversion.html.length} chars`);
+    logger.info(`- Has errors: ${conversion.errors.length > 0}`);
+    logger.info(`- Attempts used: ${result.attemptsUsed}`);
+    // if (conversion.errors.length > 0) {
+    // logger.warn(`⚠️ Conversion errors:`, conversion.errors);
+    // }
+
+    // Log first 500 chars of HTML
+    logger.info(`📄 HTML preview (first 500 chars):`);
+    logger.info(conversion.html.substring(0, 500));
+
     res.json({
       conversationId,
       html: conversion.html,
@@ -76,24 +174,26 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
       message: result.assistantMessage,
       hasErrors: conversion.errors.length > 0,
       errors: conversion.errors,
+      attemptsUsed: result.attemptsUsed,
+      hadErrors: result.hadErrors,
     });
   } catch (error: any) {
     logger.err('❌ Start generation error:', error);
     
     // ⭐ SPECIAL HANDLING FOR OVERLOAD
     if (error.message?.includes('overloaded') || error.status === 529) {
-        return res.status(503).json({
+      return res.status(503).json({
         code: 'API_OVERLOADED',
         message: 'Claude AI is currently experiencing high demand. Please try again in a moment.',
         retryAfter: 10, // seconds
-        });
+      });
     }
     
     res.status(500).json({
-        code: 'GENERATION_ERROR',
-        message: error.message || 'Failed to generate template',
+      code: 'GENERATION_ERROR',
+      message: error.message || 'Failed to generate template',
     });
-    }
+  }
 });
 
 /**
@@ -172,6 +272,8 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
       message: result.assistantMessage,
       hasErrors: conversion.errors.length > 0,
       errors: conversion.errors,
+      attemptsUsed: result.attemptsUsed,
+      hadErrors: result.hadErrors,
     });
   } catch (error: any) {
     logger.err('❌ Continue conversation error:', error);

@@ -110,3 +110,50 @@ GET /api/auth/me 304 99.669 ms - -
 GET /api/auth/me 304 82.492 ms - -
 GET /api/auth/me 304 80.943 ms - -
 GET /api/auth/me 304 83.878 ms - -
+POST /api/generate/continue/f8ac61c6-f840-4ff0-a43b-72e105dd5e23 200 42272.044 ms - -
+GET /api/auth/me 304 92.947 ms - -
+GET /api/auth/me 304 90.923 ms - -
+GET /api/auth/me 304 85.098 ms - -
+GET /api/auth/me 304 80.592 ms - -
+GET /api/auth/me 304 84.777 ms - -
+GET /api/auth/me 304 158.606 ms - -
+GET /api/auth/me 304 121.102 ms - -
+GET /api/auth/me 401 0.395 ms - 29
+POST /api/auth/logout 200 0.809 ms - 37
+
+
+(node:5592) [MONGOOSE] Warning: Duplicate schema index on {"conversationId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+include the prompt as note 
+Create a welcome email with a header "Welcome to Our Platform!", 
+a paragraph saying "We're excited to have you here. Get started by exploring our features.", 
+a blue "Explore Features" button, and a simple footer with "© 2024 Company Name"
+
+Create a product showcase email with:
+- Header: "New Arrivals" in large bold text
+- 3 product sections, each with:
+  - Product image placeholder
+  - Product name in bold
+  - Short description
+  - Price in green
+  - "Buy Now" button in orange
+- Footer with social media icons
+
+Create a monthly newsletter template with:
+- Company logo and "Monthly Newsletter - March 2024" header
+- Featured article section with large image and title
+- 2 smaller article cards side by side
+- "Read More" buttons for each article
+- Footer with unsubscribe link
+Use professional blue and white color scheme
+
+
+
+instead of preview we have to put the technology is in early stages and could make mistakes
+
+
+we also need to change the component on the template page with template preview it is redundant
+
+also need to move the template preview cache ts to the new component preview folder
