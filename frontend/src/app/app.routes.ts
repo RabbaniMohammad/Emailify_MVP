@@ -4,6 +4,7 @@ import { QaPageComponent } from './app/features/qa/pages/qa-page/qa-page.compone
 import { AuthPageComponent } from './app/features/auth/pages/auth-page/auth-page.component';
 import { AuthCallbackComponent } from './app/features/auth/pages/auth-page/auth-callback.component';
 import { PendingApprovalComponent } from './app/features/auth/pages/auth-page/pending-approval.component';
+import { GeneratePageComponent } from './app/features/generate/pages/generate-page/generate-page.component';
 import { authGuard } from './app/core/guards/auth.guard';
 import { adminGuard } from './app/core/guards/admin.guard';
 
@@ -12,6 +13,18 @@ export const routes: Routes = [
   { path: 'auth', component: AuthPageComponent },
   { path: 'auth/callback', component: AuthCallbackComponent },
   { path: 'auth/pending', component: PendingApprovalComponent },
+
+  // Generate Template routes (add after auth routes, before admin routes)
+  { 
+    path: 'generate', 
+    component: GeneratePageComponent,
+    canActivate: [authGuard]
+  },
+  { 
+    path: 'generate/:conversationId', 
+    component: GeneratePageComponent,
+    canActivate: [authGuard]
+  },
   
   // Admin routes (super_admin and admin only)
   {

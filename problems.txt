@@ -7,15 +7,12 @@ http://localhost:4200/auth?returnUrl=%2F can we able show as login or sign-in..?
 
 why the flickering happening 
 
+
 Real-time Updates
 Multi-Device
 Multi-Device
 
 should not have to be hold the animation
-
-
-tmrw
-now working on the admin button when clicked the number is showing but the pending only getting shown when refresh manually and also deactivate is not working when deactivate and refreshed the user still able to access the application
 
 
 note this is AI please check before continuing
@@ -33,12 +30,7 @@ it should be more deterministic
 
 {"error":"connect ETIMEDOUT 89.192.9.178:27017"} (any error it should show a custom error)
 
-currently we are fixing these 
-1. I have asked for a back and forth arrows because there many pages out there. If you need the files of those pages I will it to you 
-2. no need to show super admin the navbar just show the photo and name and the arrow on the button should not turn when hovered but should turn down when clicked 
-3. No need to show duplicate information when clicked on the button just show logout for now thats it 
-4. make the navbar responsive and remove the templates button and add left and right arrows for seamless navigation 
-5. those arrows should be to the left of the photo and name
+
 
 
 
@@ -62,4 +54,59 @@ length
 
 
 
-just update the claude with these files thats it
+just update the claude with these files thats it (we always should not have to do the authentication for everytime)
+
+admin should also has the delete user and make some one admin but cannot able to touch superuser
+
+active and inactive buttons has to be same size
+
+GET /api/auth/me 304 95.180 ms - -
+GET /api/auth/me 304 197.222 ms - -
+GET /api/auth/me 304 94.791 ms - -
+GET /api/auth/me 304 461.888 ms - -
+GET /api/auth/me 304 83.636 ms - -
+GET /api/auth/me 304 203.358 ms - -
+GET /api/auth/me 304 109.129 ms - -
+GET /api/auth/me 304 227.240 ms - -
+GET /api/auth/me 304 91.923 ms - -
+GET /api/auth/me 304 311.835 ms - -
+GET /api/auth/me 304 97.482 ms - -
+GET /api/auth/me 304 240.227 ms - -
+GET /api/auth/me 304 111.481 ms - -
+GET /api/auth/me 304 218.194 ms - -
+GET /api/auth/me 304 86.200 ms - -
+GET /api/auth/me 304 197.756 ms - -
+GET /api/auth/me 304 81.956 ms - -
+GET /api/auth/me 304 150.980 ms - -
+GET /api/auth/me 304 84.658 ms - -
+GET /api/auth/me 304 176.484 ms - -
+GET /api/auth/me 304 84.819 ms - -
+GET /api/auth/me 304 171.702 ms - -
+GET /api/auth/me 304 100.244 ms - -
+GET /api/auth/me 304 195.039 ms - -
+GET /api/auth/me 304 80.795 ms - -
+GET /api/auth/me 304 82.432 ms - -
+GET /api/auth/me 304 88.517 ms - -
+GET /api/auth/me 304 223.655 ms - -
+GET /api/auth/me 304 83.160 ms - -
+GET /api/auth/me 304 83.386 ms - -
+GET /api/auth/me 304 230.249 ms - -
+GET /api/auth/me 304 83.789 ms - -
+GET /api/auth/me 304 120.901 ms - -
+GET /api/auth/me 304 86.503 ms - -
+GET /api/auth/me 304 220.958 ms - -
+GET /api/auth/me 304 86.582 ms - -
+GET /api/auth/me 304 217.270 ms - -
+GET /api/auth/me 304 85.022 ms - -
+GET /api/auth/me 304 120.707 ms - -
+GET /api/auth/me 304 86.722 ms - -
+GET /api/auth/me 304 263.000 ms - -
+GET /api/auth/me 304 83.444 ms - -
+GET /api/auth/me 304 277.228 ms - -
+GET /api/auth/me 304 87.713 ms - -
+GET /api/auth/me 304 84.292 ms - -
+GET /api/auth/me 304 93.581 ms - -
+GET /api/auth/me 304 99.669 ms - -
+GET /api/auth/me 304 82.492 ms - -
+GET /api/auth/me 304 80.943 ms - -
+GET /api/auth/me 304 83.878 ms - -

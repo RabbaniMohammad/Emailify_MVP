@@ -72,7 +72,7 @@ export class AuthPageComponent implements OnInit, OnDestroy {
         this.router.navigate(['/auth/pending']);
     } else if (type === 'AUTH_DEACTIVATED') {
         console.log('🚫 AUTH_DEACTIVATED - showing error');
-        this.errorMessage = 'Your account has been deactivated. Please contact an administrator.';
+        this.errorMessage = 'Your account has been deactivated. Please contact your administrator.';
     }
     }
 

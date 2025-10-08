@@ -61,6 +61,22 @@
 
           <mat-divider *ngIf="isAdmin()"></mat-divider>
 
+            <!-- Generate Template Button ✅ NEW -->
+          <button 
+            mat-menu-item 
+            class="menu-item generate-item"
+            (click)="navigateTo('/generate')">
+            <div class="menu-item-icon generate-icon">
+              <mat-icon>auto_awesome</mat-icon>
+            </div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">Generate Template</span>
+              <span class="menu-item-subtitle">Create with AI</span>
+            </div>
+          </button>
+
+          <mat-divider></mat-divider>
+          
           <!-- Logout Button -->
           <button mat-menu-item class="menu-item logout-item" (click)="logout()">
             <div class="menu-item-icon logout-icon">

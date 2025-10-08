@@ -103,7 +103,7 @@ router.get(
             <div class="container">
               <div class="icon">🚫</div>
               <h1>Account Deactivated</h1>
-              <p>Your account has been deactivated. Please contact an administrator.</p>
+              <p>Your account has been deactivated. Please contact your administrator.</p>
               <button onclick="window.close()">Close</button>
             </div>
           </body>
