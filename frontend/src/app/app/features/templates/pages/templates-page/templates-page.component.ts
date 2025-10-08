@@ -106,7 +106,10 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   // Component state
   searchQuery = '';
   runButtonItemId?: string;
-  loadingTemplateId: string | null = null; // Track which template is loading
+  
+  // Double-click prevention
+  private lastClickTime = 0;
+  private lastClickedId = '';
   
   // Track if current selection was user-initiated or auto-restored
   private userInitiatedSelection = false;
@@ -124,6 +127,10 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   // Private subjects and subscriptions
   private destroy$ = new Subject<void>();
   private fetchSub?: Subscription;
+  private loadingTimer?: any;
+  
+  // Track in-flight requests to prevent duplicate API calls
+  private inflightRequests = new Map<string, Subscription>();
 
   ngOnInit(): void {
     // Subscribe to selected item changes to load content
@@ -139,20 +146,19 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           // Clear preview when nothing selected
           this.safeSrcdoc = null;
           this.runButtonItemId = undefined;
-          this.loadingTemplateId = null;
           this.cdr.markForCheck();
         }
       });
 
     // Always load templates on init
-    console.log('🔍 Component init - loading templates');
+    console.log('Component init - loading templates');
     
     // Check if we have items already loaded
     if (this.svc.snapshot.items.length === 0) {
-      console.log('📋 No items in state, calling search');
+      console.log('No items in state, calling search');
       this.svc.search(''); // Will use cache or fetch fresh
     } else {
-      console.log('✅ Items already in state:', this.svc.snapshot.items.length);
+      console.log('Items already in state:', this.svc.snapshot.items.length);
     }
     
     // After initial setup, mark as no longer initial load
@@ -165,6 +171,12 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     this.destroy$.next();
     this.destroy$.complete();
     this.fetchSub?.unsubscribe();
+    if (this.loadingTimer) {
+      clearTimeout(this.loadingTimer);
+    }
+    // Clean up all in-flight requests
+    this.inflightRequests.forEach(sub => sub.unsubscribe());
+    this.inflightRequests.clear();
   }
 
   // Search functionality
@@ -173,13 +185,15 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     this.svc.search(query);
   }
 
-  // Template list methods
+  // Template list methods with double-click prevention
   onSelect(item: TemplateItem): void {
-    // IMMEDIATELY hide button from previous template
-    this.runButtonItemId = undefined;
+    // Only hide button if switching to a different template
+    const currentSelected = this.svc.snapshot.selectedId;
+    if (currentSelected && currentSelected !== item.id) {
+      this.runButtonItemId = undefined;
+    }
     
     this.svc.select(item.id, item.name);
-    // Mark as user-initiated selection
     this.userInitiatedSelection = true;
     
     try {
@@ -187,7 +201,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
       localStorage.setItem('lastTemplateName', item.name || '');
     } catch {}
     
-    // Trigger change detection to update UI immediately
     this.cdr.markForCheck();
   }
 
@@ -196,15 +209,29 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   }
 
   onClick(item: TemplateItem): void {
-    // Prevent clicking the template that's currently loading
-    if (item.id === this.loadingTemplateId) {
+    const now = Date.now();
+    
+    // Prevent rapid double-clicks on the same item
+    if (this.lastClickedId === item.id && (now - this.lastClickTime) < 500) {
+      console.log('Double-click prevented for:', item.id);
       return;
     }
+    
+    // Prevent any clicks that are too rapid (global debounce)
+    if ((now - this.lastClickTime) < 200) {
+      console.log('Rapid click prevented');
+      return;
+    }
+    
+    this.lastClickTime = now;
+    this.lastClickedId = item.id;
+    
     this.onSelect(item);
   }
 
   onAction(item: TemplateItem, event: Event): void {
     event.stopPropagation();
+    event.preventDefault();
     this.onRunTests(item.id);
   }
 
@@ -212,7 +239,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     return item.id;
   }
 
-  // Preview methods - SIMPLIFIED LOGIC
+  // Preview methods - OPTIMIZED FOR NO FLICKERING
   private showRunButton(templateId: string): void {
     const current = this.svc.snapshot.selectedId;
     if (templateId === current) {
@@ -285,67 +312,86 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Private method for template loading
+  // ✅ FIXED: Optimized template loading - NO MORE FLICKERING + NO DUPLICATE API CALLS
   private loadTemplateContent(id: string): void {
-    console.log('🔵 START loadTemplateContent, id:', id);
+    console.log('🔄 START loadTemplateContent, id:', id);
     
+    // Clear previous state
     this.previewError = undefined;
-    this.safeSrcdoc = null;
-    this.fetchSub?.unsubscribe();
     this.runButtonItemId = undefined;
+    
+    // Clear any pending loading timer
+    if (this.loadingTimer) {
+      clearTimeout(this.loadingTimer);
+      this.loadingTimer = undefined;
+    }
 
     if (!id) {
       this.loading = false;
-      this.loadingTemplateId = null;
-      console.log('⚪ No ID - loading set to FALSE');
+      this.safeSrcdoc = null;
+      console.log('❌ No ID - loading set to FALSE');
       this.cdr.markForCheck();
       return;
     }
 
-    // Always show loading first
-    this.loading = true;
-    console.log('🟢 Loading set to TRUE for template:', id);
-    this.cdr.markForCheck();
-
     // Check cache first
     const cached = this.cache.get(id) || this.cache.getPersisted(id);
-    console.log('🔦 Cache check:', cached ? 'HIT' : 'MISS');
+    console.log('💾 Cache check:', cached ? 'HIT' : 'MISS');
     
     if (cached) {
-      // DON'T set loadingTemplateId for cached content - no API call needed
-      console.log('⏱️ Using cached content, waiting 100ms...');
-      setTimeout(() => {
-        console.log('✅ 100ms passed, setting HTML');
-        if (this.svc.snapshot.selectedId !== id) {
-          console.log('⚠️ User switched, aborting');
-          return;
+      console.log('✅ Using cached content - loading instantly');
+      
+      // ✅ Process content immediately
+      const wrapped = this.ensureDoc(cached);
+      const cleaned = this.stripDangerousBits(wrapped);
+      this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
+      
+      // Show loading very briefly for smooth UX (optional - you can set to 0)
+      this.loading = true;
+      this.cdr.markForCheck();
+      
+      // Hide loading after iframe renders
+      // Note: You can reduce this to 0 if you want instant switching
+      this.loadingTimer = setTimeout(() => {
+        if (this.svc.snapshot.selectedId === id) {
+          this.loading = false;
+          this.showRunButton(id);
+          console.log('✅ Cached template loaded successfully');
+          this.cdr.markForCheck();
         }
-        
-        const wrapped = this.ensureDoc(cached);
-        const cleaned = this.stripDangerousBits(wrapped);
-        this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
-        console.log('🎨 HTML set, loading still TRUE, waiting for iframe...');
-        this.cdr.markForCheck();
-      }, 100);
+      }, 0); // Changed to 0 for instant loading (was 50ms)
       
       return;
     }
 
-    // ONLY set loadingTemplateId when making fresh API call
-    this.loadingTemplateId = id;
-    console.log('🔒 Template locked for API call:', id);
+    // ✅ Check if we already have an in-flight request for this template
+    if (this.inflightRequests.has(id)) {
+      console.log('⏳ Request already in-flight for template:', id, '- reusing existing request');
+      this.loading = true;
+      this.cdr.markForCheck();
+      return; // Just show loading, the existing request will complete
+    }
 
-    // Fresh content path
-    console.log('🌐 Fetching fresh content from API...');
-    this.fetchSub = this.http
+    // Fresh content path - fetch from API
+    console.log('📡 Fetching fresh content from API...');
+    this.loading = true;
+    this.safeSrcdoc = null;
+    this.cdr.markForCheck();
+
+    const subscription = this.http
       .get(`/api/templates/${id}/raw`, { responseType: 'text' })
       .subscribe({
         next: (text) => {
-          console.log('✅ API response received');
+          console.log('📥 API response received for:', id);
+          
+          // Remove from in-flight requests
+          this.inflightRequests.delete(id);
+          
           const currentId = this.svc.snapshot.selectedId;
+          
+          // Check if user switched templates during fetch
           if (currentId !== id) {
             console.log('⚠️ User switched during fetch, aborting');
-            this.loadingTemplateId = null;
             return;
           }
           
@@ -355,21 +401,31 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           const wrapped = this.ensureDoc(html);
           const cleaned = this.stripDangerousBits(wrapped);
           this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
-          console.log('🎨 Fresh HTML set, loading still TRUE, waiting for iframe...');
+          console.log('✅ Fresh HTML set, waiting for iframe load event');
           this.cdr.markForCheck();
         },
         error: (e) => {
-          console.log('❌ API error:', e);
+          console.error('❌ API error for:', id, e);
+          
+          // Remove from in-flight requests
+          this.inflightRequests.delete(id);
+          
           this.loading = false;
-          this.loadingTemplateId = null; // Clear on error
           this.previewError = e?.message || 'Failed to load preview.';
           this.cdr.markForCheck();
         },
+        complete: () => {
+          // Ensure cleanup on completion
+          this.inflightRequests.delete(id);
+        }
       });
+    
+    // Store the subscription to prevent duplicate requests
+    this.inflightRequests.set(id, subscription);
   }
 
   onIframeLoad(): void {
-    console.log('🎬 onIframeLoad called');
+    console.log('🖼️ onIframeLoad called');
     
     // Only clear loading if we actually have content to show
     if (!this.safeSrcdoc) {
@@ -379,7 +435,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     
     console.log('✅ Iframe loaded with content - setting loading to FALSE');
     this.loading = false;
-    this.loadingTemplateId = null; // Clear loading template when done
     const currentId = this.svc.snapshot.selectedId;
     if (currentId) {
       this.showRunButton(currentId);

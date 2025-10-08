@@ -2404,14 +2404,3 @@
     }
   }
 }
-
-.template-item.disabled {
-  pointer-events: none !important;
-  opacity: 0.6 !important;
-  cursor: not-allowed !important;
-  
-  &:hover {
-    transform: none !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
-  }
-}

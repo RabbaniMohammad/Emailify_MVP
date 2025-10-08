@@ -68,7 +68,6 @@
               *ngFor="let item of vm.items; trackBy: trackById"
               (click)="onClick(item)"
               [class.selected]="item.id === vm.selectedId"
-              [class.disabled]="item.id === loadingTemplateId"
               [attr.data-item-id]="item.id"
               class="template-item">
               <div class="item-wrapper">
