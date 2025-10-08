@@ -57,12 +57,13 @@ export type LoadingStatus = 'idle' | 'loading' | 'success' | 'error';
   animations: [
     trigger('fadeInOut', [
       state('in', style({ opacity: 1 })),
-      transition(':enter', [
+      state('out', style({ opacity: 0 })),
+      transition('* => in', [
         style({ opacity: 0 }),
-        animate(300, style({ opacity: 1 }))
+        animate('300ms ease-in', style({ opacity: 1 }))
       ]),
-      transition(':leave', [
-        animate(300, style({ opacity: 0 }))
+      transition('in => out', [
+        animate('300ms ease-out', style({ opacity: 0 }))
       ])
     ]),
     trigger('bounceIn', [
@@ -168,6 +169,9 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   // Search functionality
   onSearch(query: string): void {
     this.searchQuery = query;
+    
+    // ✅ FIX: Always call search to handle both cached and fresh data
+    // The service will handle cache lookup internally
     this.svc.search(query);
   }
 
@@ -245,15 +249,15 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  onIframeLoad(): void {
-    this.loading = false;
-    const currentId = this.svc.snapshot.selectedId;
-    if (currentId) {
-      // ✅ Show button when iframe finishes loading (fresh content)
-      this.showRunButton(currentId);
-    }
-    this.cdr.markForCheck();
-  }
+  // onIframeLoad(): void {
+  //   this.loading = false;
+  //   const currentId = this.svc.snapshot.selectedId;
+  //   if (currentId) {
+  //     // ✅ Show button when iframe finishes loading (fresh content)
+  //     this.showRunButton(currentId);
+  //   }
+  //   this.cdr.markForCheck();
+  // }
 
   // Utility methods for scrolling
   scrollToItem(itemId: string): void {
@@ -289,53 +293,74 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Private methods for template loading
+  // ✅ FIXED: Private method for template loading
   private loadTemplateContent(id: string): void {
+    console.log('🔵 START loadTemplateContent, id:', id);
+    
     this.previewError = undefined;
-    this.loading = false;
     this.safeSrcdoc = null;
     this.fetchSub?.unsubscribe();
-    
-    // ✅ Clear the button immediately when switching templates
     this.runButtonItemId = undefined;
 
-    if (!id) return;
-
-    // Check cache first
-    const cached = this.cache.get(id) || this.cache.getPersisted(id);
-    
-    if (cached) {
-      // ✅ CACHED CONTENT PATH
-      this.setFromHtml(cached);
-      
-      // Show button immediately for cached content
-      // (because iframe won't trigger load event when srcdoc doesn't change)
-      this.showRunButton(id);
-      
+    if (!id) {
+      this.loading = false;
+      console.log('⚪ No ID - loading set to FALSE');
       this.cdr.markForCheck();
       return;
     }
 
-    // ✅ FRESH CONTENT PATH - Load from API
+    // ✅ ALWAYS show loading first
     this.loading = true;
+    console.log('🟢 Loading set to TRUE');
     this.cdr.markForCheck();
+
+    // Check cache first
+    const cached = this.cache.get(id) || this.cache.getPersisted(id);
+    console.log('📦 Cache check:', cached ? 'HIT' : 'MISS');
     
+    if (cached) {
+      console.log('⏱️ Using cached content, waiting 300ms...');
+      setTimeout(() => {
+        console.log('✅ 300ms passed, setting HTML');
+        if (this.svc.snapshot.selectedId !== id) {
+          console.log('⚠️ User switched, aborting');
+          return;
+        }
+        
+        const wrapped = this.ensureDoc(cached);
+        const cleaned = this.stripDangerousBits(wrapped);
+        this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
+        console.log('🎨 HTML set, loading still TRUE, waiting for iframe...');
+        this.cdr.markForCheck();
+      }, 100);
+      
+      return;
+    }
+
+    // Fresh content path
+    console.log('🌐 Fetching fresh content from API...');
     this.fetchSub = this.http
       .get(`/api/templates/${id}/raw`, { responseType: 'text' })
       .subscribe({
         next: (text) => {
+          console.log('✅ API response received');
           const currentId = this.svc.snapshot.selectedId;
-          // Only process if this is still the selected template
-          if (currentId !== id) return;
+          if (currentId !== id) {
+            console.log('⚠️ User switched during fetch, aborting');
+            return;
+          }
           
           const html = text || '';
           this.cache.set(id, html);
-          this.setFromHtml(html);
           
-          // Note: Button will show via onIframeLoad() when iframe finishes rendering
+          const wrapped = this.ensureDoc(html);
+          const cleaned = this.stripDangerousBits(wrapped);
+          this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
+          console.log('🎨 Fresh HTML set, loading still TRUE, waiting for iframe...');
           this.cdr.markForCheck();
         },
         error: (e) => {
+          console.log('❌ API error:', e);
           this.loading = false;
           this.previewError = e?.message || 'Failed to load preview.';
           this.cdr.markForCheck();
@@ -343,23 +368,22 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
       });
   }
 
-  private setFromHtml(rawHtml: string): void {
-    const wrapped = this.ensureDoc(rawHtml);
-    const cleaned = this.stripDangerousBits(wrapped);
-    this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
-    this.loading = true;
+  onIframeLoad(): void {
+    console.log('🎬 onIframeLoad called');
     
-    // Fallback timeout in case iframe load event doesn't fire
-    setTimeout(() => {
-      if (this.loading) {
-        this.loading = false;
-        const currentId = this.svc.snapshot.selectedId;
-        if (currentId) {
-          this.showRunButton(currentId);
-        }
-        this.cdr.markForCheck();
-      }
-    }, 3000);
+    // ✅ FIX: Only clear loading if we actually have content to show
+    if (!this.safeSrcdoc) {
+      console.log('⚠️ Iframe loaded but no content yet - ignoring');
+      return;
+    }
+    
+    console.log('✅ Iframe loaded with content - setting loading to FALSE');
+    this.loading = false;
+    const currentId = this.svc.snapshot.selectedId;
+    if (currentId) {
+      this.showRunButton(currentId);
+    }
+    this.cdr.markForCheck();
   }
 
   private ensureDoc(bodyOrDoc: string): string {

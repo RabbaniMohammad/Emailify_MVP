@@ -250,8 +250,8 @@
 
       <!-- Modern Preview Container -->
       <div class="preview-container" *ngIf="vm.selectedId">
-        <!-- Advanced Loading State -->
-        <div class="advanced-loader" *ngIf="loading" [@fadeInOut]>
+        <!-- ✅ FIXED: Advanced Loading State - Triggers on every load -->
+        <div class="advanced-loader" *ngIf="loading" [@fadeInOut]="loading ? 'in' : 'out'">
           <div class="loader-background">
             <div class="neural-network">
               <div class="node node-1"></div>

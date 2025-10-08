@@ -157,3 +157,10 @@ instead of preview we have to put the technology is in early stages and could ma
 we also need to change the component on the template page with template preview it is redundant
 
 also need to move the template preview cache ts to the new component preview folder
+
+
+
+preview animation is not working for other templates
+refresh is not working it is taking time (refresh is sending it back to the backend I think it is kind of a good thing)
+
+run button showing even before preview
