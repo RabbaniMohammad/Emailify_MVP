@@ -996,15 +996,16 @@
 
   .loader-spinner {
     position: relative;
-    width: clamp(60px, 15vw, 100px);
-    height: clamp(60px, 15vw, 100px);
-    margin: 0 auto clamp(1.5rem, 4vw, 2.5rem);
+    width: clamp(50px, 12vw, 80px);
+    height: clamp(50px, 12vw, 80px);
+    // margin: clamp(0.8rem, 2vw, 1rem) auto clamp(1.5rem, 4vw, 2.5rem);
+    margin: clamp(1rem, 2vw, 1rem) auto clamp(1.5rem, 4vw, 2.5rem);
 
     .spinner-outer,
     .spinner-inner,
     .spinner-core {
       position: absolute;
-      border: clamp(2px, 0.5vw, 4px) solid transparent;
+      border: clamp(2px, 0.5vw, 3px) solid transparent;
       border-radius: 50%;
       // ✅ Infinite spinning animation
       animation: spin-loader 1.2s linear infinite;

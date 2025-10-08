@@ -37,9 +37,9 @@ const CACHE_KEYS = {
 };
 
 const CACHE_TTL = {
-  LIST: 2 * 60 * 1000,      // 2 minutes for template list
-  SEARCH: 5 * 60 * 1000,    // 5 minutes for search results
-  SELECTED: 30 * 60 * 1000, // 30 minutes for selected template
+  LIST: 2 * 60 * 60 * 1000,      // 2 hours
+  SEARCH: 2 * 60 * 60 * 1000,    // 2 hours for search results
+  SELECTED: 2 * 60 * 60 * 1000, // 2 hours for selected template
 };
 
 @Injectable({
