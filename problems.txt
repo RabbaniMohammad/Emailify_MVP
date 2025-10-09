@@ -164,3 +164,5 @@ preview animation is not working for other templates
 refresh is not working it is taking time (refresh is sending it back to the backend I think it is kind of a good thing)
 
 run button showing even before preview
+
+when we are in last page we are moving to first page directly

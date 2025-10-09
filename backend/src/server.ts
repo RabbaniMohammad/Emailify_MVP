@@ -29,6 +29,7 @@ import { NodeEnvs } from '@src/common/constants';
 
 import mailchimp from '@mailchimp/mailchimp_marketing';
 
+import qaNewRouter from '@src/routes/qa-new';
 
 /******************************************************************************
                                 Setup
@@ -92,6 +93,8 @@ mailchimp.setConfig({
 
 // Auth routes (must be before other API routes)
 app.use('/api/auth', authRouter);
+
+app.use('/api/qa-new', qaNewRouter);
 
 // Admin Routes 
 app.use('/api/admin', adminRouter);
