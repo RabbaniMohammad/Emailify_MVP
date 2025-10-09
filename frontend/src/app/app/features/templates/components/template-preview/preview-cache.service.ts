@@ -74,6 +74,22 @@ export class PreviewCacheService {
   }
 
   /**
+ * Clear all cache entries for a specific template
+ * @param templateId Template ID
+ */
+  clearTemplate(templateId: string): void {
+    const key = this.getCacheKey(templateId);
+    this.cache.invalidate(key);
+    
+    // Also clear from sessionStorage metadata
+    try {
+      sessionStorage.removeItem(`metadata-${templateId}`);
+    } catch (e) {
+      console.warn('Failed to clear metadata cache:', e);
+    }
+  }
+
+  /**
    * Get cache statistics (for debugging)
    */
   getStats() {

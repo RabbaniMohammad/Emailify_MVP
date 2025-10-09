@@ -29,6 +29,7 @@ import { NodeEnvs } from '@src/common/constants';
 
 import mailchimp from '@mailchimp/mailchimp_marketing';
 
+
 /******************************************************************************
                                 Setup
 ******************************************************************************/

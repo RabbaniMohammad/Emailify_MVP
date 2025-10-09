@@ -337,7 +337,7 @@
   }
 
   &:hover:not(:disabled) {
-    transform: translateY(-2px);
+    // transform: translateY(-2px);
     
     .btn-icon svg {
       transform: scale(1.1) rotate(5deg);
@@ -988,6 +988,7 @@
   min-height: 200px !important;
   max-height: 250px !important; // Prevent excessive height
   overflow-y: auto !important; // Scroll if content is too long
+  margin-top:0px;
   
   &:last-child {
     margin-bottom: 0 !important; // Remove bottom margin from last panel
@@ -1110,7 +1111,7 @@
 
     &:hover {
       background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
-      transform: translateX(4px);
+      // transform: translateX(4px);
     }
   }
 }

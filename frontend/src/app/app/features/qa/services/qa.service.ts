@@ -75,76 +75,155 @@ type SnapApiResponse = {
   error?: string;
 };
 
+/* ------------------------- Suggestions types ---------------------------- */
+export type SuggestionResult = {
+  gibberish: Array<{ text: string; reason: string }>;
+  suggestions: string[];
+};
+
 @Injectable({ providedIn: 'root' })
 export class QaService {
   private http = inject(HttpClient);
 
   /* ---------- localStorage keys ---------- */
-  private kGolden(id: string)   { return `qa:golden:${id}`; }
-  private kSubjects(id: string) { return `qa:subjects:${id}`; }
-
-  private kRunId(tplId: string)   { return `qa:variants:runId:${tplId}`; }
-  private kRunData(runId: string) { return `qa:variants:run:${runId}`; }
-
+  private kGolden(id: string)      { return `qa:golden:${id}`; }
+  private kSubjects(id: string)    { return `qa:subjects:${id}`; }
+  private kSuggestions(id: string) { return `qa:suggestions:${id}`; }
+  
+  private kRunId(tplId: string)    { return `qa:variants:runId:${tplId}`; }
+  private kRunData(runId: string)  { return `qa:variants:run:${runId}`; }
+  
   private kChat(runId: string, no: number) { return `qa:chat:${runId}:${no}`; }
-
+  
   // Per-run snapshots
   private kSnaps(runId: string) { return `qa:snaps:${runId}`; }
-
-  // NEW: per-run valid links list
+  
+  // Per-run valid links list
   private kValidLinks(runId: string) { return `qa:validlinks:${runId}`; }
 
-  /* --------------------------- Golden / Subjects -------------------------- */
-  getGoldenCached(id: string) {
-    try { const raw = localStorage.getItem(this.kGolden(id)); return raw ? (JSON.parse(raw) as GoldenResult) : null; } catch { return null; }
+  /* ------------------- Golden / Subjects / Suggestions ------------------- */
+  
+  getGoldenCached(id: string): GoldenResult | null {
+    try {
+      const raw = localStorage.getItem(this.kGolden(id));
+      return raw ? (JSON.parse(raw) as GoldenResult) : null;
+    } catch {
+      return null;
+    }
   }
-  getSubjectsCached(id: string) {
-    try { const raw = localStorage.getItem(this.kSubjects(id)); return raw ? (JSON.parse(raw) as string[]) : null; } catch { return null; }
+  
+  getSubjectsCached(id: string): string[] | null {
+    try {
+      const raw = localStorage.getItem(this.kSubjects(id));
+      return raw ? (JSON.parse(raw) as string[]) : null;
+    } catch {
+      return null;
+    }
+  }
+  
+  getSuggestionsCached(id: string): SuggestionResult | null {
+    try {
+      const raw = localStorage.getItem(this.kSuggestions(id));
+      return raw ? (JSON.parse(raw) as SuggestionResult) : null;
+    } catch {
+      return null;
+    }
   }
 
   generateGolden(id: string, force = true) {
-    if (!force) { const cached = this.getGoldenCached(id); if (cached) return of(cached); }
+    if (!force) {
+      const cached = this.getGoldenCached(id);
+      if (cached) return of(cached);
+    }
+    
     return this.http.post<GoldenResult>(`/api/qa/${id}/golden`, {}).pipe(
-      tap(res => { try { localStorage.setItem(this.kGolden(id), JSON.stringify(res)); } catch {} })
+      tap(res => {
+        try {
+          localStorage.setItem(this.kGolden(id), JSON.stringify(res));
+        } catch {}
+      })
     );
   }
 
   generateSubjects(id: string, force = true) {
-    if (!force) { const cached = this.getSubjectsCached(id); if (cached) return of(cached); }
+    if (!force) {
+      const cached = this.getSubjectsCached(id);
+      if (cached) return of(cached);
+    }
+    
     return this.http.post<{ subjects: string[] }>(`/api/qa/${id}/subjects`, {}).pipe(
       map(r => r.subjects || []),
-      tap(list => { try { localStorage.setItem(this.kSubjects(id), JSON.stringify(list)); } catch {} })
+      tap(list => {
+        try {
+          localStorage.setItem(this.kSubjects(id), JSON.stringify(list));
+        } catch {}
+      })
     );
   }
 
-  generateSuggestions(id: string) {
-    return this.http.post<{ gibberish: Array<{text: string; reason: string}>, suggestions: string[] }>(
-      `/api/qa/${id}/suggestions`, {}
+  generateSuggestions(id: string, force = false) {
+    // Check cache first if not forcing
+    if (!force) {
+      const cached = this.getSuggestionsCached(id);
+      if (cached) return of(cached);
+    }
+    
+    return this.http.post<SuggestionResult>(
+      `/api/qa/${id}/suggestions`,
+      {}
+    ).pipe(
+      tap(res => {
+        try {
+          localStorage.setItem(this.kSuggestions(id), JSON.stringify(res));
+        } catch {}
+      })
     );
   }
 
-  clearGolden(id: string)   { try { localStorage.removeItem(this.kGolden(id)); } catch {} }
-  clearSubjects(id: string) { try { localStorage.removeItem(this.kSubjects(id)); } catch {} }
+  clearGolden(id: string) {
+    try {
+      localStorage.removeItem(this.kGolden(id));
+    } catch {}
+  }
+  
+  clearSubjects(id: string) {
+    try {
+      localStorage.removeItem(this.kSubjects(id));
+    } catch {}
+  }
+  
+  clearSuggestions(id: string) {
+    try {
+      localStorage.removeItem(this.kSuggestions(id));
+    } catch {}
+  }
 
   /* ------------------------------- Variants ------------------------------- */
+  
   getVariantsRunCached(templateId: string): VariantsRun | null {
     try {
       const runId = localStorage.getItem(this.kRunId(templateId));
       if (!runId) return null;
       const raw = localStorage.getItem(this.kRunData(runId));
       return raw ? (JSON.parse(raw) as VariantsRun) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   getVariantsRunById(runId: string): VariantsRun | null {
     try {
       const raw = localStorage.getItem(this.kRunData(runId));
       return raw ? (JSON.parse(raw) as VariantsRun) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   private setRunIdForTemplate(templateId: string, runId: string) {
-    try { localStorage.setItem(this.kRunId(templateId), runId); } catch {}
+    try {
+      localStorage.setItem(this.kRunId(templateId), runId);
+    } catch {}
   }
 
   saveVariantsRun(templateId: string, run: VariantsRun) {
@@ -156,7 +235,8 @@ export class QaService {
 
   startVariants(templateId: string, goldenHtml: string, target = 5) {
     return this.http.post<{ runId: string; target: number }>(
-      `/api/qa/${templateId}/variants/start`, { html: goldenHtml, target }
+      `/api/qa/${templateId}/variants/start`,
+      { html: goldenHtml, target }
     ).pipe(
       tap(({ runId, target }) => {
         const run: VariantsRun = { runId, target, items: [] };
@@ -166,26 +246,37 @@ export class QaService {
   }
 
   nextVariant(runId: string) {
-    return this.http.post<VariantItem>(`/api/qa/variants/${runId}/next`, {}).pipe(
+    return this.http.post<VariantItem>(
+      `/api/qa/variants/${runId}/next`,
+      {}
+    ).pipe(
       tap((item) => {
         const cached = this.getVariantsRunById(runId);
         if (cached) {
           const idx = cached.items.findIndex(i => i.no === item.no);
           if (idx >= 0) cached.items[idx] = item;
           else cached.items.push(item);
-          try { localStorage.setItem(this.kRunData(runId), JSON.stringify(cached)); } catch {}
+          try {
+            localStorage.setItem(this.kRunData(runId), JSON.stringify(cached));
+          } catch {}
         }
       })
     );
   }
 
   getVariantsStatus(runId: string) {
-    return this.http.get<{ runId: string; templateId: string; target: number; count: number; items: VariantItem[] }>(
-      `/api/qa/variants/${runId}/status`
-    ).pipe(
+    return this.http.get<{
+      runId: string;
+      templateId: string;
+      target: number;
+      count: number;
+      items: VariantItem[];
+    }>(`/api/qa/variants/${runId}/status`).pipe(
       catchError((e) => {
         if (e?.status === 404) {
-          return throwError(() => new Error('Run not found (server restarted or bad runId). Start a new run.'));
+          return throwError(() => new Error(
+            'Run not found (server restarted or bad runId). Start a new run.'
+          ));
         }
         return throwError(() => e);
       })
@@ -193,38 +284,57 @@ export class QaService {
   }
 
   /* --------------------------------- Chat --------------------------------- */
+  
   getChatCached(runId: string, no: number): ChatThread | null {
     try {
       const raw = localStorage.getItem(this.kChat(runId, no));
       return raw ? (JSON.parse(raw) as ChatThread) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   saveChat(runId: string, no: number, thread: ChatThread) {
-    try { localStorage.setItem(this.kChat(runId, no), JSON.stringify(thread)); } catch {}
+    try {
+      localStorage.setItem(this.kChat(runId, no), JSON.stringify(thread));
+    } catch {}
   }
 
   sendChatMessage(
     runId: string,
     no: number,
     html: string,
-    history: Array<{ role: 'user'|'assistant'; content: string }>,
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
     userMessage: string
   ) {
-    return this.http.post<{ assistantText: string; json: ChatAssistantJson }>(
-      `/api/qa/variants/${runId}/chat/message`,
-      { no, html, history, userMessage }
-    );
+    return this.http.post<{
+      assistantText: string;
+      json: ChatAssistantJson;
+    }>(`/api/qa/variants/${runId}/chat/message`, {
+      no,
+      html,
+      history,
+      userMessage
+    });
   }
 
   applyChatEdits(runId: string, html: string, edits: GoldenEdit[]) {
-    return this.http.post<{ html: string; changes: Array<{ before: string; after: string; parent: string; reason?: string }> }>(
-      `/api/qa/variants/${runId}/chat/apply`,
-      { html, edits }
-    );
+    return this.http.post<{
+      html: string;
+      changes: Array<{
+        before: string;
+        after: string;
+        parent: string;
+        reason?: string;
+      }>;
+    }>(`/api/qa/variants/${runId}/chat/apply`, {
+      html,
+      edits
+    });
   }
 
   /* ------------------------------ Snapshots ------------------------------- */
+  
   getSnapsCached(runId: string): SnapResult[] {
     try {
       const raw = localStorage.getItem(this.kSnaps(runId));
@@ -236,15 +346,21 @@ export class QaService {
   }
 
   saveSnaps(runId: string, snaps: SnapResult[]) {
-    try { localStorage.setItem(this.kSnaps(runId), JSON.stringify(snaps)); } catch {}
+    try {
+      localStorage.setItem(this.kSnaps(runId), JSON.stringify(snaps));
+    } catch {}
   }
 
   addOrReplaceSnap(runId: string, snap: SnapResult): SnapResult[] {
     const list = this.getSnapsCached(runId);
     const key = (snap.finalUrl || snap.url).toLowerCase();
-    const idx = list.findIndex(s => ((s.finalUrl || s.url).toLowerCase() === key));
+    const idx = list.findIndex(s => (
+      (s.finalUrl || s.url).toLowerCase() === key
+    ));
+    
     if (idx >= 0) list[idx] = snap;
     else list.unshift(snap);
+    
     this.saveSnaps(runId, list);
     return list;
   }
@@ -273,6 +389,7 @@ export class QaService {
   }
 
   /* ------------------------- Valid Links (per run) ------------------------ */
+  
   getValidLinks(runId: string): string[] {
     try {
       const raw = localStorage.getItem(this.kValidLinks(runId));

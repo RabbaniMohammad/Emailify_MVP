@@ -225,6 +225,26 @@ export class ToolbarComponent implements OnInit, OnDestroy {
     return canvas.toDataURL();
   }
 
+  /**
+ * Navigate to home page
+ */
+  navigateToHome(): void {
+    const currentUrl = this.router.url;
+    
+    // If already on home page, refresh the templates
+    if (currentUrl === '/' || currentUrl === '') {
+      console.log('Already on home - refreshing templates');
+      // If you have access to TemplatesService, call refresh
+      // this.templatesService.refresh();
+      // Or just reload
+      window.location.reload();
+    } else {
+      // Navigate to home
+      console.log('Navigating to home from:', currentUrl);
+      this.router.navigate(['/']);
+    }
+  }
+
   navigateToAdmin(): void {
     this.fetchPendingCount();
     this.adminEventService.triggerNavigationRefresh();

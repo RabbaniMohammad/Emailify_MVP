@@ -24,6 +24,7 @@ import {
   transition, 
   animate 
 } from '@angular/animations';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, Subscription } from 'rxjs';
 import { takeUntil, map, distinctUntilChanged } from 'rxjs/operators';
 import { TemplatesService, TemplatesState } from '../../../../core/services/templates.service';
@@ -91,6 +92,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private cache = inject(PreviewCacheService);
   private cdr = inject(ChangeDetectorRef);
+  private snackBar = inject(MatSnackBar);
 
   // ViewChild references
   @ViewChild('scrollContainer', { static: false }) scrollContainer!: ElementRef<HTMLElement>;
@@ -123,11 +125,17 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   allowScripts = false;
   safeSrcdoc: SafeHtml | null = null;
   previewError?: string;
+  
+  // Info banner & metadata
+  showInfoBanner = false;
+  templateMetadata: any = null;
 
   // Private subjects and subscriptions
   private destroy$ = new Subject<void>();
   private fetchSub?: Subscription;
   private loadingTimer?: any;
+
+  isDeleting = false;
   
   // Track in-flight requests to prevent duplicate API calls
   private inflightRequests = new Map<string, Subscription>();
@@ -156,7 +164,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     // Check if we have items already loaded
     if (this.svc.snapshot.items.length === 0) {
       console.log('No items in state, calling search');
-      this.svc.search(''); // Will use cache or fetch fresh
+      this.svc.search('');
     } else {
       console.log('Items already in state:', this.svc.snapshot.items.length);
     }
@@ -239,7 +247,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     return item.id;
   }
 
-  // Preview methods - OPTIMIZED FOR NO FLICKERING
+  // Preview methods
   private showRunButton(templateId: string): void {
     const current = this.svc.snapshot.selectedId;
     if (templateId === current) {
@@ -252,6 +260,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     const currentId = this.svc.snapshot.selectedId;
     if (currentId) {
       this.cache.clear(currentId);
+      sessionStorage.removeItem(`metadata-${currentId}`);
       this.loadTemplateContent(currentId);
     }
   }
@@ -277,6 +286,90 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     this.viewMode = mode;
     this.cdr.markForCheck();
   }
+
+  toggleInfoBanner(): void {
+    this.showInfoBanner = !this.showInfoBanner;
+    this.cdr.markForCheck();
+  }
+
+  deleteTemplate(): void {
+  // Prevent concurrent deletions
+  if (this.isDeleting) {
+    console.log('⏳ Delete already in progress');
+    return;
+  }
+
+  const currentId = this.svc.snapshot.selectedId;
+  const currentName = this.svc.snapshot.selectedName;
+  
+  if (!currentId) {
+    console.warn('No template selected');
+    return;
+  }
+  
+  const confirmed = confirm(
+    `Are you sure you want to delete "${currentName}"?\n\nThis action cannot be undone and will permanently remove the template from Mailchimp.`
+  );
+  
+  if (!confirmed) {
+    console.log('Delete cancelled by user');
+    return;
+  }
+  
+  console.log('🗑️ Deleting template:', currentId);
+  
+  // Set deleting flag
+  this.isDeleting = true;
+  
+  // Optimistic UI update
+  this.safeSrcdoc = null;
+  this.templateMetadata = null;
+  this.runButtonItemId = undefined;
+  this.loading = false;
+  this.cdr.markForCheck();
+  
+  // Clear all caches
+  this.cache.clearTemplate(currentId);
+  
+  // Delete from backend
+  this.svc.deleteTemplate(currentId).subscribe({
+    next: (response) => {
+      console.log('✅ Template deleted successfully');
+      
+      this.isDeleting = false;
+      
+      this.snackBar.open(
+        `"${currentName}" deleted successfully`,
+        'Close',
+        {
+          duration: 4000,
+          panelClass: ['success-snackbar'],
+          horizontalPosition: 'center',
+          verticalPosition: 'bottom'
+        }
+      );
+    },
+    error: (error) => {
+      console.error('❌ Failed to delete template:', error);
+      
+      this.isDeleting = false;
+      
+      this.snackBar.open(
+        `Failed to delete template: ${error?.error?.message || error?.message || 'Unknown error'}`,
+        'Close',
+        {
+          duration: 6000,
+          panelClass: ['error-snackbar'],
+          horizontalPosition: 'center',
+          verticalPosition: 'bottom'
+        }
+      );
+      
+      // Reload to sync state
+      this.svc.search(this.searchQuery);
+    }
+  });
+}
 
   // Utility methods for scrolling
   scrollToItem(itemId: string): void {
@@ -312,13 +405,14 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ✅ FIXED: Optimized template loading - NO MORE FLICKERING + NO DUPLICATE API CALLS
+  // Optimized template loading with metadata caching
   private loadTemplateContent(id: string): void {
     console.log('🔄 START loadTemplateContent, id:', id);
     
     // Clear previous state
     this.previewError = undefined;
     this.runButtonItemId = undefined;
+    this.templateMetadata = null;
     
     // Clear any pending loading timer
     if (this.loadingTimer) {
@@ -341,17 +435,52 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     if (cached) {
       console.log('✅ Using cached content - loading instantly');
       
-      // ✅ Process content immediately
+      // Check if metadata is already cached
+      const cachedMetadata = sessionStorage.getItem(`metadata-${id}`);
+      if (cachedMetadata) {
+        this.templateMetadata = JSON.parse(cachedMetadata);
+        console.log('✅ Using cached metadata');
+        this.cdr.markForCheck();
+      } else {
+        // Fetch metadata from API and cache it
+        this.http.get(`/api/templates/${id}`, { responseType: 'json' })
+          .subscribe({
+            next: (response: any) => {
+              this.templateMetadata = {
+                type: response.type,
+                category: response.category || 'N/A',
+                thumbnail: response.thumbnail,
+                dateCreated: response.dateCreated,
+                dateEdited: response.dateEdited,
+                createdBy: response.createdBy,
+                active: response.active,
+                dragAndDrop: response.dragAndDrop,
+                responsive: response.responsive,
+                folderId: response.folderId || 'N/A',
+                screenshotUrl: response.screenshotUrl,
+                source: response.source
+              };
+              
+              // Cache the metadata
+              sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
+              console.log('✅ Fetched and cached metadata');
+              
+              this.cdr.markForCheck();
+            },
+            error: (e) => console.warn('⚠️ Failed to load metadata:', e)
+          });
+      }
+      
+      // Process content immediately
       const wrapped = this.ensureDoc(cached);
       const cleaned = this.stripDangerousBits(wrapped);
       this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
       
-      // Show loading very briefly for smooth UX (optional - you can set to 0)
+      // Show loading very briefly for smooth UX
       this.loading = true;
       this.cdr.markForCheck();
       
       // Hide loading after iframe renders
-      // Note: You can reduce this to 0 if you want instant switching
       this.loadingTimer = setTimeout(() => {
         if (this.svc.snapshot.selectedId === id) {
           this.loading = false;
@@ -359,17 +488,17 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           console.log('✅ Cached template loaded successfully');
           this.cdr.markForCheck();
         }
-      }, 0); // Changed to 0 for instant loading (was 50ms)
+      }, 0);
       
       return;
     }
 
-    // ✅ Check if we already have an in-flight request for this template
+    // Check if we already have an in-flight request for this template
     if (this.inflightRequests.has(id)) {
       console.log('⏳ Request already in-flight for template:', id, '- reusing existing request');
       this.loading = true;
       this.cdr.markForCheck();
-      return; // Just show loading, the existing request will complete
+      return;
     }
 
     // Fresh content path - fetch from API
@@ -379,10 +508,28 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
 
     const subscription = this.http
-      .get(`/api/templates/${id}/raw`, { responseType: 'text' })
+      .get(`/api/templates/${id}`, { responseType: 'json' })
       .subscribe({
-        next: (text) => {
-          console.log('📥 API response received for:', id);
+        next: (response: any) => {
+          // Store metadata
+          this.templateMetadata = {
+            type: response.type,
+            category: response.category || 'N/A',
+            thumbnail: response.thumbnail,
+            dateCreated: response.dateCreated,
+            dateEdited: response.dateEdited,
+            createdBy: response.createdBy,
+            active: response.active,
+            dragAndDrop: response.dragAndDrop,
+            responsive: response.responsive,
+            folderId: response.folderId || 'N/A',
+            screenshotUrl: response.screenshotUrl,
+            source: response.source
+          };
+          
+          // Cache the metadata
+          sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
+          console.log('✅ Fetched and cached metadata');
           
           // Remove from in-flight requests
           this.inflightRequests.delete(id);
@@ -395,7 +542,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
             return;
           }
           
-          const html = text || '';
+          const html = response.html || '';
           this.cache.set(id, html);
           
           const wrapped = this.ensureDoc(html);

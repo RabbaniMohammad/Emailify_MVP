@@ -2,7 +2,21 @@ import { Router, type Request, type Response } from 'express';
 import mailchimp from '@mailchimp/mailchimp_marketing';
 
 // ---------- Minimal types ----------
-type McTemplate = { id: number | string; name?: string; type?: string };
+type McTemplate = { 
+  id: number | string; 
+  name?: string; 
+  type?: string;
+  category?: string;
+  thumbnail?: string;
+  date_created?: string;
+  date_edited?: string;
+  created_by?: string;
+  active?: boolean;
+  drag_and_drop?: boolean;
+  responsive?: boolean;
+  folder_id?: string;
+  screenshot_url?: string;
+};
 type McTemplatesList = { templates?: McTemplate[]; total_items?: number };
 
 // ---------- Typing shims for SDK groups we call ----------
@@ -16,7 +30,7 @@ const mc = mailchimp as unknown as {
     defaultContent?: (id: string | number) => Promise<any>;
   };
 };
-const MC_ANY: any = mailchimp as any; // for campaigns.* calls
+const MC_ANY: any = mailchimp as any;
 
 const router = Router();
 
@@ -66,15 +80,10 @@ async function renderViaTempCampaign(templateId: string): Promise<string> {
   }
 }
 
-/** Build best-effort HTML for a template:
- *  1) direct template.html (custom-coded),
- *  2) temp campaign → compiled HTML (classic DnD),
- *  3) default content (sections/html) stitched.
- */
+/** Build best-effort HTML for a template */
 async function getHtmlForTemplate(id: string): Promise<{ name: string; html: string; source: string }> {
   const sdk: any = mc;
 
-  // Try to fetch template metadata/HTML (method name varies by SDK version)
   let t: any = null;
   if (typeof sdk.templates?.get === 'function') {
     t = await sdk.templates.get(id);
@@ -89,13 +98,11 @@ async function getHtmlForTemplate(id: string): Promise<{ name: string; html: str
   ).trim();
   let source = 'template.html';
 
-  // Fallback 2: render via temporary campaign (works for classic DnD)
   if (!html) {
     html = await renderViaTempCampaign(id);
     if (html) source = 'campaign.content.html';
   }
 
-  // Fallback 3: default content (sections/html), stitch if needed
   if (!html) {
     let dc: any = null;
     if (typeof sdk.templates?.getDefaultContent === 'function') {
@@ -127,14 +134,14 @@ async function getHtmlForTemplate(id: string): Promise<{ name: string; html: str
 
 // ---------- Routes ----------
 
-/** GET /api/templates?query=&limit=&offset= → { items:[{id,name}], total } */
+/** GET /api/templates?query=&limit=&offset= → { items:[{id,name,...metadata}], total } */
 router.get('/', async (req: Request, res: Response) => {
   try {
     const query  = String(req.query.query ?? '').trim().toLowerCase();
     const limit  = Math.min(Number(req.query.limit ?? 50), 250);
     const offset = Number(req.query.offset ?? 0);
 
-    // Only Saved/User templates (classic/custom)
+    // Get templates (user/saved only)
     const resp: McTemplatesList = await mc.templates.list({ count: limit, offset, type: 'user' });
 
     const source: McTemplate[] = Array.isArray(resp.templates) ? resp.templates : [];
@@ -145,7 +152,24 @@ router.get('/', async (req: Request, res: Response) => {
 
     const seen = new Set<string>();
     let items = (userOnly.length ? userOnly : source)
-      .map((t) => ({ id: String(t.id), name: String(t.name ?? '') }))
+      .map((t) => ({
+        // Basic (original)
+        id: String(t.id),
+        name: String(t.name ?? 'Untitled Template'),
+        
+        // NEW: Additional metadata
+        type: t.type ?? null,
+        category: t.category ?? null,
+        thumbnail: t.thumbnail ?? null,
+        dateCreated: t.date_created ?? null,
+        dateEdited: t.date_edited ?? null,
+        createdBy: t.created_by ?? null,
+        active: t.active ?? true,
+        dragAndDrop: t.drag_and_drop ?? null,
+        responsive: t.responsive ?? null,
+        folderId: t.folder_id ?? null,
+        screenshotUrl: t.screenshot_url ?? null,
+      }))
       .filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
 
     if (query) items = items.filter((t) => t.name.toLowerCase().includes(query));
@@ -156,13 +180,12 @@ router.get('/', async (req: Request, res: Response) => {
     const e = err as any;
     const status  = e?.status || e?.statusCode || e?.response?.status || 500;
     const message = e?.response?.text || e?.detail || e?.message || 'Failed to fetch templates';
-    // eslint-disable-next-line no-console
     console.error('Mailchimp templates error:', { status, message });
     res.status(status).json({ code: 'MAILCHIMP_ERROR', message });
   }
 });
 
-/** GET /api/templates/:id → JSON: { id, name, html } (no-cache) */
+/** GET /api/templates/:id → JSON: { id, name, html, ...metadata } (no-cache) */
 router.get('/:id', async (req: Request, res: Response) => {
   res.set({
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -173,10 +196,41 @@ router.get('/:id', async (req: Request, res: Response) => {
 
   const id = String(req.params.id);
   try {
+    // Get template metadata
+    const sdk: any = mc;
+    let template: any = null;
+    
+    if (typeof sdk.templates?.get === 'function') {
+      template = await sdk.templates.get(id);
+    } else if (typeof sdk.templates?.getTemplate === 'function') {
+      template = await sdk.templates.getTemplate(id);
+    }
+
+    // Get HTML content
     const { name, html, source } = await getHtmlForTemplate(id);
-    // eslint-disable-next-line no-console
+    
     console.log(`Template ${id} → html length: ${html.length} (source: ${source})`);
-    return res.status(200).json({ id, name, html });
+    
+    return res.status(200).json({ 
+      // Basic (original)
+      id, 
+      name, 
+      html,
+      
+      // NEW: Additional metadata from template
+      type: template?.type ?? null,
+      category: template?.category ?? null,
+      thumbnail: template?.thumbnail ?? null,
+      dateCreated: template?.date_created ?? null,
+      dateEdited: template?.date_edited ?? null,
+      createdBy: template?.created_by ?? null,
+      active: template?.active ?? true,
+      dragAndDrop: template?.drag_and_drop ?? null,
+      responsive: template?.responsive ?? null,
+      folderId: template?.folder_id ?? null,
+      screenshotUrl: template?.screenshot_url ?? null,
+      source, // How HTML was fetched
+    });
   } catch (e: any) {
     const status  = e?.status || e?.statusCode || e?.response?.status || 500;
     const message = e?.response?.text || e?.detail || e?.message || 'Failed to fetch template';
@@ -185,13 +239,63 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
+/** DELETE /api/templates/:id - Delete template from Mailchimp */
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const templates: any = MC_ANY.templates;
+    
+    console.log('🗑️ Deleting template:', id);
+    
+    // Try different SDK method names for deleting templates
+    if (typeof templates.delete === 'function') {
+      await templates.delete(id);
+    } else if (typeof templates.remove === 'function') {
+      await templates.remove(id);
+    } else if (typeof templates.deleteTemplate === 'function') {
+      await templates.deleteTemplate(id);
+    } else {
+      throw new Error('Delete method not available on templates API');
+    }
+    
+    console.log('✅ Template deleted successfully:', id);
+    res.json({ 
+      success: true, 
+      message: 'Template deleted successfully',
+      id 
+    });
+  } catch (err: any) {
+    console.error('❌ Delete error:', err);
+    
+    const status = err?.status || err?.statusCode || 500;
+    const message = err?.response?.text || err?.message || 'Failed to delete template';
+    
+    // Check if it's a 404 (template not found)
+    if (status === 404) {
+      console.warn('⚠️ Template not found, may have been already deleted');
+      // Still return success since the end result is the same
+      return res.json({ 
+        success: true, 
+        message: 'Template already deleted or not found',
+        id: String(req.params.id)
+      });
+    }
+    
+    res.status(status).json({ 
+      success: false,
+      code: 'DELETE_ERROR', 
+      message 
+    });
+  }
+});
+
+
 /** GET /api/templates/:id/raw → HTML (iframe-friendly), no-cache */
 router.get('/:id/raw', async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
     const { name, html, source } = await getHtmlForTemplate(id);
 
-    // Ensure full document shell
     const hasDocShell = /<body[\s>]/i.test(html) || /<\/html>/i.test(html);
     const fullHtml = hasDocShell
       ? html

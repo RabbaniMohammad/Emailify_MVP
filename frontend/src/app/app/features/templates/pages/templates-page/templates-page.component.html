@@ -118,21 +118,41 @@
           <div class="header-left">
             <h3 class="template-title">{{ vm.selectedName }}</h3>
             <div class="template-meta">
-              <span class="status-badge">
-                <span class="status-indicator"></span>
-                Live Preview
-              </span>
               <span class="template-id">ID: {{ vm.selectedId }}</span>
-              <div class="performance-badge-inline">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-                </svg>
-                <span>Optimized</span>
-              </div>
             </div>
           </div>
           <div class="header-actions">
             <div class="action-buttons">
+              <!-- Info Button -->
+              <button 
+                class="action-btn info-btn" 
+                [class.active]="showInfoBanner"
+                (click)="toggleInfoBanner()" 
+                title="Template Info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <circle cx="12" cy="8" r="0.7" fill="currentColor"/> <!-- ✅ Dot as circle -->
+              </svg>
+                <span>Info</span>
+              </button>
+
+              <!-- Delete Button -->
+              <button 
+                class="action-btn delete-btn" 
+                (click)="deleteTemplate()" 
+                [disabled]="isDeleting"
+                title="Delete Template">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  <line x1="10" y1="11" x2="10" y2="17"/>
+                  <line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+                <span>Delete</span>
+              </button>
+
+              <!-- Refresh Button -->
               <button class="action-btn refresh-btn" (click)="refresh()" title="Refresh Preview">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
@@ -142,6 +162,8 @@
                 </svg>
                 <span>Refresh</span>
               </button>
+              
+              <!-- Fullscreen Button -->
               <button class="action-btn fullscreen-btn" (click)="toggleFullscreen()" title="Toggle Fullscreen">
                 <svg *ngIf="!isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
@@ -158,6 +180,8 @@
                 <span>{{ isFullscreen ? 'Exit' : 'Fullscreen' }}</span>
               </button>
             </div>
+
+            <!-- View Mode Toggle -->
             <div class="view-mode-toggle">
               <button 
                 class="mode-btn" 
@@ -249,7 +273,7 @@
 
       <!-- Modern Preview Container -->
       <div class="preview-container" *ngIf="vm.selectedId">
-        <!-- ✅ FIXED: Advanced Loading State - Triggers on every load -->
+        <!-- Advanced Loading State -->
         <div class="advanced-loader" *ngIf="loading" [@fadeInOut]="loading ? 'in' : 'out'">
           <div class="loader-background">
             <div class="neural-network">
@@ -351,4 +375,89 @@
       </div>
     </div>
   </aside>
+</div>
+
+<!-- ✅ NEW: Modal Popup for Template Info -->
+<div class="info-modal-backdrop" *ngIf="showInfoBanner" (click)="toggleInfoBanner()">
+  <div class="info-modal-content" (click)="$event.stopPropagation()">
+    <div class="info-modal-header">
+      <h3>Template Information</h3>
+      <button class="close-btn" (click)="toggleInfoBanner()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="info-grid" *ngIf="templateMetadata">
+      <div class="info-item">
+        <span class="info-label">Type</span>
+        <span class="info-value">{{ templateMetadata.type || 'N/A' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Category</span>
+        <span class="info-value">{{ templateMetadata.category }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Created By</span>
+        <span class="info-value">{{ templateMetadata.createdBy || 'N/A' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Created Date</span>
+        <span class="info-value">{{ templateMetadata.dateCreated | date:'short' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Last Edited</span>
+        <span class="info-value">{{ templateMetadata.dateEdited | date:'short' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Active</span>
+        <span class="info-value">
+          <span class="status-badge" [class.active]="templateMetadata.active">
+            {{ templateMetadata.active ? 'Yes' : 'No' }}
+          </span>
+        </span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Drag & Drop</span>
+        <span class="info-value">{{ templateMetadata.dragAndDrop ? 'Yes' : 'No' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Responsive</span>
+        <span class="info-value">{{ templateMetadata.responsive ? 'Yes' : 'No' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Folder ID</span>
+        <span class="info-value">{{ templateMetadata.folderId }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Source</span>
+        <span class="info-value">{{ templateMetadata.source }}</span>
+      </div>
+      
+      <div class="info-item full-width" *ngIf="templateMetadata.thumbnail">
+        <span class="info-label">Thumbnail</span>
+        <a [href]="templateMetadata.thumbnail" target="_blank" class="info-link">
+          View Thumbnail →
+        </a>
+      </div>
+      
+      <div class="info-item full-width" *ngIf="templateMetadata.screenshotUrl">
+        <span class="info-label">Screenshot</span>
+        <a [href]="templateMetadata.screenshotUrl" target="_blank" class="info-link">
+          View Screenshot →
+        </a>
+      </div>
+    </div>
+  </div>
 </div>

@@ -151,6 +151,32 @@ export class TemplatesService {
     this.cache.invalidatePrefix('templates-');
   }
 
+  deleteTemplate(id: string): Observable<any> {
+  return this.http.delete(`/api/templates/${id}`).pipe(
+    tap(() => {
+      // Remove from current state
+      const currentItems = this.snapshot.items;
+      const updatedItems = currentItems.filter(item => item.id !== id);
+      
+      this.updateState({ 
+        items: updatedItems,
+        selectedId: null,
+        selectedName: null
+      });
+      
+      // Clear all caches for this template
+      const cacheKeys = [
+        `${CACHE_KEYS.TEMPLATES_LIST}`,
+        `${CACHE_KEYS.SEARCH_PREFIX}${this.currentSearchQuery}`
+      ];
+      
+      cacheKeys.forEach(key => this.cache.invalidate(key));
+      
+      console.log('✅ Template removed from state and cache');
+    })
+  );
+}
+
   private fetchTemplates(query: string, cacheKey: string): void {
     // ✅ Only set loading state when actually fetching
     this.updateState({ status: 'loading', error: null });

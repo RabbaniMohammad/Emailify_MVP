@@ -24,6 +24,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ViewChild, ElementRef } from '@angular/core';
 
+
+
 type AssistantPayload = {
   assistantText: string;
   json: ChatAssistantJson;
@@ -111,6 +113,7 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   private routerSub?: Subscription;
   private refreshSub?: Subscription;
   private navigationRefreshSub?: Subscription;
+
 
   readonly linkChecks$ = combineLatest([this.validLinks$, this.htmlLinks$]).pipe(
     map(([fileLinks, htmlLinks]) => {
@@ -410,6 +413,7 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     }
   }
 
+
   private smoothScrollTo(targetPosition: number): void {
     const element = this.chatMessagesRef?.nativeElement || document.querySelector('.chat-messages');
     if (!element) return;
@@ -444,86 +448,89 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     this.scrollAnimation = requestAnimationFrame(animateScroll);
   }
 
-  async onSend() {
-    const message = (this.input.value || '').trim();
-    if (!message || this.sending) return;
-    this.input.setValue('');
-    this.sending = true;
+// Change back to your ORIGINAL onSend method
+async onSend() {
+  const message = (this.input.value || '').trim();
+  if (!message || this.sending) return;
+  this.input.setValue('');
+  this.sending = true;
 
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
-    const html = this.htmlSubject.value;
+  const runId = this.ar.snapshot.paramMap.get('runId')!;
+  const no = Number(this.ar.snapshot.paramMap.get('no')!);
+  const html = this.htmlSubject.value;
 
-    const hist = (this.messagesSubject.value || []).slice(-6).map(t => ({
-      role: t.role,
-      content: t.text,
-    }));
+  const hist = (this.messagesSubject.value || []).slice(-6).map(t => ({
+    role: t.role,
+    content: t.text,
+  }));
 
-    try {
-      const userTurn: ChatTurn = { role: 'user', text: message, ts: Date.now() };
-      const msgs = [...this.messagesSubject.value, userTurn];
-      this.messagesSubject.next(msgs);
-      this.persistThread(runId, no, html, msgs);
-      
-      setTimeout(() => this.scrollToBottom(), 50);
+  try {
+    const userTurn: ChatTurn = { role: 'user', text: message, ts: Date.now() };
+    const msgs = [...this.messagesSubject.value, userTurn];
+    this.messagesSubject.next(msgs);
+    this.persistThread(runId, no, html, msgs);
+    
+    setTimeout(() => this.scrollToBottom(), 50);
 
-      const resp = await firstValueFrom(this.qa.sendChatMessage(runId, no, html, hist, message)) as AssistantPayload;
+    const resp = await firstValueFrom(this.qa.sendChatMessage(runId, no, html, hist, message)) as AssistantPayload;
 
-      const assistantText = resp.assistantText || 'Okay.';
-      const assistantTurn: ChatTurn = {
-        role: 'assistant',
-        text: assistantText,
-        json: this.toAssistantJson(resp.json),
-        ts: Date.now(),
-      };
-      const msgs2 = [...this.messagesSubject.value, assistantTurn];
-      this.messagesSubject.next(msgs2);
-      this.persistThread(runId, no, html, msgs2);
-      
-      setTimeout(() => this.scrollToBottom(), 50);
-    } catch (e) {
-      console.error('chat send error', e);
-    } finally {
-      this.sending = false;
-    }
+    const assistantText = resp.assistantText || 'Okay.';
+    const assistantTurn: ChatTurn = {
+      role: 'assistant',
+      text: assistantText,
+      json: this.toAssistantJson(resp.json),
+      ts: Date.now(),
+    };
+    const msgs2 = [...this.messagesSubject.value, assistantTurn];
+    this.messagesSubject.next(msgs2);
+    this.persistThread(runId, no, html, msgs2);
+    
+    setTimeout(() => this.scrollToBottom(), 50);
+  } catch (e) {
+    console.error('chat send error', e);
+  } finally {
+    this.sending = false;
   }
+}
 
-  async onApplyEdits(turnIndex: number) {
-    if (this.applyingIndex !== null) return;
-    this.applyingIndex = turnIndex;
+// Change back to your ORIGINAL onApplyEdits method
+async onApplyEdits(turnIndex: number) {
+  if (this.applyingIndex !== null) return;
+  this.applyingIndex = turnIndex;
 
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+  const runId = this.ar.snapshot.paramMap.get('runId')!;
+  const no = Number(this.ar.snapshot.paramMap.get('no')!);
 
-    const turn = this.messagesSubject.value[turnIndex];
-    const edits = (turn?.json?.edits || []).slice();
-    if (!edits.length) { this.applyingIndex = null; return; }
+  const turn = this.messagesSubject.value[turnIndex];
+  const edits = (turn?.json?.edits || []).slice();
+  if (!edits.length) { this.applyingIndex = null; return; }
 
-    try {
-      const currentHtml = this.htmlSubject.value;
-      const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, edits));
-      const newHtml = resp?.html || currentHtml;
-      const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
+  try {
+    const currentHtml = this.htmlSubject.value;
+    const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, edits));
+    const newHtml = resp?.html || currentHtml;
+    const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
 
-      this.htmlSubject.next(newHtml);
-      this.updateMessageEdits(turnIndex, []);
+    this.htmlSubject.next(newHtml);
+    this.updateMessageEdits(turnIndex, []);
 
-      const noteText = numChanges > 0
-        ? `Applied ${numChanges} change(s).`
-        : `No matching text found.`;
+    const noteText = numChanges > 0
+      ? `Applied ${numChanges} change(s).`
+      : `No matching text found.`;
 
-      const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
-      const msgs = [...this.messagesSubject.value, appliedNote];
-      this.messagesSubject.next(msgs);
-      this.persistThread(runId, no, newHtml, msgs);
-      
-      setTimeout(() => this.scrollToBottom(), 50);
-    } catch (e) {
-      console.error('apply edits error', e);
-    } finally {
-      this.applyingIndex = null;
-    }
+    const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
+    const msgs = [...this.messagesSubject.value, appliedNote];
+    this.messagesSubject.next(msgs);
+    this.persistThread(runId, no, newHtml, msgs);
+    
+    setTimeout(() => this.scrollToBottom(), 50);
+  } catch (e) {
+    console.error('apply edits error', e);
+  } finally {
+    this.applyingIndex = null;
   }
+}
+
 
   handleEnterKey(event: KeyboardEvent): void {
     if (!event.shiftKey) {

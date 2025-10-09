@@ -104,7 +104,7 @@ async function getTemplateHtmlViaCampaign(id: string): Promise<string> {
   }
 }
 
-async function getRobustTemplateHtml(id: string): Promise<{ name: string; html: string }> {
+export async function getRobustTemplateHtml(id: string): Promise<{ name: string; html: string }> {
   const { name, html: direct } = await getTemplateHtmlDirect(id);
   if (direct) return { name, html: ensureFullDocShell(name, direct) };
   let html = await getTemplateHtmlViaCampaign(id);
@@ -903,7 +903,6 @@ router.post('/variants/:runId/chat/apply', async (req: Request, res: Response) =
 /*                          Headless screenshot                        */
 /* ------------------------------------------------------------------ */
 
-/** POST /api/qa/snap  body: { url } → { url, ok, status?, finalUrl?, dataUrl?, error? } */
 /** POST /api/qa/snap  body: { url } → { url, ok, status?, finalUrl?, dataUrl?, error? } */
 router.post('/snap', async (req: Request, res: Response) => {
   const url = String(req.body?.url || '').trim();

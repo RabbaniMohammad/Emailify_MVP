@@ -14,6 +14,8 @@ import { HttpClient } from '@angular/common/http';
 import { TemplatesService } from '../../../../core/services/templates.service';
 import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
 
+
+
 type SuggestionResult = {
   gibberish: Array<{ text: string; reason: string }>;
   suggestions: string[];
@@ -122,6 +124,7 @@ export class QaPageComponent {
   private http = inject(HttpClient);
   private templatesService = inject(TemplatesService);
   private previewCache = inject(PreviewCacheService);
+
   
   templateHtml = '';
   templateLoading = true;
@@ -155,6 +158,7 @@ export class QaPageComponent {
     this.id$.subscribe(id => {
       this.goldenSubject.next(this.qa.getGoldenCached(id));
       this.subjectsSubject.next(this.qa.getSubjectsCached(id));
+      this.suggestionsSubject.next(this.qa.getSuggestionsCached(id));
 
       const prevRun = this.qa.getVariantsRunCached(id);
       if (prevRun) this.variantsSubject.next(prevRun);
@@ -168,23 +172,40 @@ export class QaPageComponent {
     return Array(Math.max(0, remaining)).fill(0);
   }
   
-  // Generate Golden Template
-  onGenerateGolden(id: string) {
-    if (this.goldenLoading) return;
-    this.goldenLoading = true;
-    this.qa.generateGolden(id).subscribe({
-      next: (res) => {
-        this.goldenSubject.next(res);
-        // Auto-run suggestions once golden is ready
-        this.onAnalyzeSuggestions(id);
-      },
-      error: (e) => { 
-        console.error('golden error', e); 
-        this.goldenLoading = false; 
-      },
-      complete: () => (this.goldenLoading = false),
-    });
-  }
+// Change back to:
+onGenerateGolden(id: string) {
+  if (this.goldenLoading) return;
+  this.goldenLoading = true;
+  this.qa.generateGolden(id).subscribe({
+    next: (res) => {
+      this.goldenSubject.next(res);
+      this.onAnalyzeSuggestions(id);
+    },
+    error: (e) => { 
+      console.error('golden error', e); 
+      this.goldenLoading = false; 
+    },
+    complete: () => (this.goldenLoading = false),
+  });
+}
+
+  // Generate Golden Template old one
+  // onGenerateGolden(id: string) {
+  //   if (this.goldenLoading) return;
+  //   this.goldenLoading = true;
+  //   this.qa.generateGolden(id).subscribe({
+  //     next: (res) => {
+  //       this.goldenSubject.next(res);
+  //       // Auto-run suggestions once golden is ready
+  //       this.onAnalyzeSuggestions(id);
+  //     },
+  //     error: (e) => { 
+  //       console.error('golden error', e); 
+  //       this.goldenLoading = false; 
+  //     },
+  //     complete: () => (this.goldenLoading = false),
+  //   });
+  // }
 
   private loadOriginalTemplate(templateId: string) {
     console.log('Loading template from cache/service:', templateId);

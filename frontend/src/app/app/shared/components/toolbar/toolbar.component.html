@@ -1,7 +1,7 @@
 <mat-toolbar class="modern-toolbar">
   <div class="toolbar-container">
     <!-- Left: Brand -->
-    <div class="brand-section" (click)="refresh()" title="Refresh">
+    <div class="brand-section" (click)="navigateToHome()" title="Go to Home">
       <div class="brand-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
@@ -76,7 +76,7 @@
           </button>
 
           <mat-divider></mat-divider>
-          
+
           <!-- Logout Button -->
           <button mat-menu-item class="menu-item logout-item" (click)="logout()">
             <div class="menu-item-icon logout-icon">
