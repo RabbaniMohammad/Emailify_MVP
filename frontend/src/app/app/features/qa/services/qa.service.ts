@@ -1,7 +1,7 @@
 // src/app/services/qa.service.ts
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { catchError, map, of, tap, throwError } from 'rxjs';
+import { catchError, map, of, tap, throwError, switchMap, Observable } from 'rxjs';
 
 /* ----------------------------- Golden types ----------------------------- */
 export type GoldenEdit = {
@@ -15,6 +15,12 @@ export type GoldenEdit = {
 export type GoldenResult = {
   html: string;
   edits: GoldenEdit[];
+  stats?: {
+    totalSuggestions: number;
+    autoApplied: number;
+    manualReview: number;
+    successRate: string;
+  };
 };
 
 /* ---------------------------- Variants types ---------------------------- */
@@ -130,17 +136,43 @@ export class QaService {
     }
   }
 
-  generateGolden(id: string, force = true) {
+  /**
+   * ✅ UPDATED: Generate Golden Template
+   * Now fetches HTML and sends it to the backend
+   */
+  generateGolden(id: string, force = true): Observable<GoldenResult> {
     if (!force) {
       const cached = this.getGoldenCached(id);
       if (cached) return of(cached);
     }
     
-    return this.http.post<GoldenResult>(`/api/qa/${id}/golden`, {}).pipe(
+    // Fetch the template HTML first, then send to backend
+    return this.getTemplateHtml(id).pipe(
+      switchMap(html => {
+        return this.http.post<GoldenResult>(
+          `/api/qa/${id}/golden`,
+          { html }  // ✅ Send HTML in request body
+        );
+      }),
       tap(res => {
         try {
           localStorage.setItem(this.kGolden(id), JSON.stringify(res));
         } catch {}
+      })
+    );
+  }
+
+  /**
+   * ✅ NEW: Get template HTML from API
+   * This fetches the raw HTML content for a template
+   */
+  private getTemplateHtml(templateId: string): Observable<string> {
+    return this.http.get(`/api/templates/${templateId}/raw`, { 
+      responseType: 'text' 
+    }).pipe(
+      catchError(error => {
+        console.error('Failed to fetch template HTML:', error);
+        return throwError(() => new Error('Failed to fetch template HTML'));
       })
     );
   }

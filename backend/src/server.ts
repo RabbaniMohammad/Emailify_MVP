@@ -94,7 +94,9 @@ mailchimp.setConfig({
 // Auth routes (must be before other API routes)
 app.use('/api/auth', authRouter);
 
-app.use('/api/qa-new', qaNewRouter);
+// app.use('/api/qa-new', qaNewRouter);
+app.use('/api/qa', qaNewRouter);
+
 
 // Admin Routes 
 app.use('/api/admin', adminRouter);
@@ -104,7 +106,7 @@ app.use('/api/generate', templateGenerationRouter);
 
 // Core API routers
 app.use('/api/templates', templatesRouter);
-app.use('/api/qa', qaRouter);
+// app.use('/api/qa', qaRouter);
 
 // Existing base router
 app.use(Paths.Base, BaseRouter);

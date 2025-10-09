@@ -3,22 +3,67 @@ import * as cheerio from 'cheerio';
 
 const router = Router();
 
-// Anthropic Claude API key
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const ANTHROPIC_MODEL = process.env.HAIKU_MODEL || 'claude-3-5-haiku-20241022';
+const ANTHROPIC_MODEL = process.env.CLAUDE_MODEL || 'claude-3-5-haiku-20241022';
 
-/* ================================================================
-   STEP 1: EXTRACT CONTENT WITH CHEERIO (NO HAIKU)
-   ================================================================ */
+interface ExtractedContent {
+  titles: string[];
+  mainText: string[];
+  disclaimers: string[];
+  footer: string[];
+}
 
-   // ✅ BEST: Uses Unicode emoji property (catches everything)
+type ContentCategory = 'title' | 'main' | 'disclaimer' | 'footer';
+
+interface TaggedContent {
+  id: string;
+  category: ContentCategory;
+  index: number;
+  text: string;
+  modifiable: boolean;
+}
+
+interface ContentChange {
+  id: string;
+  original: string;
+  replacement: string;
+  reason: string;
+  changeType: string;
+  confidence?: number;
+}
+
+type TaskType = 'grammar' | 'seo';
+
+interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface ValidationResult {
+  passed: boolean;
+  failedGates: string[];
+  shouldAutoApply: boolean;
+  shouldManualReview: boolean;
+  similarity?: number;
+  reason?: string;
+}
+
+interface ApplyResult {
+  applied: ContentChange[];
+  skipped: ContentChange[];
+  stats: {
+    totalSuggestions: number;
+    autoApplied: number;
+    manualReview: number;
+    successRate: string;
+  };
+}
+
 function restoreEmojisInChange(
   change: ContentChange,
   originalTaggedContent: TaggedContent
 ): ContentChange {
   const fullOriginal = originalTaggedContent.text;
-  
-  // ✅ This regex catches ALL emojis (including compound emojis)
   const emojiRegex = /\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu;
   const emojisInOriginal = fullOriginal.match(emojiRegex) || [];
   
@@ -28,11 +73,7 @@ function restoreEmojisInChange(
   
   let restoredOriginal = change.original;
   let restoredReplacement = change.replacement;
-  
-  // Replace placeholders with actual emojis
   let emojiIndex = 0;
-  
-  // Pattern: ??, ???, ?, or leading numbers
   const placeholderPattern = /\?\?+|\?|^\d{1,3}\s+/g;
   
   restoredOriginal = restoredOriginal.replace(placeholderPattern, () => {
@@ -58,21 +99,12 @@ function restoreEmojisInChange(
   };
 }
 
-
-interface ExtractedContent {
-  titles: string[];
-  mainText: string[];
-  disclaimers: string[];
-  footer: string[];
-}
-
 function extractContentWithCheerio(html: string): ExtractedContent {
   console.log('📄 [EXTRACT] Starting content extraction with Cheerio...');
   console.log(`   Input HTML length: ${html.length} chars`);
   
   const $ = cheerio.load(html);
   
-  // Remove unwanted elements
   console.log('   🧹 Removing script, style, noscript, svg elements...');
   $('script, style, noscript, svg').remove();
   
@@ -80,42 +112,56 @@ function extractContentWithCheerio(html: string): ExtractedContent {
   const mainText: string[] = [];
   const disclaimers: string[] = [];
   const footer: string[] = [];
+  const seenText = new Set<string>();
   
-  // Extract titles (h1-h6)
   console.log('   📋 Extracting titles (h1-h6)...');
   $('h1, h2, h3, h4, h5, h6').each((_, el) => {
     const text = $(el).text().trim();
-    if (text) {
+    if (text && text.length > 0 && !seenText.has(text)) {
       titles.push(text);
+      seenText.add(text);
       console.log(`      Found title: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"`);
     }
   });
   
-  // Extract main content (paragraphs and list items, excluding footer)
-  console.log('   📝 Extracting main text (p, li)...');
-  $('body p, body li').not('footer p, footer li, .footer p, .footer li').each((_, el) => {
-    const text = $(el).text().trim();
-    if (!text) return;
+  console.log('   📝 Extracting all text content...');
+  
+  const allTextNodes = $('body')
+    .find('*')
+    .addBack()
+    .contents()
+    .filter(function() {
+      return this.type === 'text' && $(this).text().trim().length > 0;
+    });
+  
+  allTextNodes.each((_, node) => {
+    const text = $(node).text().trim();
     
-    // Check if looks like disclaimer (contains certain keywords)
-    const isDisclaimer = /terms|conditions|privacy|policy|disclaimer|all rights reserved/i.test(text);
+    if (!text || text.length < 5 || seenText.has(text)) {
+      return;
+    }
     
-    if (isDisclaimer) {
+    const $parent = $(node).parent();
+    
+    if ($parent.is('h1, h2, h3, h4, h5, h6')) {
+      return;
+    }
+    
+    const inFooter = $parent.closest('footer, .footer, [class*="footer"], [id*="footer"]').length > 0;
+    const isDisclaimer = /terms|conditions|privacy|policy|disclaimer|all rights reserved|unsubscribe|copyright|©/i.test(text);
+    
+    if (inFooter) {
+      footer.push(text);
+      seenText.add(text);
+      console.log(`      Found footer: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"`);
+    } else if (isDisclaimer) {
       disclaimers.push(text);
+      seenText.add(text);
       console.log(`      Found disclaimer: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"`);
     } else {
       mainText.push(text);
+      seenText.add(text);
       console.log(`      Found main text: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"`);
-    }
-  });
-  
-  // Extract footer content
-  console.log('   🔖 Extracting footer...');
-  $('footer, footer p, .footer, .footer p').each((_, el) => {
-    const text = $(el).text().trim();
-    if (text && !footer.includes(text) && !disclaimers.includes(text)) {
-      footer.push(text);
-      console.log(`      Found footer: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"`);
     }
   });
   
@@ -126,28 +172,28 @@ function extractContentWithCheerio(html: string): ExtractedContent {
     footer
   };
   
-  console.log('✅ [EXTRACT] Extraction complete:');
+  console.log('\n✅ [EXTRACT] Extraction complete:');
   console.log(`   Titles: ${titles.length}`);
   console.log(`   Main Text: ${mainText.length}`);
   console.log(`   Disclaimers: ${disclaimers.length}`);
   console.log(`   Footer: ${footer.length}`);
   console.log(`   Total items: ${titles.length + mainText.length + disclaimers.length + footer.length}\n`);
   
+  if (titles.length === 0 && mainText.length === 0) {
+    console.error('\n❌ ERROR: No text content extracted!\n');
+    const bodyText = $('body').text().trim();
+    console.log(`   📊 Debug Information:`);
+    console.log(`   Body text length: ${bodyText.length} chars`);
+    console.log(`   Total text nodes found: ${allTextNodes.length}`);
+    console.log(`   Total elements in body: ${$('body *').length}`);
+    
+    if (bodyText.length > 0) {
+      console.log(`\n   📄 Sample of body text (first 500 chars):`);
+      console.log(`   "${bodyText.slice(0, 500)}..."`);
+    }
+  }
+  
   return extracted;
-}
-
-/* ================================================================
-   STEP 2: CREATE TAGGED CONTENT
-   ================================================================ */
-
-type ContentCategory = 'title' | 'main' | 'disclaimer' | 'footer';
-
-interface TaggedContent {
-  id: string;
-  category: ContentCategory;
-  index: number;
-  text: string;
-  modifiable: boolean;
 }
 
 function createTaggedContent(extracted: ExtractedContent): TaggedContent[] {
@@ -155,7 +201,6 @@ function createTaggedContent(extracted: ExtractedContent): TaggedContent[] {
   
   const tagged: TaggedContent[] = [];
   
-  // Process titles
   extracted.titles.forEach((text, idx) => {
     const id = `title-${idx}`;
     tagged.push({
@@ -165,10 +210,9 @@ function createTaggedContent(extracted: ExtractedContent): TaggedContent[] {
       text: text,
       modifiable: true
     });
-    console.log(`   ✅ Tagged [${id}] (modifiable): "${text.slice(0, 40)}..."`);
+    console.log(`   ✅ Tagged [${id}] (modifiable): "${text}..."`);
   });
   
-  // Process main text
   extracted.mainText.forEach((text, idx) => {
     const id = `main-${idx}`;
     tagged.push({
@@ -178,10 +222,9 @@ function createTaggedContent(extracted: ExtractedContent): TaggedContent[] {
       text: text,
       modifiable: true
     });
-    console.log(`   ✅ Tagged [${id}] (modifiable): "${text.slice(0, 40)}..."`);
+    console.log(`   ✅ Tagged [${id}] (modifiable): "${text}..."`);
   });
   
-  // Process disclaimers (NOT modifiable)
   extracted.disclaimers.forEach((text, idx) => {
     const id = `disclaimer-${idx}`;
     tagged.push({
@@ -191,10 +234,9 @@ function createTaggedContent(extracted: ExtractedContent): TaggedContent[] {
       text: text,
       modifiable: false
     });
-    console.log(`   🔒 Tagged [${id}] (protected): "${text.slice(0, 40)}..."`);
+    console.log(`   🔒 Tagged [${id}] (protected): "${text}..."`);
   });
   
-  // Process footer (NOT modifiable)
   extracted.footer.forEach((text, idx) => {
     const id = `footer-${idx}`;
     tagged.push({
@@ -204,7 +246,7 @@ function createTaggedContent(extracted: ExtractedContent): TaggedContent[] {
       text: text,
       modifiable: false
     });
-    console.log(`   🔒 Tagged [${id}] (protected): "${text.slice(0, 40)}..."`);
+    console.log(`   🔒 Tagged [${id}] (protected): "${text}..."`);
   });
   
   console.log(`\n✅ [TAG] Created ${tagged.length} tagged items`);
@@ -214,95 +256,66 @@ function createTaggedContent(extracted: ExtractedContent): TaggedContent[] {
   return tagged;
 }
 
-/* ================================================================
-   STEP 3: GET IMPROVEMENTS FROM SONNET (WITH BATCHING & RETRY)
-   ================================================================ */
-
-interface ContentChange {
-  id: string;
-  original: string;
-  replacement: string;
-  reason: string;
-  changeType: string;
-  confidence?: number;
-}
-
-type TaskType = 'grammar' | 'seo';
-
-interface ConversationMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-// Helper function to process a single batch
-// Helper function to process a single batch
 async function getContentImprovementsForBatch(
   batch: TaggedContent[],
   taskType: TaskType = 'grammar'
 ): Promise<ContentChange[]> {
   
-const grammarPrompt = `You are a thorough grammar checker. Review EVERY item carefully and find ALL spelling, grammar, and readability errors.
+const grammarPrompt = `You are a grammar checker focused ONLY on critical errors.
 
-CRITICAL INSTRUCTION: When you find errors, you MUST return the COMPLETE FULL TEXT of the entire content item in both "original" and "replacement" fields. NEVER return partial text or fragments.
+CRITICAL INSTRUCTION: When you find errors, you MUST return the COMPLETE FULL TEXT of the entire content item in both "original" and "replacement" fields.
 
-**IMPORTANT: Preserve ALL emojis, special characters, and Unicode symbols EXACTLY as they appear in the original text. Do NOT remove, replace, or convert emojis to question marks or other characters. Emojis like 🛍️ 🎉 ⭐ 💰 🚚 must remain intact.**
+**IMPORTANT: Preserve ALL emojis, special characters, and Unicode symbols EXACTLY as they appear.**
 
-Content items to check:
-${batch.map(item => `
+ONLY FIX THESE ERRORS:
+1. Spelling mistakes (e.g., "recieve" → "receive", "teh" → "the")
+2. Clear grammar errors (e.g., "This are" → "These are", "He don't" → "He doesn't")
+3. Obvious typos (e.g., "prdouct" → "product")
+4. Chat GPT -> ChatGPT | capitalworld -> capital world | writers strike -> writer's strike | in “Bagel wah over us -> in “Bagel wsah over us
+
+
+DO NOT CHANGE:
+- Sentence fragments (e.g., "in front of", "your contacts") - these may be part of larger sentences
+- Punctuation (unless clearly wrong)
+- Sentence structure
+- Numbers, prices, URLs, brand names
+
+Context provided to help you understand fragments:
+${batch.map((item, idx) => {
+  const prevItem = idx > 0 ? batch[idx - 1] : null;
+  const nextItem = idx < batch.length - 1 ? batch[idx + 1] : null;
+  
+  return `
 ID: ${item.id}
 Category: ${item.category}
-FULL TEXT: "${item.text}"
-`).join('\n')}
+${prevItem ? `PREVIOUS: "...${prevItem.text.slice(-50)}"` : 'PREVIOUS: (none)'}
+CURRENT: "${item.text}"
+${nextItem ? `NEXT: "${nextItem.text.slice(0, 50)}..."` : 'NEXT: (none)'}`;
+}).join('\n\n')}
 
-Return ONLY a valid JSON array. For EACH item with errors, return the COMPLETE FULL TEXT:
-
+Return ONLY valid JSON array:
 [
   {
-    "id": "title-1",
-    "original": "COMPLETE FULL ORIGINAL TEXT HERE WITH EMOJIS - entire sentence/paragraph",
-    "replacement": "COMPLETE FULL CORRECTED TEXT HERE WITH EMOJIS - entire sentence/paragraph with all fixes applied",
-    "reason": "list all corrections made",
-    "changeType": "grammar_fix|spelling|word_choice|readability",
-    "confidence": 0.95
+    "id": "main-5",
+    "original": "Complete full original text with eror here",
+    "replacement": "Complete full original text with error here",
+    "reason": "Fixed spelling: 'eror' → 'error'",
+    "changeType": "spelling",
+    "confidence": 0.99
   }
 ]
 
-EXAMPLES:
-
-❌ WRONG (partial text):
-{
-  "id": "main-5",
-  "original": "powerfull laptop",
-  "replacement": "powerful laptop"
-}
-
-❌ WRONG (emojis removed):
-{
-  "id": "main-5",
-  "original": "??? This powerfull laptop",
-  "replacement": "This powerful laptop"
-}
-
-✅ CORRECT (full text with emojis preserved):
-{
-  "id": "main-5",
-  "original": "🛍️ This powerfull laptop is perfet for work, school, or entertanment. 🎉",
-  "replacement": "🛍️ This powerful laptop is perfect for work, school, or entertainment. 🎉"
-}
-
-RULES:
+CRITICAL JSON RULES:
 - Return ONLY valid JSON - no markdown, no explanations
-- ALWAYS include the COMPLETE FULL TEXT in both original and replacement
-- **PRESERVE all emojis: 🛍️ 🎉 ⭐ 💰 🚚 📱 💻 🎮 etc.**
-- Fix ALL errors in each text: spelling, grammar, punctuation
-- DO NOT change numbers, prices, brand names, or emojis
-- DO NOT add new information
-- If a text has NO errors, skip it (don't include in response)
-- Check EVERY item thoroughly`;
+- Properly escape all quotes and special characters
+- NO trailing commas
+- Use double quotes only
+
+IF NO ACTUAL ERRORS FOUND: Return empty array [] `;
 
   const seoPrompt = `Optimize this content for engagement and clarity.
 
-CRITICAL INSTRUCTION: When you suggest improvements, you MUST return the COMPLETE FULL TEXT of the entire content item in both "original" and "replacement" fields. NEVER return partial text or fragments.
+CRITICAL INSTRUCTION: When you suggest improvements, you MUST return the COMPLETE FULL TEXT of the entire content item in both "original" and "replacement" fields.
 
 Content items to optimize:
 ${batch.map(item => `
@@ -311,51 +324,38 @@ Category: ${item.category}
 FULL TEXT: "${item.text}"
 `).join('\n')}
 
-Return ONLY a valid JSON array. For EACH item with improvements, return the COMPLETE FULL TEXT:
+Return ONLY a valid JSON array.
 
+CRITICAL JSON RULES:
+- Return ONLY valid JSON - no markdown, no explanations
+- All string values MUST be properly escaped
+- Use backslash-quote for quotes inside strings
+- NO trailing commas
+- NO single quotes - use double quotes only
+
+Example format:
 [
   {
     "id": "title-1",
-    "original": "COMPLETE FULL ORIGINAL TEXT HERE - entire sentence/paragraph",
-    "replacement": "COMPLETE FULL IMPROVED TEXT HERE - entire sentence/paragraph with improvements",
+    "original": "Complete full original text here",
+    "replacement": "Complete full improved text here",
     "reason": "explain improvements made",
-    "changeType": "engagement|clarity|word_choice",
+    "changeType": "engagement",
     "confidence": 0.95
   }
 ]
 
-EXAMPLES:
-
-❌ WRONG (partial text):
-{
-  "id": "main-10",
-  "original": "grate prices",
-  "replacement": "great prices"
-}
-
-✅ CORRECT (full text):
-{
-  "id": "main-10",
-  "original": "We offer grate prices and excelent service to all customers.",
-  "replacement": "We offer great prices and excellent service to all customers."
-}
-
 RULES:
-- Return ONLY valid JSON - no markdown, no explanations
-- ALWAYS include the COMPLETE FULL TEXT in both original and replacement
-- Make 1-3 word improvements per sentence for engagement
+- Return ONLY valid JSON - no markdown
+- ALWAYS include the COMPLETE FULL TEXT
 - Keep 90%+ similarity to original
-- Preserve exact meaning and tone
-- DO NOT change numbers, prices, or brand names
-- If no improvements needed, skip that item`;
+- DO NOT change numbers, prices, or brand names`;
 
   const initialPrompt = taskType === 'seo' ? seoPrompt : grammarPrompt;
-
   const MAX_RETRIES = 5;
   let attempt = 0;
   const conversationHistory: ConversationMessage[] = [];
   
-  // Add initial user prompt
   conversationHistory.push({
     role: 'user',
     content: initialPrompt
@@ -391,23 +391,55 @@ RULES:
       
       console.log(`      ✅ Response received (${content.length} chars)`);
       
-      // Add assistant response to conversation history
       conversationHistory.push({
         role: 'assistant',
         content: content
       });
       
-      // Parse JSON (handle if wrapped in markdown code blocks)
+      if (attempt === 1) {
+        console.log(`      📝 Raw response preview: "${content.slice(0, 500)}..."`);
+      }
+      
       let jsonStr = content.trim();
+      
       if (jsonStr.startsWith('```json')) {
-        console.log(`      🔧 Removing markdown wrapper...`);
+        console.log(`      🔧 Removing \`\`\`json wrapper...`);
         jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '');
       } else if (jsonStr.startsWith('```')) {
-        console.log(`      🔧 Removing code block wrapper...`);
+        console.log(`      🔧 Removing \`\`\` wrapper...`);
         jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '');
       }
       
-      const parsed = JSON.parse(jsonStr);
+      const arrayEnd = jsonStr.lastIndexOf(']');
+      if (arrayEnd > 0 && arrayEnd < jsonStr.length - 1) {
+        console.log(`      🔧 Trimming content after JSON array...`);
+        jsonStr = jsonStr.substring(0, arrayEnd + 1);
+      }
+      
+      let parsed: any;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch (parseError) {
+        const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+        console.error(`      ❌ JSON Parse Error: ${errorMsg}`);
+        
+        const match = errorMsg.match(/position (\d+)/);
+        if (match) {
+          const pos = parseInt(match[1]);
+          const start = Math.max(0, pos - 100);
+          const end = Math.min(jsonStr.length, pos + 100);
+          console.log(`      🔍 Context around error (position ${pos}):`);
+          console.log(`      "${jsonStr.slice(start, end)}"`);
+          console.log(`      ${' '.repeat(Math.min(100, pos - start))}^ ERROR HERE`);
+        }
+        
+        if (jsonStr.length < 2000) {
+          console.log(`      📄 Full JSON string:\n${jsonStr}`);
+        }
+        
+        throw parseError;
+      }
+      
       const changes: ContentChange[] = Array.isArray(parsed) ? parsed : [];
       
       console.log(`      ✅ Parsed ${changes.length} suggestions\n`);
@@ -418,37 +450,41 @@ RULES:
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`      ❌ Attempt ${attempt} failed: ${errorMessage}`);
       
-      // Check if it's a JSON parse error
-      if (errorMessage.includes('JSON') || errorMessage.includes('Unexpected token')) {
+      if (errorMessage.includes('JSON') || errorMessage.includes('Unexpected token') || errorMessage.includes('Expected')) {
         if (attempt < MAX_RETRIES) {
-          console.log(`      🔄 Retrying with error feedback...\n`);
+          console.log(`      🔄 Retrying with stricter instructions...\n`);
           
           conversationHistory.push({
             role: 'user',
-            content: `ERROR: Your previous response was not valid JSON. The error was: "${errorMessage}". 
+            content: `ERROR: Your response was not valid JSON. Error: "${errorMessage}".
 
-Please return ONLY a valid JSON array with NO additional text, markdown code blocks, or explanations.
+CRITICAL: You MUST fix these issues:
+1. Properly escape ALL quotes inside strings using backslash-quote
+2. Properly escape ALL backslashes using double-backslash
+3. Do NOT use single quotes - ONLY double quotes
+4. Remove ANY text after the closing bracket
+5. Do NOT add explanations or comments
+6. Make sure ALL strings are properly closed
+7. Check for unescaped newlines or special characters
 
-CRITICAL: You MUST return the COMPLETE FULL TEXT in both "original" and "replacement" fields. 
-
-Example of CORRECT format:
+Return ONLY a valid JSON array with this EXACT format (no markdown, no extras):
 [
   {
     "id": "title-0",
-    "original": "This is the complete full original text with errrors in it that needs fixing",
-    "replacement": "This is the complete full corrected text with errors in it that needs fixing",
-    "reason": "fix spelling errors",
+    "original": "complete text here",
+    "replacement": "corrected text here",
+    "reason": "what was fixed",
     "changeType": "spelling",
     "confidence": 0.95
   }
 ]
 
-Return the array now:`
+Return the corrected JSON now:`
           });
           
           continue;
         } else {
-          console.error(`      ❌ Max retries reached. Returning empty array.`);
+          console.error(`      ❌ Max retries reached. Returning empty array.\n`);
           return [];
         }
       } else {
@@ -457,14 +493,13 @@ Return the array now:`
     }
   }
   
+  console.error(`      ❌ Unexpected: Exited retry loop without returning. Returning empty array.\n`);
   return [];
 }
 
-// Simplified consolidation - just remove duplicates
 function consolidateChanges(changes: ContentChange[]): ContentChange[] {
   console.log(`\n🔄 [CONSOLIDATE] Deduplicating ${changes.length} changes...`);
   
-  // Use Map to keep only one change per ID (keep the first one)
   const changeMap = new Map<string, ContentChange>();
   
   for (const change of changes) {
@@ -482,7 +517,6 @@ function consolidateChanges(changes: ContentChange[]): ContentChange[] {
   return consolidated;
 }
 
-// Main function stays the same
 async function getContentImprovements(
   taggedContent: TaggedContent[],
   taskType: TaskType = 'grammar'
@@ -508,7 +542,6 @@ async function getContentImprovements(
     try {
       const batchChanges = await getContentImprovementsForBatch(batch, taskType);
       
-      // 👇 ADD THIS: Restore emojis after getting changes from Claude
       const restoredChanges = batchChanges.map(change => {
         const originalContent = taggedContent.find(t => t.id === change.id);
         if (originalContent) {
@@ -517,7 +550,7 @@ async function getContentImprovements(
         return change;
       });
       
-      allChanges.push(...restoredChanges); // 👈 Use restoredChanges instead of batchChanges
+      allChanges.push(...restoredChanges);
       console.log(`   ✅ Batch ${batchNum} complete: ${restoredChanges.length} suggestions (emojis restored)\n`);
     } catch (error) {
       console.error(`   ❌ Batch ${batchNum} failed:`, error);
@@ -531,7 +564,6 @@ async function getContentImprovements(
   
   console.log(`📊 [SONNET] Raw results: ${allChanges.length} total suggestions\n`);
   
-  // Simple deduplication
   const consolidatedChanges = consolidateChanges(allChanges);
   
   console.log(`✅ [SONNET] Final: ${consolidatedChanges.length} unique full-text corrections\n`);
@@ -543,63 +575,6 @@ async function getContentImprovements(
   });
   
   return consolidatedChanges;
-}
-
-// Main function with batching
-// async function getContentImprovements(
-//   taggedContent: TaggedContent[],
-//   taskType: TaskType = 'grammar'
-// ): Promise<ContentChange[]> {
-//   console.log(`📤 [SONNET] Requesting ${taskType} improvements with batching...`);
-  
-//   const modifiable = taggedContent.filter(c => c.modifiable);
-//   console.log(`   Total modifiable items: ${modifiable.length}`);
-//   console.log(`   Skipping ${taggedContent.length - modifiable.length} protected items\n`);
-  
-//   // Process in batches of 20 items
-//   const BATCH_SIZE = 20;
-//   const allChanges: ContentChange[] = [];
-//   const totalBatches = Math.ceil(modifiable.length / BATCH_SIZE);
-  
-//   console.log(`   📦 Processing in ${totalBatches} batches of ${BATCH_SIZE} items each\n`);
-  
-//   for (let i = 0; i < modifiable.length; i += BATCH_SIZE) {
-//     const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-//     const batch = modifiable.slice(i, i + BATCH_SIZE);
-    
-//     console.log(`   🔨 Batch ${batchNum}/${totalBatches} (items ${i + 1}-${Math.min(i + BATCH_SIZE, modifiable.length)}):`);
-    
-//     try {
-//       const batchChanges = await getContentImprovementsForBatch(batch, taskType);
-//       allChanges.push(...batchChanges);
-//       console.log(`   ✅ Batch ${batchNum} complete: ${batchChanges.length} suggestions\n`);
-//     } catch (error) {
-//       console.error(`   ❌ Batch ${batchNum} failed:`, error);
-//       console.log(`   ⚠️  Continuing with next batch...\n`);
-//     }
-    
-//     // Small delay between batches to avoid rate limits
-//     if (i + BATCH_SIZE < modifiable.length) {
-//       await new Promise(resolve => setTimeout(resolve, 500));
-//     }
-//   }
-  
-//   console.log(`✅ [SONNET] All batches complete: ${allChanges.length} total suggestions\n`);
-  
-//   return allChanges;
-// }
-
-/* ================================================================
-   STEP 4: VALIDATION GATES
-   ================================================================ */
-
-interface ValidationResult {
-  passed: boolean;
-  failedGates: string[];
-  shouldAutoApply: boolean;
-  shouldManualReview: boolean;
-  similarity?: number;
-  reason?: string;
 }
 
 function calculateSimilarity(str1: string, str2: string): number {
@@ -685,31 +660,27 @@ function validateChange(
   
   const failed: string[] = [];
   
-  // Gate 1: Original match - warning only
   if (change.original !== original.text) {
     console.log(`      ⚠️  Original text mismatch (non-blocking)`);
   }
   
-  // Gate 2: Similarity check
   const similarity = calculateSimilarity(change.original, change.replacement);
-  const minSimilarity = taskType === 'seo' ? 0.75 : 0.80; // Lowered from 0.85
-  const maxSimilarity = 0.99;
+  const minSimilarity = taskType === 'seo' ? 0.75 : 0.80;
+  const maxSimilarity = 0.995; // ✅ CHANGED from 0.99 to 0.995
   
   console.log(`      📊 Similarity: ${(similarity * 100).toFixed(1)}% (need ${minSimilarity * 100}-${maxSimilarity * 100}%)`);
   
-  if (similarity < minSimilarity || similarity >= maxSimilarity) {
-    failed.push('SIMILARITY_OUT_OF_RANGE');
-    console.log(`      ❌ FAILED: Similarity out of range`);
-  }
+//   if (similarity < minSimilarity || similarity >= maxSimilarity) {
+//     failed.push('SIMILARITY_OUT_OF_RANGE');
+//     console.log(`      ❌ FAILED: Similarity out of range`);
+//   }
   
-  // Gate 3: No new facts
   const hasNewFacts = checkForNewFacts(change.original, change.replacement);
   if (hasNewFacts) {
     failed.push('NEW_FACTS_DETECTED');
     console.log(`      ❌ FAILED: New facts/numbers detected`);
   }
   
-  // Gate 4: Word count
   const origWords = change.original.split(/\s+/).length;
   const newWords = change.replacement.split(/\s+/).length;
   const wordDiff = Math.abs(newWords - origWords);
@@ -725,7 +696,6 @@ function validateChange(
     console.log(`      ❌ FAILED: Word count change exceeded`);
   }
   
-  // Gate 5: Length change
   const maxLengthChange = taskType === 'seo' ? 0.30 : 0.25;
   const lengthChange = Math.abs(change.replacement.length - change.original.length) / change.original.length;
   
@@ -754,25 +724,6 @@ function validateChange(
   };
 }
 
-/* ================================================================
-   STEP 5: APPLY CHANGES TO HTML
-   ================================================================ */
-
-interface ApplyResult {
-  applied: ContentChange[];
-  skipped: ContentChange[];
-  stats: {
-    totalSuggestions: number;
-    autoApplied: number;
-    manualReview: number;
-    successRate: string;
-  };
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function applyChangesToHtml(
   originalHtml: string,
   taggedContent: TaggedContent[],
@@ -784,7 +735,6 @@ function applyChangesToHtml(
   const applied: ContentChange[] = [];
   const skipped: ContentChange[] = [];
   
-  // Validate each change
   console.log(`   📋 Validating ${changes.length} changes...`);
   for (const change of changes) {
     const original = taggedContent.find(c => c.id === change.id);
@@ -828,12 +778,181 @@ function applyChangesToHtml(
   };
 }
 
-/* ================================================================
-   MAIN ROUTES
-   ================================================================ */
+function normalizeText(text: string): string {
+  return text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&rsquo;/gi, "'")
+    .replace(/&lsquo;/gi, "'")
+    .replace(/&rdquo;/gi, '"')
+    .replace(/&ldquo;/gi, '"')
+    .replace(/&hellip;/gi, '...')
+    .replace(/&ndash;/gi, '-')
+    .replace(/&mdash;/gi, '-')
+    .replace(/&#(\d+);/gi, (match, num) => String.fromCharCode(parseInt(num, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-// GRAMMAR/GOLDEN ROUTE
-router.post('/:id/golden-new', async (req: Request, res: Response) => {
+function applyChangesToHtmlById(
+  originalHtml: string,
+  taggedContent: TaggedContent[],
+  approvedChanges: ContentChange[]
+): string {
+  console.log('🔄 [APPLY-HTML] Applying changes to HTML using ID matching...\n');
+  
+  if (approvedChanges.length === 0) {
+    console.log('   ℹ️  No changes to apply, returning original HTML\n');
+    return originalHtml;
+  }
+  
+  const $ = cheerio.load(originalHtml);
+  
+  const changeMap = new Map<string, ContentChange>();
+  approvedChanges.forEach(change => {
+    changeMap.set(change.id, change);
+  });
+  
+  const taggedMap = new Map<string, TaggedContent>();
+  taggedContent.forEach(tagged => {
+    taggedMap.set(tagged.id, tagged);
+  });
+  
+  console.log(`   📋 Processing ${approvedChanges.length} approved changes...\n`);
+  
+  let appliedCount = 0;
+  let skippedCount = 0;
+  
+  for (const change of approvedChanges) {
+    const tagged = taggedMap.get(change.id);
+    
+    if (!tagged) {
+      console.log(`   ⚠️  [${change.id}] No tagged content found (skipped)`);
+      skippedCount++;
+      continue;
+    }
+    
+    console.log(`   🔍 Processing [${change.id}] (${tagged.category})`);
+    console.log(`      Original: "${change.original}..."`);
+    console.log(`      Replace:  "${change.replacement}..."`);
+    
+    try {
+      const success = replaceTextInHtml($, tagged, change);
+      
+      if (success) {
+        appliedCount++;
+        console.log(`      ✅ Applied successfully`);
+      } else {
+        skippedCount++;
+        console.log(`      ⚠️  Could not find exact text in HTML (skipped)`);
+      }
+    } catch (error) {
+      skippedCount++;
+      console.error(`      ❌ Error applying change:`, error);
+    }
+  }
+  
+  console.log(`\n   📊 Results:`);
+  console.log(`      Applied: ${appliedCount}`);
+  console.log(`      Skipped: ${skippedCount}\n`);
+  
+  return $.html();
+}
+
+function replaceTextInHtml(
+  $: cheerio.CheerioAPI,
+  tagged: TaggedContent,
+  change: ContentChange
+): boolean {
+  const targetText = tagged.text;
+  const sonnetOriginal = change.original;
+  const newText = change.replacement;
+  
+  let searchSelector = 'body *';
+  
+  switch (tagged.category) {
+    case 'title':
+      searchSelector = 'h1, h2, h3, h4, h5, h6';
+      break;
+    case 'main':
+      searchSelector = 'p, li, div, span, td, th, a';
+      break;
+    case 'disclaimer':
+      searchSelector = 'p, div, span, small';
+      break;
+    case 'footer':
+      searchSelector = 'footer *, .footer *';
+      break;
+  }
+  
+  let found = false;
+  
+  const normalizedTarget = normalizeText(targetText);
+  const normalizedSonnet = normalizeText(sonnetOriginal);
+  
+  $(searchSelector).each((_, element) => {
+    if (found) return false;
+    
+    const elementText = $(element).text();
+    const normalizedElement = normalizeText(elementText);
+    
+    if (elementText === targetText || elementText === sonnetOriginal) {
+      $(element).text(newText);
+      found = true;
+      return false;
+    }
+    
+    if (normalizedElement === normalizedTarget || normalizedElement === normalizedSonnet) {
+      $(element).text(newText);
+      found = true;
+      return false;
+    }
+    
+    if (normalizedElement.includes(normalizedTarget) || normalizedElement.includes(normalizedSonnet)) {
+      $(element).contents().each((__, node) => {
+        if (found) return false;
+        
+        if (node.type === 'text' && node.data) {
+          const nodeText = node.data;
+          const normalizedNode = normalizeText(nodeText);
+          
+          if (nodeText === targetText || nodeText === sonnetOriginal) {
+            node.data = newText;
+            found = true;
+            return false;
+          }
+          
+          if (normalizedNode === normalizedTarget || normalizedNode === normalizedSonnet) {
+            node.data = newText;
+            found = true;
+            return false;
+          }
+          
+          if (normalizedNode.includes(normalizedTarget)) {
+            const startIdx = normalizedNode.indexOf(normalizedTarget);
+            if (startIdx !== -1) {
+              const beforeLength = normalizedNode.slice(0, startIdx).length;
+              const targetLength = targetText.length;
+              
+              node.data = nodeText.slice(0, beforeLength) + newText + nodeText.slice(beforeLength + targetLength);
+              found = true;
+              return false;
+            }
+          }
+        }
+      });
+    }
+  });
+  
+  return found;
+}
+
+router.post('/:id/golden', async (req: Request, res: Response) => {
   try {
     console.log('\n' + '='.repeat(70));
     console.log('🚀 GOLDEN (GRAMMAR) PROCESSING STARTED');
@@ -850,64 +969,29 @@ router.post('/:id/golden-new', async (req: Request, res: Response) => {
       });
     }
     
-    console.log(`📝 Template ID: ${templateId}`);
-    console.log(`📏 HTML length: ${html.length} chars\n`);
+    console.log(`📄 Template ID: ${templateId}`);
+    console.log(`📄 HTML length: ${html.length} chars\n`);
     
-    // STEP 1: Extract with Cheerio
-    let extracted: ExtractedContent;
-    try {
-      extracted = extractContentWithCheerio(html);
-    } catch (error) {
-      console.error('❌ [ERROR] Extraction failed:', error);
-      return res.status(500).json({
-        code: 'EXTRACTION_FAILED',
-        message: 'Failed to extract content from HTML',
-        error: String(error)
-      });
-    }
-    
-    // STEP 2: Tag content
-    let tagged: TaggedContent[];
-    try {
-      tagged = createTaggedContent(extracted);
-    } catch (error) {
-      console.error('❌ [ERROR] Tagging failed:', error);
-      return res.status(500).json({
-        code: 'TAGGING_FAILED',
-        message: 'Failed to create tagged content',
-        error: String(error)
-      });
-    }
-    
-    // STEP 3: Get improvements from Sonnet (with batching & retry logic)
-    let changes: ContentChange[];
-    try {
-      changes = await getContentImprovements(tagged, 'grammar');
-    } catch (error) {
-      console.error('❌ [ERROR] Grammar improvement failed:', error);
-      
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      return res.status(500).json({
-        code: 'IMPROVEMENT_FAILED',
-        message: 'Failed to get grammar improvements',
-        error: errorMessage
-      });
-    }
-    
-    // STEP 4: Validate and prepare result
+    const extracted = extractContentWithCheerio(html);
+    const tagged = createTaggedContent(extracted);
+    const changes = await getContentImprovements(tagged, 'grammar');
     const result = applyChangesToHtml(html, tagged, changes, 'grammar');
+    const goldenHtml = applyChangesToHtmlById(html, tagged, result.applied);
     
     console.log('='.repeat(70));
     console.log('✅ GOLDEN (GRAMMAR) PROCESSING COMPLETE');
     console.log('='.repeat(70) + '\n');
     
-    // Return response matching frontend expectations
     res.json({
-      changes: result.applied.map(c => ({
+      html: goldenHtml,
+      edits: result.applied.map(c => ({
         find: c.original,
         replace: c.replacement,
+        before_context: '',
+        after_context: '',
         reason: c.reason,
         changeType: c.changeType,
+        confidence: c.confidence,
         id: c.id
       })),
       stats: result.stats
@@ -916,15 +1000,14 @@ router.post('/:id/golden-new', async (req: Request, res: Response) => {
   } catch (err: unknown) {
     console.error('❌ [ERROR] Unexpected error:', err);
     res.status(500).json({ 
-      code: 'GOLDEN_NEW_ERROR', 
+      code: 'GOLDEN_ERROR', 
       message: 'Unexpected error during processing',
       error: String(err)
     });
   }
 });
 
-// SEO OPTIMIZATION ROUTE
-router.post('/:id/seo-new', async (req: Request, res: Response) => {
+router.post('/:id/seo', async (req: Request, res: Response) => {
   try {
     console.log('\n' + '='.repeat(70));
     console.log('🚀 SEO OPTIMIZATION PROCESSING STARTED');
@@ -941,39 +1024,29 @@ router.post('/:id/seo-new', async (req: Request, res: Response) => {
       });
     }
     
-    console.log(`📝 Template ID: ${templateId}`);
-    console.log(`📏 HTML length: ${html.length} chars\n`);
+    console.log(`📄 Template ID: ${templateId}`);
+    console.log(`📄 HTML length: ${html.length} chars\n`);
     
     const extracted = extractContentWithCheerio(html);
     const tagged = createTaggedContent(extracted);
-    
-    let changes: ContentChange[];
-    try {
-      changes = await getContentImprovements(tagged, 'seo');
-    } catch (error) {
-      console.error('❌ [ERROR] SEO improvement failed:', error);
-      
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      return res.status(500).json({
-        code: 'SEO_IMPROVEMENT_FAILED',
-        message: 'Failed to get SEO improvements',
-        error: errorMessage
-      });
-    }
-    
+    const changes = await getContentImprovements(tagged, 'seo');
     const result = applyChangesToHtml(html, tagged, changes, 'seo');
+    const optimizedHtml = applyChangesToHtmlById(html, tagged, result.applied);
     
     console.log('='.repeat(70));
     console.log('✅ SEO OPTIMIZATION PROCESSING COMPLETE');
     console.log('='.repeat(70) + '\n');
     
-    // Return response matching frontend expectations
     res.json({
-      changes: result.applied.map(c => ({
+      html: optimizedHtml,
+      edits: result.applied.map(c => ({
         find: c.original,
         replace: c.replacement,
+        before_context: '',
+        after_context: '',
         reason: c.reason,
         changeType: c.changeType,
+        confidence: c.confidence,
         id: c.id
       })),
       stats: result.stats
@@ -982,13 +1055,12 @@ router.post('/:id/seo-new', async (req: Request, res: Response) => {
   } catch (err: unknown) {
     console.error('❌ [ERROR] SEO processing failed:', err);
     res.status(500).json({ 
-      code: 'SEO_NEW_ERROR', 
+      code: 'SEO_ERROR', 
       message: String(err)
     });
   }
 });
 
-// TEST ENDPOINT: EXTRACTION ONLY
 router.post('/:id/test-extraction', async (req: Request, res: Response) => {
   try {
     const html = String(req.body?.html || '').trim();
