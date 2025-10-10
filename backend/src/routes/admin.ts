@@ -140,7 +140,7 @@ router.delete('/users/:userId', authenticate, requireSuperAdmin, async (req: Req
   }
 });
 
-// Reactivate user (admin only)
+// Reactivate users (admin only)
 router.post('/users/:userId/reactivate', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;

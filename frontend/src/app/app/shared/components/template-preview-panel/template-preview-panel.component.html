@@ -138,7 +138,7 @@
     </div>
     </div>
 
-  <!-- Next-Gen Empty State -->
+<!-- Next-Gen Empty State -->
   <div *ngIf="!html && !loading" class="modern-placeholder">
     <div class="placeholder-background">
       <div class="floating-shapes">
@@ -150,40 +150,75 @@
       <div class="grid-pattern"></div>
     </div>
     <div class="placeholder-content">
-      <div class="placeholder-icon-container">
-        <div class="icon-backdrop"></div>
-        <div class="icon-ring"></div>
-        <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path d="m15 10 4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14"/>
-          <rect x="3" y="6" width="12" height="12" rx="2"/>
-        </svg>
-      </div>
-      <div class="placeholder-text">
-        <h2>Ready for Preview</h2>
-        <p>Select any template from the sidebar to experience our cutting-edge live preview technology</p>
-      </div>
-      <div class="feature-pills">
-        <div class="pill">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-          </svg>
-          Real-time Updates
+      <!-- AI Warning Placeholder (Generate Page) -->
+      <ng-container *ngIf="isGeneratePage">
+        <div class="ai-warning-container">
+          <div class="floating-ai-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+              <circle cx="12" cy="17" r="0.5" fill="currentColor" stroke="none"/>
+            </svg>
+            <div class="pulse-ring"></div>
+          </div>
+          <h2>AI-Powered Generation</h2>
+          <p class="warning-text">AI can make mistakes. Please review and verify all generated content carefully before use.</p>
+          <div class="info-badges">
+            <div class="badge warning">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+              Always Verify
+            </div>
+            <div class="badge info">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+              Beta Feature
+            </div>
+          </div>
         </div>
-        <div class="pill">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-            <line x1="8" y1="21" x2="16" y2="21"/>
-            <line x1="12" y1="17" x2="12" y2="21"/>
+      </ng-container>
+
+      <!-- Default Placeholder (Other Pages) -->
+      <ng-container *ngIf="!isGeneratePage">
+        <div class="placeholder-icon-container">
+          <div class="icon-backdrop"></div>
+          <div class="icon-ring"></div>
+          <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="m15 10 4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14"/>
+            <rect x="3" y="6" width="12" height="12" rx="2"/>
           </svg>
-          Multi-Device
         </div>
-        <div class="pill">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-          </svg>
-          Lightning Fast
+        <div class="placeholder-text">
+          <h2>Ready for Preview</h2>
+          <p>Select any template from the sidebar to experience our cutting-edge live preview technology</p>
         </div>
-      </div>
+        <div class="feature-pills">
+          <div class="pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+            Real-time Updates
+          </div>
+          <div class="pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            Multi-Device
+          </div>
+          <div class="pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+            Lightning Fast
+          </div>
+        </div>
+      </ng-container>
     </div>
   </div>
 
