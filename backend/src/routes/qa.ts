@@ -160,7 +160,6 @@ function grammarSystemPrompt(): string {
 
 const ZWS = /[\u200B\u200C\u200D\uFEFF]/;
 
-// Minimal named entity table for the cases we care about in email copy
 const NAMED_ENT: Record<string, string> = {
   nbsp: '\u00A0', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
   rsquo: '\u2019', lsquo: '\u2018', rdquo: '\u201D', ldquo: '\u201C',
@@ -170,7 +169,7 @@ const NAMED_ENT: Record<string, string> = {
 function decodeHtmlEntityAt(raw: string, i: number): { ch: string; end: number } | null {
   if (raw[i] !== '&') return null;
   const semi = raw.indexOf(';', i + 1);
-  if (semi < 0 || semi - i > 31) return null; // sanity cap
+  if (semi < 0 || semi - i > 31) return null;
   const body = raw.slice(i + 1, semi);
 
   if (body.startsWith('#x') || body.startsWith('#X')) {
@@ -197,10 +196,6 @@ function normalizeChar(ch: string): string {
   return ch;
 }
 
-/** Build normalized string with precise RAW span mapping per character.
- *  - Decodes entities (&rsquo;, &#160;, &#x2019;) to single chars before normalization.
- *  - Collapses all whitespace to single spaces (with coalescing).
- */
 function normalizeAndMap(rawIn: string): { norm: string; mapStart: number[]; mapEnd: number[] } {
   const raw = String(rawIn || '');
   const mapStart: number[] = [];
@@ -231,7 +226,7 @@ function normalizeAndMap(rawIn: string): { norm: string; mapStart: number[]; map
     }
 
     mapStart[norm.length] = i;
-    mapEnd[norm.length] = end; // exclusive end in RAW
+    mapEnd[norm.length] = end;
     norm += ch;
     i = end - 1;
   }
@@ -273,7 +268,6 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
     const okBefore = bRaw ? raw.slice(Math.max(0, i - bRaw.length), i).endsWith(bRaw) : true;
     const okAfter  = aRaw ? raw.slice(i + nRaw.length, i + nRaw.length + aRaw.length).startsWith(aRaw) : true;
     
-    // ✅ CHANGED: Accept if BOTH match OR if at least ONE context matches
     if ((okBefore && okAfter) || (bRaw && okBefore) || (aRaw && okAfter)) {
       return { start: i, end: i + nRaw.length };
     }
@@ -292,7 +286,6 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
     const okBefore = nBefore ? H.norm.slice(Math.max(0, ni - nBefore.length), ni).endsWith(nBefore) : true;
     const okAfter  = nAfter  ? H.norm.slice(ni + nNeedle.length, ni + nNeedle.length + nAfter.length).startsWith(nAfter) : true;
     
-    // ✅ CHANGED: Accept if at least ONE context matches
     if ((okBefore && okAfter) || (nBefore && okBefore) || (nAfter && okAfter)) {
       const span = mapNormSpanToRawSpan(H.mapStart, H.mapEnd, ni, nNeedle.length, raw.length);
       if (span) return span;
@@ -342,13 +335,116 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
 }
 
 function deniedParents(): Set<string> {
-  // Allow <a> so CTA/link text can be edited; still block script/style/title/svg
-  return new Set(['style', 'script', 'title', 'svg']);
+  return new Set([
+    'style', 'script', 'title', 'svg', 'noscript',
+    'input', 'textarea', 'select', 'option',
+  ]);
 }
 
-/** Apply grammar/SEO edits INSIDE TEXT NODES ONLY (never tags/attrs). 
- *  ✅ FIXED: Now tracks which edits have been applied to prevent duplicates
- */
+function isBlockElement(tag: string): boolean {
+  const blockTags = new Set([
+    'p', 'div', 'td', 'th', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'blockquote', 'pre', 'article', 'section', 'header', 'footer', 'aside'
+  ]);
+  return blockTags.has(tag);
+}
+
+// ✅ NEW: Consolidate text nodes from an element with mapping
+type TextNodeMap = {
+  node: any;
+  startInConsolidated: number;
+  endInConsolidated: number;
+};
+
+function consolidateTextNodes(
+  $: any,
+  element: any
+): { fullText: string; nodeMap: TextNodeMap[] } {
+  let fullText = '';
+  const nodeMap: TextNodeMap[] = [];
+  
+  function traverse(node: any) {
+    if (node.type === 'text') {
+      const txt = String(node.data || '');
+      if (txt) {
+        const startInConsolidated = fullText.length;
+        fullText += txt;
+        const endInConsolidated = fullText.length;
+        nodeMap.push({ node, startInConsolidated, endInConsolidated });
+      }
+    } else if (node.type === 'tag') {
+      const tag = node.tagName?.toLowerCase();
+      
+      // ✅ NEW: Stop at boundary elements (links, buttons, forms)
+      const boundaryElements = new Set(['input', 'textarea', 'select']);
+      if (boundaryElements.has(tag)) {
+        return; // Don't traverse into these elements
+      }
+      
+      const children = $(node).contents().toArray();
+      for (const child of children) {
+        traverse(child);
+      }
+    }
+  }
+  
+  traverse(element);
+  return { fullText, nodeMap };
+}
+
+// ✅ NEW: Apply replacement across consolidated text and map back to nodes
+function applyReplacementToNodes(
+  nodeMap: TextNodeMap[],
+  matchStart: number,
+  matchEnd: number,
+  replacement: string
+): boolean {
+  // Find which nodes the match spans
+  const affectedNodes: { node: any; localStart: number; localEnd: number }[] = [];
+  
+  for (const mapping of nodeMap) {
+    const { node, startInConsolidated, endInConsolidated } = mapping;
+    
+    // Check if this node is affected by the match
+    if (matchEnd <= startInConsolidated || matchStart >= endInConsolidated) {
+      continue; // No overlap
+    }
+    
+    const localStart = Math.max(0, matchStart - startInConsolidated);
+    const localEnd = Math.min(
+      endInConsolidated - startInConsolidated,
+      matchEnd - startInConsolidated
+    );
+    
+    affectedNodes.push({ node, localStart, localEnd });
+  }
+  
+  if (affectedNodes.length === 0) return false;
+  
+  // Apply replacement
+  if (affectedNodes.length === 1) {
+    // Simple case: match is within one node
+    const { node, localStart, localEnd } = affectedNodes[0];
+    const original = String(node.data || '');
+    node.data = original.slice(0, localStart) + replacement + original.slice(localEnd);
+    return true;
+  } else {
+    // Complex case: match spans multiple nodes
+    // Replace in first node, clear the rest
+    const first = affectedNodes[0];
+    const original = String(first.node.data || '');
+    first.node.data = original.slice(0, first.localStart) + replacement;
+    
+    for (let i = 1; i < affectedNodes.length; i++) {
+      const { node, localEnd } = affectedNodes[i];
+      const original = String(node.data || '');
+      node.data = original.slice(localEnd);
+    }
+    return true;
+  }
+}
+
+/** ✅ UPDATED: Apply edits with cross-node text consolidation */
 function applyContextEdits(
   html: string,
   edits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string }>
@@ -357,7 +453,6 @@ function applyContextEdits(
   const deny = deniedParents();
   const changes: Array<{ before: string; after: string; parent: string; reason?: string }> = [];
 
-  // ✅ Add 'used' flag to track applied edits
   const queue = (Array.isArray(edits) ? edits : [])
     .map((e: any) => ({
       find: String(e?.find || ''),
@@ -365,44 +460,48 @@ function applyContextEdits(
       before: String(e?.before_context || ''),
       after: String(e?.after_context || ''),
       reason: e?.reason ? String(e.reason) : undefined,
-      used: false, // ✅ NEW: Track if this edit has been applied
+      used: false,
     }))
     .filter((e: any) => e.find && e.replace && e.find !== e.replace);
 
+  // Process block-level elements
   $('body *').each((_: any, el: any) => {
     const tag = (el as any).tagName?.toLowerCase?.() || '';
     if (deny.has(tag)) return;
+    
+    // Only process block elements to avoid duplicates
+    if (!isBlockElement(tag)) return;
 
-    $(el).contents().each((__: any, node: any) => {
-      if ((node as any).type !== 'text') return;
-      let txt: string = (node as any).data || '';
-      let modified = false;
+    // ✅ NEW: Consolidate all text nodes in this block element
+    const { fullText, nodeMap } = consolidateTextNodes($, el);
+    if (!fullText || nodeMap.length === 0) return;
 
-      for (const e of queue) {
-        // ✅ Skip already-applied edits
-        if (e.used) continue;
+    // Try to apply each unused edit
+    for (const e of queue) {
+      if (e.used) continue;
 
-        // hard safety: don't allow URL or merge-tag manipulation
-        if (/https?:\/\//i.test(e.find) || /https?:\/\//i.test(e.replace)) continue;
-        if (/\*\|[A-Z0-9_]+\|\*/.test(e.find) || /\*\|[A-Z0-9_]+\|\*/.test(e.replace)) continue;
+      // Safety checks
+      if (/https?:\/\//i.test(e.find) || /https?:\/\//i.test(e.replace)) continue;
+      if (/\*\|[A-Z0-9_]+\|\*/.test(e.find) || /\*\|[A-Z0-9_]+\|\*/.test(e.replace)) continue;
 
-        const span = findWithContextSpan(txt, e.find, e.before, e.after);
-        if (!span) continue;
+      // ✅ NEW: Search in consolidated text
+      const span = findWithContextSpan(fullText, e.find, e.before, e.after);
+      if (!span) continue;
 
-        const next = txt.slice(0, span.start) + e.replace + txt.slice(span.end);
-        if (next !== txt) {
-          changes.push({ before: e.find, after: e.replace, parent: tag, reason: e.reason });
-          txt = next;
-          modified = true;
-          e.used = true; // ✅ Mark edit as consumed
-          break; // ✅ Only apply ONE edit per text node iteration
-        }
+      // ✅ NEW: Apply replacement across nodes
+      const success = applyReplacementToNodes(
+        nodeMap,
+        span.start,
+        span.end,
+        e.replace
+      );
+
+      if (success) {
+        changes.push({ before: e.find, after: e.replace, parent: tag, reason: e.reason });
+        e.used = true;
+        break; // Move to next element after one successful edit
       }
-
-      if (modified) {
-        (node as any).data = txt;
-      }
-    });
+    }
   });
 
   return { html: $.html(), changes };
@@ -412,8 +511,6 @@ function applyContextEdits(
 /*                      Loose word fallback (safe)                     */
 /* ------------------------------------------------------------------ */
 
-// Gentle fallback when the model sent too-wide 'find' and context didn't match.
-// Swaps a meaningful word inside the 'find' with 'replace' (text nodes only).
 function applyLooseWordFallback(
   html: string,
   edits: Array<{ find: string; replace: string; reason?: string }>
@@ -435,7 +532,6 @@ function applyLooseWordFallback(
         const r = String(e.replace || '').trim();
         if (!f || !r) continue;
 
-        // Only try if replacement is basically one token.
         if (r.split(/\s+/).length !== 1) continue;
 
         const candidates = f.split(/\s+/).filter(w => w && w.length >= 4);
@@ -627,7 +723,6 @@ type VariantRun = {
 const VARIANT_TARGET_DEFAULT = 5;
 const variantRuns = new Map<string, VariantRun>();
 
-/** Ask model for "enhancement" edits (NOT HTML), with idea tags & "why" bullets, avoiding used ideas */
 async function getVariantEditsAndWhy(sourceHtml: string, usedIdeas: Set<string>): Promise<{ edits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string; idea?: string }>; why: string[]; }> {
   const $ = cheerio.load(sourceHtml);
   $('script, style, noscript').remove();
@@ -681,7 +776,6 @@ async function getVariantEditsAndWhy(sourceHtml: string, usedIdeas: Set<string>)
   return { edits, why };
 }
 
-/** POST /api/qa/:id/variants/start  { html, target? } -> { runId, target } */
 router.post('/:id/variants/start', async (req: Request, res: Response) => {
   try {
     const templateId = String(req.params.id);
@@ -710,7 +804,6 @@ router.post('/:id/variants/start', async (req: Request, res: Response) => {
   }
 });
 
-/** POST /api/qa/variants/:runId/next -> next variant (1..target) */
 router.post('/variants/:runId/next', async (req: Request, res: Response) => {
   try {
     const runId = String(req.params.runId);
@@ -727,7 +820,6 @@ router.post('/variants/:runId/next', async (req: Request, res: Response) => {
     const applied = applyContextEdits(sourceHtml, edits);
     const variantNo = run.variants.length + 1;
 
-    // Harvest ideas from edits
     const ideas = Array.from(new Set((edits || []).map((e) => (e as any).idea).filter(Boolean) as string[]));
     ideas.forEach((i) => run.usedIdeas.add(i));
 
@@ -748,7 +840,6 @@ router.post('/variants/:runId/next', async (req: Request, res: Response) => {
   }
 });
 
-/** (Optional) GET status for a run (useful on refresh) */
 router.get('/variants/:runId/status', async (req: Request, res: Response) => {
   const runId = String(req.params.runId);
   const run = variantRuns.get(runId);
@@ -811,11 +902,6 @@ function chatSystemPrompt(): string {
   ].join('\n');
 }
 
-/**
- * POST /api/qa/variants/:runId/chat/message
- * body: { no:number, html?:string, history?: ChatTurn[], userMessage:string }
- * resp: { assistantText: string, json: ChatAssistantJson }
- */
 router.post('/variants/:runId/chat/message', async (req: Request, res: Response) => {
   try {
     const runId: string = String(req.params.runId);
@@ -838,7 +924,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
       { role: 'user', content: `Visible text (for context):\n${context || 'No visible text.'}` },
     ];
 
-    // We only send a very short sketch of history to control tokens
     for (const t of history.slice(-6)) {
       const r = (t?.role === 'assistant') ? 'assistant' : 'user';
       messages.push({ role: r, content: (t?.content || '').toString() });
@@ -890,22 +975,15 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
   }
 });
 
-/**
- * POST /api/qa/variants/:runId/chat/apply
- * body: { html:string, edits:GoldenEdit[] }
- * resp: { html:string, changes: [...] }
- */
 router.post('/variants/:runId/chat/apply', async (req: Request, res: Response) => {
   try {
     const html: string = String(req.body?.html || '');
     const edits = Array.isArray(req.body?.edits) ? req.body.edits : [];
     if (!html) return res.status(400).json({ code: 'CHAT_APPLY_BAD_REQUEST', message: 'html is required' });
 
-    // 1) strict, context-aware apply (text nodes only, with entity-aware matching)
     const strict = applyContextEdits(html, edits);
     let best = strict;
 
-    // 2) if nothing matched, try a careful word-level fallback
     if (!best.changes?.length) {
       const loose = applyLooseWordFallback(html, edits);
       if (loose.changes.length > (best.changes?.length || 0)) best = loose;
@@ -922,7 +1000,6 @@ router.post('/variants/:runId/chat/apply', async (req: Request, res: Response) =
 /*                          Headless screenshot                        */
 /* ------------------------------------------------------------------ */
 
-/** POST /api/qa/snap  body: { url } → { url, ok, status?, finalUrl?, dataUrl?, error? } */
 router.post('/snap', async (req: Request, res: Response) => {
   const url = String(req.body?.url || '').trim();
   if (!/^https?:\/\//i.test(url)) {
