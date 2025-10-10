@@ -9,7 +9,7 @@ import type { Browser } from 'puppeteer';
 const router = Router();
 const MC: any = mailchimp as any;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 
@@ -1112,3 +1112,5 @@ router.post('/snap', async (req: Request, res: Response) => {
 
 
 export default router;
+
+// hai

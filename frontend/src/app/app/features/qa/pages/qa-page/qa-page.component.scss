@@ -927,6 +927,7 @@
   padding-bottom: 1rem;
   border-bottom: 2px solid rgba(0, 0, 0, 0.05);
   flex-shrink: 0 !important; // Don't let header shrink
+  flex-wrap: nowrap !important;
 
 
   .variant-number {
@@ -936,6 +937,8 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    white-space: nowrap; 
+    flex-shrink: 0;
   }
 
   .variant-badge {
@@ -949,6 +952,8 @@
     font-size: 0.8125rem;
     font-weight: 700;
     color: #065f46;
+    white-space: nowrap;
+    flex-shrink: 0; 
 
     svg {
       width: 14px;
@@ -1382,8 +1387,15 @@
 }
 
 .modern-btn.loading {
-  justify-content: center !important;
-  text-align: center !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  opacity: 1 !important;
+}
+
+.modern-btn:not(.loading)[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 // Responsive Design
@@ -1460,7 +1472,7 @@
     padding: 1rem;
 
     .section-title {
-      font-size: 1.25rem;
+      font-size: 1rem !important;
     }
   }
 }
@@ -1523,12 +1535,12 @@
   }
   
   .variants-header-main {
-    flex-direction: column;
+    flex-direction: row;
     align-items: flex-start;
     gap: 1rem;
     
     .variants-progress {
-      width: 100%;
+      width: 33%;
       justify-content: space-between;
       
       .progress-bar-container {
@@ -1546,7 +1558,7 @@
   }
   
   .variant-header {
-    flex-direction: column;
+    flex-direction: row;
     align-items: flex-start;
     gap: 0.5rem;
   }
@@ -1716,6 +1728,15 @@
   }
 }
 
+.accent-btn .cancel-text {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  
+  &:hover {
+    color: #fecaca !important; // Light red tint
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+  }
+}
 
 .secondary-btn .spinner-container {
   justify-content: center !important;
@@ -1723,5 +1744,82 @@
   
   .btn-text-loading {
     text-align: center !important;
+  }
+}
+
+.spinner-container {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.625rem !important;
+  
+  .modern-spinner,
+  .cancel-text {
+    flex-shrink: 0;
+  }
+}
+
+.secondary-btn {
+  .modern-spinner {
+    border-color: rgba(109, 40, 217, 0.2) !important;
+    border-top-color: var(--primary-purple) !important;
+  }
+}
+
+
+// Snackbar Styles
+::ng-deep .error-snackbar {
+  background-color: #ef4444 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  
+  .mat-simple-snackbar-action {
+    color: white !important;
+  }
+}
+
+::ng-deep .success-snackbar {
+  background-color: #10b981 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  
+  .mat-simple-snackbar-action {
+    color: white !important;
+  }
+}
+
+::ng-deep .warning-snackbar {
+  background-color: #f59e0b !important;
+  color: white !important;
+  font-weight: 600 !important;
+  
+  .mat-simple-snackbar-action {
+    color: white !important;
+  }
+}
+
+::ng-deep .info-snackbar {
+  background-color: #3b82f6 !important;
+  color: white !important;
+  font-weight: 600 !important;
+  
+  .mat-simple-snackbar-action {
+    color: white !important;
+  }
+}
+
+.cancel-text {
+  color: #ef4444 !important; // Red color - clear indication of cancel
+  cursor: pointer !important;
+  font-weight: 600 !important;
+  text-decoration: none !important;
+  transition: color 0.15s ease !important;
+  
+  &:hover {
+    color: #dc2626 !important; // Darker red on hover
+  }
+  
+  &:active {
+    transform: scale(0.98);
   }
 }

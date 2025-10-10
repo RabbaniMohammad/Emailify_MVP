@@ -19,7 +19,6 @@
         <div class="title-underline"></div>
       </div>
       <div class="card-content" style="flex: 1; overflow: hidden; min-height: 0; display: flex; flex-direction: column;">
-        <!-- Create a simplified preview container that mimics the template preview -->
         <div class="template-preview-container" style="flex: 1; height: 100%; min-height: 500px; background: white; border-radius: 8px; overflow: hidden;">
           <app-html-preview
             [html]="templateHtml"
@@ -46,11 +45,11 @@
       <div class="scrollable-content" style="flex: 1; overflow-y: auto; min-height: 0;">
         <!-- Primary Actions -->
         <div class="actions-group">
+          <!-- Generate Golden Button -->
           <button 
             mat-raised-button 
             class="modern-btn primary-btn"
-            (click)="onGenerateGolden(id)" 
-            [disabled]="goldenLoading"
+            (click)="goldenLoading ? cancelGolden() : onGenerateGolden(id)"
             [class.loading]="goldenLoading">
             <span class="btn-content" *ngIf="!goldenLoading">
               <span class="btn-icon">
@@ -63,18 +62,16 @@
             </span>
             <span class="spinner-container" *ngIf="goldenLoading">
               <span class="modern-spinner"></span>
-              <span class="btn-text-loading">Generating...</span>
+              <span class="btn-text-loading cancel-text">Cancel</span>
             </span>
           </button>
 
+          <!-- Generate Subjects Button -->
           <button 
             mat-stroked-button 
             class="modern-btn secondary-btn"
-            (click)="onGenerateSubjects(id)" 
-            [disabled]="subjectsLoading"
+            (click)="subjectsLoading ? cancelSubjects() : onGenerateSubjects(id)"
             [class.loading]="subjectsLoading">
-            
-            <!-- Show normal content when NOT loading -->
             <span class="btn-content" *ngIf="!subjectsLoading">
               <span class="btn-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -83,11 +80,9 @@
               </span>
               <span class="btn-text">Generate Subjects</span>
             </span>
-            
-            <!-- Show spinner when loading -->
             <span class="spinner-container" *ngIf="subjectsLoading">
-              <!-- <span class="modern-spinner"></span> -->
-              <span class="btn-text-loading">Analyzing...</span>
+              <span class="modern-spinner"></span>
+              <span class="btn-text-loading cancel-text">Cancel</span>
             </span>
           </button>
         </div>
@@ -97,8 +92,8 @@
           <button 
             mat-raised-button 
             class="modern-btn accent-btn"
-            (click)="onGenerateVariants(id)"
-            [disabled]="variantsGenerating || goldenLoading || !(golden$ | async)?.html"
+            (click)="variantsGenerating ? cancelVariants() : onGenerateVariants(id)"
+            [disabled]="!variantsGenerating && (goldenLoading || !(golden$ | async)?.html)"
             [class.loading]="variantsGenerating">
             <span class="btn-content" *ngIf="!variantsGenerating">
               <span class="btn-icon">
@@ -111,7 +106,7 @@
             </span>
             <span class="spinner-container" *ngIf="variantsGenerating">
               <span class="modern-spinner"></span>
-              <span class="btn-text-loading">Creating Variants...</span>
+              <span class="btn-text-loading cancel-text">Cancel</span>
             </span>
           </button>
         </div>
@@ -135,10 +130,6 @@
               </div>
             </div>
           </div>
-          <!-- <div class="loading-panel centered-overlay" *ngIf="subjectsLoading" [@pulse]>
-            <div class="loading-spinner"></div>
-            <span>Generating subject ideas...</span>
-          </div> -->
         </ng-container>
 
         <!-- Edits Panel -->
@@ -237,49 +228,50 @@
         <h3 class="section-title">Golden Preview</h3>
         <div class="title-underline golden"></div>
       </div>
-        <div class="card-content preview-content" style="flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column;">
-          <!-- Loading State for Golden Generation -->
-          <div *ngIf="goldenLoading" class="golden-loading-state" [@fadeIn] style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem;">
-            <div class="golden-loader">
-              <div class="golden-spinner">
-                <div class="spinner-ring"></div>
-                <div class="spinner-ring"></div>
-                <div class="spinner-ring"></div>
-              </div>
-              <div class="golden-icon-container">
+      <div class="card-content preview-content" style="flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column;">
+        <!-- Loading State for Golden Generation -->
+        <div *ngIf="goldenLoading" class="golden-loading-state" [@fadeIn] style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem;">
+          <div class="golden-loader">
+            <div class="golden-spinner">
+              <div class="spinner-ring"></div>
+              <div class="spinner-ring"></div>
+              <div class="spinner-ring"></div>
+            </div>
+            <div class="golden-icon-container">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="loading-text">
+            <h4>Generating Golden Template</h4>
+            <p>AI is optimizing your template for the best user experience</p>
+          </div>
+        </div>
+
+        <!-- Golden Template Content -->
+        <ng-container *ngIf="!goldenLoading">
+          <ng-container *ngIf="golden$ | async as golden">
+            <app-html-preview
+              *ngIf="golden?.html"
+              [html]="golden.html"
+              [loading]="false"
+              [allowScripts]="true"
+              style="flex: 1; min-height: 0; height: 100%;">
+            </app-html-preview>
+
+            <div *ngIf="!golden?.html" class="empty-state" [@fadeIn] style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+              <div class="empty-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
                 </svg>
               </div>
+              <h4>No Golden Template Yet</h4>
+              <p>Generate the Golden Template to see the optimized result</p>
             </div>
-            <div class="loading-text">
-              <h4>Generating Golden Template</h4>
-              <p>AI is optimizing your template for the best user experience</p>
-            </div>
-          </div>
-
-          <!-- Golden Template Content -->
-          <ng-container *ngIf="!goldenLoading">
-            <ng-container *ngIf="golden$ | async as golden">
-              <app-html-preview
-                [html]="golden?.html || ''"
-                [loading]="false"
-                [allowScripts]="true"
-                style="flex: 1; min-height: 0; height: 100%;">
-              </app-html-preview>
-
-              <div *ngIf="!golden?.html" class="empty-state" [@fadeIn] style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
-                <div class="empty-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
-                  </svg>
-                </div>
-                <h4>No Golden Template Yet</h4>
-                <p>Generate the Golden Template to see the optimized result</p>
-              </div>
-            </ng-container>
           </ng-container>
-        </div>
+        </ng-container>
+      </div>
     </section>
   </div>
 
@@ -327,17 +319,17 @@
           </div>
 
           <div class="variant-actions">
-          <button 
-            mat-raised-button 
-            class="modern-btn use-btn"
-            (click)="onUseVariant(id, vr.runId, v.no)">
-            <span style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M5 13l4 4L19 7"/>
-              </svg>
-              <span>Use This Template</span>
-            </span>
-          </button>
+            <button 
+              mat-raised-button 
+              class="modern-btn use-btn"
+              (click)="onUseVariant(id, vr.runId, v.no)">
+              <span style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 13l4 4L19 7"/>
+                </svg>
+                <span>Use This Template</span>
+              </span>
+            </button>
           </div>
         </div>
 
@@ -384,7 +376,7 @@
         </div>
       </div>
 
-      <!-- Skeleton loading cards AFTER actual variants -->
+      <!-- Skeleton loading cards ONLY if still generating -->
       <div class="variant-skeleton glass-card" 
            *ngFor="let placeholder of getSkeletonArray(vr?.target || 5, vr?.items?.length || 0); trackBy: trackByIndex" 
            [@variantAnimation]>

@@ -1,7 +1,8 @@
-import { Component, ChangeDetectionStrategy, inject  } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnDestroy  } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { BehaviorSubject, firstValueFrom, map, shareReplay } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, map, shareReplay, of, Subscription } from 'rxjs';
+import { timeout, catchError, retry } from 'rxjs/operators';
 import { trigger, state, style, transition, animate, query, stagger } from '@angular/animations';
 import { QaService, GoldenResult, VariantItem, VariantsRun } from '../../services/qa.service';
 import { HtmlPreviewComponent } from '../../components/html-preview/html-preview.component';
@@ -10,11 +11,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpClient } from '@angular/common/http';
 import { TemplatesService } from '../../../../core/services/templates.service';
 import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
-
-
 
 type SuggestionResult = {
   gibberish: Array<{ text: string; reason: string }>;
@@ -37,7 +37,6 @@ type SuggestionResult = {
   styleUrls: ['./qa-page.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [
-    // Fade in and slide up animation
     trigger('fadeInUp', [
       transition(':enter', [
         style({ opacity: 0, transform: 'translateY(30px)' }),
@@ -45,7 +44,6 @@ type SuggestionResult = {
           style({ opacity: 1, transform: 'translateY(0)' }))
       ])
     ]),
-
     trigger('fadeInOut', [
       transition(':enter', [
         style({ opacity: 0 }),
@@ -55,15 +53,12 @@ type SuggestionResult = {
         animate('0.3s ease-in', style({ opacity: 0 }))
       ])
     ]),
-    // Fade in animation
     trigger('fadeIn', [
       transition(':enter', [
         style({ opacity: 0 }),
         animate('0.4s ease-out', style({ opacity: 1 }))
       ])
     ]),
-
-    // Slide in from left
     trigger('slideIn', [
       transition(':enter', [
         style({ opacity: 0, transform: 'translateX(-20px)' }),
@@ -71,8 +66,6 @@ type SuggestionResult = {
           style({ opacity: 1, transform: 'translateX(0)' }))
       ])
     ]),
-
-    // Expand animation
     trigger('expandIn', [
       transition(':enter', [
         style({ opacity: 0, height: 0, overflow: 'hidden' }),
@@ -80,16 +73,12 @@ type SuggestionResult = {
           style({ opacity: 1, height: '*' }))
       ])
     ]),
-
-    // Pulse animation
     trigger('pulse', [
       transition(':enter', [
         style({ opacity: 0, transform: 'scale(0.95)' }),
         animate('0.3s ease-out', style({ opacity: 1, transform: 'scale(1)' }))
       ])
     ]),
-
-    // Chip animation with stagger
     trigger('chipAnimation', [
       transition(':enter', [
         style({ opacity: 0, transform: 'scale(0.8) translateY(10px)' }),
@@ -97,8 +86,6 @@ type SuggestionResult = {
           style({ opacity: 1, transform: 'scale(1) translateY(0)' }))
       ])
     ]),
-
-    // List item animation
     trigger('listAnimation', [
       transition(':enter', [
         style({ opacity: 0, transform: 'translateX(-10px)' }),
@@ -106,8 +93,6 @@ type SuggestionResult = {
           style({ opacity: 1, transform: 'translateX(0)' }))
       ])
     ]),
-
-    // Variant card animation
     trigger('variantAnimation', [
       transition(':enter', [
         style({ opacity: 0, transform: 'translateY(30px) scale(0.95)' }),
@@ -117,45 +102,70 @@ type SuggestionResult = {
     ])
   ]
 })
-export class QaPageComponent {
+export class QaPageComponent implements OnDestroy {
   private ar = inject(ActivatedRoute);
   private qa = inject(QaService);
   private router = inject(Router);
   private http = inject(HttpClient);
   private templatesService = inject(TemplatesService);
   private previewCache = inject(PreviewCacheService);
+  private cdr = inject(ChangeDetectorRef);
+  private snackBar = inject(MatSnackBar);
 
+  // Timeout configurations
+  private readonly GOLDEN_TIMEOUT = 120000;
+  private readonly SUBJECTS_TIMEOUT = 60000;
+  private readonly SUGGESTIONS_TIMEOUT = 90000;
+  private readonly VARIANTS_START_TIMEOUT = 60000;
+  private readonly VARIANTS_NEXT_TIMEOUT = 120000;
+  private readonly VARIANTS_TOTAL_TIMEOUT = 600000;
+
+  private goldenTimeoutId?: number;
+  private subjectsTimeoutId?: number;
+  private suggestionsTimeoutId?: number;
+  private variantsTimeoutId?: number;
+  private variantsTotalTimeoutId?: number;
+
+  // Abort flags
+  private goldenAborted = false;
+  private subjectsAborted = false;
+  private suggestionsAborted = false;
+  private variantsAborted = false;
+
+  // Active subscriptions for each operation
+  private goldenSub?: Subscription;
+  private subjectsSub?: Subscription;
+  private suggestionsSub?: Subscription;
   
+  // Subscriptions for cleanup
+  private subscriptions: Subscription[] = [];
+
   templateHtml = '';
   templateLoading = true;
 
-  // Route id
   readonly id$ = this.ar.paramMap.pipe(map(p => p.get('id')!), shareReplay(1));
+  private templateId: string | null = null;
 
-  // Golden
   private goldenSubject = new BehaviorSubject<GoldenResult | null>(null);
   readonly golden$ = this.goldenSubject.asObservable();
   goldenLoading = false;
 
-  // Subjects
   private subjectsSubject = new BehaviorSubject<string[] | null>(null);
   readonly subjects$ = this.subjectsSubject.asObservable();
   subjectsLoading = false;
 
-  // Suggestions
   private suggestionsSubject = new BehaviorSubject<SuggestionResult | null>(null);
   readonly suggestions$ = this.suggestionsSubject.asObservable();
   suggestionsLoading = false;
 
-  // Variants
   private variantsRunId: string | null = null;
   private variantsSubject = new BehaviorSubject<VariantsRun | null>(null);
   readonly variants$ = this.variantsSubject.asObservable();
   variantsGenerating = false;
 
   constructor() {
-    // Rehydrate cached values on load/refresh
-    this.id$.subscribe(id => {
+    const idSub = this.id$.subscribe(id => {
+      this.templateId = id;
       this.goldenSubject.next(this.qa.getGoldenCached(id));
       this.subjectsSubject.next(this.qa.getSubjectsCached(id));
       this.suggestionsSubject.next(this.qa.getSuggestionsCached(id));
@@ -165,54 +175,591 @@ export class QaPageComponent {
       this.variantsRunId = prevRun?.runId || null;
       this.loadOriginalTemplate(id);
     });
+    this.subscriptions.push(idSub);
+  }
+
+  ngOnDestroy(): void {
+    this.clearAllTimeouts();
+    
+    // Unsubscribe from active operations
+    if (this.goldenSub) this.goldenSub.unsubscribe();
+    if (this.subjectsSub) this.subjectsSub.unsubscribe();
+    if (this.suggestionsSub) this.suggestionsSub.unsubscribe();
+    
+    this.subscriptions.forEach(sub => sub.unsubscribe());
+  }
+
+  private clearAllTimeouts(): void {
+    if (this.goldenTimeoutId) clearTimeout(this.goldenTimeoutId);
+    if (this.subjectsTimeoutId) clearTimeout(this.subjectsTimeoutId);
+    if (this.suggestionsTimeoutId) clearTimeout(this.suggestionsTimeoutId);
+    if (this.variantsTimeoutId) clearTimeout(this.variantsTimeoutId);
+    if (this.variantsTotalTimeoutId) clearTimeout(this.variantsTotalTimeoutId);
   }
 
   getSkeletonArray(target: number, currentCount: number): number[] {
     const remaining = target - currentCount;
     return Array(Math.max(0, remaining)).fill(0);
   }
-  
-// Change back to:
-onGenerateGolden(id: string) {
-  if (this.goldenLoading) return;
-  this.goldenLoading = true;
-  this.qa.generateGolden(id).subscribe({
-    next: (res) => {
-      this.goldenSubject.next(res);
-      this.onAnalyzeSuggestions(id);
-    },
-    error: (e) => { 
-      console.error('golden error', e); 
-      this.goldenLoading = false; 
-    },
-    complete: () => (this.goldenLoading = false),
-  });
-}
 
-  // Generate Golden Template old one
-  // onGenerateGolden(id: string) {
-  //   if (this.goldenLoading) return;
-  //   this.goldenLoading = true;
-  //   this.qa.generateGolden(id).subscribe({
-  //     next: (res) => {
-  //       this.goldenSubject.next(res);
-  //       // Auto-run suggestions once golden is ready
-  //       this.onAnalyzeSuggestions(id);
-  //     },
-  //     error: (e) => { 
-  //       console.error('golden error', e); 
-  //       this.goldenLoading = false; 
-  //     },
-  //     complete: () => (this.goldenLoading = false),
-  //   });
-  // }
+  // ============================================
+  // GENERATE GOLDEN TEMPLATE
+  // ============================================
+  onGenerateGolden(id: string) {
+    if (this.goldenLoading) return;
+    
+    this.goldenLoading = true;
+    this.goldenAborted = false;
+    this.cdr.markForCheck();
+
+    this.goldenTimeoutId = window.setTimeout(() => {
+      this.handleGoldenTimeout();
+    }, this.GOLDEN_TIMEOUT);
+
+    this.goldenSub = this.qa.generateGolden(id).pipe(
+      timeout(this.GOLDEN_TIMEOUT),
+      retry({ count: 2, delay: 3000, resetOnSuccess: true }),
+      catchError(error => {
+        if (error.name === 'TimeoutError') {
+          throw new Error('Golden template generation timed out. Please try again.');
+        }
+        throw error;
+      })
+    ).subscribe({
+      next: (res) => {
+        if (this.goldenAborted) return;
+        
+        if (this.goldenTimeoutId) {
+          clearTimeout(this.goldenTimeoutId);
+          this.goldenTimeoutId = undefined;
+        }
+        
+        this.goldenSubject.next(res);
+        this.showSuccess('Golden template generated successfully!');
+        // this.onAnalyzeSuggestions(id);
+      },
+      error: (e) => {
+        if (this.goldenAborted) return;
+        
+        console.error('Golden generation error:', e);
+        
+        if (this.goldenTimeoutId) {
+          clearTimeout(this.goldenTimeoutId);
+          this.goldenTimeoutId = undefined;
+        }
+        
+        this.goldenLoading = false;
+        this.goldenAborted = true;
+        
+        const errorMessage = this.getErrorMessage(e, 'golden template generation');
+        this.showError(errorMessage);
+        
+        this.cdr.markForCheck();
+      },
+      complete: () => {
+        if (this.goldenAborted) return;
+        
+        this.goldenLoading = false;
+        this.cdr.markForCheck();
+      }
+    });
+
+    // ❌ REMOVED - Don't add to global subscriptions array
+    // this.subscriptions.push(this.goldenSub);
+  }
+
+  private handleGoldenTimeout(): void {
+    console.error('Golden template generation timed out');
+    this.goldenLoading = false;
+    this.goldenAborted = true;
+    
+    this.showError(
+      'Golden template generation is taking longer than expected. The server might be busy. Please try again.'
+    );
+    
+    this.cdr.markForCheck();
+  }
+
+  cancelGolden(): void {
+    if (!this.goldenLoading) return;
+    
+    this.goldenAborted = true;
+    this.goldenLoading = false;
+    
+    if (this.goldenSub) {
+      this.goldenSub.unsubscribe();
+      this.goldenSub = undefined;
+    }
+    
+    if (this.goldenTimeoutId) {
+      clearTimeout(this.goldenTimeoutId);
+      this.goldenTimeoutId = undefined;
+    }
+    
+    // this.showWarning('Golden template generation cancelled.');
+    this.cdr.markForCheck();
+  }
+
+  // ============================================
+  // GENERATE SUBJECTS
+  // ============================================
+  onGenerateSubjects(id: string) {
+    if (this.subjectsLoading) return;
+    
+    this.subjectsLoading = true;
+    this.subjectsAborted = false;
+    this.cdr.markForCheck();
+
+    this.subjectsTimeoutId = window.setTimeout(() => {
+      this.handleSubjectsTimeout();
+    }, this.SUBJECTS_TIMEOUT);
+
+    this.subjectsSub = this.qa.generateSubjects(id).pipe(
+      timeout(this.SUBJECTS_TIMEOUT),
+      retry({ count: 2, delay: 2000, resetOnSuccess: true }),
+      catchError(error => {
+        if (error.name === 'TimeoutError') {
+          throw new Error('Subject generation timed out. Please try again.');
+        }
+        throw error;
+      })
+    ).subscribe({
+      next: (list) => {
+        if (this.subjectsAborted) return;
+        
+        if (this.subjectsTimeoutId) {
+          clearTimeout(this.subjectsTimeoutId);
+          this.subjectsTimeoutId = undefined;
+        }
+        
+        this.subjectsSubject.next(list);
+        this.showSuccess(`Generated ${list.length} subject idea(s)!`);
+      },
+      error: (e) => {
+        if (this.subjectsAborted) return;
+        
+        console.error('Subjects generation error:', e);
+        
+        if (this.subjectsTimeoutId) {
+          clearTimeout(this.subjectsTimeoutId);
+          this.subjectsTimeoutId = undefined;
+        }
+        
+        this.subjectsLoading = false;
+        this.subjectsAborted = true;
+        
+        const errorMessage = this.getErrorMessage(e, 'subject generation');
+        this.showError(errorMessage);
+        
+        this.cdr.markForCheck();
+      },
+      complete: () => {
+        if (this.subjectsAborted) return;
+        
+        this.subjectsLoading = false;
+        this.cdr.markForCheck();
+      }
+    });
+
+    // ❌ REMOVED - Don't add to global subscriptions array
+    // this.subscriptions.push(this.subjectsSub);
+  }
+
+  private handleSubjectsTimeout(): void {
+    console.error('Subject generation timed out');
+    this.subjectsLoading = false;
+    this.subjectsAborted = true;
+    
+    this.showError('Subject generation is taking longer than expected. Please try again.');
+    this.cdr.markForCheck();
+  }
+
+  cancelSubjects(): void {
+    if (!this.subjectsLoading) return;
+    
+    this.subjectsAborted = true;
+    this.subjectsLoading = false;
+    
+    if (this.subjectsSub) {
+      this.subjectsSub.unsubscribe();
+      this.subjectsSub = undefined;
+    }
+    
+    if (this.subjectsTimeoutId) {
+      clearTimeout(this.subjectsTimeoutId);
+      this.subjectsTimeoutId = undefined;
+    }
+    
+    // this.showWarning('Subject generation cancelled.');
+    this.cdr.markForCheck();
+  }
+
+  // ============================================
+  // ANALYZE SUGGESTIONS
+  // ============================================
+  onAnalyzeSuggestions(id: string) {
+    if (this.suggestionsLoading) return;
+    
+    this.suggestionsLoading = true;
+    this.suggestionsAborted = false;
+    this.cdr.markForCheck();
+
+    this.suggestionsTimeoutId = window.setTimeout(() => {
+      this.handleSuggestionsTimeout();
+    }, this.SUGGESTIONS_TIMEOUT);
+
+    this.suggestionsSub = this.qa.generateSuggestions(id).pipe(
+      timeout(this.SUGGESTIONS_TIMEOUT),
+      retry({ count: 2, delay: 3000, resetOnSuccess: true }),
+      catchError(error => {
+        if (error.name === 'TimeoutError') {
+          throw new Error('Suggestions analysis timed out. Please try again.');
+        }
+        throw error;
+      })
+    ).subscribe({
+      next: (res) => {
+        if (this.suggestionsAborted) return;
+        
+        if (this.suggestionsTimeoutId) {
+          clearTimeout(this.suggestionsTimeoutId);
+          this.suggestionsTimeoutId = undefined;
+        }
+        
+        this.suggestionsSubject.next(res);
+        this.showSuccess('Suggestions analysis complete!');
+        
+        setTimeout(() => {
+          const scrollableContent = document.querySelector('.col-2 .scrollable-content');
+          const suggestionsPanel = document.querySelector('.suggestions-panel');
+          
+          if (scrollableContent && suggestionsPanel) {
+            const containerRect = scrollableContent.getBoundingClientRect();
+            const suggestionRect = suggestionsPanel.getBoundingClientRect();
+            const scrollTop = suggestionRect.top - containerRect.top + scrollableContent.scrollTop;
+            
+            scrollableContent.scrollTo({
+              top: scrollTop - 20,
+              behavior: 'smooth'
+            });
+          }
+        }, 300);
+      },
+      error: (e) => {
+        if (this.suggestionsAborted) return;
+        
+        console.error('Suggestions generation error:', e);
+        
+        if (this.suggestionsTimeoutId) {
+          clearTimeout(this.suggestionsTimeoutId);
+          this.suggestionsTimeoutId = undefined;
+        }
+        
+        this.suggestionsLoading = false;
+        this.suggestionsAborted = true;
+        
+        const errorMessage = this.getErrorMessage(e, 'suggestions analysis');
+        this.showError(errorMessage);
+        
+        this.cdr.markForCheck();
+      },
+      complete: () => {
+        if (this.suggestionsAborted) return;
+        
+        this.suggestionsLoading = false;
+        this.cdr.markForCheck();
+      }
+    });
+
+    // ❌ REMOVED - Don't add to global subscriptions array
+    // this.subscriptions.push(this.suggestionsSub);
+  }
+
+  private handleSuggestionsTimeout(): void {
+    console.error('Suggestions analysis timed out');
+    this.suggestionsLoading = false;
+    this.suggestionsAborted = true;
+    
+    this.showError('Suggestions analysis is taking longer than expected. Please try again.');
+    this.cdr.markForCheck();
+  }
+
+  cancelSuggestions(): void {
+    if (!this.suggestionsLoading) return;
+    
+    this.suggestionsAborted = true;
+    this.suggestionsLoading = false;
+    
+    if (this.suggestionsSub) {
+      this.suggestionsSub.unsubscribe();
+      this.suggestionsSub = undefined;
+    }
+    
+    if (this.suggestionsTimeoutId) {
+      clearTimeout(this.suggestionsTimeoutId);
+      this.suggestionsTimeoutId = undefined;
+    }
+    
+    this.showWarning('Suggestions analysis cancelled.');
+    this.cdr.markForCheck();
+  }
+
+  // ============================================
+  // GENERATE VARIANTS
+  // ============================================
+  async onGenerateVariants(templateId: string) {
+    if (this.variantsGenerating) return;
+
+    const golden = this.goldenSubject.value;
+    const goldenHtml = golden?.html || '';
+    if (!goldenHtml) {
+      this.showWarning('Please generate a golden template first.');
+      return;
+    }
+
+    this.variantsGenerating = true;
+    this.variantsAborted = false;
+    this.cdr.markForCheck();
+
+    this.variantsTotalTimeoutId = window.setTimeout(() => {
+      this.handleVariantsTotalTimeout();
+    }, this.VARIANTS_TOTAL_TIMEOUT);
+
+    let variantAttempt = 0;
+    let hasShownSlowWarning = false;
+
+    try {
+      const start = await firstValueFrom(
+        this.qa.startVariants(templateId, goldenHtml, 5).pipe(
+          timeout(this.VARIANTS_START_TIMEOUT),
+          catchError(error => {
+            if (error.name === 'TimeoutError') {
+              throw new Error('Failed to start variant generation. Please try again.');
+            }
+            throw error;
+          })
+        )
+      );
+
+      if (this.variantsAborted) {
+        this.cleanupVariants();
+        return;
+      }
+
+      this.variantsRunId = start.runId;
+      let run: VariantsRun = { runId: start.runId, target: start.target, items: [] };
+      this.variantsSubject.next(run);
+      this.qa.saveVariantsRun(templateId, run);
+
+      this.showSuccess('Variant generation started!');
+
+      setTimeout(() => {
+        const variantsSection = document.querySelector('.variants-section');
+        if (variantsSection) {
+          variantsSection.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+          });
+        }
+      }, 300);
+
+      for (let i = 0; i < start.target; i++) {
+        if (this.variantsAborted) {
+          const current = this.variantsSubject.value;
+          if (current) {
+            current.target = current.items.length;
+            this.variantsSubject.next(current);
+            this.qa.saveVariantsRun(templateId, current);
+          }
+          this.cleanupVariants();
+          return;
+        }
+
+        variantAttempt++;
+
+        try {
+          const item = await firstValueFrom(
+            this.qa.nextVariant(start.runId).pipe(
+              timeout(this.VARIANTS_NEXT_TIMEOUT),
+              retry({ count: 1, delay: 2000 }),
+              catchError(error => {
+                console.warn(`Variant ${i + 1} generation failed:`, error);
+                
+                if (!hasShownSlowWarning) {
+                  hasShownSlowWarning = true;
+                  this.showWarning(
+                    'Connection issue detected. Retrying... This is taking longer than usual.'
+                  );
+                }
+                
+                if (error.name === 'TimeoutError') {
+                  throw new Error(`Variant ${i + 1} generation timed out.`);
+                }
+                throw error;
+              })
+            )
+          );
+
+          if ((item as any)?.done) break;
+
+          run = { ...run, items: [...run.items, item] };
+          this.variantsSubject.next(run);
+          this.qa.saveVariantsRun(templateId, run);
+          this.cdr.markForCheck();
+
+          if ((i + 1) % 2 === 0) {
+            this.showInfo(`Generated ${i + 1} of ${start.target} variants...`);
+          }
+
+        } catch (variantError) {
+          console.error(`Failed to generate variant ${i + 1}:`, variantError);
+          this.showWarning(`Variant ${i + 1} failed, continuing with others...`);
+          continue;
+        }
+      }
+
+      if (this.variantsTotalTimeoutId) {
+        clearTimeout(this.variantsTotalTimeoutId);
+        this.variantsTotalTimeoutId = undefined;
+      }
+
+      const finalCount = run.items.length;
+      this.showSuccess(`Successfully generated ${finalCount} variant(s)!`);
+
+    } catch (e) {
+      console.error('Variants generation error:', e);
+      this.variantsAborted = true;
+      const errorMessage = this.getErrorMessage(e, 'variant generation');
+      this.showError(errorMessage);
+      
+    } finally {
+      this.variantsGenerating = false;
+      this.cleanupVariants();
+      this.cdr.markForCheck();
+    }
+  }
+
+  private handleVariantsTotalTimeout(): void {
+    console.error('Total variants generation timed out');
+    
+    const current = this.variantsSubject.value;
+    if (current && this.templateId) {
+      current.target = current.items.length;
+      this.variantsSubject.next(current);
+      this.qa.saveVariantsRun(this.templateId, current);
+    }
+    
+    this.variantsGenerating = false;
+    this.variantsAborted = true;
+    
+    this.showError(
+      'Variant generation timed out. Partial results have been saved and are available to use.'
+    );
+    
+    this.cleanupVariants();
+    this.cdr.markForCheck();
+  }
+
+  private cleanupVariants(): void {
+    if (this.variantsTimeoutId) {
+      clearTimeout(this.variantsTimeoutId);
+      this.variantsTimeoutId = undefined;
+    }
+    if (this.variantsTotalTimeoutId) {
+      clearTimeout(this.variantsTotalTimeoutId);
+      this.variantsTotalTimeoutId = undefined;
+    }
+  }
+
+  cancelVariants(): void {
+    if (!this.variantsGenerating) return;
+    
+    this.variantsAborted = true;
+    this.variantsGenerating = false;
+    
+    const current = this.variantsSubject.value;
+    if (current && this.templateId) {
+      current.target = current.items.length;
+      this.variantsSubject.next(current);
+      this.qa.saveVariantsRun(this.templateId, current);
+    }
+    
+    this.cleanupVariants();
+    
+    const count = current?.items?.length || 0;
+    if (count > 0) {
+      this.showWarning(`Variant generation cancelled. ${count} variant(s) generated and available to use.`);
+    } else {
+      this.showWarning('Variant generation cancelled.');
+    }
+    
+    this.cdr.markForCheck();
+  }
+
+  // ============================================
+  // UTILITY METHODS
+  // ============================================
+  private getErrorMessage(error: any, operation: string): string {
+    if (error?.message?.includes('timeout') || error?.name === 'TimeoutError') {
+      return `${operation} timed out. The server might be busy. Please try again.`;
+    }
+    
+    if (error?.status === 0 || error?.message?.includes('Http failure')) {
+      return `Cannot connect to server. Please check if the backend is running.`;
+    }
+    
+    if (error?.status === 500) {
+      return `Server error during ${operation}. Please try again.`;
+    }
+    
+    if (error?.status === 404) {
+      return `Resource not found. Please refresh the page.`;
+    }
+    
+    return error?.message || `An error occurred during ${operation}. Please try again.`;
+  }
+
+  private showError(message: string): void {
+    this.snackBar.open(message, 'Close', {
+      duration: 8000,
+      panelClass: ['error-snackbar'],
+      horizontalPosition: 'center',
+      verticalPosition: 'top',
+    });
+  }
+
+  private showSuccess(message: string): void {
+    this.snackBar.open(message, 'Close', {
+      duration: 3000,
+      panelClass: ['success-snackbar'],
+      horizontalPosition: 'center',
+      verticalPosition: 'bottom',
+    });
+  }
+
+  private showWarning(message: string): void {
+    this.snackBar.open(message, 'Close', {
+      duration: 5000,
+      panelClass: ['warning-snackbar'],
+      horizontalPosition: 'center',
+      verticalPosition: 'top',
+    });
+  }
+
+  private showInfo(message: string): void {
+    this.snackBar.open(message, 'Dismiss', {
+      duration: 6000,
+      panelClass: ['info-snackbar'],
+      horizontalPosition: 'center',
+      verticalPosition: 'top',
+    });
+  }
 
   private loadOriginalTemplate(templateId: string) {
     console.log('Loading template from cache/service:', templateId);
     this.templateLoading = true;
-    this.templateHtml = ''; // Clear any previous content
+    this.templateHtml = '';
     
-    // First try to get from preview cache
     const cachedHtml = this.previewCache.get(templateId) || this.previewCache.getPersisted(templateId);
     
     if (cachedHtml) {
@@ -222,7 +769,6 @@ onGenerateGolden(id: string) {
       return;
     }
     
-    // If not in cache, get from templates service
     const currentState = this.templatesService.snapshot;
     const template = currentState.items.find(item => item.id === templateId);
     
@@ -233,7 +779,6 @@ onGenerateGolden(id: string) {
       return;
     }
     
-    // Fallback: fetch from API only if not available anywhere else
     console.log('Template not found in cache or service, fetching from API');
     this.http.get(`/api/templates/${templateId}/raw`, { responseType: 'text' })
       .subscribe({
@@ -250,101 +795,10 @@ onGenerateGolden(id: string) {
       });
   }
 
-  // Generate Subject Ideas
-  onGenerateSubjects(id: string) {
-    if (this.subjectsLoading) return;
-    this.subjectsLoading = true;
-    this.qa.generateSubjects(id).subscribe({
-      next: (list) => this.subjectsSubject.next(list),
-      error: (e) => { 
-        console.error('subjects error', e); 
-        this.subjectsLoading = false; 
-      },
-      complete: () => (this.subjectsLoading = false),
-    });
-  }
-
-  // Analyze Suggestions
-  onAnalyzeSuggestions(id: string) {
-    if (this.suggestionsLoading) return;
-    this.suggestionsLoading = true;
-    this.qa.generateSuggestions(id).subscribe({
-      next: (res) => {
-        this.suggestionsSubject.next(res);
-        
-        // Auto-scroll within the middle column's scrollable area
-        setTimeout(() => {
-          const scrollableContent = document.querySelector('.col-2 .scrollable-content');
-          const suggestionsPanel = document.querySelector('.suggestions-panel');
-          
-          if (scrollableContent && suggestionsPanel) {
-            const containerRect = scrollableContent.getBoundingClientRect();
-            const suggestionRect = suggestionsPanel.getBoundingClientRect();
-            const scrollTop = suggestionRect.top - containerRect.top + scrollableContent.scrollTop;
-            
-            scrollableContent.scrollTo({
-              top: scrollTop - 20, // 20px offset from top
-              behavior: 'smooth'
-            });
-          }
-        }, 300);
-      },
-      error: (e) => { 
-        console.error('suggestions error', e); 
-        this.suggestionsLoading = false; 
-      },
-      complete: () => (this.suggestionsLoading = false),
-    });
-  }
-
-  // Use Variant
   onUseVariant(templateId: string, runId: string, no: number) {
     this.router.navigate(['/qa', templateId, 'use', runId, no]);
   }
 
-  // Generate Variants - Single-click flow
-  async onGenerateVariants(templateId: string) {
-    if (this.variantsGenerating) return;
-
-    const golden = this.goldenSubject.value;
-    const goldenHtml = golden?.html || '';
-    if (!goldenHtml) return;
-
-    this.variantsGenerating = true;
-    
-    try {
-      const start = await firstValueFrom(this.qa.startVariants(templateId, goldenHtml, 5));
-      this.variantsRunId = start.runId;
-      let run: VariantsRun = { runId: start.runId, target: start.target, items: [] };
-      this.variantsSubject.next(run);
-      this.qa.saveVariantsRun(templateId, run);
-
-      // Auto-scroll to variants section smoothly
-      setTimeout(() => {
-        const variantsSection = document.querySelector('.variants-section');
-        if (variantsSection) {
-          variantsSection.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'start' 
-          });
-        }
-      }, 300);
-
-      for (let i = 0; i < start.target; i++) {
-        const item = await firstValueFrom(this.qa.nextVariant(start.runId));
-        if ((item as any)?.done) break;
-        run = { ...run, items: [...run.items, item] };
-        this.variantsSubject.next(run);
-        this.qa.saveVariantsRun(templateId, run);
-      }
-    } catch (e) {
-      console.error('variants flow error', e);
-    } finally {
-      this.variantsGenerating = false;
-    }
-  }
-
-  // Template helpers
   trackByIndex = (i: number) => i;
   trackByEdit = (i: number, e: any) => e.before + '|' + e.after + '|' + (e.parent || '');
 }
