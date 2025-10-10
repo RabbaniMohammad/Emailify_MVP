@@ -1,20 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { authenticate } from '@src/middleware/auth';
 import TemplateConversation from '@src/models/TemplateConversation';
+import GeneratedTemplate from '@src/models/GeneratedTemplate';
 import { generateTemplate, refineTemplate } from '@src/services/templateGenerationService';
 import { convertMjmlToHtml, validateMjml, getMjmlStarter } from '@src/services/mjmlConversionService';
 import logger from 'jet-logger';
 import { randomUUID } from 'crypto';
-import fs from 'fs-extra';
-import path from 'path';
 
 const router = Router();
-
-// Directory for saved templates (same as existing templates)
-const TEMPLATES_DIR = path.join(process.cwd(), 'templates');
-
-// Ensure templates directory exists
-fs.ensureDirSync(TEMPLATES_DIR);
 
 /**
  * POST /api/generate
@@ -70,17 +63,15 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
   } catch (error: any) {
     logger.err('❌ Quick generation error:', error);
     
-    // ⭐ SPECIAL HANDLING FOR OVERLOAD
     if (error.message?.includes('overloaded') || error.status === 529) {
       return res.status(503).json({
         success: false,
         code: 'API_OVERLOADED',
         message: 'Claude AI is currently experiencing high demand. Please try again in a moment.',
-        retryAfter: 10, // seconds
+        retryAfter: 10,
       });
     }
     
-    // ⭐ SPECIAL HANDLING FOR TIMEOUT
     if (error.message?.includes('timeout')) {
       return res.status(408).json({
         success: false,
@@ -96,9 +87,6 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
     });
   }
 });
-
-
-
 
 /**
  * POST /api/generate/start
@@ -118,14 +106,12 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
 
     logger.info(`🎨 Starting template generation for user ${userId}`);
 
-    // Generate template using Claude
     const result = await generateTemplate({
       prompt: prompt.trim(),
       conversationHistory: [],
       userId,
     });
 
-    // Convert MJML to HTML
     const conversion = convertMjmlToHtml(result.mjmlCode);
 
     if (conversion.errors.length > 0 && !conversion.html) {
@@ -137,7 +123,6 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
       });
     }
 
-    // Create conversation in database
     const conversationId = randomUUID();
     const conversation = await TemplateConversation.create({
       userId,
@@ -153,20 +138,6 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
 
     logger.info(`✅ Conversation created: ${conversationId}`);
 
-    // ⭐ DEBUG: Log what we're sending
-    logger.info(`📤 Sending response:`);
-    logger.info(`- MJML length: ${result.mjmlCode.length} chars`);
-    logger.info(`- HTML length: ${conversion.html.length} chars`);
-    logger.info(`- Has errors: ${conversion.errors.length > 0}`);
-    logger.info(`- Attempts used: ${result.attemptsUsed}`);
-    // if (conversion.errors.length > 0) {
-    // logger.warn(`⚠️ Conversion errors:`, conversion.errors);
-    // }
-
-    // Log first 500 chars of HTML
-    logger.info(`📄 HTML preview (first 500 chars):`);
-    logger.info(conversion.html.substring(0, 500));
-
     res.json({
       conversationId,
       html: conversion.html,
@@ -180,12 +151,11 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
   } catch (error: any) {
     logger.err('❌ Start generation error:', error);
     
-    // ⭐ SPECIAL HANDLING FOR OVERLOAD
     if (error.message?.includes('overloaded') || error.status === 529) {
       return res.status(503).json({
         code: 'API_OVERLOADED',
         message: 'Claude AI is currently experiencing high demand. Please try again in a moment.',
-        retryAfter: 10, // seconds
+        retryAfter: 10,
       });
     }
     
@@ -213,7 +183,6 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
       });
     }
 
-    // Find conversation
     const conversation = await TemplateConversation.findOne({
       conversationId,
       userId,
@@ -228,13 +197,11 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
 
     logger.info(`🔧 Continuing conversation: ${conversationId}`);
 
-    // Build conversation history
     const conversationHistory = conversation.messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
     }));
 
-    // Refine template
     const result = await refineTemplate(
       conversation.currentMjml,
       message.trim(),
@@ -242,7 +209,6 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
       userId
     );
 
-    // Convert MJML to HTML
     const conversion = convertMjmlToHtml(result.mjmlCode);
 
     if (conversion.errors.length > 0 && !conversion.html) {
@@ -254,7 +220,6 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
       });
     }
 
-    // Update conversation
     conversation.messages.push(
       { role: 'user', content: message, timestamp: new Date() },
       { role: 'assistant', content: result.assistantMessage, timestamp: new Date() }
@@ -342,7 +307,6 @@ router.get('/history', authenticate, async (req: Request, res: Response) => {
 
     const total = await TemplateConversation.countDocuments({ userId });
 
-    // Format response
     const items = conversations.map((conv) => ({
       conversationId: conv.conversationId,
       templateName: conv.templateName || 'Untitled Template',
@@ -370,7 +334,7 @@ router.get('/history', authenticate, async (req: Request, res: Response) => {
 
 /**
  * POST /api/generate/save/:conversationId
- * Save template to file system (like existing templates)
+ * Save template to MongoDB
  */
 router.post('/save/:conversationId', authenticate, async (req: Request, res: Response) => {
   try {
@@ -385,7 +349,6 @@ router.post('/save/:conversationId', authenticate, async (req: Request, res: Res
       });
     }
 
-    // Find conversation
     const conversation = await TemplateConversation.findOne({
       conversationId,
       userId,
@@ -405,26 +368,27 @@ router.post('/save/:conversationId', authenticate, async (req: Request, res: Res
       });
     }
 
-    // Generate unique template ID
     const templateId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    const fileName = `${templateId}.html`;
-    const filePath = path.join(TEMPLATES_DIR, fileName);
 
-    // Save HTML to file
-    await fs.writeFile(filePath, conversation.currentHtml, 'utf-8');
+    const generatedTemplate = await GeneratedTemplate.create({
+      templateId,
+      name: templateName.trim(),
+      html: conversation.currentHtml,
+      userId,
+      conversationId,
+      type: 'generated',
+    });
 
-    // Update conversation
     conversation.templateName = templateName.trim();
     conversation.status = 'saved';
     conversation.savedTemplateId = templateId;
     await conversation.save();
 
-    logger.info(`✅ Template saved: ${templateId} (${fileName})`);
+    logger.info(`✅ Template saved to MongoDB: ${templateId}`);
 
     res.json({
       templateId,
-      templateName: conversation.templateName,
-      fileName,
+      templateName: generatedTemplate.name,
       message: 'Template saved successfully',
     });
   } catch (error: any) {
@@ -451,7 +415,6 @@ router.post('/preview', authenticate, async (req: Request, res: Response) => {
       });
     }
 
-    // Validate and convert
     const validation = validateMjml(mjml);
     
     if (!validation.valid) {

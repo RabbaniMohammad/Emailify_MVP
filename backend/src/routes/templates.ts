@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import mailchimp from '@mailchimp/mailchimp_marketing';
+import GeneratedTemplate from '@src/models/GeneratedTemplate';
 
 // ---------- Minimal types ----------
 type McTemplate = { 
@@ -42,6 +43,24 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
+function isGeneratedTemplate(id: string): boolean {
+  return id.startsWith('gen_') || id.startsWith('Generated_');
+}
+
+async function getGeneratedTemplateFromDB(id: string): Promise<{ name: string; html: string; source: string }> {
+  const template = await GeneratedTemplate.findOne({ templateId: id });
+  
+  if (!template) {
+    throw new Error(`Generated template not found: ${id}`);
+  }
+  
+  return {
+    name: template.name,
+    html: template.html,
+    source: 'generated'
+  };
+}
+
 /**
  * Renders a template to HTML using a temporary campaign, then deletes it.
  * Requires: MC_AUDIENCE_ID, MC_FROM_EMAIL, MC_FROM_NAME
@@ -82,6 +101,10 @@ async function renderViaTempCampaign(templateId: string): Promise<string> {
 
 /** Build best-effort HTML for a template */
 async function getHtmlForTemplate(id: string): Promise<{ name: string; html: string; source: string }> {
+  if (isGeneratedTemplate(id)) {
+    return await getGeneratedTemplateFromDB(id);
+  }
+
   const sdk: any = mc;
 
   let t: any = null;
@@ -141,7 +164,6 @@ router.get('/', async (req: Request, res: Response) => {
     const limit  = Math.min(Number(req.query.limit ?? 50), 250);
     const offset = Number(req.query.offset ?? 0);
 
-    // Get templates (user/saved only)
     const resp: McTemplatesList = await mc.templates.list({ count: limit, offset, type: 'user' });
 
     const source: McTemplate[] = Array.isArray(resp.templates) ? resp.templates : [];
@@ -153,11 +175,8 @@ router.get('/', async (req: Request, res: Response) => {
     const seen = new Set<string>();
     let items = (userOnly.length ? userOnly : source)
       .map((t) => ({
-        // Basic (original)
         id: String(t.id),
         name: String(t.name ?? 'Untitled Template'),
-        
-        // NEW: Additional metadata
         type: t.type ?? null,
         category: t.category ?? null,
         thumbnail: t.thumbnail ?? null,
@@ -195,8 +214,23 @@ router.get('/:id', async (req: Request, res: Response) => {
   });
 
   const id = String(req.params.id);
+  
   try {
-    // Get template metadata
+    if (isGeneratedTemplate(id)) {
+      const { name, html, source } = await getGeneratedTemplateFromDB(id);
+      
+      console.log(`Generated template ${id} → html length: ${html.length}`);
+      
+      return res.status(200).json({ 
+        id, 
+        name, 
+        html,
+        type: 'generated',
+        source,
+        active: true,
+      });
+    }
+
     const sdk: any = mc;
     let template: any = null;
     
@@ -206,18 +240,14 @@ router.get('/:id', async (req: Request, res: Response) => {
       template = await sdk.templates.getTemplate(id);
     }
 
-    // Get HTML content
     const { name, html, source } = await getHtmlForTemplate(id);
     
     console.log(`Template ${id} → html length: ${html.length} (source: ${source})`);
     
     return res.status(200).json({ 
-      // Basic (original)
       id, 
       name, 
       html,
-      
-      // NEW: Additional metadata from template
       type: template?.type ?? null,
       category: template?.category ?? null,
       thumbnail: template?.thumbnail ?? null,
@@ -229,25 +259,47 @@ router.get('/:id', async (req: Request, res: Response) => {
       responsive: template?.responsive ?? null,
       folderId: template?.folder_id ?? null,
       screenshotUrl: template?.screenshot_url ?? null,
-      source, // How HTML was fetched
+      source,
     });
   } catch (e: any) {
     const status  = e?.status || e?.statusCode || e?.response?.status || 500;
     const message = e?.response?.text || e?.detail || e?.message || 'Failed to fetch template';
-    console.error('Template detail error:', { status, message });
-    return res.status(status).json({ code: 'MAILCHIMP_ERROR', message });
+    console.error('Template detail error:', { id, status, message });
+    return res.status(status).json({ code: 'FETCH_ERROR', message });
   }
 });
 
-/** DELETE /api/templates/:id - Delete template from Mailchimp */
+/** DELETE /api/templates/:id - Delete template */
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
+    
+    if (isGeneratedTemplate(id)) {
+      console.log('🗑️ Deleting generated template:', id);
+      
+      const result = await GeneratedTemplate.deleteOne({ templateId: id });
+      
+      if (result.deletedCount === 0) {
+        console.warn('⚠️ Generated template not found:', id);
+        return res.json({ 
+          success: true, 
+          message: 'Template already deleted or not found',
+          id 
+        });
+      }
+      
+      console.log('✅ Generated template deleted:', id);
+      return res.json({ 
+        success: true, 
+        message: 'Generated template deleted successfully',
+        id 
+      });
+    }
+
     const templates: any = MC_ANY.templates;
     
-    console.log('🗑️ Deleting template:', id);
+    console.log('🗑️ Deleting Mailchimp template:', id);
     
-    // Try different SDK method names for deleting templates
     if (typeof templates.delete === 'function') {
       await templates.delete(id);
     } else if (typeof templates.remove === 'function') {
@@ -270,10 +322,8 @@ router.delete('/:id', async (req: Request, res: Response) => {
     const status = err?.status || err?.statusCode || 500;
     const message = err?.response?.text || err?.message || 'Failed to delete template';
     
-    // Check if it's a 404 (template not found)
     if (status === 404) {
       console.warn('⚠️ Template not found, may have been already deleted');
-      // Still return success since the end result is the same
       return res.json({ 
         success: true, 
         message: 'Template already deleted or not found',
@@ -288,7 +338,6 @@ router.delete('/:id', async (req: Request, res: Response) => {
     });
   }
 });
-
 
 /** GET /api/templates/:id/raw → HTML (iframe-friendly), no-cache */
 router.get('/:id/raw', async (req: Request, res: Response) => {
@@ -317,6 +366,7 @@ router.get('/:id/raw', async (req: Request, res: Response) => {
 
     console.log(`Template ${id} → html length: ${fullHtml.length} (source: ${source})`);
   } catch (err: any) {
+    console.error(`❌ Error fetching raw template ${req.params.id}:`, err);
     res
       .status(500)
       .send(

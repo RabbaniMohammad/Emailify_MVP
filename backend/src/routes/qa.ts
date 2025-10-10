@@ -5,6 +5,7 @@ import * as cheerio from 'cheerio';
 import { randomUUID } from 'crypto';
 import puppeteer from 'puppeteer';
 import type { Browser } from 'puppeteer';
+import GeneratedTemplate from '@src/models/GeneratedTemplate';
 
 const router = Router();
 const MC: any = mailchimp as any;
@@ -16,6 +17,23 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /* ------------------------------------------------------------------ */
 /*                       Helpers & safe typings                        */
 /* ------------------------------------------------------------------ */
+function isGeneratedTemplate(id: string): boolean {
+  return id.startsWith('gen_') || id.startsWith('Generated_');
+}
+
+async function getGeneratedTemplateHtml(id: string): Promise<{ name: string; html: string }> {
+  const template = await GeneratedTemplate.findOne({ templateId: id });
+  
+  if (!template) {
+    throw new Error(`Generated template not found: ${id}`);
+  }
+  
+  return {
+    name: template.name,
+    html: template.html
+  };
+}
+
 
 function errMsg(err: unknown): string {
   if (typeof err === 'object' && err && 'message' in err) {
@@ -103,6 +121,12 @@ async function getTemplateHtmlViaCampaign(id: string): Promise<string> {
 }
 
 export async function getRobustTemplateHtml(id: string): Promise<{ name: string; html: string }> {
+  // ✅ NEW: Check if it's a generated template first
+  if (isGeneratedTemplate(id)) {
+    return await getGeneratedTemplateHtml(id);
+  }
+  
+  // Original Mailchimp logic
   const { name, html: direct } = await getTemplateHtmlDirect(id);
   if (direct) return { name, html: ensureFullDocShell(name, direct) };
   let html = await getTemplateHtmlViaCampaign(id);

@@ -67,6 +67,7 @@ const TemplateConversationSchema = new Schema<ITemplateConversation>(
     },
     savedTemplateId: {
       type: String,
+      index: true,
     },
   },
   {
@@ -74,9 +75,9 @@ const TemplateConversationSchema = new Schema<ITemplateConversation>(
   }
 );
 
-// Index for faster queries
 TemplateConversationSchema.index({ userId: 1, createdAt: -1 });
 TemplateConversationSchema.index({ conversationId: 1 });
+TemplateConversationSchema.index({ savedTemplateId: 1 });
 
 export default mongoose.model<ITemplateConversation>(
   'TemplateConversation',
