@@ -3,10 +3,8 @@ import mailchimp from '@mailchimp/mailchimp_marketing';
 import OpenAI from 'openai';
 import * as cheerio from 'cheerio';
 import { randomUUID } from 'crypto';
-import puppeteer from 'puppeteer'; // ⬅️ ADDED
+import puppeteer from 'puppeteer';
 import type { Browser } from 'puppeteer';
-
-// let browser: Browser | null = null;
 
 const router = Router();
 const MC: any = mailchimp as any;
@@ -150,8 +148,8 @@ function grammarSystemPrompt(): string {
     '           "reason":"<short>"}]}',
     "",
     "Rules:",
-    "- ‘find’ and contexts must be copied from the input text (no HTML).",
-    "- Keep edits minimal; don’t rewrite tone or meaning.",
+    "- 'find' and contexts must be copied EXACTLY from the input text (no HTML).",
+    "- Keep edits minimal; don't rewrite tone or meaning.",
     "- Max 30 edits per request.",
   ].join("\n");
 }
@@ -165,8 +163,8 @@ const ZWS = /[\u200B\u200C\u200D\uFEFF]/;
 // Minimal named entity table for the cases we care about in email copy
 const NAMED_ENT: Record<string, string> = {
   nbsp: '\u00A0', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
-  rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“',
-  hellip: '…', ndash: '–', mdash: '—',
+  rsquo: '\u2019', lsquo: '\u2018', rdquo: '\u201D', ldquo: '\u201C',
+  hellip: '\u2026', ndash: '\u2013', mdash: '\u2014',
 };
 
 function decodeHtmlEntityAt(raw: string, i: number): { ch: string; end: number } | null {
@@ -192,10 +190,10 @@ function decodeHtmlEntityAt(raw: string, i: number): { ch: string; end: number }
 function normalizeChar(ch: string): string {
   if (ZWS.test(ch)) return '';
   if (ch === '\u00A0' || ch === '\u2007' || ch === '\u202F') return ' ';
-  if (ch === '“' || ch === '”') return '"';
-  if (ch === '‘' || ch === '’') return "'";
-  if (ch === '–' || ch === '—') return '-';
-  if (ch === '…') return '...';
+  if (ch === '\u201C' || ch === '\u201D') return '"';
+  if (ch === '\u2018' || ch === '\u2019') return "'";
+  if (ch === '\u2013' || ch === '\u2014') return '-';
+  if (ch === '\u2026') return '...';
   return ch;
 }
 
@@ -274,7 +272,12 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
   while (i >= 0) {
     const okBefore = bRaw ? raw.slice(Math.max(0, i - bRaw.length), i).endsWith(bRaw) : true;
     const okAfter  = aRaw ? raw.slice(i + nRaw.length, i + nRaw.length + aRaw.length).startsWith(aRaw) : true;
-    if (okBefore && okAfter) return { start: i, end: i + nRaw.length };
+    
+    // ✅ CHANGED: Accept if BOTH match OR if at least ONE context matches
+    if ((okBefore && okAfter) || (bRaw && okBefore) || (aRaw && okAfter)) {
+      return { start: i, end: i + nRaw.length };
+    }
+    
     i = raw.indexOf(nRaw, i + 1);
   }
 
@@ -288,10 +291,13 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
   while (ni >= 0) {
     const okBefore = nBefore ? H.norm.slice(Math.max(0, ni - nBefore.length), ni).endsWith(nBefore) : true;
     const okAfter  = nAfter  ? H.norm.slice(ni + nNeedle.length, ni + nNeedle.length + nAfter.length).startsWith(nAfter) : true;
-    if (okBefore && okAfter) {
+    
+    // ✅ CHANGED: Accept if at least ONE context matches
+    if ((okBefore && okAfter) || (nBefore && okBefore) || (nAfter && okAfter)) {
       const span = mapNormSpanToRawSpan(H.mapStart, H.mapEnd, ni, nNeedle.length, raw.length);
       if (span) return span;
     }
+    
     ni = H.norm.indexOf(nNeedle, ni + 1);
   }
 
@@ -340,16 +346,18 @@ function deniedParents(): Set<string> {
   return new Set(['style', 'script', 'title', 'svg']);
 }
 
-/** Apply grammar/SEO edits INSIDE TEXT NODES ONLY (never tags/attrs). */
+/** Apply grammar/SEO edits INSIDE TEXT NODES ONLY (never tags/attrs). 
+ *  ✅ FIXED: Now tracks which edits have been applied to prevent duplicates
+ */
 function applyContextEdits(
   html: string,
   edits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string }>
 ): { html: string; changes: Array<{ before: string; after: string; parent: string; reason?: string }>; } {
-  // use `as any` to allow decodeEntities option
   const $ = (cheerio as any).load(html, { decodeEntities: false });
   const deny = deniedParents();
   const changes: Array<{ before: string; after: string; parent: string; reason?: string }> = [];
 
+  // ✅ Add 'used' flag to track applied edits
   const queue = (Array.isArray(edits) ? edits : [])
     .map((e: any) => ({
       find: String(e?.find || ''),
@@ -357,6 +365,7 @@ function applyContextEdits(
       before: String(e?.before_context || ''),
       after: String(e?.after_context || ''),
       reason: e?.reason ? String(e.reason) : undefined,
+      used: false, // ✅ NEW: Track if this edit has been applied
     }))
     .filter((e: any) => e.find && e.replace && e.find !== e.replace);
 
@@ -367,9 +376,13 @@ function applyContextEdits(
     $(el).contents().each((__: any, node: any) => {
       if ((node as any).type !== 'text') return;
       let txt: string = (node as any).data || '';
+      let modified = false;
 
       for (const e of queue) {
-        // hard safety: don’t allow URL or merge-tag manipulation
+        // ✅ Skip already-applied edits
+        if (e.used) continue;
+
+        // hard safety: don't allow URL or merge-tag manipulation
         if (/https?:\/\//i.test(e.find) || /https?:\/\//i.test(e.replace)) continue;
         if (/\*\|[A-Z0-9_]+\|\*/.test(e.find) || /\*\|[A-Z0-9_]+\|\*/.test(e.replace)) continue;
 
@@ -380,10 +393,15 @@ function applyContextEdits(
         if (next !== txt) {
           changes.push({ before: e.find, after: e.replace, parent: tag, reason: e.reason });
           txt = next;
+          modified = true;
+          e.used = true; // ✅ Mark edit as consumed
+          break; // ✅ Only apply ONE edit per text node iteration
         }
       }
 
-      (node as any).data = txt;
+      if (modified) {
+        (node as any).data = txt;
+      }
     });
   });
 
@@ -618,9 +636,10 @@ async function getVariantEditsAndWhy(sourceHtml: string, usedIdeas: Set<string>)
   const system = [
     'You generate SMALL, high-signal copy tweaks for an email variant.',
     'Return ONLY valid JSON:',
-    '{ "edits":[{ "find":"...", "replace":"...", "before_context":"...", "after_context":"...", "reason":"...", "idea":"<short tag>"}], "why":["..."] }',
+    '{ "edits":[{ "find":"<exact substring from input text node>", "replace":"<final corrected text>", "before_context":"<10-40 chars from before the find>", "after_context":"<10-40 chars from after the find>", "reason":"...", "idea":"<short tag>"}], "why":["..."] }',
     'Rules:',
-    '- Up to 12 edits. Each edit must be within ONE text node (use the given contexts).',
+    '- Up to 12 edits. Each edit must be within ONE text node.',
+    '- "find" and contexts must be copied EXACTLY from the input text (no HTML).',
     '- Do NOT change URLs, merge tags (*|FNAME|*), tracking codes, or anchor/link text.',
     '- Keep tone/meaning; ≤20% length change per edit.',
     '- Favor deliverability & SEO clarity; avoid spammy all-caps or exclamation!!!!',
@@ -775,7 +794,7 @@ function chatSystemPrompt(): string {
     '  "intent": "suggest" | "edit" | "both" | "clarify",',
     '  "ideas": ["..."],',
     '  "edits": [',
-    '    { "find":"...", "replace":"...", "before_context":"...", "after_context":"...", "reason":"..." }',
+    '    { "find":"<exact substring from input text node>", "replace":"<final corrected text>", "before_context":"<10-40 chars from before the find>", "after_context":"<10-40 chars from after the find>", "reason":"..." }',
     '  ],',
     '  "targets": ["optional-block-hints"],',
     '  "notes": ["optional warnings"]',
@@ -783,10 +802,10 @@ function chatSystemPrompt(): string {
     '',
     'Strict rules:',
     '- Edits are TEXT-ONLY inside text nodes. Do NOT output HTML in `find`/`replace`.',
+    '- "find" and contexts must be copied EXACTLY from the input text (no HTML).',
     '- Do NOT change URLs, anchor text, merge tags (*|FNAME|*), or tracking codes.',
     '- Keep language/tone. ≤20% length delta per edit.',
-    '- If ambiguous, set intent "clarify" and ask a short question in `notes".',
-    // critical nudges for reliable matching:
+    '- If ambiguous, set intent "clarify" and ask a short question in "notes".',
     '- Each edit MUST use the smallest possible `find` (prefer a single word or tiny phrase). Never include a whole sentence unless unavoidable.',
     '- ALWAYS include 10–40 characters of `before_context` and `after_context`, copied verbatim from around the `find` in the original text.',
   ].join('\n');
@@ -913,10 +932,8 @@ router.post('/snap', async (req: Request, res: Response) => {
   let browser: Browser | null = null;
   try {
     browser = await puppeteer.launch({
-      headless: true, // ✅ boolean, not "new"
+      headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      // If Chromium didn't download (e.g., corporate proxy), set this env var:
-      // PUPPETEER_EXECUTABLE_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
     });
 

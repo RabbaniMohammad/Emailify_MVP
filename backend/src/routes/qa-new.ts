@@ -4,7 +4,7 @@ import * as cheerio from 'cheerio';
 const router = Router();
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const ANTHROPIC_MODEL = process.env.CLAUDE_MODEL || 'claude-3-5-haiku-20241022';
+const ANTHROPIC_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929';
 
 interface ExtractedContent {
   titles: string[];
@@ -30,6 +30,8 @@ interface ContentChange {
   reason: string;
   changeType: string;
   confidence?: number;
+  before_context?: string;  
+  after_context?: string;
 }
 
 type TaskType = 'grammar' | 'seo';
@@ -256,8 +258,61 @@ function createTaggedContent(extracted: ExtractedContent): TaggedContent[] {
   return tagged;
 }
 
+// Add this new helper function for extracting context
+function extractContext(
+  allTagged: TaggedContent[],
+  currentItem: TaggedContent,
+  contextChars: number = 40
+): { before: string; after: string } {
+  const currentIndex = allTagged.findIndex(t => t.id === currentItem.id);
+  
+  if (currentIndex === -1) {
+    return { before: '', after: '' };
+  }
+  
+  // Get previous items for before context
+  let before = '';
+  for (let i = currentIndex - 1; i >= 0 && before.length < contextChars; i--) {
+    const prevText = allTagged[i].text;
+    if (before.length === 0) {
+      // Take end of previous item
+      before = prevText.slice(-contextChars);
+    } else {
+      before = prevText + ' ' + before;
+      if (before.length > contextChars) {
+        before = before.slice(-contextChars);
+        break;
+      }
+    }
+  }
+  
+  // Get next items for after context
+  let after = '';
+  for (let i = currentIndex + 1; i < allTagged.length && after.length < contextChars; i++) {
+    const nextText = allTagged[i].text;
+    if (after.length === 0) {
+      // Take start of next item
+      after = nextText.slice(0, contextChars);
+    } else {
+      after = after + ' ' + nextText;
+      if (after.length > contextChars) {
+        after = after.slice(0, contextChars);
+        break;
+      }
+    }
+  }
+  
+  // Trim to exact length
+  before = before.slice(-contextChars);
+  after = after.slice(0, contextChars);
+  
+  return { before, after };
+}
+
+// REPLACE your existing getContentImprovementsForBatch with this:
 async function getContentImprovementsForBatch(
   batch: TaggedContent[],
+  allTagged: TaggedContent[], // 👈 NEW PARAMETER
   taskType: TaskType = 'grammar'
 ): Promise<ContentChange[]> {
   
@@ -271,34 +326,44 @@ ONLY FIX THESE ERRORS:
 1. Spelling mistakes (e.g., "recieve" → "receive", "teh" → "the")
 2. Clear grammar errors (e.g., "This are" → "These are", "He don't" → "He doesn't")
 3. Obvious typos (e.g., "prdouct" → "product")
-4. Chat GPT -> ChatGPT | capitalworld -> capital world | writers strike -> writer's strike | in “Bagel wah over us -> in “Bagel wsah over us
-
+4. Chat GPT -> ChatGPT | capitalworld -> capital world | writers strike -> writer's strike
 
 DO NOT CHANGE:
-- Sentence fragments (e.g., "in front of", "your contacts") - these may be part of larger sentences
+- Sentence fragments - these may be part of larger sentences
 - Punctuation (unless clearly wrong)
 - Sentence structure
 - Numbers, prices, URLs, brand names
 
 Context provided to help you understand fragments:
-${batch.map((item, idx) => {
-  const prevItem = idx > 0 ? batch[idx - 1] : null;
-  const nextItem = idx < batch.length - 1 ? batch[idx + 1] : null;
+${batch.map((item) => {
+  const context = extractContext(allTagged, item, 50);
   
   return `
 ID: ${item.id}
 Category: ${item.category}
-${prevItem ? `PREVIOUS: "...${prevItem.text.slice(-50)}"` : 'PREVIOUS: (none)'}
-CURRENT: "${item.text}"
-${nextItem ? `NEXT: "${nextItem.text.slice(0, 50)}..."` : 'NEXT: (none)'}`;
+BEFORE CONTEXT: "${context.before}"
+CURRENT TEXT: "${item.text}"
+AFTER CONTEXT: "${context.after}"`;
 }).join('\n\n')}
 
-Return ONLY valid JSON array:
+Return ONLY valid JSON array. Each edit MUST include:
+- "id": the ID of the item
+- "original": COMPLETE FULL original text with error
+- "replacement": COMPLETE FULL corrected text
+- "before_context": text that appears BEFORE this item (provided above)
+- "after_context": text that appears AFTER this item (provided above)
+- "reason": what was fixed
+- "changeType": "spelling" | "grammar" | "typo"
+- "confidence": 0.0 to 1.0
+
+Example:
 [
   {
     "id": "main-5",
     "original": "Complete full original text with eror here",
     "replacement": "Complete full original text with error here",
+    "before_context": "previous sentence ending here",
+    "after_context": "next sentence starting here",
     "reason": "Fixed spelling: 'eror' → 'error'",
     "changeType": "spelling",
     "confidence": 0.99
@@ -311,20 +376,47 @@ CRITICAL JSON RULES:
 - NO trailing commas
 - Use double quotes only
 
-IF NO ACTUAL ERRORS FOUND: Return empty array [] `;
+IF NO ACTUAL ERRORS FOUND: Return empty array []`;
 
   const seoPrompt = `Optimize this content for engagement and clarity.
 
 CRITICAL INSTRUCTION: When you suggest improvements, you MUST return the COMPLETE FULL TEXT of the entire content item in both "original" and "replacement" fields.
 
-Content items to optimize:
-${batch.map(item => `
+Content items with context:
+${batch.map((item) => {
+  const context = extractContext(allTagged, item, 50);
+  
+  return `
 ID: ${item.id}
 Category: ${item.category}
-FULL TEXT: "${item.text}"
-`).join('\n')}
+BEFORE CONTEXT: "${context.before}"
+CURRENT TEXT: "${item.text}"
+AFTER CONTEXT: "${context.after}"`;
+}).join('\n\n')}
 
-Return ONLY a valid JSON array.
+Return ONLY valid JSON array. Each edit MUST include:
+- "id": the ID of the item
+- "original": COMPLETE FULL original text
+- "replacement": COMPLETE FULL improved text
+- "before_context": text that appears BEFORE this item (provided above)
+- "after_context": text that appears AFTER this item (provided above)
+- "reason": explain improvements made
+- "changeType": "engagement" | "clarity" | "word_choice"
+- "confidence": 0.0 to 1.0
+
+Example:
+[
+  {
+    "id": "title-1",
+    "original": "Complete full original text here",
+    "replacement": "Complete full improved text here",
+    "before_context": "previous content",
+    "after_context": "next content",
+    "reason": "Improved clarity and engagement",
+    "changeType": "engagement",
+    "confidence": 0.95
+  }
+]
 
 CRITICAL JSON RULES:
 - Return ONLY valid JSON - no markdown, no explanations
@@ -333,20 +425,8 @@ CRITICAL JSON RULES:
 - NO trailing commas
 - NO single quotes - use double quotes only
 
-Example format:
-[
-  {
-    "id": "title-1",
-    "original": "Complete full original text here",
-    "replacement": "Complete full improved text here",
-    "reason": "explain improvements made",
-    "changeType": "engagement",
-    "confidence": 0.95
-  }
-]
-
 RULES:
-- Return ONLY valid JSON - no markdown
+- Return ONLY valid JSON
 - ALWAYS include the COMPLETE FULL TEXT
 - Keep 90%+ similarity to original
 - DO NOT change numbers, prices, or brand names`;
@@ -441,10 +521,27 @@ RULES:
       }
       
       const changes: ContentChange[] = Array.isArray(parsed) ? parsed : [];
+      console.log(`\n      📋 CHANGES RECEIVED FROM CLAUDE:`);
+      changes.forEach((change, idx) => {
+        console.log(`         Change ${idx + 1} [${change.id}]:`);
+        console.log(`            Original: "${(change.original || '').slice(0, 50)}..."`);
+        console.log(`            Replace:  "${(change.replacement || '').slice(0, 50)}..."`);
+        console.log(`            Before Context: "${change.before_context || 'MISSING'}"`);
+        console.log(`            After Context:  "${change.after_context || 'MISSING'}"`);
+        console.log(`            Reason: ${change.reason}`);
+      });
       
-      console.log(`      ✅ Parsed ${changes.length} suggestions\n`);
+      // 👇 ADD VALIDATION: Ensure before_context and after_context are present
+      const validatedChanges = changes.filter(change => {
+        if (!change.before_context && !change.after_context) {
+          console.log(`      ⚠️  Warning: Change for ${change.id} missing context, but accepting it`);
+        }
+        return true; // Accept all changes but log warning
+      });
       
-      return changes;
+      console.log(`      ✅ Parsed ${validatedChanges.length} suggestions\n`);
+      
+      return validatedChanges;
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -473,6 +570,8 @@ Return ONLY a valid JSON array with this EXACT format (no markdown, no extras):
     "id": "title-0",
     "original": "complete text here",
     "replacement": "corrected text here",
+    "before_context": "text before",
+    "after_context": "text after",
     "reason": "what was fixed",
     "changeType": "spelling",
     "confidence": 0.95
@@ -497,6 +596,7 @@ Return the corrected JSON now:`
   return [];
 }
 
+
 function consolidateChanges(changes: ContentChange[]): ContentChange[] {
   console.log(`\n🔄 [CONSOLIDATE] Deduplicating ${changes.length} changes...`);
   
@@ -517,6 +617,7 @@ function consolidateChanges(changes: ContentChange[]): ContentChange[] {
   return consolidated;
 }
 
+// REPLACE your existing getContentImprovements with this:
 async function getContentImprovements(
   taggedContent: TaggedContent[],
   taskType: TaskType = 'grammar'
@@ -540,7 +641,8 @@ async function getContentImprovements(
     console.log(`   🔨 Batch ${batchNum}/${totalBatches} (items ${i + 1}-${Math.min(i + BATCH_SIZE, modifiable.length)}):`);
     
     try {
-      const batchChanges = await getContentImprovementsForBatch(batch, taskType);
+      // 👇 PASS taggedContent as second parameter
+      const batchChanges = await getContentImprovementsForBatch(batch, taggedContent, taskType);
       
       const restoredChanges = batchChanges.map(change => {
         const originalContent = taggedContent.find(t => t.id === change.id);
