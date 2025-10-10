@@ -295,17 +295,19 @@ export class ToolbarComponent implements OnInit, OnDestroy {
   }
 
   navigateToHome(): void {
-    const currentUrl = this.router.url;
+  const currentUrl = this.router.url;
+  
+  if (currentUrl === '/' || currentUrl === '') {
+    console.log('Already on home - smart refreshing templates (cache-aware)');
+    this.clearNavigationHistory();
     
-    if (currentUrl === '/' || currentUrl === '') {
-      console.log('Already on home - refreshing templates');
-      this.clearNavigationHistory();
-      window.location.reload();
-    } else {
-      console.log('Navigating to home from:', currentUrl);
-      this.router.navigate(['/']);
-    }
+    // ✅ Smart refresh: only fetch non-cached templates
+    this.svc.smartRefresh();
+  } else {
+    console.log('Navigating to home from:', currentUrl);
+    this.router.navigate(['/']);
   }
+}
 
   navigateToAdmin(): void {
     this.fetchPendingCount();

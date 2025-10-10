@@ -139,6 +139,63 @@ export class TemplatesService {
     this.fetchTemplates(this.currentSearchQuery, cacheKey);
   }
 
+  // Add this to your TemplatesService class:
+
+/**
+ * Smart refresh: Fetch new template list but skip cached content
+ */
+// Replace the smartRefresh method in your TemplatesService with this:
+
+smartRefresh(): void {
+  console.log('🔄 Smart refresh started...');
+  
+  // Set loading state
+  this.updateState({ status: 'loading', error: null });
+  
+  // Fetch fresh template list from server
+  this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates')
+    .pipe(
+      tap(response => {
+        const freshItems = response.items || [];
+        
+        console.log(`✅ Smart refresh: ${freshItems.length} templates from server`);
+        
+        // Cache the fresh list
+        this.cache.set(CACHE_KEYS.TEMPLATES_LIST, freshItems, CACHE_TTL.LIST, 'session');
+        
+        // Update state with fresh list
+        this.updateState({ 
+          items: freshItems, 
+          status: 'success', 
+          error: null 
+        });
+      }),
+      catchError(error => {
+        console.error('❌ Smart refresh failed:', error);
+        
+        // Try to use stale cache
+        const stale = this.cache.getStale<TemplateItem[]>(CACHE_KEYS.TEMPLATES_LIST);
+        
+        if (stale && stale.length > 0) {
+          console.warn('⚠️ Using stale cache due to network error');
+          this.updateState({ 
+            items: stale, 
+            status: 'success', 
+            error: 'Showing cached data (offline)' 
+          });
+        } else {
+          this.updateState({ 
+            status: 'error', 
+            error: error.message || 'Failed to refresh templates' 
+          });
+        }
+        
+        return throwError(() => error);
+      })
+    )
+    .subscribe();
+}
+
   hasFreshCache(): boolean {
     const cacheKey = this.currentSearchQuery 
       ? `${CACHE_KEYS.SEARCH_PREFIX}${this.currentSearchQuery}`

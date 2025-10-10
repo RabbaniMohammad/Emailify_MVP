@@ -158,12 +158,16 @@ async function getHtmlForTemplate(id: string): Promise<{ name: string; html: str
 // ---------- Routes ----------
 
 /** GET /api/templates?query=&limit=&offset= → { items:[{id,name,...metadata}], total } */
+// In templates.ts - REPLACE the GET / route with this:
+
+/** GET /api/templates?query=&limit=&offset= → { items:[{id,name,...metadata}], total } */
 router.get('/', async (req: Request, res: Response) => {
   try {
     const query  = String(req.query.query ?? '').trim().toLowerCase();
     const limit  = Math.min(Number(req.query.limit ?? 50), 250);
     const offset = Number(req.query.offset ?? 0);
 
+    // ✅ Fetch Mailchimp templates
     const resp: McTemplatesList = await mc.templates.list({ count: limit, offset, type: 'user' });
 
     const source: McTemplate[] = Array.isArray(resp.templates) ? resp.templates : [];
@@ -173,7 +177,7 @@ router.get('/', async (req: Request, res: Response) => {
     });
 
     const seen = new Set<string>();
-    let items = (userOnly.length ? userOnly : source)
+    let mailchimpItems = (userOnly.length ? userOnly : source)
       .map((t) => ({
         id: String(t.id),
         name: String(t.name ?? 'Untitled Template'),
@@ -191,16 +195,47 @@ router.get('/', async (req: Request, res: Response) => {
       }))
       .filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
 
-    if (query) items = items.filter((t) => t.name.toLowerCase().includes(query));
+    // ✅ Fetch Generated templates from MongoDB
+    const generatedTemplates = await GeneratedTemplate.find({})
+      .sort({ createdAt: -1 })
+      .limit(100) // Reasonable limit
+      .lean();
 
-    const total = typeof resp.total_items === 'number' ? resp.total_items : items.length;
+    const generatedItems = generatedTemplates.map((t) => ({
+      id: t.templateId,
+      name: t.name,
+      type: 'generated',
+      category: 'Generated',
+      thumbnail: null,
+      dateCreated: t.createdAt?.toISOString() ?? null,
+      dateEdited: t.updatedAt?.toISOString() ?? null,
+      createdBy: 'AI Generated',
+      active: true,
+      dragAndDrop: false,
+      responsive: true,
+      folderId: null,
+      screenshotUrl: null,
+    }));
+
+    // ✅ Merge both lists (generated templates first, then Mailchimp)
+    let items = [...generatedItems, ...mailchimpItems];
+
+    // ✅ Apply search filter if provided
+    if (query) {
+      items = items.filter((t) => t.name.toLowerCase().includes(query));
+    }
+
+    const total = items.length;
+    
+    console.log(`📋 Templates list: ${generatedItems.length} generated + ${mailchimpItems.length} Mailchimp = ${total} total`);
+
     res.json({ items, total });
   } catch (err: unknown) {
     const e = err as any;
     const status  = e?.status || e?.statusCode || e?.response?.status || 500;
     const message = e?.response?.text || e?.detail || e?.message || 'Failed to fetch templates';
-    console.error('Mailchimp templates error:', { status, message });
-    res.status(status).json({ code: 'MAILCHIMP_ERROR', message });
+    console.error('Templates list error:', { status, message });
+    res.status(status).json({ code: 'FETCH_ERROR', message });
   }
 });
 

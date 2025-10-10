@@ -320,45 +320,59 @@ onRunTests(): void {
     });
 }
 
+onTemplateNameChange(newName: string): void {
+  this.templateName = newName;
+}
   onSaveTemplate(): void {
-    if (!this.conversationId) {
-      this.snackBar.open('No template to save', 'Close', {
-        duration: 3000,
-        panelClass: ['error-snackbar'],
-      });
-      return;
-    }
-
-    const name = this.templateName.trim() || `Template_${Date.now()}`;
-
-    this.generationService
-      .saveTemplate(this.conversationId, name)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response) => {
-          this.snackBar.open('Template saved successfully!', 'Close', {
-            duration: 3000,
-            panelClass: ['success-snackbar'],
-          });
-
-          // Navigate to templates page and highlight the new template
-          this.router.navigate(['/'], {
-            queryParams: {
-              newTemplateId: response.templateId,
-              highlight: 'true',
-            },
-          });
-        },
-        error: (error) => {
-          console.error('Save failed:', error);
-          this.snackBar.open(
-            error.error?.message || 'Failed to save template',
-            'Close',
-            { duration: 5000, panelClass: ['error-snackbar'] }
-          );
-        },
-      });
+  if (!this.conversationId) {
+    this.snackBar.open('No template to save', 'Close', {
+      duration: 3000,
+      panelClass: ['error-snackbar'],
+    });
+    return;
   }
+
+  // ✅ Validate template name
+  const name = this.templateName?.trim();
+  
+  if (!name) {
+    this.snackBar.open('Please enter a template name', 'Close', {
+      duration: 4000,
+      panelClass: ['error-snackbar'],
+      horizontalPosition: 'center',
+      verticalPosition: 'top',
+    });
+    return;
+  }
+
+  this.generationService
+    .saveTemplate(this.conversationId, name)
+    .pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: (response) => {
+        this.snackBar.open('Template saved successfully!', 'Close', {
+          duration: 3000,
+          panelClass: ['success-snackbar'],
+        });
+
+        // Navigate to templates page and highlight the new template
+        this.router.navigate(['/'], {
+          queryParams: {
+            newTemplateId: response.templateId,
+            highlight: 'true',
+          },
+        });
+      },
+      error: (error) => {
+        console.error('Save failed:', error);
+        this.snackBar.open(
+          error.error?.message || 'Failed to save template',
+          'Close',
+          { duration: 5000, panelClass: ['error-snackbar'] }
+        );
+      },
+    });
+}
 
   onNewConversation(): void {
     // Clear current conversation

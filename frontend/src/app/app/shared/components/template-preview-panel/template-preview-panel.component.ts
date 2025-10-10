@@ -78,6 +78,7 @@ export class TemplatePreviewPanelComponent implements OnChanges {
 
   @Output() saveTemplate = new EventEmitter<void>();
   @Output() runTests = new EventEmitter<void>();
+  @Output() templateNameChange = new EventEmitter<string>();
 
   // Outputs
   @Output() refresh = new EventEmitter<void>();
@@ -105,6 +106,9 @@ export class TemplatePreviewPanelComponent implements OnChanges {
   onSaveTemplate(): void {
     this.saveTemplate.emit();
   }
+  onTemplateNameChange(newName: string): void {
+  this.templateNameChange.emit(newName);
+}
   
   onRunTests(): void {
     this.runTests.emit();

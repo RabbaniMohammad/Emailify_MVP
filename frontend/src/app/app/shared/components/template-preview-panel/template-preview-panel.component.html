@@ -16,11 +16,12 @@
         <ng-container *ngIf="showGenerateActions && isGeneratePage">
             <!-- Template Name Input (Smaller) -->
             <input 
-            type="text"
-            class="template-name-input-simple"
-            [(ngModel)]="templateName" 
-            placeholder="Template Name"
-            maxlength="100">
+                type="text"
+                class="template-name-input-simple"
+                [(ngModel)]="templateName"
+                (ngModelChange)="onTemplateNameChange($event)"
+                placeholder="Template Name"
+                maxlength="100">
 
             <!-- Save Button -->
             <button 
