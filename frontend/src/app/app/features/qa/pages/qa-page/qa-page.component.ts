@@ -99,6 +99,24 @@ type SuggestionResult = {
         animate('0.5s cubic-bezier(0.34, 1.56, 0.64, 1)', 
           style({ opacity: 1, transform: 'translateY(0) scale(1)' }))
       ])
+    ]),
+    trigger('modalAnimation', [
+      transition(':enter', [
+        style({ opacity: 0 }),
+        animate('200ms ease-out', style({ opacity: 1 }))
+      ]),
+      transition(':leave', [
+        animate('150ms ease-in', style({ opacity: 0 }))
+      ])
+    ]),
+    trigger('modalContentAnimation', [
+      transition(':enter', [
+        style({ opacity: 0, transform: 'scale(0.95)' }),
+        animate('200ms ease-out', style({ opacity: 1, transform: 'scale(1)' }))
+      ]),
+      transition(':leave', [
+        animate('150ms ease-in', style({ opacity: 0, transform: 'scale(0.95)' }))
+      ])
     ])
   ]
 })
@@ -111,6 +129,11 @@ export class QaPageComponent implements OnDestroy {
   private previewCache = inject(PreviewCacheService);
   private cdr = inject(ChangeDetectorRef);
   private snackBar = inject(MatSnackBar);
+
+  // Modal state
+  isEditModalOpen = false;
+  editableTexts: Array<{ id: string; text: string; tag: string; edited: boolean }> = [];
+  currentGoldenHtml = '';
 
   // Timeout configurations
   private readonly GOLDEN_TIMEOUT = 120000;
@@ -203,6 +226,156 @@ export class QaPageComponent implements OnDestroy {
   }
 
   // ============================================
+  // MODAL METHODS
+  // ============================================
+  openEditModal(): void {
+    const golden = this.goldenSubject.value;
+    if (!golden?.html) return;
+    
+    this.currentGoldenHtml = golden.html;
+    this.extractEditableTexts(golden.html);
+    this.isEditModalOpen = true;
+    document.body.style.overflow = 'hidden';
+    this.cdr.markForCheck();
+  }
+
+  closeEditModal(): void {
+    this.isEditModalOpen = false;
+    document.body.style.overflow = '';
+    this.editableTexts = [];
+    this.currentGoldenHtml = '';
+    this.cdr.markForCheck();
+  }
+
+  onModalBackdropClick(event: MouseEvent): void {
+    if (event.target === event.currentTarget) {
+      this.closeEditModal();
+    }
+  }
+
+  private extractEditableTexts(html: string): void {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const textElements: Array<{ id: string; text: string; tag: string; edited: boolean }> = [];
+    let idCounter = 0;
+
+    // Target elements that typically contain user-visible text
+    const targetSelectors = 'p, h1, h2, h3, h4, h5, h6, span, div, a, button, li, td, th, label';
+    const elements = doc.querySelectorAll(targetSelectors);
+
+    elements.forEach((element) => {
+      // Get direct text content (not from children)
+      const textContent = Array.from(element.childNodes)
+        .filter(node => node.nodeType === Node.TEXT_NODE)
+        .map(node => node.textContent?.trim())
+        .filter(text => text && text.length > 0)
+        .join(' ');
+
+      if (textContent) {
+        textElements.push({
+          id: `text-${idCounter++}`,
+          text: textContent,
+          tag: element.tagName.toLowerCase(),
+          edited: false
+        });
+      }
+    });
+
+    this.editableTexts = textElements;
+  }
+
+  onTextEdit(id: string, newText: string): void {
+    const item = this.editableTexts.find(t => t.id === id);
+    if (item) {
+      item.text = newText;
+      item.edited = true;
+      this.cdr.markForCheck();
+    }
+  }
+
+  saveEditedTemplate(): void {
+    if (!this.currentGoldenHtml) return;
+
+    let updatedHtml = this.currentGoldenHtml;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(updatedHtml, 'text/html');
+    
+    // Track which texts we've already replaced to handle duplicates
+    const replacementMap = new Map<string, string>();
+    this.editableTexts.forEach(item => {
+      if (item.edited) {
+        replacementMap.set(item.id, item.text);
+      }
+    });
+
+    // Apply edits to the DOM
+    const targetSelectors = 'p, h1, h2, h3, h4, h5, h6, span, div, a, button, li, td, th, label';
+    const elements = doc.querySelectorAll(targetSelectors);
+    let idCounter = 0;
+
+    elements.forEach((element) => {
+      const directTextNodes = Array.from(element.childNodes).filter(
+        node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()
+      );
+
+      directTextNodes.forEach((textNode) => {
+        const currentId = `text-${idCounter++}`;
+        const newText = replacementMap.get(currentId);
+        
+        if (newText !== undefined && textNode.textContent) {
+          textNode.textContent = newText;
+        }
+      });
+    });
+
+    // Get updated HTML
+    updatedHtml = doc.documentElement.outerHTML;
+
+    // Update the golden subject
+    const currentGolden = this.goldenSubject.value;
+    if (currentGolden) {
+      const updatedGolden = { ...currentGolden, html: updatedHtml };
+      this.goldenSubject.next(updatedGolden);
+      
+      // Save to cache if templateId exists
+      if (this.templateId) {
+        this.qa.saveGoldenToCache(this.templateId, updatedGolden);
+      }
+    }
+
+    this.showSuccess('Golden template updated successfully!');
+    this.closeEditModal();
+  }
+
+  onBypassVariants(): void {
+    // Placeholder for future implementation
+    this.showInfo('Bypass Variants feature coming soon!');
+  }
+
+  getTagDisplayName(tag: string): string {
+    const tagMap: { [key: string]: string } = {
+      'h1': 'Heading 1',
+      'h2': 'Heading 2',
+      'h3': 'Heading 3',
+      'h4': 'Heading 4',
+      'h5': 'Heading 5',
+      'h6': 'Heading 6',
+      'p': 'Paragraph',
+      'span': 'Text',
+      'div': 'Content',
+      'a': 'Link',
+      'button': 'Button',
+      'li': 'List Item',
+      'td': 'Table Cell',
+      'th': 'Table Header',
+      'label': 'Label'
+    };
+    return tagMap[tag] || tag.toUpperCase();
+  }
+
+  trackByTextId = (index: number, item: any) => item.id;
+
+  // ============================================
   // GENERATE GOLDEN TEMPLATE
   // ============================================
   onGenerateGolden(id: string) {
@@ -236,7 +409,6 @@ export class QaPageComponent implements OnDestroy {
         
         this.goldenSubject.next(res);
         this.showSuccess('Golden template generated successfully!');
-        // this.onAnalyzeSuggestions(id);
       },
       error: (e) => {
         if (this.goldenAborted) return;
@@ -263,9 +435,6 @@ export class QaPageComponent implements OnDestroy {
         this.cdr.markForCheck();
       }
     });
-
-    // ❌ REMOVED - Don't add to global subscriptions array
-    // this.subscriptions.push(this.goldenSub);
   }
 
   private handleGoldenTimeout(): void {
@@ -296,7 +465,6 @@ export class QaPageComponent implements OnDestroy {
       this.goldenTimeoutId = undefined;
     }
     
-    // this.showWarning('Golden template generation cancelled.');
     this.cdr.markForCheck();
   }
 
@@ -360,9 +528,6 @@ export class QaPageComponent implements OnDestroy {
         this.cdr.markForCheck();
       }
     });
-
-    // ❌ REMOVED - Don't add to global subscriptions array
-    // this.subscriptions.push(this.subjectsSub);
   }
 
   private handleSubjectsTimeout(): void {
@@ -390,7 +555,6 @@ export class QaPageComponent implements OnDestroy {
       this.subjectsTimeoutId = undefined;
     }
     
-    // this.showWarning('Subject generation cancelled.');
     this.cdr.markForCheck();
   }
 
@@ -470,9 +634,6 @@ export class QaPageComponent implements OnDestroy {
         this.cdr.markForCheck();
       }
     });
-
-    // ❌ REMOVED - Don't add to global subscriptions array
-    // this.subscriptions.push(this.suggestionsSub);
   }
 
   private handleSuggestionsTimeout(): void {

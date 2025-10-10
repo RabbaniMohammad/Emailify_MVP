@@ -432,6 +432,15 @@ export class QaService {
     }
   }
 
+  saveGoldenToCache(templateId: string, golden: GoldenResult): void {
+  const key = `qa-golden-${templateId}`;
+  try {
+    localStorage.setItem(key, JSON.stringify(golden));
+  } catch (e) {
+    console.warn('Failed to save golden to cache:', e);
+  }
+}
+
   saveValidLinks(runId: string, links: string[]) {
     try {
       const clean = Array.from(
