@@ -1341,3 +1341,253 @@
     page-break-inside: avoid;
   }
 }
+
+// ============================================================================
+// AI WARNING PLACEHOLDER STYLES FOR GENERATE PAGE
+// Paste this at the BOTTOM of template-preview-panel.component.scss
+// ============================================================================
+
+// AI Warning Container
+.ai-warning-container {
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem;
+  animation: fadeInScale 0.6s ease forwards;
+}
+
+// Floating AI Icon with Pulse Rings
+.floating-ai-icon {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 2.5rem;
+  animation: floatUpDown 3s ease-in-out infinite;
+  
+  svg {
+    width: 100%;
+    height: 100%;
+    stroke: #6d28d9;
+    filter: drop-shadow(0 10px 30px rgba(109, 40, 217, 0.3));
+    position: relative;
+    z-index: 2;
+  }
+  
+  .pulse-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 3px solid rgba(109, 40, 217, 0.4);
+    animation: pulseRing 2s ease-out infinite;
+    
+    &::before,
+    &::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      border: 3px solid rgba(109, 40, 217, 0.3);
+    }
+    
+    &::before {
+      width: 130%;
+      height: 130%;
+      animation: pulseRing 2s ease-out infinite 0.5s;
+    }
+    
+    &::after {
+      width: 160%;
+      height: 160%;
+      animation: pulseRing 2s ease-out infinite 1s;
+    }
+  }
+}
+
+// Warning Text
+.ai-warning-container h2 {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 800;
+  background: linear-gradient(135deg, #6d28d9 0%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 1.5rem 0;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.warning-text {
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  line-height: 1.7;
+  color: #64748b;
+  margin: 0 0 2.5rem 0;
+  font-weight: 500;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+// Info Badges
+.info-badges {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  
+  .badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 50px;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    border: 2px solid;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: default;
+    
+    svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    
+    &.warning {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(251, 191, 36, 0.1) 100%);
+      border-color: rgba(245, 158, 11, 0.3);
+      color: #d97706;
+      
+      &:hover {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(251, 191, 36, 0.2) 100%);
+        border-color: rgba(245, 158, 11, 0.5);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(245, 158, 11, 0.2);
+      }
+    }
+    
+    &.info {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 197, 253, 0.1) 100%);
+      border-color: rgba(59, 130, 246, 0.3);
+      color: #2563eb;
+      
+      &:hover {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(147, 197, 253, 0.2) 100%);
+        border-color: rgba(59, 130, 246, 0.5);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(59, 130, 246, 0.2);
+      }
+    }
+  }
+}
+
+// ============================================================================
+// ANIMATIONS
+// ============================================================================
+
+@keyframes floatUpDown {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes pulseRing {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.4);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// ============================================================================
+// RESPONSIVE DESIGN
+// ============================================================================
+
+@media (max-width: 768px) {
+  .ai-warning-container {
+    padding: 1.5rem 1rem;
+  }
+  
+  .floating-ai-icon {
+    width: 90px;
+    height: 90px;
+    margin-bottom: 2rem;
+  }
+  
+  .info-badges {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    
+    .badge {
+      justify-content: center;
+      width: 100%;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .floating-ai-icon {
+    width: 70px;
+    height: 70px;
+    margin-bottom: 1.5rem;
+  }
+  
+  .warning-text {
+    font-size: 0.9375rem;
+    margin-bottom: 2rem;
+  }
+  
+  .info-badges .badge {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+}
+
+// ============================================================================
+// REDUCED MOTION ACCESSIBILITY
+// ============================================================================
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-ai-icon,
+  .pulse-ring,
+  .pulse-ring::before,
+  .pulse-ring::after {
+    animation: none !important;
+  }
+  
+  .info-badges .badge:hover {
+    transform: none !important;
+  }
+  
+  .ai-warning-container {
+    animation: none !important;
+  }
+}
