@@ -150,6 +150,11 @@ function grammarSystemPrompt(): string {
     "Rules:",
     "- 'find' and contexts must be copied EXACTLY from the input text (no HTML).",
     "- Keep edits minimal; don't rewrite tone or meaning.",
+    "- ✅ CRITICAL: Make separate edits for text that appears to cross link boundaries.",
+    "- ✅ Example: If 'ew single, Bagel wah over us' has errors, make TWO edits SEPERATELY:",
+    "  1) 'ew single' → 'new single' (inside link)",
+    "  2) 'wah over us' → 'wash over us' (outside link)",
+    "  3) *ALWAYS AIM FOR ONE EDIT ONLY SENTENCE 1 HAS $ MISTAKES should AIM for 4 different edits*",
     "- Max 30 edits per request.",
   ].join("\n");
 }
@@ -395,9 +400,8 @@ function applyReplacementToNodes(
   for (const mapping of nodeMap) {
     const { node, startInConsolidated, endInConsolidated } = mapping;
     
-    // Check if this node is affected by the match
     if (matchEnd <= startInConsolidated || matchStart >= endInConsolidated) {
-      continue; // No overlap
+      continue;
     }
     
     const localStart = Math.max(0, matchStart - startInConsolidated);
@@ -411,16 +415,70 @@ function applyReplacementToNodes(
   
   if (affectedNodes.length === 0) return false;
   
+  // ✅ CHECK: Reject if match crosses interactive element boundaries
+  if (affectedNodes.length > 1) {
+    const interactiveTags = ['a', 'button'];
+    
+    // Find the interactive ancestor for each node (if any)
+    const interactiveParents = affectedNodes.map((n, idx) => {
+      let current = n.node.parent;
+      let depth = 0;
+      
+      // 🔍 DEBUG: Log the parent chain
+      console.log(`\n--- Node ${idx} parent chain ---`);
+      let temp = n.node.parent;
+      while (temp && depth < 10) {
+        console.log(`  ${depth}: ${temp.type} ${temp.tagName || temp.name || ''}`);
+        temp = temp.parent;
+        depth++;
+      }
+      
+      current = n.node.parent;
+      while (current) {
+        const tag = current.tagName?.toLowerCase();
+        console.log(`  Checking: ${current.type} tag=${tag}`);
+        if (tag && interactiveTags.includes(tag)) {
+          console.log(`  ✅ Found interactive: ${tag}`);
+          return current;
+        }
+        current = current.parent;
+      }
+      console.log(`  ❌ No interactive parent found`);
+      return null;
+    });
+    
+    console.log('\n--- Final check ---');
+    console.log('interactiveParents:', interactiveParents.map(p => p?.tagName || 'null'));
+    
+    const hasInteractive = interactiveParents.some(p => p !== null);
+    const hasNonInteractive = interactiveParents.some(p => p === null);
+    
+    console.log('hasInteractive:', hasInteractive);
+    console.log('hasNonInteractive:', hasNonInteractive);
+    
+    if (hasInteractive && hasNonInteractive) {
+      console.log('🚫 BLOCKING: crosses interactive boundary');
+      return false;
+    }
+    
+    const uniqueInteractive = new Set(interactiveParents.filter(p => p !== null));
+    console.log('uniqueInteractive.size:', uniqueInteractive.size);
+    
+    if (uniqueInteractive.size > 1) {
+      console.log('🚫 BLOCKING: multiple interactive elements');
+      return false;
+    }
+    
+    console.log('✅ ALLOWING: passed all checks');
+  }
+  
   // Apply replacement
   if (affectedNodes.length === 1) {
-    // Simple case: match is within one node
     const { node, localStart, localEnd } = affectedNodes[0];
     const original = String(node.data || '');
     node.data = original.slice(0, localStart) + replacement + original.slice(localEnd);
     return true;
   } else {
-    // Complex case: match spans multiple nodes
-    // Replace in first node, clear the rest
     const first = affectedNodes[0];
     const original = String(first.node.data || '');
     first.node.data = original.slice(0, first.localStart) + replacement;
