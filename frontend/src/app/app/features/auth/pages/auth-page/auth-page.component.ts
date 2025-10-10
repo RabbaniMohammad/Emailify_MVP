@@ -92,9 +92,11 @@ export class AuthPageComponent implements OnInit, OnDestroy {
       'google_auth_failed': 'Google authentication failed. Please try again.',
       'no_user': 'Unable to create user account. Please try again.',
       'callback_failed': 'Authentication callback failed. Please try again.',
-      'pending_approval': 'Your account is pending admin approval. Please wait for an administrator to review your request.',
-      'account_deactivated': 'Your account has been deactivated. Please contact an administrator.',
+      'pending_approval': 'Your account is pending admin approval.',
+      'account_deactivated': 'Your account has been deactivated. Contact your administrator.',
       'authentication_failed': 'Authentication failed. Please try again.',
+      'session_expired': 'Your session has expired. Please sign in again.', // ✅ NEW
+      'access_denied': 'Access denied. Contact your administrator.', // ✅ NEW
     };
     return messages[error] || 'An error occurred during authentication. Please try again.';
   }

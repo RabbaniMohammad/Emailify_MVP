@@ -1,7 +1,7 @@
 import { Injectable, inject, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, tap, catchError, of, firstValueFrom, interval, Subscription, map } from 'rxjs';
+import { BehaviorSubject, Observable, tap, catchError, of, firstValueFrom, interval, Subscription, map, throwError } from 'rxjs';
 import { CacheService } from './cache.service';
 
 export interface User {
@@ -25,14 +25,17 @@ export class AuthService implements OnDestroy {
   private router = inject(Router);
   private cache = inject(CacheService);
 
+  // ==================== State Management ====================
   private currentUserSubject = new BehaviorSubject<User | null>(null);
   public currentUser$ = this.currentUserSubject.asObservable();
 
   private isAuthenticatedSubject = new BehaviorSubject<boolean>(false);
   public isAuthenticated$ = this.isAuthenticatedSubject.asObservable();
 
+  // ==================== Internal Flags ====================
   private authCheckComplete = false;
   private statusCheckSubscription?: Subscription;
+  private tokenRefreshTimer?: any;
 
   constructor() {
     // Don't call checkAuthStatus here - it causes race conditions
@@ -42,33 +45,61 @@ export class AuthService implements OnDestroy {
     this.stopStatusMonitoring();
   }
 
+  // ==================== Status Monitoring ====================
+  
   /**
-   * Start monitoring user status (call after successful login)
+   * Start monitoring user status and proactively refresh tokens
+   * Call this after successful login
    */
   startStatusMonitoring(): void {
-    // Stop any existing monitoring
+    console.log('🔄 Starting status monitoring and proactive token refresh');
     this.stopStatusMonitoring();
 
-    // Check status every 30 seconds
+    // ✅ Check user status every 30 seconds
     this.statusCheckSubscription = interval(30000).subscribe(() => {
       if (this.isAuthenticatedSubject.value) {
         this.checkUserStatus();
       }
     });
+
+    // ✅ Proactive token refresh every 50 minutes (before 60-minute expiry)
+    this.tokenRefreshTimer = setInterval(() => {
+      if (this.isAuthenticatedSubject.value) {
+        console.log('🔄 Proactively refreshing token (50-minute interval)...');
+        
+        this.refreshToken().subscribe({
+          next: () => {
+            console.log('✅ Token refreshed proactively');
+          },
+          error: (err) => {
+            console.error('❌ Proactive refresh failed:', err);
+            this.handleRefreshFailure(err);
+          }
+        });
+      }
+    }, 50 * 60 * 1000); // 50 minutes
   }
 
   /**
-   * Stop monitoring user status
+   * Stop all monitoring timers
    */
   stopStatusMonitoring(): void {
+    console.log('🛑 Stopping status monitoring');
+    
     if (this.statusCheckSubscription) {
       this.statusCheckSubscription.unsubscribe();
       this.statusCheckSubscription = undefined;
+    }
+    
+    if (this.tokenRefreshTimer) {
+      clearInterval(this.tokenRefreshTimer);
+      this.tokenRefreshTimer = undefined;
     }
   }
 
   /**
    * Check if current user is still active and approved
+   * Called every 30 seconds by status monitoring
    */
   private checkUserStatus(): void {
     this.http.get<{ user: User }>('/api/auth/me', { withCredentials: true })
@@ -76,42 +107,45 @@ export class AuthService implements OnDestroy {
         next: (response) => {
           const user = response.user;
           
-          // Check if user is deactivated or not approved
+          // ✅ Check if user account status changed
           if (!user.isActive || !user.isApproved) {
-            console.warn('User account status changed - logging out');
-            this.logout().subscribe({
-              next: () => {
-                this.router.navigate(['/auth'], {
-                  queryParams: {
-                    error: !user.isActive ? 'account_deactivated' : 'pending_approval'
-                  },
-                  replaceUrl: true
-                });
-              }
-            });
+            console.warn('⚠️ User account status changed - logging out');
+            const reason = !user.isActive ? 'account_deactivated' : 'pending_approval';
+            this.handleForceLogout(reason);
           } else {
-            // Update user data
+            // ✅ Update user data
             this.currentUserSubject.next(user);
           }
         },
         error: (error) => {
-          // If 401 or 403, user session is invalid
-          if (error.status === 401 || error.status === 403) {
-            this.logout().subscribe({
+          // ✅ Try to refresh token if 401
+          if (error.status === 401) {
+            console.log('🔄 Token expired during status check - attempting refresh...');
+            
+            this.refreshToken().subscribe({
               next: () => {
-                this.router.navigate(['/auth'], {
-                  queryParams: { error: 'session_expired' },
-                  replaceUrl: true
-                });
+                console.log('✅ Token refreshed successfully during status check');
+                // Retry the status check after successful refresh
+                this.checkUserStatus();
+              },
+              error: (refreshError) => {
+                console.error('❌ Token refresh failed during status check');
+                this.handleRefreshFailure(refreshError);
               }
             });
+          } else if (error.status === 403) {
+            // ✅ Access forbidden
+            console.error('🚫 Access forbidden during status check');
+            this.handleForceLogout('access_denied');
           }
         }
       });
   }
 
+  // ==================== Authentication Methods ====================
+
   /**
-   * Check authentication status (call this before routing)
+   * Check authentication status (call before routing)
    */
   async checkAuthStatus(): Promise<boolean> {
     if (this.authCheckComplete) {
@@ -127,7 +161,7 @@ export class AuthService implements OnDestroy {
       this.isAuthenticatedSubject.next(true);
       this.authCheckComplete = true;
       
-      // Start monitoring after successful auth
+      // ✅ Start monitoring after successful auth check
       this.startStatusMonitoring();
       
       return true;
@@ -158,12 +192,16 @@ export class AuthService implements OnDestroy {
       );
   }
 
+  /**
+   * Handle successful authentication from OAuth callback
+   */
   handleAuthSuccess(user: any): void {
-    // Update the current user
+    console.log('✅ Authentication successful:', user.email);
+    
     this.currentUserSubject.next(user);
     this.isAuthenticatedSubject.next(true);
     
-    // Start monitoring
+    // ✅ Start monitoring
     this.startStatusMonitoring();
   }
 
@@ -182,9 +220,11 @@ export class AuthService implements OnDestroy {
       `width=${width},height=${height},left=${left},top=${top}`
     );
 
+    // ✅ Poll for popup closure
     const pollTimer = setInterval(() => {
       if (popup?.closed) {
         clearInterval(pollTimer);
+        console.log('🔄 OAuth popup closed - checking auth status...');
         this.authCheckComplete = false;
         this.checkAuthStatus();
       }
@@ -192,26 +232,125 @@ export class AuthService implements OnDestroy {
   }
 
   /**
-   * Refresh access token
+   * Handle successful OAuth callback
+   */
+  handleAuthCallback(): void {
+    this.authCheckComplete = false;
+    this.checkAuthStatus();
+  }
+
+  // ==================== Token Management ====================
+
+  /**
+   * Refresh access token using refresh token
    */
   refreshToken(): Observable<any> {
-    return this.http.post('/api/auth/refresh', {}, { withCredentials: true });
+    return this.http.post('/api/auth/refresh', {}, { withCredentials: true }).pipe(
+      tap(() => {
+        console.log('✅ Access token refreshed');
+      }),
+      catchError((error) => {
+        console.error('❌ Token refresh error:', error.status, error.error);
+        return throwError(() => error);
+      })
+    );
   }
 
   /**
-   * Logout user
+   * Handle refresh token failure with smart error detection
+   */
+  private handleRefreshFailure(error: any): void {
+    const status = error.status;
+    const errorMessage = error.error?.error || '';
+    const errorCode = error.error?.code || '';
+
+    console.error('❌ Refresh failed:', { status, errorCode, errorMessage });
+
+    // ✅ Determine the specific reason for failure
+    let redirectError = 'session_expired';
+
+    if (status === 401) {
+      switch (errorCode) {
+        case 'NO_REFRESH_TOKEN':
+          redirectError = 'session_expired';
+          console.error('❌ Refresh token missing (cookies cleared or expired)');
+          break;
+        case 'INVALID_REFRESH_TOKEN':
+          redirectError = 'session_expired';
+          console.error('❌ Refresh token invalid (malformed or secret changed)');
+          break;
+        case 'USER_NOT_FOUND':
+          redirectError = 'session_expired';
+          console.error('❌ User account deleted');
+          break;
+        case 'USER_INACTIVE':
+          redirectError = 'account_deactivated';
+          console.error('❌ Account deactivated');
+          break;
+        case 'USER_NOT_APPROVED':
+          redirectError = 'pending_approval';
+          console.error('❌ Account not approved');
+          break;
+        default:
+          redirectError = 'session_expired';
+          console.error('❌ Refresh token expired (7 days passed)');
+      }
+    } else if (status === 403) {
+      redirectError = 'access_denied';
+      console.error('❌ Access forbidden');
+    } else {
+      redirectError = 'authentication_failed';
+      console.error('❌ Unknown refresh error:', error);
+    }
+
+    // ✅ Force logout and redirect
+    this.handleForceLogout(redirectError);
+  }
+
+  /**
+   * Force logout with specific error reason
+   */
+  private handleForceLogout(reason: string): void {
+    console.log('🚪 Force logout initiated:', reason);
+    this.stopStatusMonitoring();
+    
+    this.logout().subscribe({
+      next: () => {
+        console.log('✅ Logout successful, redirecting to auth page');
+        this.router.navigate(['/auth'], {
+          queryParams: { error: reason },
+          replaceUrl: true
+        });
+      },
+      error: (logoutError) => {
+        console.error('❌ Logout failed, forcing navigation:', logoutError);
+        // Force navigation even if logout fails
+        this.clearAuthState();
+        this.router.navigate(['/auth'], {
+          queryParams: { error: reason },
+          replaceUrl: true
+        });
+      }
+    });
+  }
+
+  // ==================== Logout ====================
+
+  /**
+   * Logout user and clear all state
    */
   logout(): Observable<any> {
-    // Stop monitoring
+    console.log('🚪 Logging out...');
     this.stopStatusMonitoring();
     
     return this.http.post('/api/auth/logout', {}, { withCredentials: true }).pipe(
       tap({
         next: () => {
+          console.log('✅ Logout successful');
           this.clearAuthState();
         },
         error: (error) => {
-          console.error('Logout error:', error);
+          console.error('❌ Logout error:', error);
           // Clear state even on error
           this.clearAuthState();
         }
@@ -223,29 +362,25 @@ export class AuthService implements OnDestroy {
    * Clear all authentication state and caches
    */
   private clearAuthState(): void {
+    console.log('🧹 Clearing authentication state and caches');
+    
     // Clear auth state
     this.currentUserSubject.next(null);
     this.isAuthenticatedSubject.next(false);
     this.authCheckComplete = false;
 
-    // ✅ PRODUCTION FIX: Clear all user-specific caches
+    // ✅ Clear all user-specific caches
     // This clears:
     // - All sessionStorage (templates list, search results, selected template)
     // - User-specific localStorage items (template-, user-, last- prefixes)
     // - Memory cache
     // But keeps: General app preferences (theme, language, etc.)
-    this.cache.clearUserData(['template-', 'user-', 'last-', 'selected-']);
+    this.cache.clearUserData(['template-', 'user-', 'last-', 'selected-', 'generate:']);
 
-    console.info('🧹 All user caches cleared on logout');
+    console.log('✅ All user caches cleared on logout');
   }
 
-  /**
-   * Handle successful OAuth callback
-   */
-  handleAuthCallback(): void {
-    this.authCheckComplete = false;
-    this.checkAuthStatus();
-  }
+  // ==================== Getters ====================
 
   /**
    * Get current user value (synchronous)

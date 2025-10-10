@@ -8,13 +8,13 @@ import { IUser } from '@src/models/User';
 
 const router = Router();
 
-// Google OAuth initiation
+// ==================== Google OAuth Initiation ====================
 router.get('/google', passport.authenticate('google', { 
   scope: ['profile', 'email'],
   session: false 
 }));
 
-// Google OAuth callback
+// ==================== Google OAuth Callback ====================
 router.get(
   '/google/callback',
   passport.authenticate('google', { 
@@ -30,7 +30,7 @@ router.get(
         return res.redirect(`${process.env.FRONTEND_URL}/auth?error=no_user`);
       }
 
-      // Check if user is deactivated first
+      // ==================== Check if user is deactivated ====================
       if (!user.isActive) {
         logger.warn(`🚫 Deactivated user login attempt: ${user.email}`);
         return res.send(`
@@ -111,7 +111,7 @@ router.get(
         `);
       }
 
-      // Check approval status - DON'T generate tokens for unapproved users
+      // ==================== Check approval status ====================
       if (!user.isApproved) {
         logger.warn(`⏳ Unapproved user login attempt: ${user.email}`);
         return res.send(`
@@ -192,7 +192,7 @@ router.get(
         `);
       }
 
-      // User is approved and active - generate tokens
+      // ==================== User is approved and active - generate tokens ====================
       const accessToken = generateAccessToken(user);
       const refreshToken = generateRefreshToken(user);
 
@@ -242,69 +242,127 @@ router.get(
   }
 );
 
-// Get current user - allow unapproved users to check their status
+// ==================== Get Current User ====================
 router.get('/me', authenticate, async (req: Request, res: Response) => {
   try {
     const tokenPayload = (req as any).tokenPayload as TokenPayload | undefined;
     
     if (!tokenPayload) {
-      return res.status(401).json({ error: 'Not authenticated' });
+      return res.status(401).json({ error: 'Not authenticated', code: 'NOT_AUTHENTICATED' });
     }
     
     const user = await User.findById(tokenPayload.userId).select('-__v');
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
     }
 
     // Return user info even if not approved - let frontend handle the pending state
     res.json({ user });
   } catch (error) {
     logger.err('Get user error:', error);
-    res.status(500).json({ error: 'Failed to get user' });
+    res.status(500).json({ error: 'Failed to get user', code: 'SERVER_ERROR' });
   }
 });
 
-// Refresh access token
+// ==================== Refresh Access Token ====================
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
     const refreshToken = req.cookies?.refreshToken;
 
+    // ✅ Check if refresh token exists
     if (!refreshToken) {
-      return res.status(401).json({ error: 'No refresh token' });
+      logger.warn('🚫 Refresh attempt with no token');
+      return res.status(401).json({ 
+        error: 'No refresh token',
+        code: 'NO_REFRESH_TOKEN'
+      });
     }
 
-    // Verify refresh token
-    const payload = verifyRefreshToken(refreshToken);
+    // ✅ Verify refresh token signature
+    let payload: TokenPayload;
+    try {
+      payload = verifyRefreshToken(refreshToken);
+    } catch (verifyError) {
+      logger.warn('🚫 Invalid refresh token signature');
+      return res.status(401).json({ 
+        error: 'Invalid refresh token',
+        code: 'INVALID_REFRESH_TOKEN'
+      });
+    }
 
-    // Get user
+    // ✅ Get user from database
     const user = await User.findById(payload.userId);
-    if (!user || !user.isActive || !user.isApproved) {
-      return res.status(401).json({ error: 'User not found, inactive, or not approved' });
+    
+    if (!user) {
+      logger.warn(`🚫 User not found during refresh: ${payload.userId}`);
+      return res.status(401).json({ 
+        error: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
     }
 
-    // Generate new access token
+    // ✅ Check if user is active
+    if (!user.isActive) {
+      logger.warn(`🚫 Inactive user refresh attempt: ${user.email}`);
+      return res.status(401).json({ 
+        error: 'User account is inactive',
+        code: 'USER_INACTIVE'
+      });
+    }
+
+    // ✅ Check if user is approved
+    if (!user.isApproved) {
+      logger.warn(`🚫 Unapproved user refresh attempt: ${user.email}`);
+      return res.status(401).json({ 
+        error: 'User account is not approved',
+        code: 'USER_NOT_APPROVED'
+      });
+    }
+
+    // ✅ Generate new access token
     const newAccessToken = generateAccessToken(user);
 
-    // Set new access token cookie
+    // ✅ Generate new refresh token (token rotation for better security)
+    const newRefreshToken = generateRefreshToken(user);
+
+    // ✅ Set new access token cookie
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 1000,
+      maxAge: 60 * 60 * 1000, // 1 hour
     });
 
-    res.json({ message: 'Token refreshed' });
+    // ✅ Set new refresh token cookie (token rotation)
+    res.cookie('refreshToken', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    logger.info(`✅ Token refreshed successfully for: ${user.email}`);
+    res.json({ message: 'Token refreshed successfully' });
   } catch (error) {
     logger.err('Refresh token error:', error);
-    res.status(401).json({ error: 'Invalid refresh token' });
+    res.status(401).json({ 
+      error: 'Token refresh failed',
+      code: 'REFRESH_FAILED'
+    });
   }
 });
 
-// Logout
+// ==================== Logout ====================
 router.post('/logout', (req: Request, res: Response) => {
-  res.clearCookie('accessToken');
-  res.clearCookie('refreshToken');
-  res.json({ message: 'Logged out successfully' });
+  try {
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+    logger.info('✅ User logged out successfully');
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    logger.err('Logout error:', error);
+    res.status(500).json({ error: 'Logout failed', code: 'LOGOUT_FAILED' });
+  }
 });
 
 export default router;
