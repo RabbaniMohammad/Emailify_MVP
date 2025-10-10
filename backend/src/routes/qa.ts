@@ -335,10 +335,7 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
 }
 
 function deniedParents(): Set<string> {
-  return new Set([
-    'style', 'script', 'title', 'svg', 'noscript',
-    'input', 'textarea', 'select', 'option',
-  ]);
+  return new Set(['style', 'script', 'title', 'svg']);
 }
 
 function isBlockElement(tag: string): boolean {
@@ -356,6 +353,8 @@ type TextNodeMap = {
   endInConsolidated: number;
 };
 
+// ✅ FIXED: Only consolidate DIRECT text children, not nested elements
+// ✅ FIXED: Recursively collect ALL text nodes in subtree
 function consolidateTextNodes(
   $: any,
   element: any
@@ -364,34 +363,25 @@ function consolidateTextNodes(
   const nodeMap: TextNodeMap[] = [];
   
   function traverse(node: any) {
-    if (node.type === 'text') {
-      const txt = String(node.data || '');
-      if (txt) {
-        const startInConsolidated = fullText.length;
-        fullText += txt;
-        const endInConsolidated = fullText.length;
-        nodeMap.push({ node, startInConsolidated, endInConsolidated });
-      }
-    } else if (node.type === 'tag') {
-      const tag = node.tagName?.toLowerCase();
-      
-      // ✅ NEW: Stop at boundary elements (links, buttons, forms)
-      const boundaryElements = new Set(['input', 'textarea', 'select']);
-      if (boundaryElements.has(tag)) {
-        return; // Don't traverse into these elements
-      }
-      
-      const children = $(node).contents().toArray();
-      for (const child of children) {
+    $(node).contents().each((_: any, child: any) => {
+      if (child.type === 'text') {
+        const txt = String(child.data || '');
+        if (txt) {
+          const startInConsolidated = fullText.length;
+          fullText += txt;
+          const endInConsolidated = fullText.length;
+          nodeMap.push({ node: child, startInConsolidated, endInConsolidated });
+        }
+      } else if (child.type === 'tag') {
+        // ✅ Traverse ALL child elements (inline AND block)
         traverse(child);
       }
-    }
+    });
   }
   
   traverse(element);
   return { fullText, nodeMap };
 }
-
 // ✅ NEW: Apply replacement across consolidated text and map back to nodes
 function applyReplacementToNodes(
   nodeMap: TextNodeMap[],
@@ -445,10 +435,14 @@ function applyReplacementToNodes(
 }
 
 /** ✅ UPDATED: Apply edits with cross-node text consolidation */
+/** ✅ FINAL FIX: Handle cross-element text replacements */
 function applyContextEdits(
   html: string,
   edits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string }>
-): { html: string; changes: Array<{ before: string; after: string; parent: string; reason?: string }>; } {
+): {
+  html: string;
+  changes: Array<{ before: string; after: string; parent: string; reason?: string }>;
+} {
   const $ = (cheerio as any).load(html, { decodeEntities: false });
   const deny = deniedParents();
   const changes: Array<{ before: string; after: string; parent: string; reason?: string }> = [];
@@ -464,19 +458,18 @@ function applyContextEdits(
     }))
     .filter((e: any) => e.find && e.replace && e.find !== e.replace);
 
-  // Process block-level elements
+  // ✅ Process ALL block elements, but consolidate text recursively
   $('body *').each((_: any, el: any) => {
     const tag = (el as any).tagName?.toLowerCase?.() || '';
     if (deny.has(tag)) return;
-    
-    // Only process block elements to avoid duplicates
     if (!isBlockElement(tag)) return;
 
-    // ✅ NEW: Consolidate all text nodes in this block element
-    const { fullText, nodeMap } = consolidateTextNodes($, el);
-    if (!fullText || nodeMap.length === 0) return;
+    // ✅ Recursively collect ALL text nodes within this block
+    const { fullText, nodeMap } = consolidateTextNodesRecursive($, el);
+    
+    if (!fullText.trim()) return;
 
-    // Try to apply each unused edit
+    // Try applying unused edits
     for (const e of queue) {
       if (e.used) continue;
 
@@ -484,22 +477,15 @@ function applyContextEdits(
       if (/https?:\/\//i.test(e.find) || /https?:\/\//i.test(e.replace)) continue;
       if (/\*\|[A-Z0-9_]+\|\*/.test(e.find) || /\*\|[A-Z0-9_]+\|\*/.test(e.replace)) continue;
 
-      // ✅ NEW: Search in consolidated text
       const span = findWithContextSpan(fullText, e.find, e.before, e.after);
       if (!span) continue;
 
-      // ✅ NEW: Apply replacement across nodes
-      const success = applyReplacementToNodes(
-        nodeMap,
-        span.start,
-        span.end,
-        e.replace
-      );
-
-      if (success) {
+      const applied = applyReplacementToNodes(nodeMap, span.start, span.end, e.replace);
+      
+      if (applied) {
         changes.push({ before: e.find, after: e.replace, parent: tag, reason: e.reason });
         e.used = true;
-        break; // Move to next element after one successful edit
+        break;
       }
     }
   });
@@ -507,6 +493,34 @@ function applyContextEdits(
   return { html: $.html(), changes };
 }
 
+// ✅ NEW FUNCTION: Recursively collect text nodes
+function consolidateTextNodesRecursive(
+  $: any,
+  element: any
+): { fullText: string; nodeMap: TextNodeMap[] } {
+  let fullText = '';
+  const nodeMap: TextNodeMap[] = [];
+  
+  function traverse(node: any) {
+    $(node).contents().each((_: any, child: any) => {
+      if (child.type === 'text') {
+        const txt = String(child.data || '');
+        if (txt) {
+          const startInConsolidated = fullText.length;
+          fullText += txt;
+          const endInConsolidated = fullText.length;
+          nodeMap.push({ node: child, startInConsolidated, endInConsolidated });
+        }
+      } else if (child.type === 'tag') {
+        // ✅ Recursively traverse nested elements
+        traverse(child);
+      }
+    });
+  }
+  
+  traverse(element);
+  return { fullText, nodeMap };
+}
 /* ------------------------------------------------------------------ */
 /*                      Loose word fallback (safe)                     */
 /* ------------------------------------------------------------------ */
