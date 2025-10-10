@@ -424,11 +424,9 @@ function applyReplacementToNodes(
       let current = n.node.parent;
       let depth = 0;
       
-      // 🔍 DEBUG: Log the parent chain
-      console.log(`\n--- Node ${idx} parent chain ---`);
       let temp = n.node.parent;
       while (temp && depth < 10) {
-        console.log(`  ${depth}: ${temp.type} ${temp.tagName || temp.name || ''}`);
+        // console.log(`  ${depth}: ${temp.type} ${temp.tagName || temp.name || ''}`);
         temp = temp.parent;
         depth++;
       }
@@ -436,40 +434,40 @@ function applyReplacementToNodes(
       current = n.node.parent;
       while (current) {
         const tag = current.tagName?.toLowerCase();
-        console.log(`  Checking: ${current.type} tag=${tag}`);
+        // console.log(`  Checking: ${current.type} tag=${tag}`);
         if (tag && interactiveTags.includes(tag)) {
-          console.log(`  ✅ Found interactive: ${tag}`);
+          // console.log(`  ✅ Found interactive: ${tag}`);
           return current;
         }
         current = current.parent;
       }
-      console.log(`  ❌ No interactive parent found`);
+      // console.log(`  ❌ No interactive parent found`);
       return null;
     });
     
-    console.log('\n--- Final check ---');
-    console.log('interactiveParents:', interactiveParents.map(p => p?.tagName || 'null'));
+    // console.log('\n--- Final check ---');
+    // console.log('interactiveParents:', interactiveParents.map(p => p?.tagName || 'null'));
     
     const hasInteractive = interactiveParents.some(p => p !== null);
     const hasNonInteractive = interactiveParents.some(p => p === null);
     
-    console.log('hasInteractive:', hasInteractive);
-    console.log('hasNonInteractive:', hasNonInteractive);
+    // console.log('hasInteractive:', hasInteractive);
+    // console.log('hasNonInteractive:', hasNonInteractive);
     
     if (hasInteractive && hasNonInteractive) {
-      console.log('🚫 BLOCKING: crosses interactive boundary');
+      // console.log('🚫 BLOCKING: crosses interactive boundary');
       return false;
     }
     
     const uniqueInteractive = new Set(interactiveParents.filter(p => p !== null));
-    console.log('uniqueInteractive.size:', uniqueInteractive.size);
+    // console.log('uniqueInteractive.size:', uniqueInteractive.size);
     
     if (uniqueInteractive.size > 1) {
-      console.log('🚫 BLOCKING: multiple interactive elements');
+      // console.log('🚫 BLOCKING: multiple interactive elements');
       return false;
     }
     
-    console.log('✅ ALLOWING: passed all checks');
+    // console.log('✅ ALLOWING: passed all checks');
   }
   
   // Apply replacement
@@ -1112,7 +1110,3 @@ router.post('/snap', async (req: Request, res: Response) => {
 
 
 export default router;
-
-// hai
-// hai
-// hai

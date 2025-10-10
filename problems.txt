@@ -121,6 +121,8 @@ GET /api/auth/me 304 121.102 ms - -
 GET /api/auth/me 401 0.395 ms - 29
 POST /api/auth/logout 200 0.809 ms - 37
 
+An error occurred during authentication. Please try again.
+
 
 (node:5592) [MONGOOSE] Warning: Duplicate schema index on {"conversationId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
 (Use `node --trace-warnings ...` to show where the warning was created)

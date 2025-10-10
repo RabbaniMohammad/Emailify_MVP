@@ -40,31 +40,50 @@ export class ToolbarComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
   
-  // Navigation tracking
+  // Navigation tracking with persistence
+  private readonly HISTORY_KEY = 'navigation_history';
+  private readonly INDEX_KEY = 'navigation_index';
+  private readonly MAX_HISTORY = 50; // Prevent unlimited growth
   private navigationHistory: string[] = [];
   private currentIndex = -1;
-  private isNavigating = false; // Prevent double navigation
+  private isNavigating = false;
   
   pendingCount$ = new BehaviorSubject<number>(0);
   currentUser$ = this.authService.currentUser$;
   activeRoute$ = new BehaviorSubject<string>('');
 
-  // Public observables for template
   canGoBack$ = new BehaviorSubject<boolean>(false);
   canGoForward$ = new BehaviorSubject<boolean>(false);
 
   ngOnInit(): void {
-    // Initialize with current route
+    // ✅ RESTORE navigation history from sessionStorage
+    this.restoreNavigationHistory();
+    
     const currentUrl = this.router.url;
-    this.navigationHistory = [currentUrl];
-    this.currentIndex = 0;
+    
+    // If history is empty (first load), initialize it
+    if (this.navigationHistory.length === 0) {
+      this.navigationHistory = [currentUrl];
+      this.currentIndex = 0;
+    } else {
+      // Check if current URL matches the stored index
+      if (this.navigationHistory[this.currentIndex] !== currentUrl) {
+        // User navigated directly via URL or refresh changed the route
+        // Add current page to history
+        this.currentIndex++;
+        this.navigationHistory = this.navigationHistory.slice(0, this.currentIndex);
+        this.navigationHistory.push(currentUrl);
+      }
+    }
+    
     this.activeRoute$.next(currentUrl);
     this.updateNavigationState();
+    this.saveNavigationHistory();
 
     // Track navigation
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd),
-      filter(() => !this.isNavigating), // Ignore programmatic navigation
+      filter(() => !this.isNavigating),
       takeUntil(this.destroy$)
     ).subscribe((event: any) => {
       const url = event.urlAfterRedirects;
@@ -75,11 +94,21 @@ export class ToolbarComponent implements OnInit, OnDestroy {
         this.navigationHistory = this.navigationHistory.slice(0, this.currentIndex + 1);
       }
       
-      // Add new page to history
-      this.navigationHistory.push(url);
-      this.currentIndex = this.navigationHistory.length - 1;
+      // Don't add duplicate consecutive entries
+      if (this.navigationHistory[this.currentIndex] !== url) {
+        this.navigationHistory.push(url);
+        this.currentIndex = this.navigationHistory.length - 1;
+        
+        // ✅ Limit history size
+        if (this.navigationHistory.length > this.MAX_HISTORY) {
+          this.navigationHistory.shift();
+          this.currentIndex--;
+        }
+      }
       
       this.updateNavigationState();
+      this.saveNavigationHistory();
+      
       console.log('Navigation history:', this.navigationHistory);
       console.log('Current index:', this.currentIndex);
     });
@@ -116,6 +145,44 @@ export class ToolbarComponent implements OnInit, OnDestroy {
     this.canGoForward$.complete();
   }
 
+  private restoreNavigationHistory(): void {
+    try {
+      const savedHistory = sessionStorage.getItem(this.HISTORY_KEY);
+      const savedIndex = sessionStorage.getItem(this.INDEX_KEY);
+      
+      if (savedHistory && savedIndex) {
+        this.navigationHistory = JSON.parse(savedHistory);
+        this.currentIndex = parseInt(savedIndex, 10);
+        console.log('✅ Restored navigation history:', this.navigationHistory);
+        console.log('✅ Restored index:', this.currentIndex);
+      }
+    } catch (error) {
+      console.warn('Failed to restore navigation history:', error);
+      this.navigationHistory = [];
+      this.currentIndex = -1;
+    }
+  }
+
+  private saveNavigationHistory(): void {
+    try {
+      sessionStorage.setItem(this.HISTORY_KEY, JSON.stringify(this.navigationHistory));
+      sessionStorage.setItem(this.INDEX_KEY, String(this.currentIndex));
+    } catch (error) {
+      console.warn('Failed to save navigation history:', error);
+    }
+  }
+
+  private clearNavigationHistory(): void {
+    try {
+      sessionStorage.removeItem(this.HISTORY_KEY);
+      sessionStorage.removeItem(this.INDEX_KEY);
+      this.navigationHistory = [];
+      this.currentIndex = -1;
+    } catch (error) {
+      console.warn('Failed to clear navigation history:', error);
+    }
+  }
+
   private updateNavigationState(): void {
     this.canGoBack$.next(this.currentIndex > 0);
     this.canGoForward$.next(this.currentIndex < this.navigationHistory.length - 1);
@@ -150,6 +217,7 @@ export class ToolbarComponent implements OnInit, OnDestroy {
     this.router.navigateByUrl(previousUrl).then(() => {
       this.activeRoute$.next(previousUrl);
       this.updateNavigationState();
+      this.saveNavigationHistory();
       this.isNavigating = false;
     });
   }
@@ -166,6 +234,7 @@ export class ToolbarComponent implements OnInit, OnDestroy {
     this.router.navigateByUrl(nextUrl).then(() => {
       this.activeRoute$.next(nextUrl);
       this.updateNavigationState();
+      this.saveNavigationHistory();
       this.isNavigating = false;
     });
   }
@@ -184,11 +253,11 @@ export class ToolbarComponent implements OnInit, OnDestroy {
   }
 
   getAvatarSrc(user: any): string {
-  if (user.picture && user.picture.trim() !== '') {
-    return user.picture;
+    if (user.picture && user.picture.trim() !== '') {
+      return user.picture;
+    }
+    return this.getInitialsAvatar(user.name);
   }
-  return this.getInitialsAvatar(user.name);
-}
 
   handleImageError(event: Event, userName: string): void {
     const img = event.target as HTMLImageElement;
@@ -225,21 +294,14 @@ export class ToolbarComponent implements OnInit, OnDestroy {
     return canvas.toDataURL();
   }
 
-  /**
- * Navigate to home page
- */
   navigateToHome(): void {
     const currentUrl = this.router.url;
     
-    // If already on home page, refresh the templates
     if (currentUrl === '/' || currentUrl === '') {
       console.log('Already on home - refreshing templates');
-      // If you have access to TemplatesService, call refresh
-      // this.templatesService.refresh();
-      // Or just reload
+      this.clearNavigationHistory();
       window.location.reload();
     } else {
-      // Navigate to home
       console.log('Navigating to home from:', currentUrl);
       this.router.navigate(['/']);
     }
@@ -267,6 +329,7 @@ export class ToolbarComponent implements OnInit, OnDestroy {
   }
 
   logout(): void {
+    this.clearNavigationHistory();
     this.authService.logout().subscribe({
       next: () => {
         this.router.navigate(['/auth']);

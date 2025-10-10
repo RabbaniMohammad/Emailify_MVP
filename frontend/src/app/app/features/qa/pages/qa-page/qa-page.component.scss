@@ -1828,6 +1828,7 @@
 // EDIT BUTTON STYLES
 // ============================================
 .edit-btn {
+  display: none;
   margin-left: auto;
   width: 44px;
   height: 44px;
@@ -1857,9 +1858,41 @@
   }
 }
 
+.skip-btn {
+  margin-left: auto;
+  width: 44px;
+  height: 44px;
+  background: var(--gradient-accent);
+  color: white;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+  transition: all var(--transition-normal);
+  
+  svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
+  }
+  
+  &:hover {
+    box-shadow: 0 6px 20px rgba(236, 72, 153, 0.4);
+    transform: translateY(-2px);
+    
+    svg {
+      transform: scale(1.1) translateX(2px);
+    }
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+}
+
 // ============================================
-// MODAL STYLES
+// WYSIWYG EDITING MODAL STYLES - ADD TO END OF SCSS FILE
 // ============================================
+
+// Modal Backdrop
 .edit-modal-backdrop {
   position: fixed;
   top: 0;
@@ -1876,10 +1909,13 @@
   overflow-y: auto;
 }
 
+// Modal Container
 .edit-modal-container {
   width: 100%;
   max-width: 1200px;
-  max-height: 90vh;
+  height: 85vh; // ✅ Set actual height
+  max-height: 85vh;
+  min-height: 600px; // ✅ Minimum height
   background: var(--glass-white);
   backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
@@ -1890,14 +1926,21 @@
   overflow: hidden;
 }
 
+// Modal Header
 .edit-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 1.5rem 2rem;
+  flex-shrink: 0; 
   background: linear-gradient(135deg, rgba(109, 40, 217, 0.05) 0%, rgba(236, 72, 153, 0.05) 100%);
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   position: relative;
+
+  > * {
+    flex-shrink: 0;
+    flex-grow: 0;
+  }
   
   &::before {
     content: '';
@@ -1909,19 +1952,6 @@
     background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
     animation: shimmer 3s infinite;
   }
-  
-.bypass-btn {
-  background: var(--gradient-primary);
-  color: white;
-  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.3);
-  border: none;
-  min-width: 160px;
-
-  &:hover {
-    box-shadow: 0 6px 20px rgba(109, 40, 217, 0.4);
-    transform: translateY(-2px);
-  }
-}
 
   .modal-header-left {
     display: flex;
@@ -1929,12 +1959,11 @@
     gap: 1rem;
   }
   
-.modal-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
+  .modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
 
   .modal-icon {
     width: 48px;
@@ -1965,32 +1994,106 @@
     letter-spacing: -0.02em;
   }
   
-  .modal-close-btn {
-    width: 40px;
-    height: 40px;
-    color: #6b7280;
-    transition: all var(--transition-fast);
+.modal-close-btn {
+  width: 44px !important;
+  height: 44px !important;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important; // ✅ Red gradient
+  color: white !important;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  transition: all var(--transition-normal);
+  
+  svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
+    color: white;
+  }
+  
+  &:hover {
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important; // ✅ Darker red on hover
     
     svg {
-      width: 24px;
-      height: 24px;
-      stroke-width: 2.5;
-    }
-    
-    &:hover {
-      background: rgba(239, 68, 68, 0.1);
-      color: var(--error-red);
       transform: rotate(90deg);
     }
   }
+  
+  &:active {
+    transform: translateY(0);
+  }
+}
 }
 
+// Bypass Button in Modal Header
+.bypass-btn {
+  background: var(--gradient-primary);
+  color: white;
+  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.3);
+  border: none;
+  min-width: 160px;
+  transition: all var(--transition-normal);
 
+  svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.5;
+    transition: transform var(--transition-normal);
+  }
+
+  &:hover {
+    box-shadow: 0 6px 20px rgba(109, 40, 217, 0.4);
+    transform: translateY(-2px);
+    
+    svg {
+      transform: translateX(4px);
+    }
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+// Icon-only bypass button
+.bypass-icon-btn {
+  width: 44px;
+  height: 44px;
+  background: var(--gradient-accent) !important;
+  color: white;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+  transition: all var(--transition-normal);
+  
+  svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
+  }
+  
+  &:hover {
+    box-shadow: 0 6px 20px rgba(236, 72, 153, 0.4);
+    transform: translateY(-2px);
+    
+    svg {
+      transform: translateX(4px);
+    }
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+// Modal Content Area
 .edit-modal-content {
   flex: 1;
   padding: 2rem;
+  padding-top: 0.3rem;
   overflow-y: auto;
-  min-height: 400px;
+  min-height: 87%;
+  max-height: calc(90vh - 280px);
   
   &::-webkit-scrollbar {
     width: 10px;
@@ -2012,15 +2115,17 @@
   }
 }
 
+// Edit Instructions Banner
 .edit-instructions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.5rem;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(109, 40, 217, 0.08) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(109, 40, 217, 0.1) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: var(--radius-md);
   margin-bottom: 1.5rem;
+  animation: pulse-gentle 2s ease-in-out infinite;
 
   svg {
     width: 24px;
@@ -2032,18 +2137,31 @@
   p {
     margin: 0;
     font-size: 0.9375rem;
-    font-weight: 500;
+    font-weight: 600;
     color: #374151;
   }
 }
 
+// Gentle Pulse Animation for Instructions
+@keyframes pulse-gentle {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
+  }
+}
+
+// ============================================
+// EDITABLE PREVIEW CONTAINER - THE KEY PART
+// ============================================
 .editable-preview-container {
   padding: 2rem;
   background: white;
   border: 2px solid rgba(0, 0, 0, 0.08);
   border-radius: var(--radius-lg);
+  flex: 1; // ✅ Fill available space
   min-height: 400px;
-  max-height: 500px;
   overflow-y: auto;
 
   &::-webkit-scrollbar {
@@ -2063,17 +2181,130 @@
     }
   }
 
-  // Editable element styles are applied via JS
+  // ============================================
+  // CONTENTEDITABLE STYLES - MAKES TEXT EDITABLE
+  // ============================================
   ::ng-deep [contenteditable="true"] {
     transition: all var(--transition-fast);
-    padding: 2px 4px;
-    margin: -2px -4px;
+    padding: 4px 6px;
+    margin: -4px -6px;
+    border-radius: 4px;
+    cursor: text;
+    position: relative;
+    
+    // Default state - subtle hint on hover
+    &:hover {
+      background: rgba(109, 40, 217, 0.05);
+      outline: 1px dashed rgba(109, 40, 217, 0.3);
+    }
+    
+    // Active editing state - when clicked and editing
+    &.editing {
+      background: rgba(109, 40, 217, 0.1);
+      outline: 2px solid var(--primary-purple);
+      box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.1);
+    }
+    
+    // Edited state - shows text has been changed
+    &.edited {
+      background: linear-gradient(135deg, rgba(109, 40, 217, 0.12) 0%, rgba(236, 72, 153, 0.12) 100%);
+      outline: 2px solid var(--accent-pink);
+      
+      // Checkmark badge
+      &::after {
+        content: '✓';
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 20px;
+        height: 20px;
+        background: var(--gradient-accent);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        box-shadow: 0 2px 8px rgba(236, 72, 153, 0.4);
+      }
+    }
+    
+    // Focus state - when element has focus
+    &:focus {
+      outline: 2px solid var(--primary-purple);
+      background: rgba(109, 40, 217, 0.08);
+      box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.1);
+    }
+
+    // Accessibility - focus-visible for keyboard navigation
+    &:focus-visible {
+      outline: 3px solid var(--primary-purple);
+      outline-offset: 2px;
+    }
+  }
+
+  // Prevent editing of images, SVGs, and other non-text elements
+  ::ng-deep img,
+  ::ng-deep svg,
+  ::ng-deep video,
+  ::ng-deep iframe,
+  ::ng-deep canvas {
+    pointer-events: none;
+    user-select: none;
+  }
+  
+  ::ng-deep .no-edit {
+    pointer-events: none;
+    user-select: none;
   }
 }
 
+// Loading State for Editable Content
+.editable-preview-container.loading {
+  position: relative;
+  min-height: 300px;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  
+  &::after {
+    content: 'Loading editor...';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--primary-purple);
+    z-index: 11;
+  }
+}
 
+// Selection Styling for Better UX
+::ng-deep .editable-preview-container ::selection {
+  background: rgba(109, 40, 217, 0.3);
+  color: inherit;
+}
 
+::ng-deep .editable-preview-container ::-moz-selection {
+  background: rgba(109, 40, 217, 0.3);
+  color: inherit;
+}
 
+// Editor Placeholder (if needed)
 .editor-placeholder {
   display: flex;
   flex-direction: column;
@@ -2101,6 +2332,7 @@
   }
 }
 
+// Modal Footer
 .edit-modal-footer {
   display: flex;
   align-items: center;
@@ -2115,42 +2347,190 @@
   }
 }
 
-.edit-modal-backdrop {
-  padding: 1rem;
+// Success Animation When Saving
+@keyframes save-success {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
-.edit-modal-container {
-  max-height: 95vh;
+.edit-modal-footer .primary-btn:active {
+  animation: save-success 0.3s ease;
 }
 
-.edit-modal-header {
-  padding: 1rem 1.5rem;
-  
-  h2 {
-    font-size: 1.25rem;
+// ============================================
+// RESPONSIVE STYLES FOR MODAL
+// ============================================
+@media (max-width: 768px) {
+  .edit-modal-backdrop {
+    padding: 1rem;
+  }
+
+  .edit-modal-container {
+    height: 90vh;
+    max-height: 90vh;
+    min-height: 500px;
+  }
+
+  .edit-modal-header {
+    padding: 1rem;
+    // ✅ Keep flex-direction: row (default) - don't stack!
+    
+    .modal-header-left {
+      flex: 1;
+      min-width: 150px;
+    }
+    
+    .modal-header-actions {
+      gap: 0.5rem;
+      // ✅ No flex-wrap - keep buttons horizontal
+    }
+    
+    h2 {
+      font-size: 1rem; // ✅ Smaller to save space
+    }
+
+    .modal-icon {
+      width: 36px;
+      height: 36px;
+      
+      svg {
+        width: 18px;
+        height: 18px;
+      }
+    }
+  }
+
+  .edit-modal-content {
+    padding: 1rem;
+  }
+
+  .editable-preview-container {
+    padding: 1rem;
+    min-height: 300px;
+  }
+}
+
+// ✅ SEPARATE media query for very small screens
+@media (max-width: 487px) {
+  .edit-modal-container {
+    height: 95vh;
+    max-height: 95vh;
+    min-height: auto;
   }
   
-  .modal-icon {
-    width: 40px;
-    height: 40px;
+  .edit-modal-header {
+    flex-wrap: wrap; // ✅ Stack vertically
+    justify-content: center; // ✅ Center everything
     
-    svg {
-      width: 20px;
-      height: 20px;
+    .modal-header-left {
+      width: 100%;
+      justify-content: center; // ✅ Center title and icon
+      text-align: center;
+    }
+    
+    .modal-header-actions {
+      flex-wrap: wrap;
+      width: 100%;
+      justify-content: center; // ✅ Center buttons
+      margin-top: 0.5rem;
+      gap: 0.75rem;
+    }
+    
+    h2 {
+      text-align: center;
     }
   }
 }
 
-.edit-modal-content {
-  padding: 1.5rem;
-}
-
-.edit-modal-footer {
-  padding: 1rem 1.5rem;
+// ============================================
+// PRINT STYLES - HIDE EDITING INDICATORS
+// ============================================
+@media print {
+  .edit-modal-backdrop,
+  .edit-modal-container {
+    display: none !important;
+  }
   
-  .modern-btn {
-    min-width: 100px;
-    font-size: 0.875rem;
-    padding: 0.75rem 1rem;
+  .editable-preview-container {
+    ::ng-deep [contenteditable="true"] {
+      padding: 0;
+      margin: 0;
+      outline: none !important;
+      background: none !important;
+      
+      &::after {
+        display: none !important;
+      }
+    }
   }
 }
+
+.modal-action-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
+  
+  svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
+  }
+  
+  &.cancel-btn {
+    background: white !important;
+    color: var(--primary-purple);
+    border: 2px solid var(--primary-purple);
+    
+    &:hover {
+      background: rgba(109, 40, 217, 0.1) !important;
+      transform: translateY(-2px);
+    }
+  }
+  
+  &.save-btn {
+    background: var(--gradient-success) !important;
+    color: white;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    
+    &:hover {
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+      transform: translateY(-2px);
+    }
+  }
+}
+
+.bypass-icon-btn,
+.modal-action-btn {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+}
+
+
+@media (max-width: 480px) {
+  .edit-modal-header {
+    flex-wrap: wrap; // ✅ Only wrap on tiny screens
+    
+    .modal-header-actions {
+      flex-wrap: wrap;
+      width: 100%;
+      // justify-content: flex-end;
+      margin-top: 0.5rem;
+    }
+  }
+}
+
+// ============================================
+// END OF WYSIWYG MODAL STYLES
+// ============================================

@@ -14,6 +14,8 @@ import { TemplatePreviewPanelComponent } from '../../../../shared/components/tem
 
 import { TemplateGenerationService, GenerationMessage } from '../../../../core/services/template-generation.service';
 
+import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
+
 @Component({
   selector: 'app-generate-page',
   standalone: true,
@@ -37,6 +39,7 @@ export class GeneratePageComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private snackBar = inject(MatSnackBar);
   private destroy$ = new Subject<void>();
+  private previewCache = inject(PreviewCacheService);
 
   viewMode: 'desktop' | 'tablet' | 'mobile' = 'desktop';
 
@@ -274,42 +277,48 @@ export class GeneratePageComponent implements OnInit, OnDestroy {
       });
   }
 
-  onRunTests(): void {
-    if (!this.conversationId) {
-      this.snackBar.open('No template to test', 'Close', {
-        duration: 3000,
-        panelClass: ['error-snackbar'],
-      });
-      return;
-    }
-
-    // Save as temporary template first, then navigate to QA
-    const tempName = this.templateName || `Generated_${Date.now()}`;
-    
-    this.generationService
-      .saveTemplate(this.conversationId, tempName)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response) => {
-          this.snackBar.open('Template saved! Redirecting to QA...', 'Close', {
-            duration: 2000,
-            panelClass: ['success-snackbar'],
-          });
-
-          // Navigate to QA page after short delay
-          setTimeout(() => {
-            this.router.navigate(['/qa', response.templateId]);
-          }, 1000);
-        },
-        error: (error) => {
-          console.error('Save failed:', error);
-          this.snackBar.open('Failed to save template', 'Close', {
-            duration: 5000,
-            panelClass: ['error-snackbar'],
-          });
-        },
-      });
+onRunTests(): void {
+  if (!this.conversationId) {
+    this.snackBar.open('No template to test', 'Close', {
+      duration: 3000,
+      panelClass: ['error-snackbar'],
+    });
+    return;
   }
+
+  const tempName = this.templateName || `Generated_${Date.now()}`;
+  const currentHtml = this.currentHtml$.value;
+  
+  // ✅ Show loading state
+  this.isGenerating$.next(true);
+  
+  this.generationService
+    .saveTemplate(this.conversationId, tempName)
+    .pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: (response) => {
+        // ✅ Cache the HTML before navigating
+        this.previewCache.set(response.templateId, currentHtml);
+        
+        this.snackBar.open('Template saved! Redirecting to QA...', 'Close', {
+          duration: 2000,
+          panelClass: ['success-snackbar'],
+        });
+
+        // ✅ Navigate immediately (no timeout needed since we cached it)
+        this.isGenerating$.next(false);
+        this.router.navigate(['/qa', response.templateId]);
+      },
+      error: (error) => {
+        console.error('Save failed:', error);
+        this.isGenerating$.next(false);
+        this.snackBar.open('Failed to save template', 'Close', {
+          duration: 5000,
+          panelClass: ['error-snackbar'],
+        });
+      },
+    });
+}
 
   onSaveTemplate(): void {
     if (!this.conversationId) {

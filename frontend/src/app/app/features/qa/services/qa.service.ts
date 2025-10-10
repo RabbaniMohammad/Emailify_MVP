@@ -1,9 +1,8 @@
-// src/app/services/qa.service.ts
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { catchError, map, of, tap, throwError, switchMap, Observable } from 'rxjs';
+import { catchError, map, of, tap, throwError, switchMap, Observable, shareReplay, finalize } from 'rxjs';
 
-/* ----------------------------- Golden types ----------------------------- */
+/* ----------------------------- Types (keep existing) ----------------------------- */
 export type GoldenEdit = {
   find: string;
   replace: string;
@@ -23,7 +22,6 @@ export type GoldenResult = {
   };
 };
 
-/* ---------------------------- Variants types ---------------------------- */
 export type VariantItem = {
   no: number;
   html: string;
@@ -38,7 +36,6 @@ export type VariantsRun = {
   items: VariantItem[];
 };
 
-/* ------------------------------ Chat types ------------------------------ */
 export type ChatIntent = 'suggest' | 'edit' | 'both' | 'clarify';
 
 export type ChatAssistantJson = {
@@ -57,19 +54,18 @@ export type ChatTurn = {
 };
 
 export type ChatThread = {
-  html: string;            // current working HTML for this variant
-  messages: ChatTurn[];    // chat transcript
+  html: string;
+  messages: ChatTurn[];
 };
 
-/* ------------------------------ Snap types ------------------------------ */
 export type SnapResult = {
   url: string;
   ok: boolean;
   status?: number;
   finalUrl?: string;
-  dataUrl?: string;  // data:image/jpeg;base64,...
+  dataUrl?: string;
   error?: string;
-  ts: number;        // when captured (ms)
+  ts: number;
 };
 
 type SnapApiResponse = {
@@ -81,7 +77,6 @@ type SnapApiResponse = {
   error?: string;
 };
 
-/* ------------------------- Suggestions types ---------------------------- */
 export type SuggestionResult = {
   gibberish: Array<{ text: string; reason: string }>;
   suggestions: string[];
@@ -100,12 +95,13 @@ export class QaService {
   private kRunData(runId: string)  { return `qa:variants:run:${runId}`; }
   
   private kChat(runId: string, no: number) { return `qa:chat:${runId}:${no}`; }
-  
-  // Per-run snapshots
   private kSnaps(runId: string) { return `qa:snaps:${runId}`; }
-  
-  // Per-run valid links list
   private kValidLinks(runId: string) { return `qa:validlinks:${runId}`; }
+
+  /* ---------- Observable caches ---------- */
+  private goldenCache$ = new Map<string, Observable<GoldenResult>>();
+  private subjectsCache$ = new Map<string, Observable<string[]>>();
+  private suggestionsCache$ = new Map<string, Observable<SuggestionResult>>();
 
   /* ------------------- Golden / Subjects / Suggestions ------------------- */
   
@@ -137,34 +133,137 @@ export class QaService {
   }
 
   /**
-   * ✅ UPDATED: Generate Golden Template
-   * Now fetches HTML and sends it to the backend
+   * ✅ UPDATED: Generate Golden Template with ShareReplay
    */
-  generateGolden(id: string, force = true): Observable<GoldenResult> {
+  generateGolden(id: string, force = false): Observable<GoldenResult> {
+    // If not forcing and observable cache exists, return it
+    if (!force && this.goldenCache$.has(id)) {
+      console.log('🔄 Returning cached golden observable');
+      return this.goldenCache$.get(id)!;
+    }
+
+    // Check localStorage cache
     if (!force) {
       const cached = this.getGoldenCached(id);
-      if (cached) return of(cached);
+      if (cached) {
+        console.log('✅ Returning golden from localStorage');
+        return of(cached);
+      }
     }
     
-    // Fetch the template HTML first, then send to backend
-    return this.getTemplateHtml(id).pipe(
+    console.log('🚀 Starting new golden generation');
+    
+    // Create new observable with shareReplay
+    const golden$ = this.getTemplateHtml(id).pipe(
       switchMap(html => {
         return this.http.post<GoldenResult>(
           `/api/qa/${id}/golden`,
-          { html }  // ✅ Send HTML in request body
+          { html }
         );
       }),
       tap(res => {
+        // Save to localStorage
         try {
           localStorage.setItem(this.kGolden(id), JSON.stringify(res));
-        } catch {}
+          console.log('💾 Saved golden to localStorage');
+        } catch (e) {
+          console.warn('Failed to save golden to localStorage:', e);
+        }
+      }),
+      shareReplay(1), // ✅ Cache the result for late subscribers
+      finalize(() => {
+        // Clean up observable cache after completion
+        console.log('🧹 Cleaning up golden observable cache');
+        this.goldenCache$.delete(id);
       })
     );
+    
+    // Store in observable cache
+    this.goldenCache$.set(id, golden$);
+    
+    return golden$;
+  }
+
+  /**
+   * ✅ UPDATED: Generate Subjects with ShareReplay
+   */
+  generateSubjects(id: string, force = false): Observable<string[]> {
+    if (!force && this.subjectsCache$.has(id)) {
+      console.log('🔄 Returning cached subjects observable');
+      return this.subjectsCache$.get(id)!;
+    }
+
+    if (!force) {
+      const cached = this.getSubjectsCached(id);
+      if (cached) {
+        console.log('✅ Returning subjects from localStorage');
+        return of(cached);
+      }
+    }
+    
+    console.log('🚀 Starting new subjects generation');
+    
+    const subjects$ = this.http.post<{ subjects: string[] }>(`/api/qa/${id}/subjects`, {}).pipe(
+      map(r => r.subjects || []),
+      tap(list => {
+        try {
+          localStorage.setItem(this.kSubjects(id), JSON.stringify(list));
+          console.log('💾 Saved subjects to localStorage');
+        } catch {}
+      }),
+      shareReplay(1),
+      finalize(() => {
+        console.log('🧹 Cleaning up subjects observable cache');
+        this.subjectsCache$.delete(id);
+      })
+    );
+    
+    this.subjectsCache$.set(id, subjects$);
+    return subjects$;
+  }
+
+  /**
+   * ✅ UPDATED: Generate Suggestions with ShareReplay
+   */
+  generateSuggestions(id: string, force = false): Observable<SuggestionResult> {
+    if (!force && this.suggestionsCache$.has(id)) {
+      console.log('🔄 Returning cached suggestions observable');
+      return this.suggestionsCache$.get(id)!;
+    }
+
+    if (!force) {
+      const cached = this.getSuggestionsCached(id);
+      if (cached) {
+        console.log('✅ Returning suggestions from localStorage');
+        return of(cached);
+      }
+    }
+    
+    console.log('🚀 Starting new suggestions generation');
+    
+    const suggestions$ = this.http.post<SuggestionResult>(
+      `/api/qa/${id}/suggestions`,
+      {}
+    ).pipe(
+      tap(res => {
+        try {
+          localStorage.setItem(this.kSuggestions(id), JSON.stringify(res));
+          console.log('💾 Saved suggestions to localStorage');
+        } catch {}
+      }),
+      shareReplay(1),
+      finalize(() => {
+        console.log('🧹 Cleaning up suggestions observable cache');
+        this.suggestionsCache$.delete(id);
+      })
+    );
+    
+    this.suggestionsCache$.set(id, suggestions$);
+    return suggestions$;
   }
 
   /**
    * ✅ NEW: Get template HTML from API
-   * This fetches the raw HTML content for a template
    */
   private getTemplateHtml(templateId: string): Observable<string> {
     return this.http.get(`/api/templates/${templateId}/raw`, { 
@@ -177,56 +276,24 @@ export class QaService {
     );
   }
 
-  generateSubjects(id: string, force = true) {
-    if (!force) {
-      const cached = this.getSubjectsCached(id);
-      if (cached) return of(cached);
-    }
-    
-    return this.http.post<{ subjects: string[] }>(`/api/qa/${id}/subjects`, {}).pipe(
-      map(r => r.subjects || []),
-      tap(list => {
-        try {
-          localStorage.setItem(this.kSubjects(id), JSON.stringify(list));
-        } catch {}
-      })
-    );
-  }
-
-  generateSuggestions(id: string, force = false) {
-    // Check cache first if not forcing
-    if (!force) {
-      const cached = this.getSuggestionsCached(id);
-      if (cached) return of(cached);
-    }
-    
-    return this.http.post<SuggestionResult>(
-      `/api/qa/${id}/suggestions`,
-      {}
-    ).pipe(
-      tap(res => {
-        try {
-          localStorage.setItem(this.kSuggestions(id), JSON.stringify(res));
-        } catch {}
-      })
-    );
-  }
-
   clearGolden(id: string) {
     try {
       localStorage.removeItem(this.kGolden(id));
+      this.goldenCache$.delete(id);
     } catch {}
   }
   
   clearSubjects(id: string) {
     try {
       localStorage.removeItem(this.kSubjects(id));
+      this.subjectsCache$.delete(id);
     } catch {}
   }
   
   clearSuggestions(id: string) {
     try {
       localStorage.removeItem(this.kSuggestions(id));
+      this.suggestionsCache$.delete(id);
     } catch {}
   }
 
@@ -433,13 +500,13 @@ export class QaService {
   }
 
   saveGoldenToCache(templateId: string, golden: GoldenResult): void {
-  const key = `qa-golden-${templateId}`;
-  try {
-    localStorage.setItem(key, JSON.stringify(golden));
-  } catch (e) {
-    console.warn('Failed to save golden to cache:', e);
+    const key = `qa:golden:${templateId}`;
+    try {
+      localStorage.setItem(key, JSON.stringify(golden));
+    } catch (e) {
+      console.warn('Failed to save golden to cache:', e);
+    }
   }
-}
 
   saveValidLinks(runId: string, links: string[]) {
     try {

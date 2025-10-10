@@ -17,6 +17,16 @@
         </div>
         <h3 class="section-title">Original Template</h3>
         <div class="title-underline"></div>
+        <button 
+          *ngIf="templateId"
+          mat-icon-button 
+          class="skip-btn"
+          (click)="onSkipToChat()"
+          matTooltip="Skip Golden & Variants Generation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 17l5-5m0 0l-5-5m5 5H6"/>
+          </svg>
+        </button>
       </div>
       <div class="card-content" style="flex: 1; overflow: hidden; min-height: 0; display: flex; flex-direction: column;">
         <div class="template-preview-container" style="flex: 1; height: 100%; min-height: 500px; background: white; border-radius: 8px; overflow: hidden;">
@@ -299,7 +309,7 @@
         <h3 class="section-title">Generated Variants</h3>
         <div class="title-underline variants"></div>
       </div>
-      <div class="variants-progress" *ngIf="vr?.items?.length">
+      <div class="variants-progress" *ngIf="variantsGenerating || vr?.items?.length">
         <span class="progress-text">{{ vr.items.length }} / {{ vr.target || 5 }}</span>
         <div class="progress-bar-container">
           <div class="progress-bar-fill" [style.width.%]="(vr.items.length / (vr.target || 5)) * 100"></div>
@@ -411,7 +421,7 @@
   </section>
 </div>
 
-<!-- Edit Modal -->
+<!-- Edit Modal - WYSIWYG Editing -->
 <div class="edit-modal-backdrop" 
      *ngIf="isEditModalOpen" 
      (click)="onModalBackdropClick($event)"
@@ -429,14 +439,34 @@
         <h2>Edit Golden Template</h2>
       </div>
       <div class="modal-header-actions">
+          <!-- <button 
+          mat-icon-button 
+          class="modal-action-btn cancel-btn"
+          (click)="closeEditModal()"
+          title="Cancel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button> -->
+
+          <button 
+          mat-icon-button 
+          class="modal-action-btn save-btn"
+          (click)="saveEditedTemplate()"
+          title="Save Changes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 13l4 4L19 7"/>
+          </svg>
+        </button>
+
         <button 
-          mat-raised-button 
-          class="modern-btn bypass-btn"
-          (click)="onBypassVariants()">
+          mat-icon-button 
+          class="bypass-icon-btn"
+          (click)="onBypassVariants()"
+          title="Skip Variants">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
           </svg>
-          Bypass Variants
         </button>
         <button 
           mat-icon-button 
@@ -454,13 +484,13 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
-        <p>Click any text to edit it directly. Changes are highlighted.</p>
+        <p>Click any text to edit it directly. Changes are highlighted in purple.</p>
       </div>
 
       <div class="editable-preview-container" [innerHTML]="editableHtml"></div>
     </div>
     
-    <div class="edit-modal-footer">
+    <!-- <div class="edit-modal-footer">
       <button 
         mat-raised-button 
         class="modern-btn secondary-btn"
@@ -479,6 +509,6 @@
         </svg>
         Save Changes
       </button>
-    </div>
+    </div> -->
   </div>
 </div>

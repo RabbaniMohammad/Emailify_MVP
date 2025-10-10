@@ -1,7 +1,9 @@
 .admin-dashboard {
-  min-height: 100vh;
+  // min-height: 100vh; //here
+  min-height: 89vh;
   background: #f8fafc;
-  padding-bottom: 2rem;
+  // padding-bottom: 2rem; //here
+
 }
 
 .dashboard-header {
@@ -76,7 +78,8 @@
 
 .admin-tabs {
   max-width: 1400px;
-  margin: 2rem auto;
+  margin: 2rem 0.5rem;
+  // margin: 2rem auto; //here
   background: white;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -121,7 +124,9 @@
 
 .tab-content {
   padding: 2rem;
-  min-height: 400px;
+  min-height: 360px;
+  // min-height: 400px; //here
+
 }
 
 .loading-state {
