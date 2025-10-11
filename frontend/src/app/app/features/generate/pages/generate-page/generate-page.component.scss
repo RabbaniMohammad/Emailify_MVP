@@ -314,6 +314,29 @@
   font-size: 0.75rem;
 }
 
+// Message Images Display
+.message-images {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+  flex-wrap: wrap;
+  
+  .message-image {
+    max-width: 150px;
+    max-height: 150px;
+    border-radius: var(--radius-md);
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    object-fit: cover;
+    cursor: pointer;
+    transition: all 0.2s;
+    
+    &:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+  }
+}
+
 // Composer - MOBILE
 .composer {
   flex-shrink: 0;
@@ -335,6 +358,95 @@
     height: 2px;
     background: var(--gradient-primary);
     border-radius: 2px;
+  }
+}
+
+// Image Upload Styles
+.image-previews {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  margin-bottom: 0.5rem;
+  overflow-x: auto;
+  
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(109, 40, 217, 0.3);
+    border-radius: 2px;
+  }
+}
+
+.image-preview-item {
+  position: relative;
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 2px solid #e2e8f0;
+  background: white;
+  
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  .remove-image-btn {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: #ef4444;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    
+    mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+    
+    &:hover {
+      background: #dc2626;
+      transform: scale(1.1);
+    }
+  }
+}
+
+.composer-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  width: 100%;
+}
+
+.add-image-btn {
+  flex-shrink: 0;
+  color: var(--primary-purple);
+  transition: all var(--transition-fast);
+  
+  &:hover:not(:disabled) {
+    background: rgba(109, 40, 217, 0.1);
+    transform: scale(1.05);
+  }
+  
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 }
 
@@ -533,6 +645,28 @@
     font-size: 0.875rem;
     line-height: 1.6;
   }
+
+  .message-images .message-image {
+    max-width: 100px;
+    max-height: 100px;
+  }
+  
+  .image-preview-item {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .add-image-btn {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+  }
   
   .composer {
     padding: 0.875rem 1rem;
@@ -650,6 +784,27 @@
     font-size: 0.9375rem;
     line-height: 1.7;
   }
+    .message-images .message-image {
+    max-width: 120px;
+    max-height: 120px;
+  }
+  
+  .image-preview-item {
+    width: 70px;
+    height: 70px;
+  }
+  
+  .add-image-btn {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    
+    mat-icon {
+      font-size: 22px;
+      width: 22px;
+      height: 22px;
+    }
+  }
   
   .composer {
     padding: 1rem 1.5rem;
@@ -703,6 +858,15 @@
   
   .bubble {
     padding: 1.25rem 1.5rem;
+  }
+    .message-images .message-image {
+    max-width: 180px;
+    max-height: 180px;
+  }
+  
+  .image-preview-item {
+    width: 80px;
+    height: 80px;
   }
 }
 

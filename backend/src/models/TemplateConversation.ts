@@ -7,6 +7,11 @@ export interface ITemplateConversation extends Document {
     role: 'user' | 'assistant';
     content: string;
     timestamp: Date;
+    images?: Array<{
+      data: string;
+      mediaType: string;
+      fileName: string;
+    }>;
   }>;
   currentMjml: string;
   currentHtml: string;
@@ -46,6 +51,13 @@ const TemplateConversationSchema = new Schema<ITemplateConversation>(
           type: Date,
           default: Date.now,
         },
+        images: [
+          {
+            data: String,
+            mediaType: String,
+            fileName: String,
+          },
+        ],
       },
     ],
     currentMjml: {

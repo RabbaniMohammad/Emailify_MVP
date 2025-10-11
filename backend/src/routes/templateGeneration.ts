@@ -94,27 +94,46 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
  */
 router.post('/start', authenticate, async (req: Request, res: Response) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, images } = req.body;
     const userId = (req as any).tokenPayload?.userId;
 
+    logger.info(`🎨 Starting template generation for user ${userId}`);
+    logger.info(`📝 Prompt length: ${prompt?.length || 0}`);
+    logger.info(`🖼️ Images received: ${images?.length || 0}`);
+
     if (!prompt || !prompt.trim()) {
+      logger.warn('⚠️ Invalid prompt - empty or missing');
       return res.status(400).json({ 
         code: 'INVALID_PROMPT', 
         message: 'Prompt is required' 
       });
     }
 
-    logger.info(`🎨 Starting template generation for user ${userId}`);
+    if (images && images.length > 0) {
+      logger.info(`📊 Image details:`, images.map((img: any) => ({
+        fileName: img.fileName,
+        mediaType: img.mediaType,
+        dataLength: img.data?.length
+      })));
+    }
 
+    logger.info(`📡 Calling generateTemplate service...`);
     const result = await generateTemplate({
       prompt: prompt.trim(),
       conversationHistory: [],
       userId,
+      images: images || undefined,
     });
 
+    logger.info(`✅ Template generated successfully`);
+    logger.info(`📄 MJML length: ${result.mjmlCode?.length}`);
+    logger.info(`🔄 Attempts used: ${result.attemptsUsed}`);
+
+    logger.info(`🔄 Converting MJML to HTML...`);
     const conversion = convertMjmlToHtml(result.mjmlCode);
 
     if (conversion.errors.length > 0 && !conversion.html) {
+      logger.err(`❌ MJML conversion failed: ${JSON.stringify(conversion.errors)}`);
       return res.status(400).json({
         code: 'MJML_CONVERSION_ERROR',
         message: 'Failed to convert MJML to HTML',
@@ -123,13 +142,27 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
       });
     }
 
+    logger.info(`✅ MJML converted, HTML length: ${conversion.html?.length}`);
+
     const conversationId = randomUUID();
+    logger.info(`🆔 Generated conversation ID: ${conversationId}`);
+
+    logger.info(`💾 Creating conversation in database...`);
     const conversation = await TemplateConversation.create({
       userId,
       conversationId,
       messages: [
-        { role: 'user', content: prompt, timestamp: new Date() },
-        { role: 'assistant', content: result.assistantMessage, timestamp: new Date() },
+        { 
+          role: 'user', 
+          content: prompt, 
+          timestamp: new Date(),
+          images: images || undefined
+        },
+        { 
+          role: 'assistant', 
+          content: result.assistantMessage, 
+          timestamp: new Date() 
+        },
       ],
       currentMjml: result.mjmlCode,
       currentHtml: conversion.html,
@@ -137,6 +170,7 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
     });
 
     logger.info(`✅ Conversation created: ${conversationId}`);
+    logger.info(`📊 User message has images: ${!!images}`);
 
     res.json({
       conversationId,
@@ -150,6 +184,7 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     logger.err('❌ Start generation error:', error);
+    logger.err('Error stack:', error.stack);
     
     if (error.message?.includes('overloaded') || error.status === 529) {
       return res.status(503).json({
@@ -173,45 +208,70 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
 router.post('/continue/:conversationId', authenticate, async (req: Request, res: Response) => {
   try {
     const { conversationId } = req.params;
-    const { message } = req.body;
+    const { message, images } = req.body;
     const userId = (req as any).tokenPayload?.userId;
 
+    logger.info(`🔧 Continuing conversation: ${conversationId}`);
+    logger.info(`📝 Message length: ${message?.length || 0}`);
+    logger.info(`🖼️ Images received: ${images?.length || 0}`);
+
     if (!message || !message.trim()) {
+      logger.warn('⚠️ Invalid message - empty or missing');
       return res.status(400).json({
         code: 'INVALID_MESSAGE',
         message: 'Message is required',
       });
     }
 
+    if (images && images.length > 0) {
+      logger.info(`📊 Image details:`, images.map((img: any) => ({
+        fileName: img.fileName,
+        mediaType: img.mediaType,
+        dataLength: img.data?.length
+      })));
+    }
+
+    logger.info(`🔍 Finding conversation in database...`);
     const conversation = await TemplateConversation.findOne({
       conversationId,
       userId,
     });
 
     if (!conversation) {
+      logger.err(`❌ Conversation not found: ${conversationId}`);
       return res.status(404).json({
         code: 'CONVERSATION_NOT_FOUND',
         message: 'Conversation not found',
       });
     }
 
-    logger.info(`🔧 Continuing conversation: ${conversationId}`);
+    logger.info(`✅ Conversation found`);
+    logger.info(`📊 Current messages count: ${conversation.messages.length}`);
 
     const conversationHistory = conversation.messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
+      images: msg.images || undefined,
     }));
 
+    logger.info(`📡 Calling refineTemplate service...`);
     const result = await refineTemplate(
       conversation.currentMjml,
       message.trim(),
       conversationHistory,
-      userId
+      userId,
+      images || undefined
     );
 
+    logger.info(`✅ Template refined successfully`);
+    logger.info(`📄 MJML length: ${result.mjmlCode?.length}`);
+    logger.info(`🔄 Attempts used: ${result.attemptsUsed}`);
+
+    logger.info(`🔄 Converting MJML to HTML...`);
     const conversion = convertMjmlToHtml(result.mjmlCode);
 
     if (conversion.errors.length > 0 && !conversion.html) {
+      logger.err(`❌ MJML conversion failed: ${JSON.stringify(conversion.errors)}`);
       return res.status(400).json({
         code: 'MJML_CONVERSION_ERROR',
         message: 'Failed to convert MJML to HTML',
@@ -220,15 +280,31 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
       });
     }
 
+    logger.info(`✅ MJML converted, HTML length: ${conversion.html?.length}`);
+
+    logger.info(`💾 Adding messages to conversation...`);
     conversation.messages.push(
-      { role: 'user', content: message, timestamp: new Date() },
-      { role: 'assistant', content: result.assistantMessage, timestamp: new Date() }
+      { 
+        role: 'user', 
+        content: message, 
+        timestamp: new Date(),
+        images: images || undefined
+      },
+      { 
+        role: 'assistant', 
+        content: result.assistantMessage, 
+        timestamp: new Date() 
+      }
     );
     conversation.currentMjml = result.mjmlCode;
     conversation.currentHtml = conversion.html;
+    
+    logger.info(`💾 Saving conversation...`);
     await conversation.save();
 
     logger.info(`✅ Conversation updated: ${conversationId}`);
+    logger.info(`📊 Total messages now: ${conversation.messages.length}`);
+    logger.info(`📊 User message has images: ${!!images}`);
 
     res.json({
       conversationId,
@@ -242,6 +318,7 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
     });
   } catch (error: any) {
     logger.err('❌ Continue conversation error:', error);
+    logger.err('Error stack:', error.stack);
     res.status(500).json({
       code: 'GENERATION_ERROR',
       message: error.message || 'Failed to continue conversation',

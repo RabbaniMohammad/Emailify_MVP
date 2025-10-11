@@ -8,6 +8,11 @@ export interface GenerationMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  images?: Array<{
+    data: string;
+    mediaType: string;
+    fileName: string;
+  }>;
 }
 
 export interface ConversationState {
@@ -79,60 +84,140 @@ export class TemplateGenerationService {
 
   /* --------------------------- Start Generation -------------------------- */
 
-  startGeneration(prompt: string): Observable<StartGenerationResponse> {
-    return this.http.post<StartGenerationResponse>(
-      '/api/generate/start',
-      { prompt },
-      { withCredentials: true }
-    ).pipe(
-      tap((response) => {
-        // Cache the conversation
-        this.cacheConversation(response.conversationId, {
-          conversationId: response.conversationId,
-          messages: [
-            { role: 'user', content: prompt, timestamp: new Date() },
-            { role: 'assistant', content: response.message, timestamp: new Date() }
-          ],
-          currentHtml: response.html,
-          currentMjml: response.mjml,
-          status: 'active',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        // Set as current conversation
-        this.setCurrentConversationId(response.conversationId);
-      })
-    );
+startGeneration(
+  prompt: string,
+  images?: Array<{ data: string; mediaType: string; fileName: string }>
+): Observable<StartGenerationResponse> {
+  console.log('🚀 TemplateGenerationService.startGeneration() called');
+  console.log('📝 Prompt:', prompt);
+  console.log('🖼️ Images count:', images?.length || 0);
+  
+  if (images && images.length > 0) {
+    console.log('📊 Image details:', images.map(img => ({
+      fileName: img.fileName,
+      mediaType: img.mediaType,
+      dataLength: img.data.length
+    })));
   }
+
+  const payload = { prompt, images };
+  console.log('📦 Request payload:', { prompt, imagesCount: images?.length || 0 });
+
+  return this.http.post<StartGenerationResponse>(
+    '/api/generate/start',
+    payload,
+    { withCredentials: true }
+  ).pipe(
+    tap((response) => {
+      console.log('✅ startGeneration response received:', {
+        conversationId: response.conversationId,
+        htmlLength: response.html?.length,
+        hasErrors: response.hasErrors
+      });
+
+      // Cache the conversation
+      const conversationState = {
+        conversationId: response.conversationId,
+        messages: [
+          { 
+            role: 'user' as const, 
+            content: prompt, 
+            timestamp: new Date(),
+            images: images || undefined
+          },
+          { 
+            role: 'assistant' as const, 
+            content: response.message, 
+            timestamp: new Date() 
+          }
+        ],
+        currentHtml: response.html,
+        currentMjml: response.mjml,
+        status: 'active' as const,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      console.log('💾 Caching conversation:', response.conversationId);
+      console.log('📊 User message has images:', !!images);
+      this.cacheConversation(response.conversationId, conversationState);
+
+      // Set as current conversation
+      console.log('🔖 Setting current conversation ID:', response.conversationId);
+      this.setCurrentConversationId(response.conversationId);
+    })
+  );
+}
 
   /* --------------------------- Continue Conversation -------------------------- */
 
-  continueConversation(
-    conversationId: string,
-    message: string
-  ): Observable<ContinueGenerationResponse> {
-    return this.http.post<ContinueGenerationResponse>(
-      `/api/generate/continue/${conversationId}`,
-      { message },
-      { withCredentials: true }
-    ).pipe(
-      tap((response) => {
-        // Update cached conversation
-        const cached = this.getConversationCached(conversationId);
-        if (cached) {
-          cached.messages.push(
-            { role: 'user', content: message, timestamp: new Date() },
-            { role: 'assistant', content: response.message, timestamp: new Date() }
-          );
-          cached.currentHtml = response.html;
-          cached.currentMjml = response.mjml;
-          cached.updatedAt = new Date();
-          this.cacheConversation(conversationId, cached);
-        }
-      })
-    );
+continueConversation(
+  conversationId: string,
+  message: string,
+  images?: Array<{ data: string; mediaType: string; fileName: string }>
+): Observable<ContinueGenerationResponse> {
+  console.log('💬 TemplateGenerationService.continueConversation() called');
+  console.log('🆔 Conversation ID:', conversationId);
+  console.log('📝 Message:', message);
+  console.log('🖼️ Images count:', images?.length || 0);
+  
+  if (images && images.length > 0) {
+    console.log('📊 Image details:', images.map(img => ({
+      fileName: img.fileName,
+      mediaType: img.mediaType,
+      dataLength: img.data.length
+    })));
   }
+
+  const payload = { message, images };
+  console.log('📦 Request payload:', { message, imagesCount: images?.length || 0 });
+
+  return this.http.post<ContinueGenerationResponse>(
+    `/api/generate/continue/${conversationId}`,
+    payload,
+    { withCredentials: true }
+  ).pipe(
+    tap((response) => {
+      console.log('✅ continueConversation response received:', {
+        conversationId: response.conversationId,
+        htmlLength: response.html?.length,
+        hasErrors: response.hasErrors
+      });
+
+      // Update cached conversation
+      const cached = this.getConversationCached(conversationId);
+      console.log('💾 Cached conversation found:', !!cached);
+      
+      if (cached) {
+        console.log('📊 Current messages count:', cached.messages.length);
+        
+        cached.messages.push(
+          { 
+            role: 'user', 
+            content: message, 
+            timestamp: new Date(),
+            images: images || undefined
+          },
+          { 
+            role: 'assistant', 
+            content: response.message, 
+            timestamp: new Date() 
+          }
+        );
+        
+        console.log('📊 Messages count after adding:', cached.messages.length);
+        console.log('🖼️ User message has images:', !!images);
+        
+        cached.currentHtml = response.html;
+        cached.currentMjml = response.mjml;
+        cached.updatedAt = new Date();
+        
+        console.log('💾 Updating cached conversation...');
+        this.cacheConversation(conversationId, cached);
+      }
+    })
+  );
+}
 
   /* --------------------------- Get Conversation -------------------------- */
 
@@ -228,34 +313,69 @@ export class TemplateGenerationService {
 
   /* --------------------------- localStorage Helpers -------------------------- */
 
-  getConversationCached(conversationId: string): ConversationState | null {
-    try {
-      const raw = localStorage.getItem(this.kConversation(conversationId));
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      // Convert date strings back to Date objects
-      parsed.createdAt = new Date(parsed.createdAt);
-      parsed.updatedAt = new Date(parsed.updatedAt);
-      parsed.messages = parsed.messages.map((m: any) => ({
-        ...m,
-        timestamp: new Date(m.timestamp),
-      }));
-      return parsed as ConversationState;
-    } catch {
+getConversationCached(conversationId: string): ConversationState | null {
+  console.log('💾 getConversationCached() called for:', conversationId);
+  
+  try {
+    const raw = localStorage.getItem(this.kConversation(conversationId));
+    console.log('📦 Raw data from localStorage:', raw ? 'Found' : 'Not found');
+    
+    if (!raw) {
+      console.log('❌ No cached conversation found');
       return null;
     }
+    
+    console.log('🔄 Parsing cached data...');
+    const parsed = JSON.parse(raw);
+    console.log('✅ Data parsed successfully');
+    console.log('📊 Cached messages count:', parsed.messages?.length);
+    
+    // Convert date strings back to Date objects
+    parsed.createdAt = new Date(parsed.createdAt);
+    parsed.updatedAt = new Date(parsed.updatedAt);
+    parsed.messages = parsed.messages.map((m: any) => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+      images: m.images || undefined, // Preserve images if they exist
+    }));
+    
+    console.log('✅ Dates converted successfully');
+    console.log('🖼️ Messages with images:', parsed.messages.filter((m: any) => m.images).length);
+    console.log('✅ Returning cached conversation');
+    
+    return parsed as ConversationState;
+  } catch (error) {
+    console.error('❌ Error getting cached conversation:', error);
+    return null;
   }
+}
 
-  cacheConversation(conversationId: string, state: ConversationState): void {
-    try {
-      localStorage.setItem(
-        this.kConversation(conversationId),
-        JSON.stringify(state)
-      );
-    } catch (err) {
-      console.error('Failed to cache conversation:', err);
-    }
+cacheConversation(conversationId: string, state: ConversationState): void {
+  console.log('💾 cacheConversation() called');
+  console.log('🆔 Conversation ID:', conversationId);
+  console.log('📊 State to cache:', {
+    messagesCount: state.messages.length,
+    status: state.status,
+    hasTemplateName: !!state.templateName,
+    htmlLength: state.currentHtml?.length,
+    mjmlLength: state.currentMjml?.length
+  });
+  console.log('🖼️ Messages with images:', state.messages.filter(m => m.images).length);
+  
+  try {
+    const jsonString = JSON.stringify(state);
+    console.log('📦 JSON size:', `${(jsonString.length / 1024).toFixed(2)}KB`);
+    
+    localStorage.setItem(
+      this.kConversation(conversationId),
+      jsonString
+    );
+    console.log('✅ Conversation cached successfully');
+  } catch (err) {
+    console.error('❌ Failed to cache conversation:', err);
+    console.error('Error details:', err);
   }
+}
 
   getCurrentConversationId(): string | null {
     try {

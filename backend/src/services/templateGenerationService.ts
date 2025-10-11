@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import logger from 'jet-logger';
 import mjml2html from 'mjml';
+import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 
 // ⭐ CONFIGURATION
 const API_TIMEOUT = parseInt(process.env.API_TIMEOUT || '120000', 10); // 2 minutes default
@@ -16,8 +17,13 @@ const MAX_TOKENS = parseInt(process.env.GENERATION_MAX_TOKENS || '4096', 10);
 
 interface GenerationRequest {
   prompt: string;
-  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  conversationHistory?: Array<{ 
+    role: 'user' | 'assistant'; 
+    content: string;
+    images?: Array<{ data: string; mediaType: string; fileName: string }>;
+  }>;
   userId: string;
+  images?: Array<{ data: string; mediaType: string; fileName: string }>;
 }
 
 interface GenerationResponse {
@@ -45,6 +51,34 @@ function getSystemPrompt(): string {
 4. Your ENTIRE response must be ONLY the MJML code (no explanations before or after)
 5. Start your response with <mjml> (the very first character)
 6. End your response with </mjml> (the very last characters)
+
+📱 MOBILE-FIRST RESPONSIVE DESIGN:
+- ALL templates MUST be mobile-first and fully responsive
+- Design for mobile screens (320-480px) FIRST, then scale up to desktop (600px+)
+- MOBILE (default):
+  * Use single column layouts for easy scrolling
+  * Center-align headings, buttons, and CTAs for better mobile UX
+  * Ensure buttons are easily tappable (min 44px height, full-width or centered)
+  * Min 16px font size for body text (14px minimum for secondary text)
+  * Adequate padding and spacing for touch targets
+- DESKTOP (600px+ width):
+  * Can use multi-column layouts if appropriate
+  * Buttons can be left/right aligned if design requires
+  * Larger font sizes and more spacing where appropriate
+- CRITICAL: By default, center-align all headings, buttons, and important CTAs
+- Use align="center" on mj-text and mj-button for mobile-friendly layouts
+
+🖼️ IMAGE REFERENCES (IF PROVIDED):
+- If the user provides design reference images, analyze them carefully for:
+  - Color schemes and branding
+  - Layout structure and spacing
+  - Typography choices
+  - Visual hierarchy and content organization
+  - Overall design style and aesthetic
+- Focus PRIMARY on the user's TEXT PROMPT for functionality and content
+- Use the IMAGES as design inspiration for visual style, colors, and layout
+- If NO images provided, create a beautiful, professional design on your own
+- Never reference or mention the images in your MJML code (just use them for inspiration)
 
 RESPONSE FORMAT (CRITICAL):
 ❌ WRONG: "Here's your template:\n<mjml>..." 
@@ -115,10 +149,13 @@ If you receive an error message about:
 
 REMEMBER:
 - Your entire response = MJML code only
-- First character: 
+- First character: <mjml>
 - Last characters: </mjml>
 - No explanations, no markdown, no extra text
 - Must be complete and valid
+- Mobile-first, responsive design ALWAYS
+- Use image references for visual inspiration (if provided)
+- Focus on user's text prompt for content and functionality
 - Email clients are unforgiving - your MJML must be perfect!
 
 Now generate the requested email template following ALL rules above.`;
@@ -427,18 +464,78 @@ export async function generateTemplate(
   request: GenerationRequest
 ): Promise<GenerationResponse> {
   try {
-    const { prompt, conversationHistory = [], userId } = request;
+    const { prompt, conversationHistory = [], userId, images } = request;
 
     logger.info(`🎨 Generating template for user ${userId}`);
+    logger.info(`📝 Prompt length: ${prompt?.length}`);
+    logger.info(`🖼️ Images provided: ${images?.length || 0}`);
     logger.info(`⏱️ Using timeout: ${API_TIMEOUT}ms`);
     logger.info(`🔄 Max MJML validation retries: ${MAX_GENERATION_RETRIES}`);
 
+    if (images && images.length > 0) {
+      logger.info(`📊 Image details: ${JSON.stringify(images.map(img => ({
+        fileName: img.fileName,
+        mediaType: img.mediaType,
+        dataLength: img.data.length
+        })))}`);
+    }
+
     let lastError: string = '';
     let lastMjmlCode: string = '';
-    let messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
-      ...conversationHistory,
-      { role: 'user', content: prompt },
-    ];
+
+    // ⭐ BUILD MESSAGES WITH IMAGE SUPPORT
+    const messages: Anthropic.MessageParam[] = [];
+
+    logger.info(`📋 Building conversation history (${conversationHistory.length} messages)...`);
+    
+    // Add conversation history
+    for (const msg of conversationHistory) {
+      if (msg.images && msg.images.length > 0) {
+        logger.info(`💬 History message with ${msg.images.length} images`);
+        const content: Anthropic.MessageParam['content'] = [
+          ...msg.images.map(img => ({
+            type: 'image' as const,
+            source: {
+              type: 'base64' as const,
+              media_type: img.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+              data: img.data,
+            },
+          })),
+          {
+            type: 'text' as const,
+            text: msg.content,
+          },
+        ];
+        messages.push({ role: msg.role, content });
+      } else {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    // Add current user message with images
+    if (images && images.length > 0) {
+      logger.info(`📤 Adding current message with ${images.length} images`);
+      const content: Anthropic.MessageParam['content'] = [
+        ...images.map(img => ({
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: img.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+            data: img.data,
+          },
+        })),
+        {
+          type: 'text' as const,
+          text: prompt,
+        },
+      ];
+      messages.push({ role: 'user', content });
+    } else {
+      logger.info(`📤 Adding current message (text only)`);
+      messages.push({ role: 'user', content: prompt });
+    }
+
+    logger.info(`✅ Messages built: ${messages.length} total messages`);
 
     // ⭐ RETRY LOOP FOR MJML GENERATION AND VALIDATION
     for (let attempt = 1; attempt <= MAX_GENERATION_RETRIES; attempt++) {
@@ -448,6 +545,7 @@ export async function generateTemplate(
         const startTime = Date.now();
 
         // ⭐ CALL CLAUDE API
+        logger.info(`📡 Calling Anthropic API...`);
         const response = await anthropic.messages.create({
           model: CLAUDE_MODEL,
           max_tokens: MAX_TOKENS,
@@ -457,6 +555,9 @@ export async function generateTemplate(
 
         const duration = Date.now() - startTime;
         logger.info(`✅ API call completed in ${duration}ms`);
+        logger.info(`📊 Response ID: ${response.id}`);
+        logger.info(`📊 Stop reason: ${response.stop_reason}`);
+        logger.info(`📊 Usage - Input: ${response.usage.input_tokens}, Output: ${response.usage.output_tokens}`);
 
         // Extract text content
         const assistantMessage =
@@ -464,32 +565,35 @@ export async function generateTemplate(
 
         // ⭐ CHECK IF RESPONSE WAS TRUNCATED
         if (response.stop_reason === 'max_tokens') {
-        logger.warn(`⚠️ Response was truncated (hit max_tokens limit)`);
-        throw new Error('Response was truncated. The template is too complex. Please try a simpler description.');
+          logger.warn(`⚠️ Response was truncated (hit max_tokens limit)`);
+          throw new Error('Response was truncated. The template is too complex. Please try a simpler description.');
         }
 
         // ⭐ DEBUG: Log the raw response
         logger.info(`📝 Raw Claude response (first 500 chars):`);
         logger.info(assistantMessage.substring(0, 500));
         logger.info(`📝 Response length: ${assistantMessage.length} chars`);
-        logger.info(`📝 Stop reason: ${response.stop_reason}`);
         logger.info(`📝 Contains <mjml>: ${assistantMessage.includes('<mjml>')}`);
         logger.info(`📝 Contains </mjml>: ${assistantMessage.includes('</mjml>')}`);
 
         // Add assistant response to conversation history
         messages.push({ role: 'assistant', content: assistantMessage });
+        logger.info(`💬 Assistant response added to conversation`);
 
         // Extract MJML code
+        logger.info(`🔍 Extracting MJML code...`);
         const mjmlCode = extractMJMLCode(assistantMessage);
         lastMjmlCode = mjmlCode;
 
-        logger.info(`📝 Extracted MJML code (${mjmlCode.length} chars)`);
+        logger.info(`✅ Extracted MJML code (${mjmlCode.length} chars)`);
 
         // ⭐ VALIDATE MJML
+        logger.info(`🔍 Validating MJML...`);
         const validationResult = validateMJML(mjmlCode);
 
         if (validationResult.isValid) {
           logger.info(`✅ Template generated and validated successfully on attempt ${attempt}`);
+          logger.info(`📊 Final stats - Attempts: ${attempt}, Had errors: ${attempt > 1}`);
           
           return {
             mjmlCode,
@@ -548,6 +652,7 @@ export async function generateTemplate(
         
         // ⭐ FOR OTHER API ERRORS, THROW IMMEDIATELY
         logger.err(`❌ API error on attempt ${attempt}:`, apiError.message);
+        logger.err(`Error details:`, apiError);
         throw apiError;
       }
     }
@@ -568,6 +673,7 @@ export async function generateTemplate(
     
   } catch (error: any) {
     logger.err('❌ Template generation error:', error);
+    logger.err('Error stack:', error.stack);
     
     // ⭐ USER-FRIENDLY ERROR MESSAGES
     if (error.message?.includes('timeout')) {
@@ -592,11 +698,27 @@ export async function generateTemplate(
 export async function refineTemplate(
   currentMjml: string,
   userFeedback: string,
-  conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
-  userId: string
+  conversationHistory: Array<{ 
+    role: 'user' | 'assistant'; 
+    content: string;
+    images?: Array<{ data: string; mediaType: string; fileName: string }>;
+  }>,
+  userId: string,
+  images?: Array<{ data: string; mediaType: string; fileName: string }>
 ): Promise<GenerationResponse> {
   try {
     logger.info(`🔧 Refining template for user ${userId}`);
+    logger.info(`📝 User feedback length: ${userFeedback?.length}`);
+    logger.info(`🖼️ Images provided: ${images?.length || 0}`);
+    logger.info(`📋 Conversation history length: ${conversationHistory.length}`);
+
+    if (images && images.length > 0) {
+      logger.info(`📊 Image details: ${JSON.stringify(images.map(img => ({
+        fileName: img.fileName,
+        mediaType: img.mediaType,
+        dataLength: img.data.length
+        })))}`);
+    }
 
     const refinementPrompt = `Current MJML template:
 ${currentMjml}
@@ -605,13 +727,17 @@ User feedback: ${userFeedback}
 
 Please update the template based on the user's feedback. Remember to output ONLY the complete updated MJML code starting with <mjml> and ending with </mjml>. Do not use markdown code blocks.`;
 
+    logger.info(`📤 Calling generateTemplate for refinement...`);
+    
     return await generateTemplate({
       prompt: refinementPrompt,
       conversationHistory,
       userId,
+      images: images || undefined,
     });
   } catch (error) {
     logger.err('❌ Template refinement error:', error);
+    logger.err('Error details:', error);
     throw error;
   }
 }

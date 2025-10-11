@@ -91,63 +91,113 @@
 
     <!-- Messages Container -->
     <div
-      #messagesContainer
-      class="chat-messages"
-      (scroll)="onScroll($event)">
-      <div
-        *ngFor="let message of messages$ | async; trackBy: trackByIndex"
-        class="chat-msg"
-        [class.user-msg]="message.role === 'user'"
-        [class.assistant-msg]="message.role === 'assistant'">
-        <div class="bubble" [class.user-bubble]="message.role === 'user'">
-          <div class="bubble-header">
-            <span class="role">{{ message.role === 'user' ? 'You' : 'AI Assistant' }}</span>
-            <span class="timestamp">{{ message.timestamp | date: 'short' }}</span>
-          </div>
-          <div class="bubble-content">
-            {{ message.content }}
-          </div>
-        </div>
+  #messagesContainer
+  class="chat-messages"
+  (scroll)="onScroll($event)">
+  <div
+    *ngFor="let message of messages$ | async; trackBy: trackByIndex"
+    class="chat-msg"
+    [class.user-msg]="message.role === 'user'"
+    [class.assistant-msg]="message.role === 'assistant'">
+    <div class="bubble" [class.user-bubble]="message.role === 'user'">
+      <div class="bubble-header">
+        <span class="role">{{ message.role === 'user' ? 'You' : 'AI Assistant' }}</span>
+        <span class="timestamp">{{ message.timestamp | date: 'short' }}</span>
       </div>
-
-      <!-- Generating Indicator -->
-      <div class="chat-msg assistant-msg" *ngIf="isGenerating$ | async">
-        <div class="bubble generating-bubble">
-          <div class="bubble-header">
-            <span class="role">AI Assistant</span>
-          </div>
-          <div class="bubble-content">
-            <div class="typing-indicator">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-            <span class="generating-text">Generating template...</span>
-          </div>
-        </div>
+      
+      <!-- ✅ Image attachments (if any) -->
+      <div class="message-images" *ngIf="message.images && message.images.length > 0">
+        <img 
+          *ngFor="let img of message.images" 
+          [src]="'data:' + img.mediaType + ';base64,' + img.data"
+          [alt]="img.fileName"
+          class="message-image">
+      </div>
+      
+      <div class="bubble-content">
+        {{ message.content }}
       </div>
     </div>
+  </div>
+
+  <!-- Generating Indicator -->
+  <div class="chat-msg assistant-msg" *ngIf="isGenerating$ | async">
+    <div class="bubble generating-bubble">
+      <div class="bubble-header">
+        <span class="role">AI Assistant</span>
+      </div>
+      <div class="bubble-content">
+        <div class="typing-indicator">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <span class="generating-text">Generating template...</span>
+      </div>
+    </div>
+  </div>
+</div>
 
     <!-- Message Composer -->
-    <div class="composer">
-      <textarea
-        #messageInput
-        class="message-input"
-        [(ngModel)]="userInput"
-        (keydown.enter)="onEnterKey($event)"
-        placeholder="Describe the email template you want to create..."
-        rows="3"
-        [disabled]="(isGenerating$ | async) ?? false">
-      </textarea>
+<!-- Message Composer -->
+<div class="composer">
+  <!-- Hidden file input -->
+  <input 
+    type="file"
+    id="imageUploadInput"
+    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/svg+xml"
+    multiple
+    [attr.max]="maxImages"
+    (change)="onImageSelect($event)"
+    style="display: none;">
 
-      <button
-        mat-raised-button
-        class="send-btn"
-        (click)="onSend()"
-        [disabled]="!userInput.trim() || ((isGenerating$ | async) ?? false)">
-        <mat-icon>send</mat-icon>
-        <span>Send</span>
+  <!-- Image Previews (if any) -->
+  <div class="image-previews" *ngIf="imagePreviewUrls.length > 0">
+    <div 
+      *ngFor="let url of imagePreviewUrls; let i = index" 
+      class="image-preview-item">
+      <img [src]="url" alt="Upload preview">
+      <button 
+        class="remove-image-btn" 
+        (click)="removeImage(i)"
+        type="button">
+        <mat-icon>close</mat-icon>
       </button>
     </div>
+  </div>
+
+  <div class="composer-input-row">
+    <!-- Plus Button for Image Upload -->
+    <button
+      mat-icon-button
+      class="add-image-btn"
+      (click)="triggerFileInput()"
+      [disabled]="selectedImages.length >= maxImages || ((isGenerating$ | async) ?? false)"
+      [matTooltip]="selectedImages.length >= maxImages ? 'Maximum 2 images' : 'Add design reference images'"
+      matTooltipPosition="above"
+      type="button">
+      <mat-icon>add_photo_alternate</mat-icon>
+    </button>
+
+    <textarea
+      #messageInput
+      class="message-input"
+      [(ngModel)]="userInput"
+      (keydown.enter)="onEnterKey($event)"
+      placeholder="Describe your email template... Upload design references for inspiration! 🎨"
+      rows="3"
+      [disabled]="(isGenerating$ | async) ?? false">
+    </textarea>
+
+    <button
+      mat-raised-button
+      class="send-btn"
+      (click)="onSend()"
+      [disabled]="!userInput.trim() || ((isGenerating$ | async) ?? false)">
+      <mat-icon>send</mat-icon>
+      <span>Send</span>
+    </button>
+  </div>
+</div>
   </section>
 </div>
