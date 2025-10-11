@@ -179,6 +179,7 @@ function grammarSystemPrompt(): string {
     "  1) 'ew single' → 'new single' (inside link)",
     "  2) 'wah over us' → 'wash over us' (outside link)",
     "  3) *ALWAYS AIM FOR ONE EDIT ONLY SENTENCE 1 HAS $ MISTAKES should AIM for 4 different edits*",
+    "4) understand the difference between the headings and normal text you are mixing the edits. edits should be seperately for each tag.",
     "- Max 30 edits per request.",
   ].join("\n");
 }

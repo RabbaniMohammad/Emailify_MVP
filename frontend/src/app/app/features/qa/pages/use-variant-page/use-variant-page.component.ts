@@ -88,6 +88,8 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
 
   applyingIndex: number | null = null;
 
+  
+
   private snapsSubject = new BehaviorSubject<SnapResult[]>([]);
   readonly snaps$ = this.snapsSubject.asObservable();
 
