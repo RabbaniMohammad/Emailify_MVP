@@ -273,19 +273,31 @@
                 
                 <!-- ✅ Inline edit input with Replace (dummy) and Retest buttons + Enter key support -->
                 <div class="snap-edit-input" *ngIf="isSnapInEditMode(s)">
+  <!-- URL Info Labels -->
+  <div class="url-info-labels">
+    <div class="url-label-row">
+      <span class="url-label-title">Original Link:</span>
+      <span class="url-label-value">{{ getOriginalUrl(s) }}</span>
+    </div>
+    <div class="url-label-row" *ngIf="hasBeenRetested(s)">
+      <span class="url-label-title">Latest Tested Link:</span>
+      <span class="url-label-value success">{{ getLatestTestedUrl(s) }}</span>
+    </div>
+  </div>
+  
   <input 
-    type="text"
-    placeholder="Paste or type new URL here"
-    [value]="getEditInputValue()"
-    (input)="editInputValue = $any($event.target).value"
-    (keydown)="onEditInputKeyDown($event, s, editUrlInput)"
-    #editUrlInput />
+  type="text"
+  placeholder="Paste or type new URL here"
+  [(ngModel)]="editInputValue"
+  (keydown)="onEditInputKeyDown($event, s, editUrlInput)"
+  #editUrlInput />
   
   <!-- ✅ Replace button - NOW FUNCTIONAL -->
   <button 
     mat-stroked-button 
     class="replace-btn"
-    (click)="onReplaceSnap(s, editUrlInput)">
+    (click)="onReplaceSnap(s, editUrlInput)"
+    [disabled]="!canReplace(s)">
     Replace
   </button>
   
@@ -293,7 +305,7 @@
   <button
     mat-stroked-button
     class="retest-btn-inline"
-    (click)="onRetestUrl(s.finalUrl || s.url, editUrlInput.value || undefined)"
+    (click)="onRetestUrl(s.finalUrl || s.url, editUrlInput.value)"
     [disabled]="isSnapping(editUrlInput.value || s.finalUrl || s.url)">
     <mat-progress-spinner
       *ngIf="isSnapping(editUrlInput.value || s.finalUrl || s.url)"

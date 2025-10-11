@@ -6,7 +6,7 @@ export interface IGeneratedTemplate extends Document {
   html: string;
   userId: Types.ObjectId;
   conversationId?: string;
-  type: 'generated';
+  type: 'Generated';
   createdAt: Date;
   updatedAt: Date;
   
