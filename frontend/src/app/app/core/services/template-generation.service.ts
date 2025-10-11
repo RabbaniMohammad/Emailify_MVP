@@ -258,27 +258,50 @@ continueConversation(
   }
 
   /* --------------------------- Save Template -------------------------- */
-
-  saveTemplate(
-    conversationId: string,
-    templateName: string
-  ): Observable<SaveTemplateResponse> {
-    return this.http.post<SaveTemplateResponse>(
-      `/api/generate/save/${conversationId}`,
-      { templateName },
-      { withCredentials: true }
-    ).pipe(
-      tap((response) => {
-        // Update cached conversation
-        const cached = this.getConversationCached(conversationId);
-        if (cached) {
-          cached.templateName = templateName;
-          cached.status = 'saved';
-          this.cacheConversation(conversationId, cached);
-        }
-      })
-    );
-  }
+saveTemplate(
+  conversationId: string,
+  templateName: string
+): Observable<SaveTemplateResponse> {
+  console.log('💾 [SERVICE] saveTemplate() called');
+  console.log('💾 [SERVICE] Conversation ID:', conversationId);
+  console.log('💾 [SERVICE] Template name:', templateName);
+  
+  return this.http.post<SaveTemplateResponse>(
+    `/api/generate/save/${conversationId}`,
+    { templateName },
+    { withCredentials: true }
+  ).pipe(
+    tap((response) => {
+      console.log('✅ [SERVICE] Save response received:', response);
+      console.log('📊 [SERVICE] Response details:', {
+        templateId: response.templateId,
+        templateName: response.templateName,
+        message: response.message
+      });
+      
+      // Update cached conversation
+      console.log('💾 [SERVICE] Updating cached conversation...');
+      const cached = this.getConversationCached(conversationId);
+      
+      if (cached) {
+        console.log('✅ [SERVICE] Cached conversation found, updating status...');
+        console.log('📊 [SERVICE] Old status:', cached.status);
+        
+        cached.templateName = templateName;
+        cached.status = 'saved';
+        
+        console.log('📊 [SERVICE] New status:', cached.status);
+        console.log('💾 [SERVICE] Saving updated conversation to cache...');
+        
+        this.cacheConversation(conversationId, cached);
+        
+        console.log('✅ [SERVICE] Conversation cache updated successfully');
+      } else {
+        console.warn('⚠️ [SERVICE] No cached conversation found to update');
+      }
+    })
+  );
+}
 
   /* --------------------------- Preview MJML -------------------------- */
 

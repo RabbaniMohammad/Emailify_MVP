@@ -9,6 +9,16 @@ export interface IGeneratedTemplate extends Document {
   type: 'generated';
   createdAt: Date;
   updatedAt: Date;
+  
+  // ✅ New metadata fields
+  templateType: 'AI Generated';
+  createdBy: string; // User's name from Google sign-in
+  source: 'AI Generated';
+  active: 'N/A';
+  category: 'N/A';
+  responsive: 'Yes';
+  folderId: 'N/A';
+  thumbnail: string; // Empty string ""
 }
 
 const GeneratedTemplateSchema = new Schema<IGeneratedTemplate>(
@@ -42,6 +52,47 @@ const GeneratedTemplateSchema = new Schema<IGeneratedTemplate>(
       type: String,
       default: 'generated',
       enum: ['generated'],
+    },
+    
+    // ✅ NEW METADATA FIELDS
+    templateType: {
+      type: String,
+      default: 'AI Generated',
+      enum: ['AI Generated'],
+    },
+    createdBy: {
+      type: String,
+      required: true, // User's name from Google sign-in
+      trim: true,
+    },
+    source: {
+      type: String,
+      default: 'AI Generated',
+      enum: ['AI Generated'],
+    },
+    active: {
+      type: String,
+      default: 'N/A',
+      enum: ['N/A'],
+    },
+    category: {
+      type: String,
+      default: 'N/A',
+      enum: ['N/A'],
+    },
+    responsive: {
+      type: String,
+      default: 'Yes',
+      enum: ['Yes'],
+    },
+    folderId: {
+      type: String,
+      default: 'N/A',
+      enum: ['N/A'],
+    },
+    thumbnail: {
+      type: String,
+      default: '', // Empty string
     },
   },
   {

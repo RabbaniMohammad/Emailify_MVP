@@ -413,7 +413,13 @@ private async continueConversation(message: string): Promise<void> {
 }
 
 onRunTests(): void {
+  console.log('🧪 [RUN_TESTS] onRunTests() triggered');
+  console.log('🧪 [RUN_TESTS] Conversation ID:', this.conversationId);
+  console.log('🧪 [RUN_TESTS] Template name:', this.templateName);
+  console.log('🧪 [RUN_TESTS] Has HTML:', !!this.currentHtml$.value);
+  
   if (!this.conversationId) {
+    console.error('❌ [RUN_TESTS] No conversation ID - aborting');
     this.snackBar.open('No template to test', 'Close', {
       duration: 3000,
       panelClass: ['error-snackbar'],
@@ -422,6 +428,7 @@ onRunTests(): void {
   }
 
   if (!this.currentHtml$.value) {
+    console.error('❌ [RUN_TESTS] No HTML content - aborting');
     this.snackBar.open('No template to save', 'Close', {
       duration: 3000,
       panelClass: ['error-snackbar'],
@@ -431,31 +438,50 @@ onRunTests(): void {
 
   // ✅ Validate template name
   const name = this.templateName?.trim();
+  console.log('🧪 [RUN_TESTS] Trimmed template name:', name);
   
   if (!name) {
+    console.error('❌ [RUN_TESTS] Template name is empty - aborting');
     this.snackBar.open('Please enter a template name before running tests', 'Close', {
       duration: 4000,
-    //   panelClass: ['error-snackbar'],
       horizontalPosition: 'center',
       verticalPosition: 'top',
     });
     return;
   }
 
+  console.log('✅ [RUN_TESTS] All validations passed');
+  console.log('📡 [RUN_TESTS] Calling generationService.saveTemplate()...');
+  console.log('📊 [RUN_TESTS] Parameters:', {
+    conversationId: this.conversationId,
+    templateName: name
+  });
+
   this.generationService
     .saveTemplate(this.conversationId, name)
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (response) => {
+        console.log('✅ [RUN_TESTS] Template saved successfully!');
+        console.log('📊 [RUN_TESTS] Response:', response);
+        console.log('🆔 [RUN_TESTS] Template ID:', response.templateId);
+        console.log('📝 [RUN_TESTS] Template name:', response.templateName);
+        
         this.snackBar.open('Template saved! Redirecting to QA...', 'Close', {
           duration: 2000,
           panelClass: ['success-snackbar'],
         });
 
+        console.log('🔗 [RUN_TESTS] Navigating to QA page:', `/qa/${response.templateId}`);
         this.router.navigate(['/qa', response.templateId]);
+        console.log('✅ [RUN_TESTS] Navigation initiated');
       },
       error: (error) => {
-        console.error('Save failed:', error);
+        console.error('❌ [RUN_TESTS] Save failed:', error);
+        console.error('❌ [RUN_TESTS] Error details:', error.error);
+        console.error('❌ [RUN_TESTS] Error message:', error.error?.message);
+        console.error('❌ [RUN_TESTS] Error code:', error.error?.code);
+        
         this.snackBar.open('Failed to save template', 'Close', {
           duration: 5000,
           panelClass: ['error-snackbar'],
@@ -467,8 +493,14 @@ onRunTests(): void {
 onTemplateNameChange(newName: string): void {
   this.templateName = newName;
 }
-  onSaveTemplate(): void {
+onSaveTemplate(): void {
+  console.log('💾 [SAVE_TEMPLATE] onSaveTemplate() triggered');
+  console.log('💾 [SAVE_TEMPLATE] Conversation ID:', this.conversationId);
+  console.log('💾 [SAVE_TEMPLATE] Template name:', this.templateName);
+  console.log('💾 [SAVE_TEMPLATE] Has HTML:', !!this.currentHtml$.value);
+  
   if (!this.conversationId) {
+    console.error('❌ [SAVE_TEMPLATE] No conversation ID - aborting');
     this.snackBar.open('No template to save', 'Close', {
       duration: 3000,
       panelClass: ['error-snackbar'],
@@ -478,37 +510,61 @@ onTemplateNameChange(newName: string): void {
 
   // ✅ Validate template name
   const name = this.templateName?.trim();
+  console.log('💾 [SAVE_TEMPLATE] Trimmed template name:', name);
   
   if (!name) {
+    console.error('❌ [SAVE_TEMPLATE] Template name is empty - aborting');
     this.snackBar.open('Please enter a template name', 'Close', {
       duration: 4000,
-    //   panelClass: ['error-snackbar'],
       horizontalPosition: 'center',
       verticalPosition: 'top',
     });
     return;
   }
 
+  console.log('✅ [SAVE_TEMPLATE] All validations passed');
+  console.log('📡 [SAVE_TEMPLATE] Calling generationService.saveTemplate()...');
+  console.log('📊 [SAVE_TEMPLATE] Parameters:', {
+    conversationId: this.conversationId,
+    templateName: name
+  });
+
   this.generationService
     .saveTemplate(this.conversationId, name)
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (response) => {
+        console.log('✅ [SAVE_TEMPLATE] Template saved successfully!');
+        console.log('📊 [SAVE_TEMPLATE] Response:', response);
+        console.log('🆔 [SAVE_TEMPLATE] Template ID:', response.templateId);
+        console.log('📝 [SAVE_TEMPLATE] Template name:', response.templateName);
+        
         this.snackBar.open('Template saved successfully!', 'Close', {
           duration: 3000,
           panelClass: ['success-snackbar'],
         });
 
         // Navigate to templates page and highlight the new template
+        console.log('🔗 [SAVE_TEMPLATE] Navigating to home with query params:', {
+          newTemplateId: response.templateId,
+          highlight: 'true'
+        });
+        
         this.router.navigate(['/'], {
           queryParams: {
             newTemplateId: response.templateId,
             highlight: 'true',
           },
         });
+        
+        console.log('✅ [SAVE_TEMPLATE] Navigation initiated');
       },
       error: (error) => {
-        console.error('Save failed:', error);
+        console.error('❌ [SAVE_TEMPLATE] Save failed:', error);
+        console.error('❌ [SAVE_TEMPLATE] Error details:', error.error);
+        console.error('❌ [SAVE_TEMPLATE] Error message:', error.error?.message);
+        console.error('❌ [SAVE_TEMPLATE] Error code:', error.error?.code);
+        
         this.snackBar.open(
           error.error?.message || 'Failed to save template',
           'Close',

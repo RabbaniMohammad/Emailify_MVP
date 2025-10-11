@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authenticate } from '@src/middleware/auth';
 import TemplateConversation from '@src/models/TemplateConversation';
 import GeneratedTemplate from '@src/models/GeneratedTemplate';
+import User from '@src/models/User'; // ✅ ADD THIS LINE
 import { generateTemplate, refineTemplate } from '@src/services/templateGenerationService';
 import { convertMjmlToHtml, validateMjml, getMjmlStarter } from '@src/services/mjmlConversionService';
 import logger from 'jet-logger';
@@ -419,34 +420,65 @@ router.post('/save/:conversationId', authenticate, async (req: Request, res: Res
     const { templateName } = req.body;
     const userId = (req as any).tokenPayload?.userId;
 
+    console.log('💾 [SAVE] Starting template save process');
+    console.log('💾 [SAVE] Conversation ID:', conversationId);
+    console.log('💾 [SAVE] Template name:', templateName);
+    console.log('💾 [SAVE] User ID:', userId);
+
     if (!templateName || !templateName.trim()) {
+      console.warn('⚠️ [SAVE] Template name is missing or empty');
       return res.status(400).json({
         code: 'INVALID_NAME',
         message: 'Template name is required',
       });
     }
 
+    console.log('🔍 [SAVE] Finding conversation in database...');
     const conversation = await TemplateConversation.findOne({
       conversationId,
       userId,
     });
 
     if (!conversation) {
+      console.error('❌ [SAVE] Conversation not found:', conversationId);
       return res.status(404).json({
         code: 'CONVERSATION_NOT_FOUND',
         message: 'Conversation not found',
       });
     }
 
+    console.log('✅ [SAVE] Conversation found');
+    console.log('📊 [SAVE] Conversation status:', conversation.status);
+    console.log('📄 [SAVE] HTML length:', conversation.currentHtml?.length);
+
     if (!conversation.currentHtml) {
+      console.error('❌ [SAVE] No HTML content to save');
       return res.status(400).json({
         code: 'NO_TEMPLATE',
         message: 'No template to save',
       });
     }
 
-    const templateId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    // ✅ Fetch user details to get the name
+    console.log('👤 [SAVE] Fetching user details for createdBy field...');
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      console.error('❌ [SAVE] User not found:', userId);
+      return res.status(404).json({
+        code: 'USER_NOT_FOUND',
+        message: 'User not found',
+      });
+    }
 
+    console.log('✅ [SAVE] User found:', user.name);
+    console.log('📧 [SAVE] User email:', user.email);
+
+    const templateId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    console.log('🆔 [SAVE] Generated template ID:', templateId);
+
+    // ✅ Create template with all metadata
+    console.log('💾 [SAVE] Creating GeneratedTemplate document...');
     const generatedTemplate = await GeneratedTemplate.create({
       templateId,
       name: templateName.trim(),
@@ -454,13 +486,38 @@ router.post('/save/:conversationId', authenticate, async (req: Request, res: Res
       userId,
       conversationId,
       type: 'generated',
+      
+      // ✅ New metadata fields
+      templateType: 'AI Generated',
+      createdBy: user.name,
+      source: 'AI Generated',
+      active: 'N/A',
+      category: 'N/A',
+      responsive: 'Yes',
+      folderId: 'N/A',
+      thumbnail: '',
     });
 
+    console.log('✅ [SAVE] GeneratedTemplate created successfully');
+    console.log('📊 [SAVE] Template metadata:', {
+      templateId: generatedTemplate.templateId,
+      name: generatedTemplate.name,
+      createdBy: generatedTemplate.createdBy,
+      templateType: generatedTemplate.templateType,
+      source: generatedTemplate.source,
+      responsive: generatedTemplate.responsive,
+      createdAt: generatedTemplate.createdAt,
+      updatedAt: generatedTemplate.updatedAt,
+    });
+
+    // Update conversation
+    console.log('💾 [SAVE] Updating conversation status...');
     conversation.templateName = templateName.trim();
     conversation.status = 'saved';
     conversation.savedTemplateId = templateId;
     await conversation.save();
 
+    console.log('✅ [SAVE] Conversation updated to "saved" status');
     logger.info(`✅ Template saved to MongoDB: ${templateId}`);
 
     res.json({
@@ -469,6 +526,8 @@ router.post('/save/:conversationId', authenticate, async (req: Request, res: Res
       message: 'Template saved successfully',
     });
   } catch (error: any) {
+    console.error('❌ [SAVE] Save template error:', error);
+    console.error('❌ [SAVE] Error stack:', error.stack);
     logger.err('❌ Save template error:', error);
     res.status(500).json({
       code: 'SAVE_ERROR',

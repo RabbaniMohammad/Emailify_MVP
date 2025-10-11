@@ -167,7 +167,12 @@ router.get('/', async (req: Request, res: Response) => {
     const limit  = Math.min(Number(req.query.limit ?? 50), 250);
     const offset = Number(req.query.offset ?? 0);
 
+    console.log('📋 [LIST_TEMPLATES] Fetching templates list');
+    console.log('📋 [LIST_TEMPLATES] Query:', query || '(none)');
+    console.log('📋 [LIST_TEMPLATES] Limit:', limit, 'Offset:', offset);
+
     // ✅ Fetch Mailchimp templates
+    console.log('📬 [LIST_TEMPLATES] Fetching Mailchimp templates...');
     const resp: McTemplatesList = await mc.templates.list({ count: limit, offset, type: 'user' });
 
     const source: McTemplate[] = Array.isArray(resp.templates) ? resp.templates : [];
@@ -182,6 +187,7 @@ router.get('/', async (req: Request, res: Response) => {
         id: String(t.id),
         name: String(t.name ?? 'Untitled Template'),
         type: t.type ?? null,
+        templateType: null, // ✅ Not applicable for Mailchimp templates
         category: t.category ?? null,
         thumbnail: t.thumbnail ?? null,
         dateCreated: t.date_created ?? null,
@@ -192,49 +198,73 @@ router.get('/', async (req: Request, res: Response) => {
         responsive: t.responsive ?? null,
         folderId: t.folder_id ?? null,
         screenshotUrl: t.screenshot_url ?? null,
+        source: 'mailchimp', // ✅ NEW FIELD
       }))
       .filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
 
+    console.log('✅ [LIST_TEMPLATES] Mailchimp templates fetched:', mailchimpItems.length);
+
     // ✅ Fetch Generated templates from MongoDB
+    console.log('🤖 [LIST_TEMPLATES] Fetching generated templates from MongoDB...');
     const generatedTemplates = await GeneratedTemplate.find({})
       .sort({ createdAt: -1 })
       .limit(100) // Reasonable limit
       .lean();
 
-    const generatedItems = generatedTemplates.map((t) => ({
-      id: t.templateId,
-      name: t.name,
-      type: 'generated',
-      category: 'Generated',
-      thumbnail: null,
-      dateCreated: t.createdAt?.toISOString() ?? null,
-      dateEdited: t.updatedAt?.toISOString() ?? null,
-      createdBy: 'AI Generated',
-      active: true,
-      dragAndDrop: false,
-      responsive: true,
-      folderId: null,
-      screenshotUrl: null,
-    }));
+    console.log('✅ [LIST_TEMPLATES] Generated templates fetched:', generatedTemplates.length);
+
+    const generatedItems = generatedTemplates.map((t: any) => {
+      console.log('📊 [LIST_TEMPLATES] Mapping template:', {
+        id: t.templateId,
+        name: t.name,
+        templateType: t.templateType,
+        createdBy: t.createdBy,
+        source: t.source
+      });
+
+      return {
+        id: t.templateId,
+        name: t.name,
+        type: t.type || 'generated',
+        templateType: t.templateType || 'AI Generated', // ✅ NEW FIELD
+        category: t.category || 'N/A',
+        thumbnail: t.thumbnail || '',
+        dateCreated: t.createdAt?.toISOString() ?? null,
+        dateEdited: t.updatedAt?.toISOString() ?? null,
+        createdBy: t.createdBy || 'Unknown', // ✅ NEW FIELD (from DB)
+        active: t.active || 'N/A',
+        dragAndDrop: false,
+        responsive: t.responsive || 'Yes',
+        folderId: t.folderId || 'N/A',
+        screenshotUrl: null,
+        source: t.source || 'AI Generated', // ✅ NEW FIELD
+      };
+    });
+
+    console.log('📊 [LIST_TEMPLATES] Generated items mapped:', generatedItems.length);
 
     // ✅ Merge both lists (generated templates first, then Mailchimp)
     let items = [...generatedItems, ...mailchimpItems];
+    console.log('🔀 [LIST_TEMPLATES] Merged lists, total before filter:', items.length);
 
     // ✅ Apply search filter if provided
     if (query) {
+      console.log('🔍 [LIST_TEMPLATES] Applying search filter:', query);
       items = items.filter((t) => t.name.toLowerCase().includes(query));
+      console.log('✅ [LIST_TEMPLATES] Filtered results:', items.length);
     }
 
     const total = items.length;
     
-    console.log(`📋 Templates list: ${generatedItems.length} generated + ${mailchimpItems.length} Mailchimp = ${total} total`);
+    console.log(`✅ [LIST_TEMPLATES] Final result: ${generatedItems.length} generated + ${mailchimpItems.length} Mailchimp = ${total} total`);
 
     res.json({ items, total });
   } catch (err: unknown) {
     const e = err as any;
     const status  = e?.status || e?.statusCode || e?.response?.status || 500;
     const message = e?.response?.text || e?.detail || e?.message || 'Failed to fetch templates';
-    console.error('Templates list error:', { status, message });
+    console.error('❌ [LIST_TEMPLATES] Error:', { status, message });
+    console.error('❌ [LIST_TEMPLATES] Stack:', e?.stack);
     res.status(status).json({ code: 'FETCH_ERROR', message });
   }
 });
@@ -250,40 +280,81 @@ router.get('/:id', async (req: Request, res: Response) => {
 
   const id = String(req.params.id);
   
+  console.log('📡 [GET_TEMPLATE] Fetching template:', id);
+  
   try {
     if (isGeneratedTemplate(id)) {
-      const { name, html, source } = await getGeneratedTemplateFromDB(id);
+      console.log('🤖 [GET_TEMPLATE] Detected as generated template');
       
-      console.log(`Generated template ${id} → html length: ${html.length}`);
+      // ✅ Fetch full template with all metadata
+      const template = await GeneratedTemplate.findOne({ templateId: id });
+      
+      if (!template) {
+        console.error('❌ [GET_TEMPLATE] Generated template not found:', id);
+        throw new Error(`Generated template not found: ${id}`);
+      }
+      
+      console.log('✅ [GET_TEMPLATE] Generated template found:', template.name);
+      console.log('📊 [GET_TEMPLATE] Template metadata:', {
+        templateType: template.templateType,
+        createdBy: template.createdBy,
+        source: template.source,
+        responsive: template.responsive,
+        createdAt: template.createdAt,
+        updatedAt: template.updatedAt
+      });
+      console.log('📄 [GET_TEMPLATE] HTML length:', template.html?.length);
       
       return res.status(200).json({ 
         id, 
-        name, 
-        html,
-        type: 'generated',
-        source,
-        active: true,
+        name: template.name, 
+        html: template.html,
+        type: template.type || 'generated',
+        templateType: template.templateType, // ✅ NEW FIELD
+        source: template.source || 'AI Generated',
+        active: template.active || 'N/A',
+        category: template.category || 'N/A',
+        thumbnail: template.thumbnail || '',
+        dateCreated: template.createdAt?.toISOString() || null,
+        dateEdited: template.updatedAt?.toISOString() || null,
+        createdBy: template.createdBy, // ✅ NEW FIELD
+        dragAndDrop: false,
+        responsive: template.responsive || 'Yes',
+        folderId: template.folderId || 'N/A',
+        screenshotUrl: null,
       });
     }
 
+    console.log('📬 [GET_TEMPLATE] Fetching Mailchimp template');
     const sdk: any = mc;
     let template: any = null;
     
     if (typeof sdk.templates?.get === 'function') {
+      console.log('📡 [GET_TEMPLATE] Using sdk.templates.get()');
       template = await sdk.templates.get(id);
     } else if (typeof sdk.templates?.getTemplate === 'function') {
+      console.log('📡 [GET_TEMPLATE] Using sdk.templates.getTemplate()');
       template = await sdk.templates.getTemplate(id);
     }
 
+    console.log('📄 [GET_TEMPLATE] Fetching HTML content...');
     const { name, html, source } = await getHtmlForTemplate(id);
     
-    console.log(`Template ${id} → html length: ${html.length} (source: ${source})`);
+    console.log('✅ [GET_TEMPLATE] Mailchimp template fetched');
+    console.log(`📊 [GET_TEMPLATE] Template ${id} → html length: ${html.length} (source: ${source})`);
+    console.log('📊 [GET_TEMPLATE] Metadata:', {
+      type: template?.type,
+      category: template?.category,
+      createdBy: template?.created_by,
+      responsive: template?.responsive
+    });
     
     return res.status(200).json({ 
       id, 
       name, 
       html,
       type: template?.type ?? null,
+      templateType: null, // Not applicable for Mailchimp templates
       category: template?.category ?? null,
       thumbnail: template?.thumbnail ?? null,
       dateCreated: template?.date_created ?? null,
@@ -297,9 +368,13 @@ router.get('/:id', async (req: Request, res: Response) => {
       source,
     });
   } catch (e: any) {
+    console.error('❌ [GET_TEMPLATE] Error fetching template:', id);
+    console.error('❌ [GET_TEMPLATE] Error details:', e);
+    console.error('❌ [GET_TEMPLATE] Error stack:', e.stack);
+    
     const status  = e?.status || e?.statusCode || e?.response?.status || 500;
     const message = e?.response?.text || e?.detail || e?.message || 'Failed to fetch template';
-    console.error('Template detail error:', { id, status, message });
+    console.error('❌ [GET_TEMPLATE] Final error:', { id, status, message });
     return res.status(status).json({ code: 'FETCH_ERROR', message });
   }
 });

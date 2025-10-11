@@ -406,170 +406,208 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   }
 
   // Optimized template loading with metadata caching
-  private loadTemplateContent(id: string): void {
-    console.log('🔄 START loadTemplateContent, id:', id);
-    
-    // Clear previous state
-    this.previewError = undefined;
-    this.runButtonItemId = undefined;
-    this.templateMetadata = null;
-    
-    // Clear any pending loading timer
-    if (this.loadingTimer) {
-      clearTimeout(this.loadingTimer);
-      this.loadingTimer = undefined;
-    }
-
-    if (!id) {
-      this.loading = false;
-      this.safeSrcdoc = null;
-      console.log('❌ No ID - loading set to FALSE');
-      this.cdr.markForCheck();
-      return;
-    }
-
-    // Check cache first
-    const cached = this.cache.get(id) || this.cache.getPersisted(id);
-    console.log('💾 Cache check:', cached ? 'HIT' : 'MISS');
-    
-    if (cached) {
-      console.log('✅ Using cached content - loading instantly');
-      
-      // Check if metadata is already cached
-      const cachedMetadata = sessionStorage.getItem(`metadata-${id}`);
-      if (cachedMetadata) {
-        this.templateMetadata = JSON.parse(cachedMetadata);
-        console.log('✅ Using cached metadata');
-        this.cdr.markForCheck();
-      } else {
-        // Fetch metadata from API and cache it
-        this.http.get(`/api/templates/${id}`, { responseType: 'json' })
-          .subscribe({
-            next: (response: any) => {
-              this.templateMetadata = {
-                type: response.type,
-                category: response.category || 'N/A',
-                thumbnail: response.thumbnail,
-                dateCreated: response.dateCreated,
-                dateEdited: response.dateEdited,
-                createdBy: response.createdBy,
-                active: response.active,
-                dragAndDrop: response.dragAndDrop,
-                responsive: response.responsive,
-                folderId: response.folderId || 'N/A',
-                screenshotUrl: response.screenshotUrl,
-                source: response.source
-              };
-              
-              // Cache the metadata
-              sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
-              console.log('✅ Fetched and cached metadata');
-              
-              this.cdr.markForCheck();
-            },
-            error: (e) => console.warn('⚠️ Failed to load metadata:', e)
-          });
-      }
-      
-      // Process content immediately
-      const wrapped = this.ensureDoc(cached);
-      const cleaned = this.stripDangerousBits(wrapped);
-      this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
-      
-      // Show loading very briefly for smooth UX
-      this.loading = true;
-      this.cdr.markForCheck();
-      
-      // Hide loading after iframe renders
-      this.loadingTimer = setTimeout(() => {
-        if (this.svc.snapshot.selectedId === id) {
-          this.loading = false;
-          this.showRunButton(id);
-          console.log('✅ Cached template loaded successfully');
-          this.cdr.markForCheck();
-        }
-      }, 0);
-      
-      return;
-    }
-
-    // Check if we already have an in-flight request for this template
-    if (this.inflightRequests.has(id)) {
-      console.log('⏳ Request already in-flight for template:', id, '- reusing existing request');
-      this.loading = true;
-      this.cdr.markForCheck();
-      return;
-    }
-
-    // Fresh content path - fetch from API
-    console.log('📡 Fetching fresh content from API...');
-    this.loading = true;
-    this.safeSrcdoc = null;
-    this.cdr.markForCheck();
-
-    const subscription = this.http
-      .get(`/api/templates/${id}`, { responseType: 'json' })
-      .subscribe({
-        next: (response: any) => {
-          // Store metadata
-          this.templateMetadata = {
-            type: response.type,
-            category: response.category || 'N/A',
-            thumbnail: response.thumbnail,
-            dateCreated: response.dateCreated,
-            dateEdited: response.dateEdited,
-            createdBy: response.createdBy,
-            active: response.active,
-            dragAndDrop: response.dragAndDrop,
-            responsive: response.responsive,
-            folderId: response.folderId || 'N/A',
-            screenshotUrl: response.screenshotUrl,
-            source: response.source
-          };
-          
-          // Cache the metadata
-          sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
-          console.log('✅ Fetched and cached metadata');
-          
-          // Remove from in-flight requests
-          this.inflightRequests.delete(id);
-          
-          const currentId = this.svc.snapshot.selectedId;
-          
-          // Check if user switched templates during fetch
-          if (currentId !== id) {
-            console.log('⚠️ User switched during fetch, aborting');
-            return;
-          }
-          
-          const html = response.html || '';
-          this.cache.set(id, html);
-          
-          const wrapped = this.ensureDoc(html);
-          const cleaned = this.stripDangerousBits(wrapped);
-          this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
-          console.log('✅ Fresh HTML set, waiting for iframe load event');
-          this.cdr.markForCheck();
-        },
-        error: (e) => {
-          console.error('❌ API error for:', id, e);
-          
-          // Remove from in-flight requests
-          this.inflightRequests.delete(id);
-          
-          this.loading = false;
-          this.previewError = e?.message || 'Failed to load preview.';
-          this.cdr.markForCheck();
-        },
-        complete: () => {
-          // Ensure cleanup on completion
-          this.inflightRequests.delete(id);
-        }
-      });
-    
-    // Store the subscription to prevent duplicate requests
-    this.inflightRequests.set(id, subscription);
+private loadTemplateContent(id: string): void {
+  console.log('🔄 START loadTemplateContent, id:', id);
+  
+  // Clear previous state
+  this.previewError = undefined;
+  this.runButtonItemId = undefined;
+  this.templateMetadata = null;
+  
+  // Clear any pending loading timer
+  if (this.loadingTimer) {
+    clearTimeout(this.loadingTimer);
+    this.loadingTimer = undefined;
   }
+
+  if (!id) {
+    this.loading = false;
+    this.safeSrcdoc = null;
+    console.log('❌ No ID - loading set to FALSE');
+    this.cdr.markForCheck();
+    return;
+  }
+
+  // Check cache first
+  const cached = this.cache.get(id) || this.cache.getPersisted(id);
+  console.log('💾 Cache check:', cached ? 'HIT' : 'MISS');
+  
+  if (cached) {
+    console.log('✅ Using cached content - loading instantly');
+    
+    // Check if metadata is already cached
+    const cachedMetadata = sessionStorage.getItem(`metadata-${id}`);
+    if (cachedMetadata) {
+      this.templateMetadata = JSON.parse(cachedMetadata);
+      console.log('✅ Using cached metadata');
+      console.log('📊 Cached metadata fields:', {
+        type: this.templateMetadata.type,
+        templateType: this.templateMetadata.templateType,
+        createdBy: this.templateMetadata.createdBy,
+        source: this.templateMetadata.source
+      });
+      this.cdr.markForCheck();
+    } else {
+      // Fetch metadata from API and cache it
+      console.log('📡 Fetching metadata from API for cached content...');
+      this.http.get(`/api/templates/${id}`, { responseType: 'json' })
+        .subscribe({
+          next: (response: any) => {
+            console.log('✅ API response received for metadata');
+            console.log('📊 Response fields:', {
+              type: response.type,
+              templateType: response.templateType,
+              createdBy: response.createdBy,
+              source: response.source
+            });
+            
+            this.templateMetadata = {
+              type: response.type,
+              templateType: response.templateType, // ✅ NEW FIELD
+              category: response.category || 'N/A',
+              thumbnail: response.thumbnail,
+              dateCreated: response.dateCreated,
+              dateEdited: response.dateEdited,
+              createdBy: response.createdBy, // ✅ NEW FIELD
+              active: response.active,
+              dragAndDrop: response.dragAndDrop,
+              responsive: response.responsive,
+              folderId: response.folderId || 'N/A',
+              screenshotUrl: response.screenshotUrl,
+              source: response.source
+            };
+            
+            // Cache the metadata
+            sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
+            console.log('✅ Fetched and cached metadata');
+            console.log('📦 Metadata cached to sessionStorage:', `metadata-${id}`);
+            
+            this.cdr.markForCheck();
+          },
+          error: (e) => {
+            console.warn('⚠️ Failed to load metadata:', e);
+            console.error('❌ Error details:', e.error);
+          }
+        });
+    }
+    
+    // Process content immediately
+    const wrapped = this.ensureDoc(cached);
+    const cleaned = this.stripDangerousBits(wrapped);
+    this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
+    
+    // Show loading very briefly for smooth UX
+    this.loading = true;
+    this.cdr.markForCheck();
+    
+    // Hide loading after iframe renders
+    this.loadingTimer = setTimeout(() => {
+      if (this.svc.snapshot.selectedId === id) {
+        this.loading = false;
+        this.showRunButton(id);
+        console.log('✅ Cached template loaded successfully');
+        this.cdr.markForCheck();
+      }
+    }, 0);
+    
+    return;
+  }
+
+  // Check if we already have an in-flight request for this template
+  if (this.inflightRequests.has(id)) {
+    console.log('⏳ Request already in-flight for template:', id, '- reusing existing request');
+    this.loading = true;
+    this.cdr.markForCheck();
+    return;
+  }
+
+  // Fresh content path - fetch from API
+  console.log('📡 Fetching fresh content from API...');
+  this.loading = true;
+  this.safeSrcdoc = null;
+  this.cdr.markForCheck();
+
+  const subscription = this.http
+    .get(`/api/templates/${id}`, { responseType: 'json' })
+    .subscribe({
+      next: (response: any) => {
+        console.log('✅ Fresh API response received');
+        console.log('📊 Response fields:', {
+          type: response.type,
+          templateType: response.templateType,
+          createdBy: response.createdBy,
+          source: response.source,
+          htmlLength: response.html?.length
+        });
+        
+        // Store metadata
+        this.templateMetadata = {
+          type: response.type,
+          templateType: response.templateType, // ✅ NEW FIELD
+          category: response.category || 'N/A',
+          thumbnail: response.thumbnail,
+          dateCreated: response.dateCreated,
+          dateEdited: response.dateEdited,
+          createdBy: response.createdBy, // ✅ NEW FIELD
+          active: response.active,
+          dragAndDrop: response.dragAndDrop,
+          responsive: response.responsive,
+          folderId: response.folderId || 'N/A',
+          screenshotUrl: response.screenshotUrl,
+          source: response.source
+        };
+        
+        // Cache the metadata
+        sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
+        console.log('✅ Fetched and cached metadata');
+        console.log('📦 Metadata cached to sessionStorage:', `metadata-${id}`);
+        
+        // Remove from in-flight requests
+        this.inflightRequests.delete(id);
+        
+        const currentId = this.svc.snapshot.selectedId;
+        
+        // Check if user switched templates during fetch
+        if (currentId !== id) {
+          console.log('⚠️ User switched during fetch, aborting');
+          return;
+        }
+        
+        const html = response.html || '';
+        console.log('📄 HTML content length:', html.length);
+        
+        this.cache.set(id, html);
+        console.log('💾 HTML cached in memory');
+        
+        const wrapped = this.ensureDoc(html);
+        const cleaned = this.stripDangerousBits(wrapped);
+        this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
+        console.log('✅ Fresh HTML set, waiting for iframe load event');
+        this.cdr.markForCheck();
+      },
+      error: (e) => {
+        console.error('❌ API error for:', id, e);
+        console.error('❌ Error details:', e.error);
+        console.error('❌ Error status:', e.status);
+        
+        // Remove from in-flight requests
+        this.inflightRequests.delete(id);
+        
+        this.loading = false;
+        this.previewError = e?.message || 'Failed to load preview.';
+        this.cdr.markForCheck();
+      },
+      complete: () => {
+        console.log('✅ HTTP request completed');
+        // Ensure cleanup on completion
+        this.inflightRequests.delete(id);
+      }
+    });
+  
+  // Store the subscription to prevent duplicate requests
+  this.inflightRequests.set(id, subscription);
+  console.log('📡 HTTP request initiated and stored');
+}
 
   onIframeLoad(): void {
     console.log('🖼️ onIframeLoad called');
