@@ -52,12 +52,13 @@ export class GeneratePageComponent implements OnInit, OnDestroy {
   currentHtml$ = new BehaviorSubject<string>('');
   isGenerating$ = new BehaviorSubject<boolean>(false);
   userInput = '';
-  templateName = '';
+  templateName = 'Generated Template';
 
   // Scroll state
   private shouldAutoScroll = true;
 
     ngOnInit(): void {
+    this.templateName = 'Generated Template';
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
         const conversationId = params.get('conversationId');
         if (conversationId) {
@@ -286,32 +287,41 @@ onRunTests(): void {
     return;
   }
 
-  const tempName = this.templateName || `Generated_${Date.now()}`;
-  const currentHtml = this.currentHtml$.value;
+  if (!this.currentHtml$.value) {
+    this.snackBar.open('No template to save', 'Close', {
+      duration: 3000,
+      panelClass: ['error-snackbar'],
+    });
+    return;
+  }
+
+  // ✅ Validate template name
+  const name = this.templateName?.trim();
   
-  // ✅ Show loading state
-  this.isGenerating$.next(true);
-  
+  if (!name) {
+    this.snackBar.open('Please enter a template name before running tests', 'Close', {
+      duration: 4000,
+    //   panelClass: ['error-snackbar'],
+      horizontalPosition: 'center',
+      verticalPosition: 'top',
+    });
+    return;
+  }
+
   this.generationService
-    .saveTemplate(this.conversationId, tempName)
+    .saveTemplate(this.conversationId, name)
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (response) => {
-        // ✅ Cache the HTML before navigating
-        this.previewCache.set(response.templateId, currentHtml);
-        
         this.snackBar.open('Template saved! Redirecting to QA...', 'Close', {
           duration: 2000,
           panelClass: ['success-snackbar'],
         });
 
-        // ✅ Navigate immediately (no timeout needed since we cached it)
-        this.isGenerating$.next(false);
         this.router.navigate(['/qa', response.templateId]);
       },
       error: (error) => {
         console.error('Save failed:', error);
-        this.isGenerating$.next(false);
         this.snackBar.open('Failed to save template', 'Close', {
           duration: 5000,
           panelClass: ['error-snackbar'],
@@ -338,7 +348,7 @@ onTemplateNameChange(newName: string): void {
   if (!name) {
     this.snackBar.open('Please enter a template name', 'Close', {
       duration: 4000,
-      panelClass: ['error-snackbar'],
+    //   panelClass: ['error-snackbar'],
       horizontalPosition: 'center',
       verticalPosition: 'top',
     });

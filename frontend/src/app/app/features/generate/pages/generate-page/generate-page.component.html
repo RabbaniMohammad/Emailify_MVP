@@ -50,10 +50,10 @@
     </div>
 
     <!-- ⭐ ONE COMPONENT WITH EVERYTHING -->
-    <app-template-preview-panel
+<app-template-preview-panel
   *ngIf="!(isGenerating$ | async)"
   [html]="(currentHtml$ | async) || ''"
-  [templateName]="templateName || 'Generated Template'"
+  [(templateName)]="templateName"
   [loading]="false"
   [showHeader]="true"
   [allowRefresh]="false"
@@ -62,8 +62,7 @@
   [showGenerateActions]="true"
   [isGeneratePage]="true"
   (saveTemplate)="onSaveTemplate()"
-  (runTests)="onRunTests()"
-  (templateNameChange)="onTemplateNameChange($event)">
+  (runTests)="onRunTests()">
 </app-template-preview-panel>
   </div>
 </section>

@@ -258,6 +258,39 @@ function createTaggedContent(extracted: ExtractedContent): TaggedContent[] {
   return tagged;
 }
 
+// ADD THIS NEW FUNCTION (place it near the top with other helper functions)
+function extractContextFromHtml(
+  html: string,
+  targetText: string,
+  contextChars: number = 50
+): { before: string; after: string } {
+  // Normalize the target text for searching
+  const normalizedTarget = normalizeText(targetText);
+  
+  // Load HTML and get plain text
+  const $ = cheerio.load(html);
+  $('script, style, noscript, svg').remove();
+  const fullText = $('body').text();
+  const normalizedFullText = normalizeText(fullText);
+  
+  // Find the target in the full text
+  const index = normalizedFullText.indexOf(normalizedTarget);
+  
+  if (index === -1) {
+    console.log(`      ⚠️  Could not find "${targetText.slice(0, 30)}..." in HTML text`);
+    return { before: '', after: '' };
+  }
+  
+  // Extract context
+  const beforeStart = Math.max(0, index - contextChars);
+  const before = normalizedFullText.slice(beforeStart, index).trim();
+  
+  const afterEnd = Math.min(normalizedFullText.length, index + normalizedTarget.length + contextChars);
+  const after = normalizedFullText.slice(index + normalizedTarget.length, afterEnd).trim();
+  
+  return { before, after };
+}
+
 // Add this new helper function for extracting context
 function extractContext(
   allTagged: TaggedContent[],
