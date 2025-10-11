@@ -40,8 +40,15 @@
             <button
               mat-raised-button
               class="finalize-btn"
-              (click)="onFinalize()">
-              Finalize
+              (click)="onFinalize()"
+              [disabled]="finalizing$ | async">
+              <mat-progress-spinner
+                *ngIf="finalizing$ | async"
+                diameter="16"
+                mode="indeterminate"
+                class="btn-spinner">
+              </mat-progress-spinner>
+              <span>{{ (finalizing$ | async) ? 'Finalizing...' : 'Finalize' }}</span>
             </button>
           </div>
 
@@ -195,52 +202,69 @@
           </div>
         </div>
 
-        <div class="snaps-list" *ngIf="(snaps$ | async) as snaps">
-          <div *ngIf="!snaps.length" class="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-              <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-            </svg>
-            <p>No screenshots yet</p>
-            <small>Click "Finalize" or paste a URL above</small>
+        <!-- ✅ NEW: Loading state wrapper -->
+        <div class="snaps-list-wrapper" [class.loading]="finalizing$ | async">
+          <!-- ✅ NEW: Loading overlay -->
+          <div class="loading-overlay" *ngIf="finalizing$ | async" @fadeInOut>
+            <div class="loading-content">
+              <mat-progress-spinner
+                diameter="48"
+                mode="indeterminate"
+                class="main-spinner">
+              </mat-progress-spinner>
+              <p class="loading-text">Capturing screenshots...</p>
+              <small class="loading-subtext">This may take a moment</small>
+            </div>
           </div>
 
-          <div class="snap-item" *ngFor="let s of snaps; trackBy: trackBySnap">
-            <div class="snap-preview" (click)="openImageModal(s)" style="cursor: pointer;">
-              <ng-container *ngIf="s.dataUrl; else snapLoading">
-                <img [src]="s.dataUrl" alt="Screenshot" />
-              </ng-container>
-              <ng-template #snapLoading>
-                <div class="snap-loading" *ngIf="!s.error">
-                  <mat-progress-spinner diameter="24" mode="indeterminate"></mat-progress-spinner>
-                </div>
-                <div class="snap-error" *ngIf="s.error">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                  </svg>
-                  <span>Failed</span>
-                </div>
-              </ng-template>
+          <!-- Existing snaps list -->
+          <div class="snaps-list" *ngIf="(snaps$ | async) as snaps">
+            <div *ngIf="!snaps.length && !(finalizing$ | async)" class="empty-state">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+              <p>No screenshots yet</p>
+              <small>Click "Finalize" or paste a URL above</small>
             </div>
-            <div class="snap-info">
-              <div class="snap-url-container">
-                <a [href]="s.finalUrl || s.url" target="_blank" class="snap-url">
-                  {{ s.finalUrl || s.url }}
-                </a>
-                <div class="snap-meta">
-                  <span class="status-badge" [class.ok]="s.ok" [class.fail]="!s.ok">
-                    {{ s.ok ? 'OK' : 'Failed' }}
-                    <ng-container *ngIf="s.status"> · {{ s.status }}</ng-container>
-                  </span>
-                </div>
+
+            <div class="snap-item" *ngFor="let s of snaps; trackBy: trackBySnap">
+              <div class="snap-preview" (click)="openImageModal(s)" style="cursor: pointer;">
+                <ng-container *ngIf="s.dataUrl; else snapLoading">
+                  <img [src]="s.dataUrl" alt="Screenshot" />
+                </ng-container>
+                <ng-template #snapLoading>
+                  <div class="snap-loading" *ngIf="!s.error">
+                    <mat-progress-spinner diameter="24" mode="indeterminate"></mat-progress-spinner>
+                  </div>
+                  <div class="snap-error" *ngIf="s.error">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <span>Failed</span>
+                  </div>
+                </ng-template>
               </div>
-              <button
-                mat-button
-                class="retest-btn"
-                (click)="onRetestUrl(s.finalUrl || s.url)"
-                [disabled]="isSnapping(s.finalUrl || s.url)">
-                Retest
-              </button>
+              <div class="snap-info">
+                <div class="snap-url-container">
+                  <a [href]="s.finalUrl || s.url" target="_blank" class="snap-url">
+                    {{ s.finalUrl || s.url }}
+                  </a>
+                  <div class="snap-meta">
+                    <span class="status-badge" [class.ok]="s.ok" [class.fail]="!s.ok">
+                      {{ s.ok ? 'OK' : 'Failed' }}
+                      <ng-container *ngIf="s.status"> · {{ s.status }}</ng-container>
+                    </span>
+                  </div>
+                </div>
+                <button
+                  mat-button
+                  class="retest-btn"
+                  (click)="onRetestUrl(s.finalUrl || s.url)"
+                  [disabled]="isSnapping(s.finalUrl || s.url)">
+                  Retest
+                </button>
+              </div>
             </div>
           </div>
         </div>

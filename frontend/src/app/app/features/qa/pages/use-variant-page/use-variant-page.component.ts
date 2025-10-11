@@ -94,10 +94,17 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   readonly snaps$ = this.snapsSubject.asObservable();
 
   private snapping = new Map<string, boolean>();
-  get isFinalizing() { return this._isFinalizing; }
+  
+  // ✅ NEW: Track finalize loading state
+  private finalizingSubject = new BehaviorSubject<boolean>(false);
+  readonly finalizing$ = this.finalizingSubject.asObservable();
+  
+  // ✅ NEW: Track if finalize was clicked in current session
+  private finalizeClickedInSession = false;
+  
+  get isFinalizing() { return this.finalizingSubject.value; }
   get isEditorOpen(): boolean { return this.editorOpenSubject.value; }
   get editorOpenSync(): boolean { return this.editorOpenSubject.value; }
-  private _isFinalizing = false;
 
   private validLinksSubject = new BehaviorSubject<string[]>([]);
   readonly validLinks$ = this.validLinksSubject.asObservable();
@@ -112,7 +119,7 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   
   // Editor state persistence
   private editorStateKey = '';
-  // ✅ ADD: Draft message persistence
+  // Draft message persistence
   private draftMessageKey = '';
   private routerSub?: Subscription;
   private refreshSub?: Subscription;
@@ -149,11 +156,10 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     // Set up reactive subscription for future route changes
     combineLatest([this.runId$, this.no$]).subscribe(([runId, no]) => {
       this.editorStateKey = `editor_state_${runId}_${no}`;
-      // ✅ ADD: Initialize draft key
       this.draftMessageKey = `draft_message_${runId}_${no}`;
     });
     
-    // ✅ ADD: Subscribe to input changes to auto-save draft
+    // Subscribe to input changes to auto-save draft
     this.input.valueChanges.subscribe(value => {
       this.saveDraft(value);
     });
@@ -170,19 +176,17 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   }
 
   constructor() {
-    // ✅ RESTORE STATE FIRST - before any template rendering
+    // RESTORE STATE FIRST - before any template rendering
     const runId = this.ar.snapshot.paramMap.get('runId');
     const no = this.ar.snapshot.paramMap.get('no');
 
     if (runId && no) {
       this.editorStateKey = `editor_state_${runId}_${no}`;
-      // ✅ ADD: Initialize draft key
       this.draftMessageKey = `draft_message_${runId}_${no}`;
       
       const wasEditorOpen = this.restoreEditorState();
       this.editorOpenSubject = new BehaviorSubject<boolean>(wasEditorOpen);
       
-      // ✅ ADD: Restore draft message
       const savedDraft = this.restoreDraft();
       if (savedDraft) {
         this.input.setValue(savedDraft);
@@ -210,6 +214,8 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
         if (cachedThread?.html) {
           this.htmlSubject.next(cachedThread.html);
           this.messagesSubject.next(cachedThread.messages || []);
+          
+          // ✅ CHANGED: Only load cached snaps, don't set finalizing state
           this.snapsSubject.next(this.qa.getSnapsCached(runId));
           return;
         }
@@ -228,6 +234,8 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
           const thread: ChatThread = { html: item.html, messages: [intro] };
           this.messagesSubject.next(thread.messages);
           this.qa.saveChat(runId, no, thread);
+          
+          // ✅ CHANGED: Only load cached snaps
           this.snapsSubject.next(this.qa.getSnapsCached(runId));
           return;
         }
@@ -258,6 +266,7 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
           this.messagesSubject.next([intro]);
         }
 
+        // ✅ CHANGED: Only load cached snaps
         this.snapsSubject.next(this.qa.getSnapsCached(runId));
       } catch (error) {
         console.error('Error during component initialization:', error);
@@ -286,46 +295,36 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   openEditor(): void {
     this.editorOpenSubject.next(true);
     this.saveEditorState(true);
-    this.cdr.detectChanges(); // Force immediate update
+    this.cdr.detectChanges();
   }
 
   closeEditor(): void {
     this.editorOpenSubject.next(false);
     this.saveEditorState(false);
-    this.cdr.detectChanges(); // Force immediate update
+    this.cdr.detectChanges();
   }
 
-  // Handle editor close event from child component
   onEditorClose(): void {
     this.closeEditor();
   }
 
-  // Handle save from editor WITHOUT closing
   onEditorSave(newHtml: string): void {
     const runId = this.ar.snapshot.paramMap.get('runId')!;
     const no = Number(this.ar.snapshot.paramMap.get('no')!);
 
-    // Update HTML
     this.htmlSubject.next(newHtml);
 
-    // Save thread with updated HTML
     const thread: ChatThread = {
       html: newHtml,
       messages: this.messagesSubject.value
     };
     this.qa.saveChat(runId, no, thread);
 
-    // DON'T close editor - keep it open for more edits
-    // this.closeEditor(); // ← REMOVED - this was causing the issue
-    
-    // Show success message
     this.showSuccess('Template updated successfully!');
     
-    // Mark for check to update the preview
     this.cdr.markForCheck();
   }
 
-  // Save editor state to sessionStorage
   private saveEditorState(isOpen: boolean): void {
     try {
       if (this.editorStateKey) {
@@ -336,7 +335,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     }
   }
 
-  // Restore editor state from sessionStorage
   private restoreEditorState(): boolean {
     try {
       if (this.editorStateKey) {
@@ -349,7 +347,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     return false;
   }
 
-  // ✅ ADD: Save draft message to sessionStorage
   private saveDraft(message: string): void {
     try {
       if (this.draftMessageKey) {
@@ -364,7 +361,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     }
   }
 
-  // ✅ ADD: Restore draft message from sessionStorage
   private restoreDraft(): string {
     try {
       if (this.draftMessageKey) {
@@ -376,7 +372,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     return '';
   }
 
-  // Optional: Toggle editor state
   toggleEditor(): void {
     const currentState = this.editorOpenSubject.value;
     if (currentState) {
@@ -495,13 +490,11 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     this.scrollAnimation = requestAnimationFrame(animateScroll);
   }
 
-  // ✅ UPDATED: Clear draft on send
   async onSend() {
     const message = (this.input.value || '').trim();
     if (!message || this.sending) return;
     
     this.input.setValue('');
-    // ✅ ADD: Clear saved draft
     this.saveDraft('');
     this.sending = true;
 
@@ -596,23 +589,59 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     }
   }
 
-  onFinalize() {
+  // ✅ COMPLETELY REWRITTEN: Finalize method with proper loading state
+  async onFinalize() {
     const el = document.getElementById('finalize');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     const runId = this.ar.snapshot.paramMap.get('runId')!;
-    if (!runId || this._isFinalizing) {
-      this.snapsSubject.next(this.qa.getSnapsCached(runId));
+    if (!runId) return;
+
+    // ✅ NEW: If already finalizing, do nothing
+    if (this.finalizingSubject.value) {
       return;
     }
 
-    this._isFinalizing = true;
-    const cached = this.qa.getSnapsCached(runId);
-    this.snapsSubject.next(cached || []);
+    // ✅ NEW: Start loading state
+    this.finalizingSubject.next(true);
+    this.cdr.markForCheck();
 
-    const html = this.htmlSubject.value || '';
-    const urls = this.extractHttpLinks(html);
-    urls.forEach((u) => this.captureOne(runId, u));
+    try {
+      // ✅ CHANGED: If finalize was clicked before in this session, clear and reload
+      if (this.finalizeClickedInSession) {
+        // Clear current snaps
+        this.snapsSubject.next([]);
+        this.cdr.markForCheck();
+      }
+
+      // ✅ NEW: Mark that finalize was clicked in current session
+      this.finalizeClickedInSession = true;
+
+      const html = this.htmlSubject.value || '';
+      const urls = this.extractHttpLinks(html);
+      
+      // ✅ NEW: Track completion of all captures
+      if (urls.length === 0) {
+        // No URLs to capture
+        this.finalizingSubject.next(false);
+        this.cdr.markForCheck();
+        return;
+      }
+
+      // ✅ NEW: Capture all URLs and wait for completion
+      const capturePromises = urls.map(url => this.captureOneWithPromise(runId, url));
+      
+      await Promise.allSettled(capturePromises);
+
+      // ✅ NEW: All captures complete, stop loading
+      this.finalizingSubject.next(false);
+      this.cdr.markForCheck();
+
+    } catch (error) {
+      console.error('Finalize error:', error);
+      this.finalizingSubject.next(false);
+      this.cdr.markForCheck();
+    }
   }
 
   onRetestUrl(url: string) {
@@ -800,6 +829,7 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     return out;
   }
 
+  // ✅ EXISTING: Keep the original captureOne for individual captures
   private captureOne(runId: string, url: string) {
     const key = url.toLowerCase();
     if (this.snapping.get(key)) return;
@@ -809,6 +839,7 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
       next: ({ snap, snaps }) => {
         this.snapsSubject.next(snaps);
         this.snapping.set(key, false);
+        this.cdr.markForCheck();
       },
       error: (err) => {
         console.error('snapshot error', err);
@@ -822,7 +853,45 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
         this.snapsSubject.next(list);
         this.qa.saveSnaps(runId, list);
         this.snapping.set(key, false);
+        this.cdr.markForCheck();
       },
+    });
+  }
+
+  // ✅ NEW: Promise-based capture for proper async handling
+  private captureOneWithPromise(runId: string, url: string): Promise<void> {
+    return new Promise((resolve) => {
+      const key = url.toLowerCase();
+      if (this.snapping.get(key)) {
+        resolve();
+        return;
+      }
+      
+      this.snapping.set(key, true);
+
+      this.qa.snapUrl(runId, url).subscribe({
+        next: ({ snap, snaps }) => {
+          this.snapsSubject.next(snaps);
+          this.snapping.set(key, false);
+          this.cdr.markForCheck();
+          resolve();
+        },
+        error: (err) => {
+          console.error('snapshot error', err);
+          const errorSnap: SnapResult = {
+            url,
+            ok: false,
+            error: (err?.message || 'Capture failed'),
+            ts: Date.now(),
+          };
+          const list = [errorSnap, ...this.snapsSubject.value];
+          this.snapsSubject.next(list);
+          this.qa.saveSnaps(runId, list);
+          this.snapping.set(key, false);
+          this.cdr.markForCheck();
+          resolve();
+        },
+      });
     });
   }
 

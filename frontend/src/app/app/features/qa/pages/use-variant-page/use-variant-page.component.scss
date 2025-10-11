@@ -2717,3 +2717,459 @@
     }
   }
 }
+
+// ✅ NEW: Loading overlay for screenshots section
+.snaps-list-wrapper {
+  position: relative;
+  min-height: 200px;
+  transition: all var(--transition-smooth);
+  
+  &.loading {
+    pointer-events: none;
+  }
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.98) 100%);
+  backdrop-filter: blur(8px);
+  border-radius: var(--radius-lg);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+      radial-gradient(circle at 20% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+      radial-gradient(circle at 80% 50%, rgba(236, 72, 153, 0.08) 0%, transparent 50%);
+    animation: pulse-gradient 3s ease-in-out infinite;
+  }
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  position: relative;
+  z-index: 2;
+  animation: fade-in-up 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  .main-spinner {
+    ::ng-deep circle {
+      stroke: url(#gradient-spinner) !important;
+    }
+    
+    filter: drop-shadow(0 4px 12px rgba(109, 40, 217, 0.15));
+  }
+  
+  .loading-text {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, #6d28d9 0%, #ec4899 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.01em;
+    animation: pulse-text 2s ease-in-out infinite;
+  }
+  
+  .loading-subtext {
+    font-size: 0.875rem;
+    color: #64748b;
+    animation: fade-in-out 2s ease-in-out infinite;
+  }
+}
+
+// ✅ NEW: Finalize button spinner styling
+.finalize-btn {
+  position: relative;
+  
+  .btn-spinner {
+    margin-right: 0.5rem;
+    
+    ::ng-deep circle {
+      stroke: white !important;
+    }
+  }
+  
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none !important;
+    
+    &:hover {
+      transform: none !important;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25) !important;
+    }
+  }
+}
+
+// ✅ NEW: Animations
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-gradient {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes pulse-text {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes fade-in-out {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+// Fullscreen Image Modal
+.image-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(5px);
+}
+
+.modal-content {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  z-index: 10000;
+  margin-top: 60px;
+
+  img {
+    max-width: 100%;
+    max-height: calc(90vh - 100px);
+    object-fit: contain;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: scaleIn 0.3s ease-out;
+  }
+}
+
+.modal-close {
+  position: absolute;
+  top: -50px;
+  right: 0;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  
+  svg {
+    width: 20px;
+    height: 20px;
+    color: #333;
+  }
+  
+  &:hover {
+    background: white;
+    transform: scale(1.1);
+  }
+}
+
+.modal-info {
+  background: rgba(255, 255, 255, 0.95);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(10px);
+  
+  a {
+    color: var(--primary-purple);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.clickable-image {
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  
+  &:hover {
+    transform: scale(1.02);
+    filter: brightness(1.1);
+  }
+}
+
+// Animations
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// Mobile responsive
+@media (max-width: 768px) {
+  .modal-content {
+    max-width: 95vw;
+    max-height: 95vh;
+    
+    img {
+      max-height: calc(95vh - 80px);
+    }
+  }
+  
+  .modal-close {
+    top: -40px;
+    width: 36px;
+    height: 36px;
+    
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+  
+  .loading-content {
+    .main-spinner {
+      width: 40px !important;
+      height: 40px !important;
+    }
+    
+    .loading-text {
+      font-size: 1rem;
+    }
+    
+    .loading-subtext {
+      font-size: 0.8125rem;
+    }
+  }
+}
+
+
+
+// Editor Mode Layout
+.use-variant-wrapper {
+  &.editor-mode {
+    .use-grid {
+      grid-template-columns: 350px 1fr;
+      transition: grid-template-columns 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      
+      @media (max-width: 1200px) {
+        grid-template-columns: 1fr;
+      }
+    }
+  }
+}
+
+// Minimized Preview
+.use-left {
+  &.minimized {
+    .preview-wrapper {
+      max-height: 400px;
+      overflow: hidden;
+      position: relative;
+      
+      &::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 60px;
+        background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.95));
+        pointer-events: none;
+      }
+    }
+  }
+}
+
+// Editor Toggle Button (in preview header)
+.editor-toggle-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 10px !important;
+  transition: all 0.3s ease !important;
+  position: relative !important;
+  overflow: hidden !important;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.3s ease;
+  }
+  
+  mat-icon {
+    font-size: 22px;
+    width: 22px;
+    height: 22px;
+    position: relative;
+    z-index: 2;
+  }
+  
+  &:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4) !important;
+    
+    &::before {
+      left: 100%;
+    }
+  }
+  
+  &:active {
+    transform: translateY(0) scale(1);
+  }
+}
+
+// Editor Expanded State
+.use-right {
+  &.editor-expanded {
+    animation: expand-editor 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    
+    app-html-editor {
+      animation: fade-in 0.5s ease forwards;
+      animation-delay: 0.2s;
+      opacity: 0;
+    }
+  }
+}
+
+// Chat Section (hide when editor is open)
+.chat-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  animation: fade-in 0.3s ease forwards;
+}
+
+// Editor Animations
+@keyframes expand-editor {
+  from {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// Responsive Editor Layout
+@media (max-width: 1200px) {
+  .use-variant-wrapper.editor-mode {
+    .use-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .use-left {
+      display: block;
+      order: -1;
+    }
+    
+    .use-right {
+      grid-column: 1 / -1;
+      order: 1;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .editor-toggle-btn {
+    width: 36px !important;
+    height: 36px !important;
+    
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+  }
+}
