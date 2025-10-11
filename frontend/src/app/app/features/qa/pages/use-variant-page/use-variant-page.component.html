@@ -202,9 +202,9 @@
           </div>
         </div>
 
-        <!-- ✅ NEW: Loading state wrapper -->
+        <!-- Loading state wrapper -->
         <div class="snaps-list-wrapper" [class.loading]="finalizing$ | async">
-          <!-- ✅ NEW: Loading overlay -->
+          <!-- Loading overlay -->
           <div class="loading-overlay" *ngIf="finalizing$ | async" @fadeInOut>
             <div class="loading-content">
               <mat-progress-spinner
@@ -247,22 +247,76 @@
               </div>
               <div class="snap-info">
                 <div class="snap-url-container">
-                  <a [href]="s.finalUrl || s.url" target="_blank" class="snap-url">
-                    {{ s.finalUrl || s.url }}
-                  </a>
-                  <div class="snap-meta">
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <a [href]="s.finalUrl || s.url" target="_blank" class="snap-url">
+                      {{ s.finalUrl || s.url }}
+                    </a>
+                    
+                    <!-- Edit icon button -->
+                    <button 
+                      mat-icon-button 
+                      class="edit-snap-btn"
+                      (click)="onEditSnap(s)"
+                      matTooltip="Edit URL">
+                      <mat-icon>edit</mat-icon>
+                    </button>
+                  </div>
+                  
+                  <!-- ✅ FIXED: Only show status when loaded (has dataUrl) or errored (has error) -->
+                  <div class="snap-meta" *ngIf="s.dataUrl || s.error">
                     <span class="status-badge" [class.ok]="s.ok" [class.fail]="!s.ok">
                       {{ s.ok ? 'OK' : 'Failed' }}
                       <ng-container *ngIf="s.status"> · {{ s.status }}</ng-container>
                     </span>
                   </div>
                 </div>
+                
+                <!-- ✅ Inline edit input with Replace (dummy) and Retest buttons + Enter key support -->
+                <div class="snap-edit-input" *ngIf="isSnapInEditMode(s)">
+  <input 
+    type="text"
+    placeholder="Paste or type new URL here"
+    [value]="getEditInputValue()"
+    (input)="editInputValue = $any($event.target).value"
+    (keydown)="onEditInputKeyDown($event, s, editUrlInput)"
+    #editUrlInput />
+  
+  <!-- ✅ Replace button - NOW FUNCTIONAL -->
+  <button 
+    mat-stroked-button 
+    class="replace-btn"
+    (click)="onReplaceSnap(s, editUrlInput)">
+    Replace
+  </button>
+  
+  <!-- ✅ Retest button -->
+  <button
+    mat-stroked-button
+    class="retest-btn-inline"
+    (click)="onRetestUrl(s.finalUrl || s.url, editUrlInput.value || undefined)"
+    [disabled]="isSnapping(editUrlInput.value || s.finalUrl || s.url)">
+    <mat-progress-spinner
+      *ngIf="isSnapping(editUrlInput.value || s.finalUrl || s.url)"
+      diameter="16"
+      mode="indeterminate">
+    </mat-progress-spinner>
+    <span *ngIf="!isSnapping(editUrlInput.value || s.finalUrl || s.url)">Retest</span>
+  </button>
+</div>
+                
+                <!-- Regular Retest button (when not in edit mode) -->
                 <button
+                  *ngIf="!isSnapInEditMode(s)"
                   mat-button
                   class="retest-btn"
                   (click)="onRetestUrl(s.finalUrl || s.url)"
                   [disabled]="isSnapping(s.finalUrl || s.url)">
-                  Retest
+                  <mat-progress-spinner
+                    *ngIf="isSnapping(s.finalUrl || s.url)"
+                    diameter="16"
+                    mode="indeterminate">
+                  </mat-progress-spinner>
+                  <span *ngIf="!isSnapping(s.finalUrl || s.url)">Retest</span>
                 </button>
               </div>
             </div>

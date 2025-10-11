@@ -76,6 +76,8 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   private htmlSubject = new BehaviorSubject<string>('');
   readonly html$ = this.htmlSubject.asObservable();
 
+  private originalSnapUrls = new Map<string, string>(); // Map<current snap key, original URL>
+
   private messagesSubject = new BehaviorSubject<ChatTurn[]>([]);
   readonly messages$ = this.messagesSubject.asObservable();
 
@@ -88,6 +90,7 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
 
   applyingIndex: number | null = null;
 
+  editInputValue: string = '';
   
 
   private snapsSubject = new BehaviorSubject<SnapResult[]>([]);
@@ -95,21 +98,26 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
 
   private snapping = new Map<string, boolean>();
   
-  // ✅ NEW: Track finalize loading state
   private finalizingSubject = new BehaviorSubject<boolean>(false);
   readonly finalizing$ = this.finalizingSubject.asObservable();
   
-  // ✅ NEW: Track if finalize was clicked in current session
   private finalizeClickedInSession = false;
+  
+  // Track which snap is in edit mode
+  private editingSnapUrl: string | null = null;
   
   get isFinalizing() { return this.finalizingSubject.value; }
   get isEditorOpen(): boolean { return this.editorOpenSubject.value; }
   get editorOpenSync(): boolean { return this.editorOpenSubject.value; }
 
+    getEditInputValue(): string {
+  return this.editInputValue;
+}
+
   private validLinksSubject = new BehaviorSubject<string[]>([]);
   readonly validLinks$ = this.validLinksSubject.asObservable();
 
-  private htmlLinks$ = this.html$.pipe(map(html => this.extractHttpLinks(html)));
+  private htmlLinks$ = this.html$.pipe(map(html => this.extractAllLinks(html)));
 
   @ViewChild('chatMessages') private chatMessagesRef!: ElementRef;
   private scrollAnimation: number | null = null;
@@ -215,7 +223,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
           this.htmlSubject.next(cachedThread.html);
           this.messagesSubject.next(cachedThread.messages || []);
           
-          // ✅ CHANGED: Only load cached snaps, don't set finalizing state
           this.snapsSubject.next(this.qa.getSnapsCached(runId));
           return;
         }
@@ -235,7 +242,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
           this.messagesSubject.next(thread.messages);
           this.qa.saveChat(runId, no, thread);
           
-          // ✅ CHANGED: Only load cached snaps
           this.snapsSubject.next(this.qa.getSnapsCached(runId));
           return;
         }
@@ -266,7 +272,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
           this.messagesSubject.next([intro]);
         }
 
-        // ✅ CHANGED: Only load cached snaps
         this.snapsSubject.next(this.qa.getSnapsCached(runId));
       } catch (error) {
         console.error('Error during component initialization:', error);
@@ -589,7 +594,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     }
   }
 
-  // ✅ COMPLETELY REWRITTEN: Finalize method with proper loading state
   async onFinalize() {
     const el = document.getElementById('finalize');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -597,43 +601,34 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     const runId = this.ar.snapshot.paramMap.get('runId')!;
     if (!runId) return;
 
-    // ✅ NEW: If already finalizing, do nothing
     if (this.finalizingSubject.value) {
       return;
     }
 
-    // ✅ NEW: Start loading state
     this.finalizingSubject.next(true);
     this.cdr.markForCheck();
 
     try {
-      // ✅ CHANGED: If finalize was clicked before in this session, clear and reload
       if (this.finalizeClickedInSession) {
-        // Clear current snaps
         this.snapsSubject.next([]);
         this.cdr.markForCheck();
       }
 
-      // ✅ NEW: Mark that finalize was clicked in current session
       this.finalizeClickedInSession = true;
 
       const html = this.htmlSubject.value || '';
-      const urls = this.extractHttpLinks(html);
+      const urls = this.extractAllLinks(html);
       
-      // ✅ NEW: Track completion of all captures
       if (urls.length === 0) {
-        // No URLs to capture
         this.finalizingSubject.next(false);
         this.cdr.markForCheck();
         return;
       }
 
-      // ✅ NEW: Capture all URLs and wait for completion
       const capturePromises = urls.map(url => this.captureOneWithPromise(runId, url));
       
       await Promise.allSettled(capturePromises);
 
-      // ✅ NEW: All captures complete, stop loading
       this.finalizingSubject.next(false);
       this.cdr.markForCheck();
 
@@ -644,10 +639,47 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     }
   }
 
-  onRetestUrl(url: string) {
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    if (!runId || !url) return;
-    this.captureOne(runId, url);
+onRetestUrl(url: string, newUrl?: string) {
+  const runId = this.ar.snapshot.paramMap.get('runId')!;
+  if (!runId || !url) return;
+  
+  let targetUrl = newUrl?.trim() || url;
+  
+  if (newUrl !== undefined) {
+    this.editInputValue = newUrl.trim();
+    
+    // ✅ STORE THE ORIGINAL URL before retest
+    if (newUrl.trim() && newUrl.trim() !== url) {
+      const snapKey = url; // Current URL is the key
+      this.originalSnapUrls.set(snapKey, url); // Store original
+      console.log('📌 Stored original URL:', url, 'for new URL:', newUrl.trim());
+    }
+  }
+  
+  if (newUrl !== undefined && !newUrl.trim()) {
+    const confirmed = confirm('Input field is empty. Do you want to retest with the existing URL?');
+    if (!confirmed) return;
+    targetUrl = url;
+  }
+  
+  const existingSnap = this.snapsSubject.value.find(s => 
+    (s.finalUrl || s.url) === url
+  );
+  
+  if (existingSnap) {
+    this.captureAndReplace(runId, targetUrl, existingSnap);
+  } else {
+    this.captureOne(runId, targetUrl);
+  }
+}
+
+  // ✅ NEW: Handle Enter key in edit input field
+  onEditInputKeyDown(event: KeyboardEvent, snap: SnapResult, inputElement: HTMLInputElement): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const newUrl = inputElement.value.trim();
+      this.onRetestUrl(snap.finalUrl || snap.url, newUrl || undefined);
+    }
   }
 
   isSnapping(url: string): boolean {
@@ -800,6 +832,23 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   trackBySnap = (_: number, s: SnapResult) => (s?.finalUrl || s?.url || String(s?.ts || '0'));
   trackByMsg = (_: number, m: ChatTurn) => m?.ts ?? _;
 
+  /**
+   * Extract all links from HTML including:
+   * - Regular anchor hrefs
+   * - Button URLs from various attributes and onclick handlers
+   */
+  private extractAllLinks(html: string): string[] {
+    const anchorLinks = this.extractHttpLinks(html);
+    const buttonLinks = this.extractButtonUrls(html);
+    
+    // Combine and dedupe
+    const allLinks = [...anchorLinks, ...buttonLinks];
+    return this.dedupe(allLinks);
+  }
+
+  /**
+   * Extract HTTP(S) links from anchor tags
+   */
   private extractHttpLinks(html: string): string[] {
     const out: string[] = [];
     try {
@@ -815,7 +864,85 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
       let m: RegExpExecArray | null;
       while ((m = rx.exec(html))) out.push(m[1]);
     }
-    return this.dedupe(out);
+    return out;
+  }
+
+  /**
+   * Extract URLs from button elements (all edge cases)
+   */
+  private extractButtonUrls(html: string): string[] {
+    const urls: string[] = [];
+    
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      
+      // Find all buttons and elements with button-like attributes
+      const buttons = Array.from(doc.querySelectorAll('button, [onclick], [data-href], [data-url], [data-link]'));
+      
+      for (const btn of buttons) {
+        // Check data attributes
+        const dataHref = btn.getAttribute('data-href') || '';
+        const dataUrl = btn.getAttribute('data-url') || '';
+        const dataLink = btn.getAttribute('data-link') || '';
+        
+        if (dataHref && /^https?:\/\//i.test(dataHref)) urls.push(dataHref);
+        if (dataUrl && /^https?:\/\//i.test(dataUrl)) urls.push(dataUrl);
+        if (dataLink && /^https?:\/\//i.test(dataLink)) urls.push(dataLink);
+        
+        // Check onclick attribute
+        const onclick = btn.getAttribute('onclick') || '';
+        if (onclick) {
+          // Match various onclick patterns:
+          // window.location = 'URL'
+          // window.location.href = 'URL'
+          // location.href = 'URL'
+          // location = 'URL'
+          // window.open('URL')
+          const patterns = [
+            /(?:window\.)?location(?:\.href)?\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
+            /window\.open\s*\(\s*["'](https?:\/\/[^"']+)["']/gi,
+            /href\s*=\s*["'](https?:\/\/[^"']+)["']/gi
+          ];
+          
+          for (const pattern of patterns) {
+            let match;
+            while ((match = pattern.exec(onclick)) !== null) {
+              urls.push(match[1]);
+            }
+          }
+        }
+      }
+      
+      // Also check for anchor tags styled as buttons (class contains 'btn' or 'button')
+      const buttonStyleAnchors = Array.from(doc.querySelectorAll('a[href][class*="btn"], a[href][class*="button"]'));
+      for (const a of buttonStyleAnchors) {
+        const href = (a.getAttribute('href') || '').trim();
+        if (href && /^https?:\/\//i.test(href)) {
+          urls.push(href);
+        }
+      }
+      
+    } catch (error) {
+      console.warn('Error parsing button URLs:', error);
+      
+      // Fallback: regex-based extraction
+      const patterns = [
+        /data-href\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
+        /data-url\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
+        /data-link\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
+        /onclick\s*=\s*["'][^"']*(?:window\.)?location(?:\.href)?\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
+        /onclick\s*=\s*["'][^"']*window\.open\s*\(\s*["'](https?:\/\/[^"']+)["']/gi
+      ];
+      
+      for (const pattern of patterns) {
+        let match;
+        while ((match = pattern.exec(html)) !== null) {
+          urls.push(match[1]);
+        }
+      }
+    }
+    
+    return urls;
   }
 
   private dedupe(list: string[]): string[] {
@@ -829,7 +956,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     return out;
   }
 
-  // ✅ EXISTING: Keep the original captureOne for individual captures
   private captureOne(runId: string, url: string) {
     const key = url.toLowerCase();
     if (this.snapping.get(key)) return;
@@ -858,7 +984,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     });
   }
 
-  // ✅ NEW: Promise-based capture for proper async handling
   private captureOneWithPromise(runId: string, url: string): Promise<void> {
     return new Promise((resolve) => {
       const key = url.toLowerCase();
@@ -959,6 +1084,290 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
       panelClass: ['success-snackbar'],
       horizontalPosition: 'center',
       verticalPosition: 'bottom',
+    });
+  }
+
+  // Toggle edit mode for a snap
+  onEditSnap(snap: SnapResult): void {
+  const snapKey = snap.finalUrl || snap.url;
+  if (this.editingSnapUrl === snapKey) {
+    // Closing edit mode
+    this.editingSnapUrl = null;
+    this.editInputValue = '';
+  } else {
+    // Opening edit mode
+    this.editingSnapUrl = snapKey;
+    this.editInputValue = ''; // Reset input when opening
+  }
+  this.cdr.markForCheck();
+}
+
+  // Check if snap is in edit mode
+  isSnapInEditMode(snap: SnapResult): boolean {
+    const snapKey = snap.finalUrl || snap.url;
+    return this.editingSnapUrl === snapKey;
+  }
+
+
+
+  // ✅ UPDATED: Replace button with confirmation and HTML URL replacement
+onReplaceSnap(snap: SnapResult, inputElement: HTMLInputElement): void {
+  console.log('🔵 Replace button clicked!');
+  const newUrl = inputElement.value.trim();
+  console.log('Input value:', newUrl);
+  
+  if (!newUrl) {
+    const confirmed = confirm('Input field is empty. Do you want to close edit mode without replacing?');
+    if (confirmed) {
+      this.editingSnapUrl = null;
+      this.editInputValue = '';
+      inputElement.value = '';
+      this.cdr.markForCheck();
+    }
+    return;
+  }
+  
+  const currentSnapUrl = snap.finalUrl || snap.url;
+  
+  // ✅ GET THE ORIGINAL URL (before retest)
+  const originalUrl = this.originalSnapUrls.get(currentSnapUrl) || currentSnapUrl;
+  
+  console.log('Current snap URL:', currentSnapUrl);
+  console.log('Original URL (to replace in HTML):', originalUrl);
+  console.log('New URL:', newUrl);
+  
+  try {
+    console.log('🟢 Calling replaceUrlInHtml...');
+    this.replaceUrlInHtml(originalUrl, newUrl, snap);
+    this.showSuccess('✓ Replace successful! Link updated in HTML.');
+    
+    // Clean up the stored original URL
+    this.originalSnapUrls.delete(currentSnapUrl);
+  } catch (error) {
+    console.error('🔴 Replace failed:', error);
+    alert('Replace failed. Please use the editor for manual changes.');
+    return;
+  }
+  
+  this.editingSnapUrl = null;
+  this.editInputValue = '';
+  inputElement.value = '';
+  this.cdr.markForCheck();
+  
+  console.log('✅ Replace complete, edit mode closed');
+}
+
+  // ✅ NEW: Replace URL in HTML with 1-to-1 mapping for duplicates
+private replaceUrlInHtml(oldUrl: string, newUrl: string, snap: SnapResult): void {
+  const runId = this.ar.snapshot.paramMap.get('runId')!;
+  const no = Number(this.ar.snapshot.paramMap.get('no')!);
+  
+  let html = this.htmlSubject.value;
+  
+  console.log('=== REPLACE URL DEBUG ===');
+  console.log('Old URL:', oldUrl);
+  console.log('New URL:', newUrl);
+
+
+  console.log('=== REPLACE URL DEBUG ===');
+  console.log('Old URL:', oldUrl);
+  console.log('New URL:', newUrl);
+  
+  // DEBUG: Search for ANY occurrence of 'munna' in HTML
+  const munnaMatches = html.match(/munna[^"\s<>]*/gi);
+  console.log('All "munna" occurrences in HTML:', munnaMatches);
+  
+  // DEBUG: Find all hrefs in HTML
+  const hrefMatches = html.match(/href=["'][^"']*["']/gi);
+  console.log('First 10 hrefs in HTML:', hrefMatches?.slice(0, 10));
+
+  
+  // Try to find the URL with different protocols
+  let fullOldUrl = oldUrl;
+  if (!oldUrl.startsWith('http://') && !oldUrl.startsWith('https://')) {
+    // Try https first
+    if (html.includes('https://' + oldUrl)) {
+      fullOldUrl = 'https://' + oldUrl;
+    } else if (html.includes('http://' + oldUrl)) {
+      fullOldUrl = 'http://' + oldUrl;
+    }
+  }
+  
+  console.log('Full old URL (with protocol):', fullOldUrl);
+  console.log('URL exists in HTML:', html.includes(fullOldUrl));
+  
+  // Add protocol to new URL if needed
+  let fullNewUrl = newUrl;
+  if (!newUrl.startsWith('http://') && !newUrl.startsWith('https://')) {
+    // Use same protocol as old URL
+    if (fullOldUrl.startsWith('https://')) {
+      fullNewUrl = 'https://' + newUrl;
+    } else if (fullOldUrl.startsWith('http://')) {
+      fullNewUrl = 'http://' + newUrl;
+    }
+  }
+  
+  console.log('Full new URL (with protocol):', fullNewUrl);
+  
+  if (!html.includes(fullOldUrl)) {
+    console.error('❌ URL not found in HTML!');
+    alert('URL not found in HTML. The link might have already been changed.');
+    throw new Error('URL not found in HTML');
+  }
+  
+  // Find which occurrence this snap represents
+  const allSnaps = this.snapsSubject.value;
+  const snapIndex = allSnaps.indexOf(snap);
+  
+  // Count how many times this URL appears before this snap
+  let occurrenceIndex = 0;
+  for (let i = 0; i < snapIndex; i++) {
+    const snapUrl = allSnaps[i].finalUrl || allSnaps[i].url;
+    if (snapUrl.toLowerCase() === oldUrl.toLowerCase()) {
+      occurrenceIndex++;
+    }
+  }
+  
+  console.log('Occurrence index:', occurrenceIndex);
+  
+  // Replace only the specific occurrence
+  const escapedUrl = fullOldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escapedUrl, 'g');
+  let count = 0;
+  const replaced = html.replace(regex, (match) => {
+    if (count === occurrenceIndex) {
+      console.log(`✅ Replacing occurrence #${count}: ${match} → ${fullNewUrl}`);
+      count++;
+      return fullNewUrl;
+    }
+    count++;
+    return match;
+  });
+  
+  console.log('HTML changed:', html !== replaced);
+  console.log('New URL exists in HTML:', replaced.includes(fullNewUrl));
+  
+  if (html === replaced) {
+    console.error('❌ No replacement was made!');
+    alert('Replacement failed. No changes were made to the HTML.');
+    throw new Error('No replacement was made');
+  }
+  
+  // Update HTML
+  this.htmlSubject.next(replaced);
+  
+  // Update the snap in the array
+  const updatedSnaps = allSnaps.map(s => {
+    if (s === snap) {
+      return {
+        ...s,
+        url: fullNewUrl,
+        finalUrl: fullNewUrl
+      };
+    }
+    return s;
+  });
+  
+  this.snapsSubject.next(updatedSnaps);
+  
+  // Persist changes
+  const thread: ChatThread = {
+    html: replaced,
+    messages: this.messagesSubject.value
+  };
+  this.qa.saveChat(runId, no, thread);
+  this.qa.saveSnaps(runId, updatedSnaps);
+  
+  console.log('=== END REPLACE DEBUG ===');
+  
+  this.cdr.markForCheck();
+}
+  // ✅ FIXED: Capture and replace with proper edit mode persistence
+  private captureAndReplace(runId: string, newUrl: string, oldSnap: SnapResult) {
+    const key = newUrl.toLowerCase();
+    if (this.snapping.get(key)) return;
+    this.snapping.set(key, true);
+
+    // Find the index of the old snap
+    const currentSnaps = [...this.snapsSubject.value];
+    const oldIndex = currentSnaps.findIndex(s => s === oldSnap);
+
+    if (oldIndex === -1) {
+      console.error('Could not find snap to replace');
+      this.snapping.set(key, false);
+      return;
+    }
+
+    // Create loading placeholder - use type assertion to avoid TypeScript error
+    const loadingSnap: SnapResult = {
+      url: newUrl,
+      ts: Date.now(),
+    } as SnapResult;
+    
+    currentSnaps[oldIndex] = loadingSnap;
+    this.snapsSubject.next(currentSnaps);
+    this.cdr.markForCheck();
+
+    // Make API call
+    this.qa.snapUrl(runId, newUrl).subscribe({
+      next: ({ snap, snaps }) => {
+        // Find the new snap from API response
+        const newSnap = snaps.find(s => 
+          s.url.toLowerCase() === newUrl.toLowerCase() || 
+          s.finalUrl?.toLowerCase() === newUrl.toLowerCase()
+        );
+
+        if (!newSnap) {
+          console.error('New snap not found in response');
+          this.snapping.set(key, false);
+          return;
+        }
+
+        // Get fresh copy and remove the loading placeholder
+        const updatedSnaps = this.snapsSubject.value.filter(s => s !== loadingSnap);
+        
+        // Insert new snap at the old position
+        updatedSnaps.splice(oldIndex, 0, newSnap);
+        
+        this.snapsSubject.next(updatedSnaps);
+        this.qa.saveSnaps(runId, updatedSnaps);
+        this.snapping.set(key, false);
+        
+        // ✅ CRITICAL FIX: Update editingSnapUrl to track the NEW snap's URL
+        if (this.editingSnapUrl) {
+          this.editingSnapUrl = newSnap.finalUrl || newSnap.url;
+        }
+        
+        this.cdr.markForCheck();
+      },
+      error: (err) => {
+        console.error('Capture error:', err);
+        
+        // Show error at the same position
+        const errorSnap: SnapResult = {
+          url: newUrl,
+          ok: false,
+          error: err?.message || 'Capture failed',
+          ts: Date.now(),
+        };
+        
+        const errorSnaps = [...this.snapsSubject.value];
+        const loadingIndex = errorSnaps.findIndex(s => s === loadingSnap);
+        if (loadingIndex !== -1) {
+          errorSnaps[loadingIndex] = errorSnap;
+        }
+        
+        this.snapsSubject.next(errorSnaps);
+        this.qa.saveSnaps(runId, errorSnaps);
+        this.snapping.set(key, false);
+        
+        // ✅ Keep edit mode open even on error
+        if (this.editingSnapUrl) {
+          this.editingSnapUrl = newUrl;
+        }
+        
+        this.cdr.markForCheck();
+      },
     });
   }
 }

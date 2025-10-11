@@ -107,6 +107,7 @@ app.use('/api/generate', templateGenerationRouter);
 // Core API routers
 app.use('/api/templates', templatesRouter);
 app.use('/api/qa', qaRouter);
+// app.use('/api/qa', qaNewRouter);
 
 // Existing base router
 app.use(Paths.Base, BaseRouter);

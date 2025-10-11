@@ -2622,11 +2622,13 @@
     transition: left 0.3s ease;
   }
   
-  mat-icon {
+   mat-icon {
     font-size: 22px;
     width: 22px;
     height: 22px;
     position: relative;
+    top:-38%;
+    left:-20%;
     z-index: 2;
   }
   
@@ -3170,6 +3172,176 @@
       font-size: 20px;
       width: 20px;
       height: 20px;
+    }
+  }
+}
+
+// ✅ NEW: Edit snap button
+.edit-snap-btn {
+  width: 28px !important;
+  height: 28px !important;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+  
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: var(--primary-purple);
+    transition: transform var(--transition-normal);
+  }
+  
+  &:hover mat-icon {
+    transform: scale(1.1) rotate(15deg);
+  }
+}
+
+// ✅ NEW: Inline edit input container
+.snap-edit-input {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, rgba(109, 40, 217, 0.02) 0%, rgba(236, 72, 153, 0.02) 100%);
+  border: 1px solid rgba(109, 40, 217, 0.15);
+  border-radius: var(--radius-md);
+  animation: slide-in-up 0.3s ease forwards;
+  
+  input {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    border: 2px solid rgba(0, 0, 0, 0.08);
+    border-radius: var(--radius-md);
+    font-size: 0.8125rem;
+    transition: all var(--transition-normal);
+    background: white;
+    
+    &:focus {
+      outline: none;
+      border-color: var(--primary-purple);
+      box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.1);
+    }
+    
+    &::placeholder {
+      color: #9ca3af;
+    }
+  }
+}
+
+// ✅ NEW: Replace button styling
+.replace-btn {
+  font-size: 0.75rem !important;
+  padding: 0.5rem 0.75rem !important;
+  border-radius: var(--radius-md) !important;
+  flex-shrink: 0;
+  transition: all var(--transition-normal) !important;
+  background: linear-gradient(135deg, rgba(109, 40, 217, 0.05) 0%, rgba(236, 72, 153, 0.05) 100%) !important;
+  border-color: rgba(109, 40, 217, 0.3) !important;
+  color: var(--primary-purple) !important;
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(109, 40, 217, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%) !important;
+    border-color: var(--primary-purple) !important;
+    transform: translateY(-1px);
+  }
+}
+// ✅ UPDATED: Make replace button look disabled (dummy)
+.replace-btn.dummy {
+  opacity: 0.6;
+  cursor: not-allowed;
+  
+  &:hover {
+    transform: none !important;
+  }
+}
+
+// ✅ NEW: Inline retest button in edit mode
+.retest-btn-inline {
+  font-size: 0.75rem !important;
+  padding: 0.5rem 0.75rem !important;
+  border-radius: var(--radius-md) !important;
+  flex-shrink: 0;
+  min-width: 80px;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  transition: all var(--transition-normal) !important;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(16, 185, 129, 0.05) 100%) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+  color: var(--accent-blue) !important;
+  
+  mat-progress-spinner {
+    width: 16px !important;
+    height: 16px !important;
+    
+    ::ng-deep circle {
+      stroke: var(--accent-blue) !important;
+    }
+  }
+  
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%) !important;
+    border-color: var(--accent-blue) !important;
+    transform: translateY(-1px);
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+// ✅ Regular retest button improvements with loading state
+.retest-btn {
+  min-width: 80px;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  transition: all var(--transition-normal) !important;
+  
+  mat-progress-spinner {
+    width: 16px !important;
+    height: 16px !important;
+    
+    ::ng-deep circle {
+      stroke: currentColor !important;
+    }
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+}
+
+// ✅ Slide in animation for edit input
+@keyframes slide-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ✅ Button loading spinner global styles
+::ng-deep .mat-progress-spinner {
+  &.btn-spinner,
+  .retest-btn &,
+  .retest-btn-inline & {
+    circle {
+      animation-duration: 1s !important;
     }
   }
 }
