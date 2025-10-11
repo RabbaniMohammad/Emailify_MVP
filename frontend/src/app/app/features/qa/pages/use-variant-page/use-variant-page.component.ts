@@ -110,6 +110,8 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   
   // Editor state persistence
   private editorStateKey = '';
+  // ✅ ADD: Draft message persistence
+  private draftMessageKey = '';
   private routerSub?: Subscription;
   private refreshSub?: Subscription;
   private navigationRefreshSub?: Subscription;
@@ -145,6 +147,13 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     // Set up reactive subscription for future route changes
     combineLatest([this.runId$, this.no$]).subscribe(([runId, no]) => {
       this.editorStateKey = `editor_state_${runId}_${no}`;
+      // ✅ ADD: Initialize draft key
+      this.draftMessageKey = `draft_message_${runId}_${no}`;
+    });
+    
+    // ✅ ADD: Subscribe to input changes to auto-save draft
+    this.input.valueChanges.subscribe(value => {
+      this.saveDraft(value);
     });
   }
 
@@ -165,8 +174,17 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
 
     if (runId && no) {
       this.editorStateKey = `editor_state_${runId}_${no}`;
+      // ✅ ADD: Initialize draft key
+      this.draftMessageKey = `draft_message_${runId}_${no}`;
+      
       const wasEditorOpen = this.restoreEditorState();
       this.editorOpenSubject = new BehaviorSubject<boolean>(wasEditorOpen);
+      
+      // ✅ ADD: Restore draft message
+      const savedDraft = this.restoreDraft();
+      if (savedDraft) {
+        this.input.setValue(savedDraft);
+      }
     } else {
       this.editorOpenSubject = new BehaviorSubject<boolean>(false);
     }
@@ -329,6 +347,33 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     return false;
   }
 
+  // ✅ ADD: Save draft message to sessionStorage
+  private saveDraft(message: string): void {
+    try {
+      if (this.draftMessageKey) {
+        if (message.trim()) {
+          sessionStorage.setItem(this.draftMessageKey, message);
+        } else {
+          sessionStorage.removeItem(this.draftMessageKey);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to save draft:', error);
+    }
+  }
+
+  // ✅ ADD: Restore draft message from sessionStorage
+  private restoreDraft(): string {
+    try {
+      if (this.draftMessageKey) {
+        return sessionStorage.getItem(this.draftMessageKey) || '';
+      }
+    } catch (error) {
+      console.warn('Failed to restore draft:', error);
+    }
+    return '';
+  }
+
   // Optional: Toggle editor state
   toggleEditor(): void {
     const currentState = this.editorOpenSubject.value;
@@ -448,88 +493,90 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     this.scrollAnimation = requestAnimationFrame(animateScroll);
   }
 
-// Change back to your ORIGINAL onSend method
-async onSend() {
-  const message = (this.input.value || '').trim();
-  if (!message || this.sending) return;
-  this.input.setValue('');
-  this.sending = true;
-
-  const runId = this.ar.snapshot.paramMap.get('runId')!;
-  const no = Number(this.ar.snapshot.paramMap.get('no')!);
-  const html = this.htmlSubject.value;
-
-  const hist = (this.messagesSubject.value || []).slice(-6).map(t => ({
-    role: t.role,
-    content: t.text,
-  }));
-
-  try {
-    const userTurn: ChatTurn = { role: 'user', text: message, ts: Date.now() };
-    const msgs = [...this.messagesSubject.value, userTurn];
-    this.messagesSubject.next(msgs);
-    this.persistThread(runId, no, html, msgs);
+  // ✅ UPDATED: Clear draft on send
+  async onSend() {
+    const message = (this.input.value || '').trim();
+    if (!message || this.sending) return;
     
-    setTimeout(() => this.scrollToBottom(), 50);
+    this.input.setValue('');
+    // ✅ ADD: Clear saved draft
+    this.saveDraft('');
+    this.sending = true;
 
-    const resp = await firstValueFrom(this.qa.sendChatMessage(runId, no, html, hist, message)) as AssistantPayload;
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    const html = this.htmlSubject.value;
 
-    const assistantText = resp.assistantText || 'Okay.';
-    const assistantTurn: ChatTurn = {
-      role: 'assistant',
-      text: assistantText,
-      json: this.toAssistantJson(resp.json),
-      ts: Date.now(),
-    };
-    const msgs2 = [...this.messagesSubject.value, assistantTurn];
-    this.messagesSubject.next(msgs2);
-    this.persistThread(runId, no, html, msgs2);
-    
-    setTimeout(() => this.scrollToBottom(), 50);
-  } catch (e) {
-    console.error('chat send error', e);
-  } finally {
-    this.sending = false;
+    const hist = (this.messagesSubject.value || []).slice(-6).map(t => ({
+      role: t.role,
+      content: t.text,
+    }));
+
+    try {
+      const userTurn: ChatTurn = { role: 'user', text: message, ts: Date.now() };
+      const msgs = [...this.messagesSubject.value, userTurn];
+      this.messagesSubject.next(msgs);
+      this.persistThread(runId, no, html, msgs);
+      
+      setTimeout(() => this.scrollToBottom(), 50);
+
+      const resp = await firstValueFrom(this.qa.sendChatMessage(runId, no, html, hist, message)) as AssistantPayload;
+
+      const assistantText = resp.assistantText || 'Okay.';
+      const assistantTurn: ChatTurn = {
+        role: 'assistant',
+        text: assistantText,
+        json: this.toAssistantJson(resp.json),
+        ts: Date.now(),
+      };
+      const msgs2 = [...this.messagesSubject.value, assistantTurn];
+      this.messagesSubject.next(msgs2);
+      this.persistThread(runId, no, html, msgs2);
+      
+      setTimeout(() => this.scrollToBottom(), 50);
+    } catch (e) {
+      console.error('chat send error', e);
+    } finally {
+      this.sending = false;
+    }
   }
-}
 
-// Change back to your ORIGINAL onApplyEdits method
-async onApplyEdits(turnIndex: number) {
-  if (this.applyingIndex !== null) return;
-  this.applyingIndex = turnIndex;
+  async onApplyEdits(turnIndex: number) {
+    if (this.applyingIndex !== null) return;
+    this.applyingIndex = turnIndex;
 
-  const runId = this.ar.snapshot.paramMap.get('runId')!;
-  const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
 
-  const turn = this.messagesSubject.value[turnIndex];
-  const edits = (turn?.json?.edits || []).slice();
-  if (!edits.length) { this.applyingIndex = null; return; }
+    const turn = this.messagesSubject.value[turnIndex];
+    const edits = (turn?.json?.edits || []).slice();
+    if (!edits.length) { this.applyingIndex = null; return; }
 
-  try {
-    const currentHtml = this.htmlSubject.value;
-    const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, edits));
-    const newHtml = resp?.html || currentHtml;
-    const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
+    try {
+      const currentHtml = this.htmlSubject.value;
+      const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, edits));
+      const newHtml = resp?.html || currentHtml;
+      const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
 
-    this.htmlSubject.next(newHtml);
-    this.updateMessageEdits(turnIndex, []);
+      this.htmlSubject.next(newHtml);
+      this.updateMessageEdits(turnIndex, []);
 
-    const noteText = numChanges > 0
-      ? `Applied ${numChanges} change(s).`
-      : `No matching text found.`;
+      const noteText = numChanges > 0
+        ? `Applied ${numChanges} change(s).`
+        : `No matching text found.`;
 
-    const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
-    const msgs = [...this.messagesSubject.value, appliedNote];
-    this.messagesSubject.next(msgs);
-    this.persistThread(runId, no, newHtml, msgs);
-    
-    setTimeout(() => this.scrollToBottom(), 50);
-  } catch (e) {
-    console.error('apply edits error', e);
-  } finally {
-    this.applyingIndex = null;
+      const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
+      const msgs = [...this.messagesSubject.value, appliedNote];
+      this.messagesSubject.next(msgs);
+      this.persistThread(runId, no, newHtml, msgs);
+      
+      setTimeout(() => this.scrollToBottom(), 50);
+    } catch (e) {
+      console.error('apply edits error', e);
+    } finally {
+      this.applyingIndex = null;
+    }
   }
-}
 
 
   handleEnterKey(event: KeyboardEvent): void {
