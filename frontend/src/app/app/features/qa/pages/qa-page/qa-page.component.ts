@@ -102,15 +102,15 @@ type SuggestionResult = {
           style({ opacity: 1, transform: 'translateY(0) scale(1)' }))
       ])
     ]),
-    trigger('modalAnimation', [
-      transition(':enter', [
-        style({ opacity: 0 }),
-        animate('200ms ease-out', style({ opacity: 1 }))
-      ]),
-      transition(':leave', [
-        animate('150ms ease-in', style({ opacity: 0 }))
-      ])
-    ]),
+    // trigger('modalAnimation', [
+    //   transition(':enter', [
+    //     style({ opacity: 0 }),
+    //     animate('200ms ease-out', style({ opacity: 1 }))
+    //   ]),
+    //   transition(':leave', [
+    //     animate('150ms ease-in', style({ opacity: 0 }))
+    //   ])
+    // ]),
     trigger('modalContentAnimation', [
       transition(':enter', [
         style({ opacity: 0, transform: 'scale(0.95)' }),
@@ -133,10 +133,10 @@ export class QaPageComponent implements OnDestroy {
   private snackBar = inject(MatSnackBar);
 
   // Modal state
-  isEditModalOpen = false;
-  isEditMode = false;
-  editableHtml = '';
-  originalGoldenHtml = '';
+  // isEditModalOpen = false;
+  // isEditMode = false;
+  // editableHtml = '';
+  // originalGoldenHtml = '';
 
   // Timeout configurations
   private readonly GOLDEN_TIMEOUT = 120000;
@@ -232,10 +232,11 @@ constructor() {
     this.loadOriginalTemplate(id);
     
     // ✅ Restore modal state
-    const savedModalTemplateId = localStorage.getItem('editModalOpen');
-    if (savedModalTemplateId === id) {
-      this.openEditModal();
-    }
+    // const savedModalTemplateId = localStorage.getItem('editModalOpen');
+    // if (savedModalTemplateId === id) {
+    //   this.openEditModal();
+    // }
+
     
     // ✅ Force change detection
     this.cdr.markForCheck();
@@ -271,288 +272,303 @@ constructor() {
   // ============================================
   // MODAL METHODS - WYSIWYG EDITING
   // ============================================
-  openEditModal(): void {
-  const golden = this.goldenSubject.value;
-  if (!golden?.html) return;
+//   openEditModal(): void {
+//   const golden = this.goldenSubject.value;
+//   if (!golden?.html) return;
   
-  this.originalGoldenHtml = golden.html;
-  this.editableHtml = golden.html;
-  this.isEditModalOpen = true;
-  this.isEditMode = false;
-  document.body.style.overflow = 'hidden';
+//   this.originalGoldenHtml = golden.html;
+//   this.editableHtml = golden.html;
+//   this.isEditModalOpen = true;
+//   this.isEditMode = false;
+//   document.body.style.overflow = 'hidden';
   
-  // ✅ ADD THIS - Save to localStorage
-  if (this.templateId) {
-    localStorage.setItem('editModalOpen', this.templateId);
-  }
+//   // ✅ ADD THIS - Save to localStorage
+//   if (this.templateId) {
+//     localStorage.setItem('editModalOpen', this.templateId);
+//   }
   
-  this.cdr.markForCheck();
+//   this.cdr.markForCheck();
 
-  setTimeout(() => {
-    this.enableInlineEditing();
-  }, 100);
-}
+//   setTimeout(() => {
+//     this.enableInlineEditing();
+//   }, 100);
+// }
 
-  closeEditModal(): void {
-  this.isEditModalOpen = false;
-  this.isEditMode = false;
-  document.body.style.overflow = '';
-  this.editableHtml = '';
-  this.originalGoldenHtml = '';
+//   closeEditModal(): void {
+//   this.isEditModalOpen = false;
+//   this.isEditMode = false;
+//   document.body.style.overflow = '';
+//   this.editableHtml = '';
+//   this.originalGoldenHtml = '';
   
-  // ✅ ADD THIS - Remove from localStorage
-  localStorage.removeItem('editModalOpen');
+//   // ✅ ADD THIS - Remove from localStorage
+//   localStorage.removeItem('editModalOpen');
   
-  this.cdr.markForCheck();
-}
+//   this.cdr.markForCheck();
+// }
 
-  onModalBackdropClick(event: MouseEvent): void {
-    if (event.target === event.currentTarget) {
-      this.closeEditModal();
-    }
-  }
+//   onModalBackdropClick(event: MouseEvent): void {
+//     if (event.target === event.currentTarget) {
+//       this.closeEditModal();
+//     }
+//   }
 
-  /**
-   * Enable inline editing for all text elements in the preview
-   */
-private enableInlineEditing(): void {
-  const container = document.querySelector('.editable-preview-container');
-  if (!container) return;
+//   /**
+//    * Enable inline editing for all text elements in the preview
+//    */
+// private enableInlineEditing(): void {
+//   const container = document.querySelector('.editable-preview-container');
+//   if (!container) return;
 
-  // Target elements that typically contain user-visible text
-  const editableSelectors = 'p, h1, h2, h3, h4, h5, h6, span:not(.no-edit), div:not(.no-edit), a, button, li, td, th, label';
-  const elements = container.querySelectorAll(editableSelectors);
+//   // Target elements that typically contain user-visible text
+//   const editableSelectors = 'p, h1, h2, h3, h4, h5, h6, span:not(.no-edit), div:not(.no-edit), a, button, li, td, th, label';
+//   const elements = container.querySelectorAll(editableSelectors);
 
-  elements.forEach((element: Element) => {
-    const htmlElement = element as HTMLElement;
+//   elements.forEach((element: Element) => {
+//     const htmlElement = element as HTMLElement;
     
-    // Skip elements that are containers with complex children
-    if (htmlElement.children.length > 3) return;
+//     // Skip elements that are containers with complex children
+//     if (htmlElement.children.length > 3) return;
     
-    // Get direct text content
-    const hasDirectText = Array.from(htmlElement.childNodes).some(
-      node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()
-    );
+//     // Get direct text content
+//     const hasDirectText = Array.from(htmlElement.childNodes).some(
+//       node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()
+//     );
 
-    if (hasDirectText || (htmlElement.children.length <= 1 && htmlElement.textContent?.trim())) {
-      // Make element editable
-      htmlElement.setAttribute('contenteditable', 'true');
-      htmlElement.classList.add('editable-element');
+//     if (hasDirectText || (htmlElement.children.length <= 1 && htmlElement.textContent?.trim())) {
+//       // Make element editable
+//       htmlElement.setAttribute('contenteditable', 'true');
+//       htmlElement.classList.add('editable-element');
       
-      // Store original value
-      htmlElement.dataset['originalText'] = htmlElement.textContent || '';
+//       // Store original value
+//       htmlElement.dataset['originalText'] = htmlElement.textContent || '';
 
-      // ✅ Add click handler with proper binding
-      const clickHandler = (e: Event) => {
-        e.stopPropagation();
-        this.onElementClick(htmlElement);
-      };
-      htmlElement.addEventListener('click', clickHandler);
+//       // ✅ Add click handler with proper binding
+//       const clickHandler = (e: Event) => {
+//         e.stopPropagation();
+//         this.onElementClick(htmlElement);
+//       };
+//       htmlElement.addEventListener('click', clickHandler);
 
-      // ✅ Track changes
-      const inputHandler = () => {
-        this.onElementEdit(htmlElement);
-      };
-      htmlElement.addEventListener('input', inputHandler);
+//       // ✅ Track changes
+//       const inputHandler = () => {
+//         this.onElementEdit(htmlElement);
+//       };
+//       htmlElement.addEventListener('input', inputHandler);
 
-      // ✅ Handle Enter key
-      const keydownHandler = (e: KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          htmlElement.blur();
-        }
-      };
-      htmlElement.addEventListener('keydown', keydownHandler);
-    }
+//       // ✅ Handle Enter key
+//       const keydownHandler = (e: KeyboardEvent) => {
+//         if (e.key === 'Enter' && !e.shiftKey) {
+//           e.preventDefault();
+//           htmlElement.blur();
+//         }
+//       };
+//       htmlElement.addEventListener('keydown', keydownHandler);
+//     }
+//   });
+
+//   this.isEditMode = true;
+//   this.cdr.markForCheck();
+// }
+
+//   /**
+//    * Handle element click
+//    */
+// private onElementClick(element: HTMLElement): void {
+//   // Remove focus from other elements
+//   document.querySelectorAll('.editable-element.editing').forEach(el => {
+//     el.classList.remove('editing');
+//   });
+
+//   // Add editing class
+//   element.classList.add('editing');
+  
+//   // ✅ Just focus - don't select all text
+//   element.focus();
+  
+//   // ✅ Place cursor at click position (natural behavior)
+//   // Browser handles cursor placement automatically
+// }
+
+//   /**
+//    * Handle element edit
+//    */
+//   private onElementEdit(element: HTMLElement): void {
+//     const originalText = element.dataset['originalText'] || '';
+//     const currentText = element.textContent || '';
+
+//     if (originalText !== currentText) {
+//       element.classList.add('edited');
+//     } else {
+//       element.classList.remove('edited');
+//     }
+//   }
+
+//   /**
+//    * Save edited template
+//    */
+// saveEditedTemplate(): void {
+//   const container = document.querySelector('.editable-preview-container');
+//   if (!container) return;
+
+//   const parser = new DOMParser();
+//   const originalDoc = parser.parseFromString(this.originalGoldenHtml, 'text/html');
+//   const editedElements = container.querySelectorAll('.edited');
+  
+//   console.log(`✏️ Processing ${editedElements.length} edited elements`);
+
+//   editedElements.forEach((element: Element) => {
+//     const htmlElement = element as HTMLElement;
+//     const originalText = htmlElement.dataset['originalText'] || '';
+//     const newText = htmlElement.textContent || ''; // ✅ Just text, no HTML
+    
+//     if (!originalText || originalText === newText) return;
+
+//     // Find matching element in original doc
+//     const tagName = htmlElement.tagName.toLowerCase();
+//     const candidates = Array.from(originalDoc.querySelectorAll(tagName));
+    
+//     const match = candidates.find(candidate => 
+//       candidate.textContent?.trim() === originalText.trim()
+//     );
+    
+//     if (match) {
+//       // ✅ Replace ONLY textContent - preserves original HTML structure!
+//       match.textContent = newText;
+//       console.log('✅ Replaced text in:', tagName);
+//     }
+//   });
+
+//   // Get updated HTML
+//   let updatedHtml: string;
+//   if (this.originalGoldenHtml.trim().startsWith('<!DOCTYPE') || 
+//       this.originalGoldenHtml.trim().startsWith('<html')) {
+//     updatedHtml = '<!DOCTYPE html>\n' + originalDoc.documentElement.outerHTML;
+//   } else if (this.originalGoldenHtml.trim().startsWith('<body')) {
+//     updatedHtml = originalDoc.body.outerHTML;
+//   } else {
+//     updatedHtml = originalDoc.body.innerHTML;
+//   }
+
+//   // Save
+//   const currentGolden = this.goldenSubject.value;
+//   if (currentGolden) {
+//     const updatedGolden = { ...currentGolden, html: updatedHtml };
+//     this.goldenSubject.next(updatedGolden);
+//     if (this.templateId) {
+//       this.qa.saveGoldenToCache(this.templateId, updatedGolden);
+//     }
+//   }
+
+//   this.showSuccess('Golden template updated successfully!');
+//   this.closeEditModal();
+// }
+
+// // Check if element only has simple inline children (like <strong>, <em>, <a>)
+// private hasOnlySimpleChildren(element: Element): boolean {
+//   const simpleInlineTags = ['strong', 'em', 'b', 'i', 'u', 'a', 'span', 'sup', 'sub'];
+  
+//   for (const child of Array.from(element.children)) {
+//     if (!simpleInlineTags.includes(child.tagName.toLowerCase())) {
+//       return false;
+//     }
+//   }
+  
+//   return true;
+// }
+
+// // DELETE the old replaceTextInElement method - not needed anymore
+
+// // Helper method to replace text while preserving child elements
+// private replaceTextInElement(element: Element, oldText: string, newText: string): void {
+//   const oldWords = oldText.split(/(\s+)/); // Keep whitespace
+//   const newWords = newText.split(/(\s+)/);
+  
+//   // Walk through child nodes
+//   const walker = document.createTreeWalker(
+//     element,
+//     NodeFilter.SHOW_TEXT,
+//     null
+//   );
+  
+//   let node: Node | null;
+//   let wordIndex = 0;
+  
+//   while ((node = walker.nextNode()) && wordIndex < oldWords.length) {
+//     const textContent = node.textContent || '';
+//     const trimmed = textContent.trim();
+    
+//     if (!trimmed) continue; // Skip empty text nodes
+    
+//     // Find matching word
+//     for (let i = wordIndex; i < oldWords.length; i++) {
+//       const oldWord = oldWords[i].trim();
+//       if (oldWord && trimmed.includes(oldWord)) {
+//         const newWord = newWords[i] || oldWord;
+//         node.textContent = textContent.replace(oldWord, newWord);
+//         wordIndex = i + 1;
+//         break;
+//       }
+//     }
+//   }
+// }
+
+
+
+
+
+onBypassVariants(): void {
+  console.log('🚀 onBypassVariants() called');
+  
+  if (!this.templateId) {
+    console.warn('❌ Template ID not found');
+    this.showWarning('Template ID not found');
+    return;
+  }
+  console.log('✅ Template ID:', this.templateId);
+
+  const golden = this.goldenSubject.value;
+  console.log('📋 Golden template value:', golden);
+  
+  if (!golden?.html) {
+    console.warn('❌ No golden template HTML available');
+    this.showWarning('No golden template available to bypass with');
+    return;
+  }
+  console.log('✅ Golden HTML length:', golden.html.length, 'characters');
+
+  // Create a synthetic variant run with the golden template
+  const syntheticRun: VariantsRun = {
+    runId: `bypass-${this.templateId}-${Date.now()}`,
+    target: 1,
+    items: [{
+      no: 1,
+      html: golden.html,
+      changes: [],
+      why: ['Using Golden Template directly - variants generation bypassed'],
+      artifacts: { usedIdeas: [] }
+    }]
+  };
+  console.log('🔧 Created synthetic run:', {
+    runId: syntheticRun.runId,
+    target: syntheticRun.target,
+    itemsCount: syntheticRun.items.length
   });
 
-  this.isEditMode = true;
-  this.cdr.markForCheck();
+  // Save the synthetic run
+  this.qa.saveVariantsRun(this.templateId, syntheticRun);
+  console.log('💾 Saved synthetic run to cache');
+
+  // Show success message
+  this.showSuccess('Bypassing variants - using Golden Template directly...');
+  console.log('✅ Success message shown');
+
+  // Navigate to use-variant page
+  const navigationPath = ['/qa', this.templateId, 'use', syntheticRun.runId, 1];
+  console.log('🧭 Navigating to:', navigationPath.join('/'));
+  this.router.navigate(navigationPath);
+  console.log('✅ Navigation initiated');
 }
-
-  /**
-   * Handle element click
-   */
-private onElementClick(element: HTMLElement): void {
-  // Remove focus from other elements
-  document.querySelectorAll('.editable-element.editing').forEach(el => {
-    el.classList.remove('editing');
-  });
-
-  // Add editing class
-  element.classList.add('editing');
-  
-  // ✅ Just focus - don't select all text
-  element.focus();
-  
-  // ✅ Place cursor at click position (natural behavior)
-  // Browser handles cursor placement automatically
-}
-
-  /**
-   * Handle element edit
-   */
-  private onElementEdit(element: HTMLElement): void {
-    const originalText = element.dataset['originalText'] || '';
-    const currentText = element.textContent || '';
-
-    if (originalText !== currentText) {
-      element.classList.add('edited');
-    } else {
-      element.classList.remove('edited');
-    }
-  }
-
-  /**
-   * Save edited template
-   */
-saveEditedTemplate(): void {
-  const container = document.querySelector('.editable-preview-container');
-  if (!container) return;
-
-  const parser = new DOMParser();
-  const originalDoc = parser.parseFromString(this.originalGoldenHtml, 'text/html');
-  const editedElements = container.querySelectorAll('.edited');
-  
-  console.log(`✏️ Processing ${editedElements.length} edited elements`);
-
-  editedElements.forEach((element: Element) => {
-    const htmlElement = element as HTMLElement;
-    const originalText = htmlElement.dataset['originalText'] || '';
-    const newText = htmlElement.textContent || ''; // ✅ Just text, no HTML
-    
-    if (!originalText || originalText === newText) return;
-
-    // Find matching element in original doc
-    const tagName = htmlElement.tagName.toLowerCase();
-    const candidates = Array.from(originalDoc.querySelectorAll(tagName));
-    
-    const match = candidates.find(candidate => 
-      candidate.textContent?.trim() === originalText.trim()
-    );
-    
-    if (match) {
-      // ✅ Replace ONLY textContent - preserves original HTML structure!
-      match.textContent = newText;
-      console.log('✅ Replaced text in:', tagName);
-    }
-  });
-
-  // Get updated HTML
-  let updatedHtml: string;
-  if (this.originalGoldenHtml.trim().startsWith('<!DOCTYPE') || 
-      this.originalGoldenHtml.trim().startsWith('<html')) {
-    updatedHtml = '<!DOCTYPE html>\n' + originalDoc.documentElement.outerHTML;
-  } else if (this.originalGoldenHtml.trim().startsWith('<body')) {
-    updatedHtml = originalDoc.body.outerHTML;
-  } else {
-    updatedHtml = originalDoc.body.innerHTML;
-  }
-
-  // Save
-  const currentGolden = this.goldenSubject.value;
-  if (currentGolden) {
-    const updatedGolden = { ...currentGolden, html: updatedHtml };
-    this.goldenSubject.next(updatedGolden);
-    if (this.templateId) {
-      this.qa.saveGoldenToCache(this.templateId, updatedGolden);
-    }
-  }
-
-  this.showSuccess('Golden template updated successfully!');
-  this.closeEditModal();
-}
-
-// Check if element only has simple inline children (like <strong>, <em>, <a>)
-private hasOnlySimpleChildren(element: Element): boolean {
-  const simpleInlineTags = ['strong', 'em', 'b', 'i', 'u', 'a', 'span', 'sup', 'sub'];
-  
-  for (const child of Array.from(element.children)) {
-    if (!simpleInlineTags.includes(child.tagName.toLowerCase())) {
-      return false;
-    }
-  }
-  
-  return true;
-}
-
-// DELETE the old replaceTextInElement method - not needed anymore
-
-// Helper method to replace text while preserving child elements
-private replaceTextInElement(element: Element, oldText: string, newText: string): void {
-  const oldWords = oldText.split(/(\s+)/); // Keep whitespace
-  const newWords = newText.split(/(\s+)/);
-  
-  // Walk through child nodes
-  const walker = document.createTreeWalker(
-    element,
-    NodeFilter.SHOW_TEXT,
-    null
-  );
-  
-  let node: Node | null;
-  let wordIndex = 0;
-  
-  while ((node = walker.nextNode()) && wordIndex < oldWords.length) {
-    const textContent = node.textContent || '';
-    const trimmed = textContent.trim();
-    
-    if (!trimmed) continue; // Skip empty text nodes
-    
-    // Find matching word
-    for (let i = wordIndex; i < oldWords.length; i++) {
-      const oldWord = oldWords[i].trim();
-      if (oldWord && trimmed.includes(oldWord)) {
-        const newWord = newWords[i] || oldWord;
-        node.textContent = textContent.replace(oldWord, newWord);
-        wordIndex = i + 1;
-        break;
-      }
-    }
-  }
-}
-
-
-
-
-
-  onBypassVariants(): void {
-    if (!this.templateId) {
-      this.showWarning('Template ID not found');
-      return;
-    }
-
-    const golden = this.goldenSubject.value;
-    if (!golden?.html) {
-      this.showWarning('No golden template available to bypass with');
-      return;
-    }
-
-    // Create a synthetic variant run with the golden template
-    const syntheticRun: VariantsRun = {
-      runId: `bypass-${this.templateId}-${Date.now()}`,
-      target: 1,
-      items: [{
-        no: 1,
-        html: golden.html,
-        changes: [],
-        why: ['Using Golden Template directly - variants generation bypassed'],
-        artifacts: { usedIdeas: [] }
-      }]
-    };
-
-    // Save the synthetic run
-    this.qa.saveVariantsRun(this.templateId, syntheticRun);
-
-    // Close modal
-    this.closeEditModal();
-
-    // Show success message
-    this.showSuccess('Bypassing variants - using Golden Template directly...');
-
-    // Navigate to use-variant page
-    this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
-  }
 
   // ============================================
   // SKIP TO CHAT METHOD

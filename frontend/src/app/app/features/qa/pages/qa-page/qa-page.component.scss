@@ -1827,36 +1827,36 @@
 // ============================================
 // EDIT BUTTON STYLES
 // ============================================
-.edit-btn {
-  display: none;
-  margin-left: auto;
-  width: 44px;
-  height: 44px;
-  background: var(--gradient-primary);
-  color: white;
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.3);
-  transition: all var(--transition-normal);
+// .edit-btn {
+//   display: none;
+//   margin-left: auto;
+//   width: 44px;
+//   height: 44px;
+//   background: var(--gradient-primary);
+//   color: white;
+//   border-radius: var(--radius-md);
+//   box-shadow: 0 4px 12px rgba(109, 40, 217, 0.3);
+//   transition: all var(--transition-normal);
   
-  svg {
-    width: 20px;
-    height: 20px;
-    stroke-width: 2.5;
-  }
+//   svg {
+//     width: 20px;
+//     height: 20px;
+//     stroke-width: 2.5;
+//   }
   
-  &:hover {
-    box-shadow: 0 6px 20px rgba(109, 40, 217, 0.4);
-    transform: translateY(-2px);
+//   &:hover {
+//     box-shadow: 0 6px 20px rgba(109, 40, 217, 0.4);
+//     transform: translateY(-2px);
     
-    svg {
-      transform: scale(1.1) rotate(5deg);
-    }
-  }
+//     svg {
+//       transform: scale(1.1) rotate(5deg);
+//     }
+//   }
   
-  &:active {
-    transform: translateY(0);
-  }
-}
+//   &:active {
+//     transform: translateY(0);
+//   }
+// }
 
 .skip-btn {
   margin-left: auto;
