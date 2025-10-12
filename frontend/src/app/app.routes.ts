@@ -54,7 +54,8 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./app/features/qa/pages/use-variant-page/use-variant-page.component')
         .then(m => m.UseVariantPageComponent),
-    canActivate: [authGuard]
+    canActivate: [authGuard],
+    canDeactivate: [qaDeactivateGuard] // ✅ ADD THIS
   },
   
   // Wildcard

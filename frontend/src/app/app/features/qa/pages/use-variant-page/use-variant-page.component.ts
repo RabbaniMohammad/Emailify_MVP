@@ -24,6 +24,10 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ViewChild, ElementRef } from '@angular/core';
 
+// import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, AfterViewInit, OnInit, OnDestroy, HostListener  } from '@angular/core';
+// import { CommonModule } from '@angular/common';
+// import { ActivatedRoute, Router  } from '@angular/router';
+
 
 
 
@@ -379,6 +383,46 @@ constructor() {
     }
   });
 }
+
+
+// ============================================
+// NAVIGATION & REFRESH GUARDS
+// ============================================
+
+/**
+ * Handle page refresh (F5) - Show browser confirmation dialog
+ */
+@HostListener('window:beforeunload', ['$event'])
+handleBeforeUnload(event: BeforeUnloadEvent): void {
+  if (this.isFinalizing) {
+    const message = '⚠️ Screenshot capture is in progress and will be lost if you leave.';
+    event.preventDefault();
+    event.returnValue = message;
+    return;
+  }
+}
+
+/**
+ * Handle navigation away - Show custom confirmation
+ */
+canDeactivate(): boolean {
+  if (!this.isFinalizing) {
+    return true;
+  }
+
+  const confirmed = confirm(
+    '⚠️ Screenshot capture is in progress and will be lost if you leave.\n\nAre you sure you want to leave? All progress will be lost.'
+  );
+
+  if (confirmed) {
+    // Clean up if user confirms
+    this.finalizingSubject.next(false);
+    console.log('🧹 Finalize process cancelled by user navigation');
+  }
+
+  return confirmed;
+}
+
 
   // EDITOR METHODS - UPDATED TO PERSIST STATE
   openEditor(): void {
