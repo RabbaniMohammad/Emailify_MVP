@@ -532,7 +532,7 @@ onBypassVariants(): void {
 
   // Create a synthetic variant run with the golden template
   const syntheticRun: VariantsRun = {
-    runId: `bypass-${this.templateId}-${Date.now()}`,
+    runId: `bypass-${this.templateId}`,
     target: 1,
     items: [{
       no: 1,
@@ -572,7 +572,7 @@ onSkipToChat(): void {
 
   // Create a synthetic variant run with the original template
   const syntheticRun: VariantsRun = {
-    runId: `skip-${this.templateId}-${Date.now()}`,
+    runId: `skip-${this.templateId}`,
     target: 1,
     items: [{
       no: 1,
