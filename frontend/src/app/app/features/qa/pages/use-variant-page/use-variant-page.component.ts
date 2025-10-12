@@ -254,7 +254,7 @@ constructor() {
           this.htmlSubject.next(item.html);
           const intro: ChatTurn = {
             role: 'assistant',
-            text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\nWhat would you like to improve?",
+            text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n•Please use editor is replacement won't happen\n\nWhat would you like to improve?",
             json: null,
             ts: Date.now(),
           };
@@ -304,7 +304,7 @@ constructor() {
 
         const intro: ChatTurn = {
           role: 'assistant',
-          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\nWhat would you like to improve?",
+          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n•Please use editor is replacement won't happen\n\nWhat would you like to improve?",
           json: null,
           ts: Date.now(),
         };
@@ -335,7 +335,7 @@ constructor() {
 
         const intro: ChatTurn = {
           role: 'assistant',
-          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\nWhat would you like to improve?",
+          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor is replacement didn't happen\n\nWhat would you like to improve?",
           json: null,
           ts: Date.now(),
         };

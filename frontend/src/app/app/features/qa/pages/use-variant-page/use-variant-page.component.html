@@ -42,12 +42,12 @@
               class="finalize-btn"
               (click)="onFinalize()"
               [disabled]="finalizing$ | async">
-              <mat-progress-spinner
+              <!-- <mat-progress-spinner
                 *ngIf="finalizing$ | async"
                 diameter="16"
                 mode="indeterminate"
-                class="btn-spinner">
-              </mat-progress-spinner>
+                class="btnspinner-">
+              </mat-progress-spinner> -->
               <span>{{ (finalizing$ | async) ? 'Finalizing...' : 'Finalize' }}</span>
             </button>
           </div>
