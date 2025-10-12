@@ -209,25 +209,29 @@ constructor() {
 
   this.editorOpen$ = this.editorOpenSubject.asObservable();
 
-  // Now continue with existing constructor code
+  // Timeout safety
   this.loadingTimeout = window.setTimeout(() => {
     if (this.loadingVariant) {
-      console.warn('Loading timeout reached, forcing completion');
+      console.warn('⏰ Loading timeout reached, forcing completion');
       this.loadingVariant = false;
       this.cdr.markForCheck();
     }
   }, 10000);
 
+  // Subscribe to runId changes
   this.runId$.subscribe(async (runId) => {
     const no = Number(this.ar.snapshot.paramMap.get('no')!);
 
     try {
-      // ✅ CHECK FOR SYNTHETIC RUN IN SESSIONSTORAGE
+      console.log('🔄 Loading variant data for runId:', runId, 'no:', no);
+
+      // ✅ PRIORITY 1: Check for SYNTHETIC run in sessionStorage FIRST
       let syntheticRun = null;
       try {
         const stored = sessionStorage.getItem(`synthetic_run_${runId}`);
         if (stored) {
           syntheticRun = JSON.parse(stored);
+          console.log('📦 Found synthetic run in sessionStorage');
         }
       } catch (e) {
         console.error('Failed to load synthetic run:', e);
@@ -236,6 +240,12 @@ constructor() {
       if (syntheticRun && syntheticRun.runId === runId) {
         const item = syntheticRun.items?.find((it: any) => it.no === no);
         if (item?.html) {
+          console.log('✅ Using FRESH synthetic run data');
+          
+          // ✅ CONSUME IT - Remove from sessionStorage so it's only used ONCE
+          sessionStorage.removeItem(`synthetic_run_${runId}`);
+          console.log('🗑️ Consumed synthetic run - removed from sessionStorage');
+          
           this.htmlSubject.next(item.html);
           const intro: ChatTurn = {
             role: 'assistant',
@@ -246,7 +256,7 @@ constructor() {
           const thread: ChatThread = { html: item.html, messages: [intro] };
           this.messagesSubject.next(thread.messages);
           
-          // ✅ SAVE TO CACHE so it persists
+          // ✅ SAVE TO localStorage so it persists on refresh
           this.qa.saveChat(runId, no, thread);
           
           this.snapsSubject.next([]);
@@ -261,18 +271,29 @@ constructor() {
         }
       }
 
+      // ✅ PRIORITY 2: Check localStorage cache (persists across refresh)
       const cachedThread = this.qa.getChatCached(runId, no);
       if (cachedThread?.html) {
+        console.log('✅ Restored from localStorage cache');
         this.htmlSubject.next(cachedThread.html);
         this.messagesSubject.next(cachedThread.messages || []);
-        
         this.snapsSubject.next(this.qa.getSnapsCached(runId));
+        
+        this.loadingVariant = false;
+        if (this.loadingTimeout) {
+          clearTimeout(this.loadingTimeout);
+          this.loadingTimeout = undefined;
+        }
+        this.cdr.markForCheck();
+        this.positionChatAtBottom();
         return;
       }
 
+      // ✅ PRIORITY 3: Check memory cache (variants run)
       const run = this.qa.getVariantsRunById(runId);
       const item = run?.items?.find(it => it.no === no) || null;
       if (item?.html) {
+        console.log('✅ Using variants run from cache');
         this.htmlSubject.next(item.html);
 
         const intro: ChatTurn = {
@@ -283,13 +304,24 @@ constructor() {
         };
         const thread: ChatThread = { html: item.html, messages: [intro] };
         this.messagesSubject.next(thread.messages);
+        
+        // ✅ SAVE TO localStorage
         this.qa.saveChat(runId, no, thread);
         
         this.snapsSubject.next(this.qa.getSnapsCached(runId));
+        this.loadingVariant = false;
+        if (this.loadingTimeout) {
+          clearTimeout(this.loadingTimeout);
+          this.loadingTimeout = undefined;
+        }
+        this.cdr.markForCheck();
+        this.positionChatAtBottom();
         return;
       }
 
+      // ✅ PRIORITY 4: Fallback to API
       try {
+        console.log('🌐 Fetching from API...');
         const status = await firstValueFrom(this.qa.getVariantsStatus(runId));
         const fromApi = status.items.find(it => it.no === no) || null;
         const html = fromApi?.html || '';
@@ -303,9 +335,13 @@ constructor() {
         };
         const thread: ChatThread = { html, messages: [intro] };
         this.messagesSubject.next(thread.messages);
+        
+        // ✅ SAVE TO localStorage
         this.qa.saveChat(runId, no, thread);
+        
+        this.snapsSubject.next(this.qa.getSnapsCached(runId));
       } catch (apiError) {
-        console.error('Failed to load from API:', apiError);
+        console.error('❌ Failed to load from API:', apiError);
         const intro: ChatTurn = {
           role: 'assistant',
           text: "I couldn't restore this variant from the server. If you go back and reopen it from the Variants list, I'll pick it up.",
@@ -313,11 +349,11 @@ constructor() {
           ts: Date.now(),
         };
         this.messagesSubject.next([intro]);
+        this.snapsSubject.next([]);
       }
 
-      this.snapsSubject.next(this.qa.getSnapsCached(runId));
     } catch (error) {
-      console.error('Error during component initialization:', error);
+      console.error('❌ Error during component initialization:', error);
       const errorMessage: ChatTurn = {
         role: 'assistant',
         text: 'An error occurred while loading this variant. Please try refreshing the page.',
@@ -333,7 +369,6 @@ constructor() {
         this.loadingTimeout = undefined;
       }
       this.cdr.markForCheck();
-      
       this.positionChatAtBottom();
     }
   });

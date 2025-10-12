@@ -276,6 +276,61 @@ export class QaService {
     );
   }
 
+  /**
+ * Clear ALL QA data (call this on logout)
+ */
+clearAllQaData(): void {
+  try {
+    // Get all localStorage keys
+    const keysToRemove: string[] = [];
+    
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('qa:')) {
+        keysToRemove.push(key);
+      }
+    }
+    
+    // Remove all QA keys
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // Clear observable caches
+    this.goldenCache$.clear();
+    this.subjectsCache$.clear();
+    this.suggestionsCache$.clear();
+    
+    console.log(`🧹 Cleared ${keysToRemove.length} QA data entries`);
+  } catch (e) {
+    console.error('Failed to clear QA data:', e);
+  }
+}
+
+/**
+ * Clear chat thread for a specific variant
+ */
+clearChatForRun(runId: string, no: number): void {
+  try {
+    const key = this.kChat(runId, no);
+    localStorage.removeItem(key);
+    console.log(`🧹 Cleared chat for ${runId} variant #${no}`);
+  } catch (e) {
+    console.error('Failed to clear chat:', e);
+  }
+}
+
+/**
+ * Clear all snapshots for a run
+ */
+clearSnapsForRun(runId: string): void {
+  try {
+    const key = this.kSnaps(runId);
+    localStorage.removeItem(key);
+    console.log(`🧹 Cleared snaps for ${runId}`);
+  } catch (e) {
+    console.error('Failed to clear snaps:', e);
+  }
+}
+
   clearGolden(id: string) {
     try {
       localStorage.removeItem(this.kGolden(id));

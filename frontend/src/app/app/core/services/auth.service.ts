@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { BehaviorSubject, Observable, tap, catchError, of, firstValueFrom, interval, Subscription, map, throwError } from 'rxjs';
 import { CacheService } from './cache.service';
+import { QaService } from '../../features/qa/services/qa.service';
 
 export interface User {
   _id: string;
@@ -24,6 +25,7 @@ export class AuthService implements OnDestroy {
   private http = inject(HttpClient);
   private router = inject(Router);
   private cache = inject(CacheService);
+  private qa = inject(QaService);
 
   // ==================== State Management ====================
   private currentUserSubject = new BehaviorSubject<User | null>(null);
@@ -342,6 +344,7 @@ export class AuthService implements OnDestroy {
   logout(): Observable<any> {
     console.log('🚪 Logging out...');
     this.stopStatusMonitoring();
+    this.qa.clearAllQaData(); 
     
     return this.http.post('/api/auth/logout', {}, { withCredentials: true }).pipe(
       tap({

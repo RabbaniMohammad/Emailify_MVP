@@ -543,14 +543,17 @@ onBypassVariants(): void {
     }]
   };
 
-  // ✅ Store in sessionStorage with special prefix
+  // ✅ SIMPLE FIX: Clear cache BEFORE navigating
+  this.qa.clearChatForRun(syntheticRun.runId, 1);
+  this.qa.clearSnapsForRun(syntheticRun.runId);
+  
+  // ✅ Store in sessionStorage
   try {
     sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
   } catch (e) {
     console.error('Failed to store synthetic run:', e);
   }
 
-  // Show success message
   this.showSuccess('Bypassing variants - using Golden Template directly...');
 
   // Navigate to use-variant page
@@ -583,14 +586,17 @@ onSkipToChat(): void {
     }]
   };
 
-  // ✅ Store in sessionStorage with special prefix
+  // ✅ SIMPLE FIX: Clear cache BEFORE navigating
+  this.qa.clearChatForRun(syntheticRun.runId, 1);
+  this.qa.clearSnapsForRun(syntheticRun.runId);
+  
+  // ✅ Store in sessionStorage
   try {
     sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
   } catch (e) {
     console.error('Failed to store synthetic run:', e);
   }
 
-  // Show success message
   this.showSuccess('Skipping to chat interface with original template...');
 
   // Navigate to use-variant page
