@@ -79,14 +79,60 @@
       </div>
 
       <!-- New Conversation Button -->
-      <button
+      <!-- <button
         mat-icon-button
         class="new-chat-btn"
         (click)="onNewConversation()"
         matTooltip="Start New Conversation"
         [disabled]="(isGenerating$ | async) ?? false">
         <mat-icon>add_circle</mat-icon>
-      </button>
+      </button> -->
+      <!-- Usage Tips Button -->
+<button
+  mat-icon-button
+  class="usage-tips-btn"
+  [matMenuTriggerFor]="usageMenu"
+  matTooltip="How to use">
+  <mat-icon>info_outline</mat-icon>
+</button>
+
+<!-- Usage Tips Menu -->
+<!-- Usage Tips Menu -->
+<mat-menu #usageMenu="matMenu" class="usage-tips-menu">
+  <div class="usage-tips-content" (click)="$event.stopPropagation()">
+    <h4>💡 How to Use This Generator</h4>
+    
+    <div class="tip-section">
+      <strong>Be Specific & Detailed</strong>
+      <p>Describe what you want clearly - layout, colors, content sections, and purpose. The more details, the better the result.</p>
+    </div>
+
+    <div class="tip-section">
+      <strong>📸 Add Design References</strong>
+      <p>Upload images (max 2) for visual inspiration - colors, layout, style. We'll match the aesthetic while following your text instructions.</p>
+    </div>
+
+    <div class="tip-section">
+      <strong>🔖 Request Placeholders</strong>
+      <p>Ask for Mailchimp or other placeholders like <code>|*EMAIL*|</code>, <code>|*FNAME*|</code>, <code>|*COMPANY*|</code> - we'll add them where needed.</p>
+    </div>
+
+    <div class="tip-section">
+      <strong>✨ Example Prompt:</strong>
+      <p class="example">"Create a product launch email with a hero image, bold headline, 3-column feature grid, and a centered CTA button. Use purple (#6d28d9) and white colors. Add |*FNAME*| placeholder in greeting."</p>
+    </div>
+
+    <div class="tip-section warning">
+      <strong>⚠️ Avoid Long Conversations</strong>
+      <p>Limit: 20 messages per chat. Be clear upfront to minimize back-and-forth. If you need major changes, save your template and start fresh.</p>
+    </div>
+
+    <div class="tip-note">
+      <!-- <mat-icon>mobile_friendly</mat-icon> -->
+      All templates are mobile-first & responsive!
+    </div>
+  </div>
+</mat-menu>
     </div>
 
     <!-- Messages Container -->

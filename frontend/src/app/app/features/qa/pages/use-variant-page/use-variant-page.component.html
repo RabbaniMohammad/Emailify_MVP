@@ -314,7 +314,17 @@
     </mat-progress-spinner>
     <span *ngIf="!isSnapping(editUrlInput.value || s.finalUrl || s.url)">Test</span>
   </button>
+
+      <button 
+      mat-stroked-button
+      class="cancel-btn"
+      (click)="onCancelEdit(s)"
+      color="warn">
+      Cancel
+    </button>
 </div>
+
+
                 
                 <!-- Regular Retest button (when not in edit mode) -->
                 <button

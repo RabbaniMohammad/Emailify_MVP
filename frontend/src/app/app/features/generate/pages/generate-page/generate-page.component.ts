@@ -12,6 +12,8 @@ import { BehaviorSubject, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { TemplatePreviewPanelComponent } from '../../../../shared/components/template-preview-panel/template-preview-panel.component';
 
+import { MatMenuModule } from '@angular/material/menu';
+
 import { TemplateGenerationService, GenerationMessage } from '../../../../core/services/template-generation.service';
 
 import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
@@ -38,6 +40,7 @@ interface ImageAttachment {
     MatInputModule,
     MatFormFieldModule,
     MatTooltipModule, 
+    MatMenuModule,
     TemplatePreviewPanelComponent,
   ],
   templateUrl: './generate-page.component.html',

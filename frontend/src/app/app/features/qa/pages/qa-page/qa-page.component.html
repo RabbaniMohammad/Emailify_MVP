@@ -42,15 +42,44 @@
 
     <!-- Column 2: Actions + Results -->
     <section class="col col-2 glass-card" [@fadeInUp] style="height: 800px !important; min-height: 800px !important; display: flex; flex-direction: column;">
-      <div class="card-header sticky-header">
-        <div class="header-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
-          </svg>
-        </div>
-        <h3 class="section-title">AI Tools & Analysis</h3>
-        <div class="title-underline"></div>
+<div class="card-header sticky-header">
+  <div class="header-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+    </svg>
+  </div>
+  <h3 class="section-title">AI Tools & Analysis</h3>
+  <div class="title-underline"></div>
+  
+  <!-- Info Icon Button -->
+  <button 
+    mat-icon-button 
+    class="qa-info-btn"
+    [matMenuTriggerFor]="qaInfoMenu"
+    matTooltip="Important Information">
+    <mat-icon>info_outline</mat-icon>
+  </button>
+
+  <!-- Info Menu -->
+  <mat-menu #qaInfoMenu="matMenu" class="qa-info-menu">
+    <div class="qa-info-content" (click)="$event.stopPropagation()">
+      <h4>⚠️ Important Notice</h4>
+      
+      <div class="info-section">
+        <p>AI will make mistakes due to its unpredictable nature and text replacement using AI will only happen under manual supervision.</p>
       </div>
+
+      <div class="info-section">
+        <p>Editing HTML using AI is astonishingly difficult due to the HTML complexity, poorly written HTML, and not following best practices.</p>
+      </div>
+
+      <div class="info-note">
+        <!-- <mat-icon>verified_user</mat-icon> -->
+        Always review AI changes before applying! and use editor if required.
+      </div>
+    </div>
+  </mat-menu>
+</div>
 
       <div class="scrollable-content" style="flex: 1; overflow-y: auto; min-height: 0;">
         <!-- Primary Actions -->

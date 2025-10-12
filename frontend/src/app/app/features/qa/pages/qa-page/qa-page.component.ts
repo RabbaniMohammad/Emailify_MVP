@@ -16,6 +16,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { HttpClient } from '@angular/common/http';
 import { TemplatesService } from '../../../../core/services/templates.service';
 import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
+import { MatMenuModule } from '@angular/material/menu';
 
 type SuggestionResult = {
   gibberish: Array<{ text: string; reason: string }>;
@@ -34,6 +35,7 @@ type SuggestionResult = {
     MatIconModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatMenuModule,
   ],
   templateUrl: './qa-page.component.html',
   styleUrls: ['./qa-page.component.scss'],
