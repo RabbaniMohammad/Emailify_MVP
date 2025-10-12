@@ -27,9 +27,20 @@
   --transition-smooth: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   
   display: block;
-  height: 100vh;
+  height: 89vh;
   overflow: hidden;
 }
+
+
+.add-image-btn.mat-mdc-icon-button {
+  --mat-mdc-button-persistent-ripple-color: transparent !important;
+  --mat-mdc-button-ripple-color: transparent !important;
+}
+
+.add-image-btn .mat-mdc-button-persistent-ripple {
+  display: none !important;
+}
+
 
 // ============================================================================
 // MAIN LAYOUT - MOBILE FIRST (Vertical Stack)
@@ -38,10 +49,11 @@
 .generate-layout {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100vh; // ✅ Use viewport height
   width: 100%;
   position: relative;
-  overflow: hidden;
+  overflow-y: auto; // ✅ CHANGE: Allow vertical scroll
+  overflow-x: hidden; // ✅ Prevent horizontal scroll
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
 }
 
@@ -50,10 +62,13 @@
 // ============================================================================
 
 .preview-section {
-  flex: 0 0 50%;
+  flex: 0 0 auto; // ✅ Don't grow, maintain size
+  height: auto; // ✅ Auto height
+  min-height: 100vh; // ✅ Minimum height
+  max-height: 45vh; // ✅ Maximum 45% of viewport on mobile
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto; 
   padding: 0.5rem;
   position: relative;
   
@@ -93,7 +108,9 @@
 // ============================================================================
 
 .chat-section {
-  flex: 0 0 50%;
+  flex: 1 1 auto;
+  min-height: 400px;
+  max-height: none; // ✅ REMOVE the max-height limit
   display: flex;
   flex-direction: column;
   background: white;
@@ -108,7 +125,8 @@
 }
 
 .chat-header {
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  min-height: 60px; // ✅ Fixed height
   padding: 0.75rem 1rem;
   background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
   border-bottom: 2px solid #e2e8f0;
@@ -163,7 +181,8 @@
     }
   }
   
-  .new-chat-btn {
+  .new-chat-btn,
+  .usage-tips-btn {
     color: var(--primary-purple);
     transition: all var(--transition-fast);
     flex-shrink: 0;
@@ -190,7 +209,9 @@
 }
 
 .chat-messages {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(100% - 220px); // ✅ Reserve space for header + composer
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0.75rem;
@@ -315,6 +336,7 @@
 }
 
 // Message Images Display
+// Message Images Display
 .message-images {
   display: flex;
   gap: 0.5rem;
@@ -322,8 +344,8 @@
   flex-wrap: wrap;
   
   .message-image {
-    max-width: 150px;
-    max-height: 150px;
+    width: 100px;
+    height: 100px;
     border-radius: var(--radius-md);
     border: 2px solid rgba(0, 0, 0, 0.1);
     object-fit: cover;
@@ -335,24 +357,65 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
   }
+  
+  &.preview-mode {
+    .image-wrapper {
+      position: relative;
+      width: 100px;
+      height: 100px;
+    }
+    
+    .remove-preview-btn {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: #ef4444;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      z-index: 10;
+      
+      mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+      }
+      
+      &:hover {
+        background: #dc2626;
+        transform: scale(1.15);
+      }
+    }
+  }
 }
 
 // Composer - MOBILE
 .composer {
-  flex-shrink: 0;
+  flex: 0 0 auto; // ✅ NEVER shrink, NEVER grow
   padding: 0.625rem;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(109, 40, 217, 0.02) 100%);
   border-top: 2px solid #e2e8f0;
+  min-height: 100px;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  flex-direction: column; // ✅ Stack previews and input
+  gap: 0;
   position: relative;
   
   &::before {
     content: '';
     position: absolute;
-    top: 0;
+    top: -10;
     left: 0.625rem;
     right: 0.625rem;
     height: 2px;
@@ -362,76 +425,77 @@
 }
 
 // Image Upload Styles
-.image-previews {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.5rem 0;
-  margin-bottom: 0.5rem;
-  overflow-x: auto;
+// .image-previews {
+//   display: flex;
+//   gap: 0.5rem;
+//   padding: 0.5rem 0;
+//   margin-bottom: 0.5rem;
+//   overflow-x: auto;
   
-  &::-webkit-scrollbar {
-    height: 4px;
-  }
+//   &::-webkit-scrollbar {
+//     height: 4px;
+//   }
   
-  &::-webkit-scrollbar-thumb {
-    background: rgba(109, 40, 217, 0.3);
-    border-radius: 2px;
-  }
-}
+//   &::-webkit-scrollbar-thumb {
+//     background: rgba(109, 40, 217, 0.3);
+//     border-radius: 2px;
+//   }
+// }
 
-.image-preview-item {
-  position: relative;
-  flex-shrink: 0;
-  width: 60px;
-  height: 60px;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  border: 2px solid #e2e8f0;
-  background: white;
+// .image-preview-item {
+//   position: relative;
+//   flex-shrink: 0;
+//   width: 60px;
+//   height: 60px;
+//   border-radius: var(--radius-md);
+//   overflow: hidden;
+//   border: 2px solid #e2e8f0;
+//   background: white;
   
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
+//   img {
+//     width: 100%;
+//     height: 100%;
+//     object-fit: cover;
+//   }
   
-  .remove-image-btn {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    padding: 0;
-    border: none;
-    border-radius: 50%;
-    background: #ef4444;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+//   .remove-image-btn {
+//     position: absolute;
+//     top: -6px;
+//     right: -6px;
+//     width: 20px;
+//     height: 20px;
+//     min-width: 20px;
+//     padding: 0;
+//     border: none;
+//     border-radius: 50%;
+//     background: #ef4444;
+//     color: white;
+//     display: flex;
+//     align-items: center;
+//     justify-content: center;
+//     cursor: pointer;
+//     transition: all 0.2s;
+//     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     
-    mat-icon {
-      font-size: 14px;
-      width: 14px;
-      height: 14px;
-    }
+//     mat-icon {
+//       font-size: 14px;
+//       width: 14px;
+//       height: 14px;
+//     }
     
-    &:hover {
-      background: #dc2626;
-      transform: scale(1.1);
-    }
-  }
-}
+//     &:hover {
+//       background: #dc2626;
+//       transform: scale(1.1);
+//     }
+//   }
+// }
 
 .composer-input-row {
   display: flex;
   gap: 0.5rem;
-  align-items: center;
+  align-items: center; // ✅ Align to bottom
   width: 100%;
+  padding-top: 0.5rem; // ✅ Add spacing
 }
 
 .add-image-btn {
@@ -439,9 +503,29 @@
   color: var(--primary-purple);
   transition: all var(--transition-fast);
   
+  // ✅ Perfect centering
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  
+  mat-icon {
+    margin: 0 auto !important;
+    display: block !important;
+  }
+  
+  // ✅ Remove the circle
+  ::ng-deep .mat-mdc-button-persistent-ripple {
+    background-color: transparent !important;
+    opacity: 0 !important;
+  }
+  
   &:hover:not(:disabled) {
-    background: rgba(109, 40, 217, 0.1);
     transform: scale(1.05);
+    
+    ::ng-deep .mat-mdc-button-persistent-ripple {
+      background-color: transparent !important;
+    }
   }
   
   &:disabled {
@@ -460,7 +544,7 @@
   line-height: 1.4;
   resize: none;
   min-height: 38px;
-  max-height: 100px;
+  max-height: 45px;
   transition: all var(--transition-normal);
   background: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -577,18 +661,34 @@
 // TABLET (768px+) - Still stacked but more spacious
 // ============================================================================
 
+// ============================================================================
+// TABLET (768px+) - Still stacked but more spacious
+// ============================================================================
+
 @media (min-width: 768px) {
+  // ✅ Layout changes
+  .generate-layout {
+    overflow-y: auto; // Allow vertical scroll
+  }
+  
   .preview-section {
-    flex: 0 0 55%;
+    flex: 1 1 auto; // ✅ Flexible sizing
+    min-height: 100vh;// ✅ Minimum height
+    max-height: none; // ✅ Remove max-height on tablet
     padding: 0.75rem;
   }
   
   .chat-section {
-    flex: 0 0 45%;
+    flex: 1 1 auto; // ✅ Flexible sizing
+    min-height: 400px; // ✅ Increased minimum height
+    max-height: none; // ✅ Remove max-height restriction on tablet
     margin: 0.75rem;
     margin-top: 0;
+    display: flex; // ✅ Ensure flexbox
+    flex-direction: column; // ✅ Stack children vertically
   }
   
+  // Chat header styling
   .chat-header {
     padding: 1rem 1.25rem;
     
@@ -619,6 +719,7 @@
     }
   }
   
+  // Chat messages
   .chat-messages {
     padding: 1rem 1.25rem;
     gap: 1rem;
@@ -668,6 +769,7 @@
     }
   }
   
+  // Composer
   .composer {
     padding: 0.875rem 1rem;
     gap: 0.75rem;
@@ -682,7 +784,7 @@
     padding: 0.75rem 0.875rem;
     font-size: 0.875rem;
     min-height: 44px;
-    max-height: 150px;
+    max-height: 48px;
     
     &::placeholder {
       font-size: 0.875rem;
@@ -710,24 +812,38 @@
 // DESKTOP (1024px+) - Side by side layout
 // ============================================================================
 
+// ============================================================================
+// DESKTOP (1024px+) - Side by side layout
+// ============================================================================
+
 @media (min-width: 1024px) {
+  // ✅ Layout changes - Side by side grid
   .generate-layout {
     display: grid;
     grid-template-columns: 1fr 400px;
     gap: 0;
+    height: 100vh; // ✅ Full viewport height
+    overflow: hidden; // ✅ Let children handle scroll
   }
   
   .preview-section {
     flex: 1;
+    min-height: unset; // ✅ Remove min-height
+    height: 89vh; // ✅ Full height
     padding: 0.75rem;
+    overflow: auto; // ✅ This scrolls independently
   }
   
   .chat-section {
     flex: 1;
+    min-height: unset; // ✅ Remove min-height
+    height: 86vh; // ✅ Full height
     margin: 0.75rem;
     margin-left: 0;
+    overflow: hidden; // ✅ Chat handles its own internal scroll
   }
   
+  // Chat header styling
   .chat-header {
     padding: 1.25rem 1.5rem;
     
@@ -758,6 +874,7 @@
     }
   }
   
+  // Chat messages
   .chat-messages {
     padding: 1.5rem;
     gap: 1.25rem;
@@ -784,7 +901,8 @@
     font-size: 0.9375rem;
     line-height: 1.7;
   }
-    .message-images .message-image {
+  
+  .message-images .message-image {
     max-width: 120px;
     max-height: 120px;
   }
@@ -806,10 +924,11 @@
     }
   }
   
+  // Composer
   .composer {
     padding: 1rem 1.5rem;
     gap: 1rem;
-    
+    max-height: 180px;
     &::before {
       left: 1.5rem;
       right: 1.5rem;
@@ -820,7 +939,7 @@
     padding: 0.875rem 1rem;
     font-size: 0.9375rem;
     min-height: 48px;
-    max-height: 200px;
+    max-height: 100px;
     
     &::placeholder {
       font-size: 0.9375rem;
@@ -838,11 +957,29 @@
 // LARGE DESKTOP (1200px+)
 // ============================================================================
 
+// ============================================================================
+// LARGE DESKTOP (1200px+)
+// ============================================================================
+
 @media (min-width: 1200px) {
+  // ✅ Layout changes - Wider chat panel
   .generate-layout {
     grid-template-columns: 1fr 480px;
+    height: 100vh; // ✅ Ensure full height
+    overflow: hidden; // ✅ Children scroll
   }
   
+  .preview-section {
+    height: 89%; // ✅ Full height
+    overflow: auto; // ✅ Scrollable
+  }
+  
+  .chat-section {
+    height: 85.5%; // ✅ Full height
+    overflow: hidden; // ✅ Internal scroll
+  }
+  
+  // Chat header styling
   .chat-header {
     padding: 1.5rem 2rem;
     
@@ -851,6 +988,7 @@
     }
   }
   
+  // Chat messages
   .chat-messages {
     padding: 2rem 1.5rem;
     gap: 1.5rem;
@@ -859,7 +997,8 @@
   .bubble {
     padding: 1.25rem 1.5rem;
   }
-    .message-images .message-image {
+  
+  .message-images .message-image {
     max-width: 180px;
     max-height: 180px;
   }
@@ -994,5 +1133,64 @@
   .usage-tips-content {
     max-width: 100%;
     padding: 16px;
+  }
+}
+
+// ============================================================================
+// HIDE AI WARNING DECORATIONS BELOW 1024px
+// ============================================================================
+
+@media (max-width: 1023px) {
+  .ai-warning-container {
+    padding: 1.5rem 1rem;
+    
+    .floating-ai-icon {
+      display: none !important;
+    }
+    
+    .info-badges {
+      display: none !important;
+    }
+    
+    h2 {
+      font-size: 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+
+    // .chat-section{
+    //     min-height: 50rem !important;
+    // }
+    
+    .warning-text {
+      font-size: 0.9375rem;
+      margin-bottom: 0;
+    }
+  }
+}
+
+// ============================================================================
+// SHOW FULL AI WARNING ON DESKTOP (1024px+)
+// ============================================================================
+
+@media (min-width: 1024px) {
+  .ai-warning-container {
+    .floating-ai-icon {
+      display: block !important;
+    }
+    
+    .info-badges {
+      display: flex !important;
+    }
+  }
+}
+
+// ============================================================================
+// DEBUG - Remove after fixing
+// ============================================================================
+@media (max-width: 1023px) {
+  .chat-section {
+    // border: 3px solid red !important;
+    min-height: 50rem;
+
   }
 }

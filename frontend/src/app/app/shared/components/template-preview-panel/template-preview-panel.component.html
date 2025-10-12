@@ -5,139 +5,162 @@
   </ng-container>
 
     <!-- Ultra Modern Glassmorphic Header -->
-    <div class="preview-header" *ngIf="!customHeaderTemplate && showHeader && !hideHeader">
-    <div class="header-content">
-        <!-- ⭐ ROW 1: Title + Template Name + Save + Run Tests -->
-        <div class="header-row-main">
-        <!-- Title -->
-        <h3 class="template-title">{{ isGeneratePage ? 'Generated Template' : (templateName || 'Live Preview') }}</h3>
+   <!-- Ultra Modern Glassmorphic Header -->
+<!-- Ultra Modern Glassmorphic Header -->
+<!-- Ultra Modern Glassmorphic Header -->
+<div class="preview-header" *ngIf="!customHeaderTemplate && showHeader && !hideHeader">
+  <div class="header-content">
+    <!-- â­ ONE ROW: Left side (Title + Input) | Right side (Menu) -->
+    <div class="header-row-unified" [class.generate-page-header]="isGeneratePage">
+      <!-- LEFT SIDE: Title + Template Name -->
+      <div class="header-left-group" *ngIf="isGeneratePage">
+        <h3 class="template-title">Generated Template</h3>
         
-        <!-- ⭐ GENERATE PAGE: Template Name Input + Buttons -->
-        <ng-container *ngIf="showGenerateActions && isGeneratePage">
-            <!-- Template Name Input (Smaller) -->
-            <input 
-                type="text"
-                class="template-name-input-simple"
-                [(ngModel)]="templateName"
-                (ngModelChange)="onTemplateNameChange($event)"
-                placeholder="Template Name"
-                maxlength="100">
+        <input 
+          type="text"
+          class="template-name-input-compact"
+          [(ngModel)]="templateName"
+          (ngModelChange)="onTemplateNameChange($event)"
+          placeholder="Template Name"
+          maxlength="100">
+      </div>
 
-            <!-- Save Button -->
-            <button 
-            mat-raised-button
-            class="save-btn"
-            (click)="onSaveTemplate()">
-            <mat-icon>save</mat-icon>
-            Save
-            </button>
+      <!-- LEFT SIDE: For non-generate pages -->
+      <h3 class="template-title" *ngIf="!isGeneratePage">{{ templateName || 'Live Preview' }}</h3>
+      
+      <!-- RIGHT SIDE: Menu Dropdown (Generate Page) -->
+      <button 
+        *ngIf="showGenerateActions && isGeneratePage"
+        class="actions-menu-btn"
+        mat-icon-button
+        [matMenuTriggerFor]="actionsMenu">
+        <mat-icon>more_vert</mat-icon>
+      </button>
 
-            <!-- Run Tests Button -->
-            <button 
-            mat-raised-button
-            class="run-tests-btn"
-            (click)="onRunTests()">
-            <mat-icon>play_arrow</mat-icon>
-            Run Tests
-            </button>
-        </ng-container>
-        
-        <!-- ⭐ NON-GENERATE PAGE: Badges -->
-        <ng-container *ngIf="!isGeneratePage">
-            <div class="template-meta">
-            <span class="status-badge">
-                <span class="status-indicator"></span>
-                Live Preview
-            </span>
-            <span class="template-id" *ngIf="templateId">ID: {{ templateId }}</span>
-            <div class="performance-badge-inline">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-                </svg>
-                <span>Optimized</span>
-            </div>
-            </div>
-        </ng-container>
-        </div>
-        
-        <!-- ⭐ ROW 2: Fullscreen + Desktop/Tablet/Mobile -->
-        <div class="header-row-controls">
-        <!-- Fullscreen Button -->
-        <button 
-            *ngIf="allowFullscreen"
-            class="action-btn fullscreen-btn" 
-            (click)="toggleFullscreen()" 
-            title="Toggle Fullscreen">
-            <svg *ngIf="!isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
-            <path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
-            <path d="M3 16v3a2 2 0 0 0 2 2h3"/>
-            <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
-            </svg>
-            <svg *ngIf="isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M8 3v3a2 2 0 0 1-2 2H3"/>
-            <path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
-            <path d="M3 16h3a2 2 0 0 1 2 2v3"/>
-            <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
-            </svg>
-            <span>Fullscreen</span>
+      <!-- Actions Menu -->
+      <mat-menu #actionsMenu="matMenu" class="actions-dropdown-menu">
+        <!-- Save -->
+        <button mat-menu-item (click)="onSaveTemplate()">
+          <mat-icon>save</mat-icon>
+          <span>Save Template</span>
         </button>
         
-        <!-- View Mode Toggle -->
-        <div class="view-mode-toggle" *ngIf="allowViewModes">
-            <button 
-            class="mode-btn" 
-            [class.active]="viewMode === 'desktop'" 
-            (click)="changeViewMode('desktop')"
-            title="Desktop View">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- Run Tests -->
+        <button mat-menu-item (click)="onRunTests()">
+          <mat-icon>play_arrow</mat-icon>
+          <span>Run Tests</span>
+        </button>
+        
+        <mat-divider></mat-divider>
+        
+        <!-- Fullscreen -->
+        <button mat-menu-item (click)="toggleFullscreen()" *ngIf="allowFullscreen">
+          <mat-icon>{{ isFullscreen ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
+          <span>{{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}</span>
+        </button>
+        
+        <mat-divider *ngIf="allowViewModes"></mat-divider>
+        
+        <!-- View Modes Section -->
+        <div class="menu-section-label" *ngIf="allowViewModes">View Mode</div>
+        
+        <button mat-menu-item (click)="changeViewMode('desktop')" *ngIf="allowViewModes">
+          <mat-icon [class.active-mode]="viewMode === 'desktop'">computer</mat-icon>
+          <span>Desktop</span>
+          <mat-icon class="check-icon" *ngIf="viewMode === 'desktop'">check</mat-icon>
+        </button>
+        
+        <button mat-menu-item (click)="changeViewMode('tablet')" *ngIf="allowViewModes">
+          <mat-icon [class.active-mode]="viewMode === 'tablet'">tablet_mac</mat-icon>
+          <span>Tablet</span>
+          <mat-icon class="check-icon" *ngIf="viewMode === 'tablet'">check</mat-icon>
+        </button>
+        
+        <button mat-menu-item (click)="changeViewMode('mobile')" *ngIf="allowViewModes">
+          <mat-icon [class.active-mode]="viewMode === 'mobile'">phone_iphone</mat-icon>
+          <span>Mobile</span>
+          <mat-icon class="check-icon" *ngIf="viewMode === 'mobile'">check</mat-icon>
+        </button>
+      </mat-menu>
+      
+      <!-- RIGHT SIDE: Regular Controls (Non-Generate Page) -->
+      <ng-container *ngIf="!isGeneratePage">
+        <div class="template-meta">
+          <span class="status-badge">
+            <span class="status-indicator"></span>
+            Live Preview
+          </span>
+          <span class="template-id" *ngIf="templateId">ID: {{ templateId }}</span>
+          <div class="performance-badge-inline">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+            <span>Optimized</span>
+          </div>
+        </div>
+
+        <div class="header-controls-regular">
+          <button 
+            *ngIf="allowFullscreen"
+            class="action-btn fullscreen-btn" 
+            (click)="toggleFullscreen()">
+            <svg *ngIf="!isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
+              <path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
+              <path d="M3 16v3a2 2 0 0 0 2 2h3"/>
+              <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+            </svg>
+            <svg *ngIf="isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3"/>
+              <path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
+              <path d="M3 16h3a2 2 0 0 1 2 2v3"/>
+              <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+            </svg>
+            <span>Fullscreen</span>
+          </button>
+
+          <div class="view-mode-toggle" *ngIf="allowViewModes">
+            <button class="mode-btn" [class.active]="viewMode === 'desktop'" (click)="changeViewMode('desktop')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
                 <line x1="8" y1="21" x2="16" y2="21"/>
                 <line x1="12" y1="17" x2="12" y2="21"/>
-            </svg>
-            <span>Desktop</span>
+              </svg>
+              <span>Desktop</span>
             </button>
-            <button 
-            class="mode-btn" 
-            [class.active]="viewMode === 'tablet'" 
-            (click)="changeViewMode('tablet')"
-            title="Tablet View">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button class="mode-btn" [class.active]="viewMode === 'tablet'" (click)="changeViewMode('tablet')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
                 <line x1="12" y1="18" x2="12.01" y2="18"/>
-            </svg>
-            <span>Tablet</span>
+              </svg>
+              <span>Tablet</span>
             </button>
-            <button 
-            class="mode-btn" 
-            [class.active]="viewMode === 'mobile'" 
-            (click)="changeViewMode('mobile')"
-            title="Mobile View">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button class="mode-btn" [class.active]="viewMode === 'mobile'" (click)="changeViewMode('mobile')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
                 <line x1="12" y1="18" x2="12.01" y2="18"/>
-            </svg>
-            <span>Mobile</span>
+              </svg>
+              <span>Mobile</span>
             </button>
-        </div>
-        
-        <!-- Refresh (non-generate pages only) -->
-        <button 
+          </div>
+
+          <button 
             *ngIf="allowRefresh && !isGeneratePage"
             class="action-btn refresh-btn" 
-            (click)="onRefresh()" 
-            title="Refresh Preview">
+            (click)="onRefresh()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-            <path d="M21 3v5h-5"/>
-            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-            <path d="M3 21v-5h5"/>
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+              <path d="M21 3v5h-5"/>
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+              <path d="M3 21v-5h5"/>
             </svg>
             <span>Refresh</span>
-        </button>
+          </button>
         </div>
+      </ng-container>
     </div>
-    </div>
+  </div>
+</div>
 
 <!-- Next-Gen Empty State -->
   <div *ngIf="!html && !loading" class="modern-placeholder">

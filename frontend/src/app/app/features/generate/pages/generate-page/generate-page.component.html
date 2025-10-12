@@ -136,10 +136,13 @@
     </div>
 
     <!-- Messages Container -->
-    <div
+<!-- Messages Container -->
+<div
   #messagesContainer
   class="chat-messages"
   (scroll)="onScroll($event)">
+  
+  <!-- Existing messages -->
   <div
     *ngFor="let message of messages$ | async; trackBy: trackByIndex"
     class="chat-msg"
@@ -151,7 +154,7 @@
         <span class="timestamp">{{ message.timestamp | date: 'short' }}</span>
       </div>
       
-      <!-- ✅ Image attachments (if any) -->
+      <!-- Images in sent messages -->
       <div class="message-images" *ngIf="message.images && message.images.length > 0">
         <img 
           *ngFor="let img of message.images" 
@@ -162,6 +165,23 @@
       
       <div class="bubble-content">
         {{ message.content }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Preview (before sending) -->
+  <div class="chat-msg user-msg" *ngIf="imagePreviewUrls.length > 0 && !(isGenerating$ | async)">
+    <div class="bubble user-bubble">
+      <div class="bubble-header">
+        <span class="role">Image Preview</span>
+      </div>
+      <div class="message-images preview-mode">
+        <div *ngFor="let url of imagePreviewUrls; let i = index" class="image-wrapper">
+          <img [src]="url" [alt]="'Preview ' + (i + 1)" class="message-image">
+          <button class="remove-preview-btn" (click)="removeImage(i)" type="button">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -186,6 +206,7 @@
 
     <!-- Message Composer -->
 <!-- Message Composer -->
+<!-- Message Composer -->
 <div class="composer">
   <!-- Hidden file input -->
   <input 
@@ -196,21 +217,6 @@
     [attr.max]="maxImages"
     (change)="onImageSelect($event)"
     style="display: none;">
-
-  <!-- Image Previews (if any) -->
-  <div class="image-previews" *ngIf="imagePreviewUrls.length > 0">
-    <div 
-      *ngFor="let url of imagePreviewUrls; let i = index" 
-      class="image-preview-item">
-      <img [src]="url" alt="Upload preview">
-      <button 
-        class="remove-image-btn" 
-        (click)="removeImage(i)"
-        type="button">
-        <mat-icon>close</mat-icon>
-      </button>
-    </div>
-  </div>
 
   <div class="composer-input-row">
     <!-- Plus Button for Image Upload -->
@@ -230,7 +236,6 @@
       class="message-input"
       [(ngModel)]="userInput"
       (keydown.enter)="onEnterKey($event)"
-      placeholder="Describe your email template... Upload design references for inspiration! 🎨"
       rows="3"
       [disabled]="(isGenerating$ | async) ?? false">
     </textarea>

@@ -22,6 +22,9 @@ import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 
+import { MatMenuModule } from '@angular/material/menu'; // ✅ ADD THIS
+import { MatDividerModule } from '@angular/material/divider';
+
 export type ViewMode = 'desktop' | 'tablet' | 'mobile';
 
 @Component({
@@ -34,7 +37,9 @@ export type ViewMode = 'desktop' | 'tablet' | 'mobile';
     MatProgressSpinnerModule,
     FormsModule,           
     MatFormFieldModule,    
-    MatInputModule         
+    MatInputModule,
+    MatMenuModule,
+    MatDividerModule          
   ],
   templateUrl: './template-preview-panel.component.html',
   styleUrls: ['./template-preview-panel.component.scss'],

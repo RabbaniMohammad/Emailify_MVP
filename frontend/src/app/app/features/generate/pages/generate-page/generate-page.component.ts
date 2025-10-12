@@ -657,8 +657,8 @@ onSaveTemplate(): void {
   console.log('🧹 Input value reset');
 }
 async processImage(file: File): Promise<void> {
-  console.log('🔄 processImage() called for:', file.name);
-  console.log('📁 File details:', {
+  console.log('📄 processImage() called for:', file.name);
+  console.log('📝 File details:', {
     name: file.name,
     type: file.type,
     size: `${(file.size / 1024).toFixed(2)}KB`,
@@ -680,14 +680,12 @@ async processImage(file: File): Promise<void> {
   }
 
   console.log('✅ File type validation passed');
-  
-  // ⭐ ALWAYS convert to JPEG for consistency and compatibility
   console.log('🗜️ Converting image to JPEG...');
   
   try {
     const processedFile = await this.compressImage(file);
     console.log('✅ Image converted to JPEG successfully!');
-    console.log('📏 Size:', `${(processedFile.size / 1024).toFixed(2)}KB`);
+    console.log('📝 Size:', `${(processedFile.size / 1024).toFixed(2)}KB`);
     
     if (processedFile.size > this.maxSizeBytes) {
       console.error('❌ Image still too large after compression');
@@ -712,12 +710,15 @@ async processImage(file: File): Promise<void> {
       
       console.log('📊 Total images now:', this.selectedImages.length);
       console.log('📊 Total previews now:', this.imagePreviewUrls.length);
+      
+      // Scroll to show preview
+      setTimeout(() => this.scrollToBottom(), 100);
     };
     reader.onerror = (error) => {
       console.error('❌ FileReader error:', error);
     };
     reader.readAsDataURL(processedFile);
-    console.log('🔄 FileReader started...');
+    console.log('📄 FileReader started...');
     
   } catch (error) {
     console.error('❌ Image processing failed:', error);
