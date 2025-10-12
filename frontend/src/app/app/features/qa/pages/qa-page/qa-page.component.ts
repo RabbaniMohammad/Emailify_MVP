@@ -1,7 +1,7 @@
-import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnDestroy  } from '@angular/core';
+import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnDestroy, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { BehaviorSubject, firstValueFrom, map, shareReplay, of, Subscription } from 'rxjs';
+import { BehaviorSubject, firstValueFrom, map, shareReplay, of, Subscription, Observable } from 'rxjs';
 import { timeout, catchError, retry } from 'rxjs/operators';
 import { trigger, state, style, transition, animate, query, stagger } from '@angular/animations';
 import { QaService, GoldenResult, VariantItem, VariantsRun } from '../../services/qa.service';
@@ -17,6 +17,7 @@ import { HttpClient } from '@angular/common/http';
 import { TemplatesService } from '../../../../core/services/templates.service';
 import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatDialog } from '@angular/material/dialog';
 
 type SuggestionResult = {
   gibberish: Array<{ text: string; reason: string }>;
@@ -104,15 +105,6 @@ type SuggestionResult = {
           style({ opacity: 1, transform: 'translateY(0) scale(1)' }))
       ])
     ]),
-    // trigger('modalAnimation', [
-    //   transition(':enter', [
-    //     style({ opacity: 0 }),
-    //     animate('200ms ease-out', style({ opacity: 1 }))
-    //   ]),
-    //   transition(':leave', [
-    //     animate('150ms ease-in', style({ opacity: 0 }))
-    //   ])
-    // ]),
     trigger('modalContentAnimation', [
       transition(':enter', [
         style({ opacity: 0, transform: 'scale(0.95)' }),
@@ -133,12 +125,6 @@ export class QaPageComponent implements OnDestroy {
   private previewCache = inject(PreviewCacheService);
   private cdr = inject(ChangeDetectorRef);
   private snackBar = inject(MatSnackBar);
-
-  // Modal state
-  // isEditModalOpen = false;
-  // isEditMode = false;
-  // editableHtml = '';
-  // originalGoldenHtml = '';
 
   // Timeout configurations
   private readonly GOLDEN_TIMEOUT = 120000;
@@ -192,70 +178,158 @@ export class QaPageComponent implements OnDestroy {
   readonly variants$ = this.variantsSubject.asObservable();
   variantsGenerating = false;
 
-constructor() {
-  const idSub = this.id$.subscribe(id => {
-    this.templateId = id;
+  constructor() {
+    const idSub = this.id$.subscribe(id => {
+      this.templateId = id;
 
-    // ✅ Load cached data
-    const cachedGolden = this.qa.getGoldenCached(id);
-    const cachedSubjects = this.qa.getSubjectsCached(id);
-    const cachedSuggestions = this.qa.getSuggestionsCached(id);
+      const cachedGolden = this.qa.getGoldenCached(id);
+      const cachedSubjects = this.qa.getSubjectsCached(id);
+      const cachedSuggestions = this.qa.getSuggestionsCached(id);
+      
+      this.goldenSubject.next(cachedGolden);
+      this.subjectsSubject.next(cachedSubjects);
+      this.suggestionsSubject.next(cachedSuggestions);
+      
+      if (cachedGolden?.html) {
+        this.goldenLoading = false;
+        console.log('✅ Restored cached golden');
+      }
+      
+      if (cachedSubjects?.length) {
+        this.subjectsLoading = false;
+        console.log('✅ Restored cached subjects');
+      }
+      
+      if (cachedSuggestions) {
+        this.suggestionsLoading = false;
+        console.log('✅ Restored cached suggestions');
+      }
+
+      const prevRun = this.qa.getVariantsRunCached(id);
+      if (prevRun) {
+        this.variantsSubject.next(prevRun);
+        this.variantsGenerating = false;
+        console.log('✅ Restored cached variants');
+      }
+      this.variantsRunId = prevRun?.runId || null;
+      
+      this.loadOriginalTemplate(id);
+      this.cdr.markForCheck();
+    });
     
-    // ✅ Set to subjects
-    this.goldenSubject.next(cachedGolden);
-    this.subjectsSubject.next(cachedSubjects);
-    this.suggestionsSubject.next(cachedSuggestions);
-    
-    // ✅ Set loading states only if cache exists
-    if (cachedGolden?.html) {
-      this.goldenLoading = false;
-      console.log('✅ Restored cached golden');
+    this.subscriptions.push(idSub);
+  }
+
+  // ============================================
+  // NAVIGATION & REFRESH GUARDS
+  // ============================================
+
+  /**
+   * Handle page refresh (F5) - Show browser confirmation dialog
+   */
+  @HostListener('window:beforeunload', ['$event'])
+  handleBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.isGenerating()) {
+      const message = this.getLoadingStateMessage();
+      event.preventDefault();
+      event.returnValue = message; // Standard way to show browser dialog
+      return;
     }
-    
-    if (cachedSubjects?.length) {
-      this.subjectsLoading = false;
-      console.log('✅ Restored cached subjects');
-    }
-    
-    if (cachedSuggestions) {
-      this.suggestionsLoading = false;
-      console.log('✅ Restored cached suggestions');
+  }
+
+  /**
+   * Handle navigation away - Show custom confirmation
+   */
+  canDeactivate(): boolean | Observable<boolean> {
+    if (!this.isGenerating()) {
+      return true;
     }
 
-    // ✅ Load variants
-    const prevRun = this.qa.getVariantsRunCached(id);
-    if (prevRun) {
-      this.variantsSubject.next(prevRun);
-      this.variantsGenerating = false;
-      console.log('✅ Restored cached variants');
-    }
-    this.variantsRunId = prevRun?.runId || null;
-    
-    this.loadOriginalTemplate(id);
-    
-    // ✅ Restore modal state
-    // const savedModalTemplateId = localStorage.getItem('editModalOpen');
-    // if (savedModalTemplateId === id) {
-    //   this.openEditModal();
-    // }
+    const message = this.getLoadingStateMessage();
+    const confirmed = confirm(
+      `${message}\n\nAre you sure you want to leave? All progress will be lost.`
+    );
 
-    
-    // ✅ Force change detection
-    this.cdr.markForCheck();
-  });
-  
-  this.subscriptions.push(idSub);
+    if (confirmed) {
+      this.cleanupOnExit();
+    }
+
+    return confirmed;
+  }
+
+  /**
+   * Check if any generation is in progress
+   */
+  private isGenerating(): boolean {
+    return this.goldenLoading || this.subjectsLoading || this.variantsGenerating;
+  }
+
+  /**
+   * Get appropriate warning message based on what's loading
+   */
+/**
+ * Get appropriate warning message - ONE simple message
+ */
+private getLoadingStateMessage(): string {
+  if (!this.isGenerating()) {
+    return '';
+  }
+
+  return '⚠️ Generation is in progress and will be lost if you leave.';
 }
 
-  ngOnDestroy(): void {
+  /**
+   * Clean up all active operations when navigating away
+   */
+  private cleanupOnExit(): void {
+    console.log('🧹 Cleaning up on exit...');
+
+    // Cancel golden
+    if (this.goldenLoading) {
+      this.goldenAborted = true;
+      this.goldenLoading = false;
+      if (this.goldenSub) {
+        this.goldenSub.unsubscribe();
+        this.goldenSub = undefined;
+      }
+    }
+
+    // Cancel subjects
+    if (this.subjectsLoading) {
+      this.subjectsAborted = true;
+      this.subjectsLoading = false;
+      if (this.subjectsSub) {
+        this.subjectsSub.unsubscribe();
+        this.subjectsSub = undefined;
+      }
+    }
+
+    // Cancel variants
+    if (this.variantsGenerating) {
+      this.variantsAborted = true;
+      this.variantsGenerating = false;
+    }
+
+    // Clear all timeouts
     this.clearAllTimeouts();
+
+    console.log('✅ Cleanup complete');
+  }
+
+  ngOnDestroy(): void {
+    console.log('🔴 Component destroying...');
     
-    // Unsubscribe from active operations
-    // if (this.goldenSub) this.goldenSub.unsubscribe();
-    // if (this.subjectsSub) this.subjectsSub.unsubscribe();
-    // if (this.suggestionsSub) this.suggestionsSub.unsubscribe();
+    // Clean up all active operations
+    this.cleanupOnExit();
+    
+    // Unsubscribe from all subscriptions
+    if (this.goldenSub) this.goldenSub.unsubscribe();
+    if (this.subjectsSub) this.subjectsSub.unsubscribe();
+    if (this.suggestionsSub) this.suggestionsSub.unsubscribe();
     
     this.subscriptions.forEach(sub => sub.unsubscribe());
+    
+    console.log('✅ Component destroyed');
   }
 
   private clearAllTimeouts(): void {
@@ -266,375 +340,112 @@ constructor() {
     if (this.variantsTotalTimeoutId) clearTimeout(this.variantsTotalTimeoutId);
   }
 
+  // ============================================
+  // REST OF THE METHODS (UNCHANGED)
+  // ============================================
+
   getSkeletonArray(target: number, currentCount: number): number[] {
     const remaining = target - currentCount;
     return Array(Math.max(0, remaining)).fill(0);
   }
 
-  // ============================================
-  // MODAL METHODS - WYSIWYG EDITING
-  // ============================================
-//   openEditModal(): void {
-//   const golden = this.goldenSubject.value;
-//   if (!golden?.html) return;
-  
-//   this.originalGoldenHtml = golden.html;
-//   this.editableHtml = golden.html;
-//   this.isEditModalOpen = true;
-//   this.isEditMode = false;
-//   document.body.style.overflow = 'hidden';
-  
-//   // ✅ ADD THIS - Save to localStorage
-//   if (this.templateId) {
-//     localStorage.setItem('editModalOpen', this.templateId);
-//   }
-  
-//   this.cdr.markForCheck();
+  onBypassVariants(): void {
+    if (!this.templateId) {
+      this.showWarning('Template ID not found');
+      return;
+    }
 
-//   setTimeout(() => {
-//     this.enableInlineEditing();
-//   }, 100);
-// }
-
-//   closeEditModal(): void {
-//   this.isEditModalOpen = false;
-//   this.isEditMode = false;
-//   document.body.style.overflow = '';
-//   this.editableHtml = '';
-//   this.originalGoldenHtml = '';
-  
-//   // ✅ ADD THIS - Remove from localStorage
-//   localStorage.removeItem('editModalOpen');
-  
-//   this.cdr.markForCheck();
-// }
-
-//   onModalBackdropClick(event: MouseEvent): void {
-//     if (event.target === event.currentTarget) {
-//       this.closeEditModal();
-//     }
-//   }
-
-//   /**
-//    * Enable inline editing for all text elements in the preview
-//    */
-// private enableInlineEditing(): void {
-//   const container = document.querySelector('.editable-preview-container');
-//   if (!container) return;
-
-//   // Target elements that typically contain user-visible text
-//   const editableSelectors = 'p, h1, h2, h3, h4, h5, h6, span:not(.no-edit), div:not(.no-edit), a, button, li, td, th, label';
-//   const elements = container.querySelectorAll(editableSelectors);
-
-//   elements.forEach((element: Element) => {
-//     const htmlElement = element as HTMLElement;
+    const golden = this.goldenSubject.value;
     
-//     // Skip elements that are containers with complex children
-//     if (htmlElement.children.length > 3) return;
+    if (!golden?.html) {
+      this.showWarning('No golden template available to bypass with');
+      return;
+    }
+
+    const syntheticRun: VariantsRun = {
+      runId: `bypass-${this.templateId}`,
+      target: 1,
+      items: [{
+        no: 1,
+        html: golden.html,
+        changes: [],
+        why: ['Using Golden Template directly - variants generation bypassed'],
+        artifacts: { usedIdeas: [] }
+      }]
+    };
+
+    this.qa.clearChatForRun(syntheticRun.runId, 1);
+    this.qa.clearSnapsForRun(syntheticRun.runId);
     
-//     // Get direct text content
-//     const hasDirectText = Array.from(htmlElement.childNodes).some(
-//       node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()
-//     );
+    try {
+      sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
+    } catch (e) {
+      console.error('Failed to store synthetic run:', e);
+    }
 
-//     if (hasDirectText || (htmlElement.children.length <= 1 && htmlElement.textContent?.trim())) {
-//       // Make element editable
-//       htmlElement.setAttribute('contenteditable', 'true');
-//       htmlElement.classList.add('editable-element');
-      
-//       // Store original value
-//       htmlElement.dataset['originalText'] = htmlElement.textContent || '';
-
-//       // ✅ Add click handler with proper binding
-//       const clickHandler = (e: Event) => {
-//         e.stopPropagation();
-//         this.onElementClick(htmlElement);
-//       };
-//       htmlElement.addEventListener('click', clickHandler);
-
-//       // ✅ Track changes
-//       const inputHandler = () => {
-//         this.onElementEdit(htmlElement);
-//       };
-//       htmlElement.addEventListener('input', inputHandler);
-
-//       // ✅ Handle Enter key
-//       const keydownHandler = (e: KeyboardEvent) => {
-//         if (e.key === 'Enter' && !e.shiftKey) {
-//           e.preventDefault();
-//           htmlElement.blur();
-//         }
-//       };
-//       htmlElement.addEventListener('keydown', keydownHandler);
-//     }
-//   });
-
-//   this.isEditMode = true;
-//   this.cdr.markForCheck();
-// }
-
-//   /**
-//    * Handle element click
-//    */
-// private onElementClick(element: HTMLElement): void {
-//   // Remove focus from other elements
-//   document.querySelectorAll('.editable-element.editing').forEach(el => {
-//     el.classList.remove('editing');
-//   });
-
-//   // Add editing class
-//   element.classList.add('editing');
-  
-//   // ✅ Just focus - don't select all text
-//   element.focus();
-  
-//   // ✅ Place cursor at click position (natural behavior)
-//   // Browser handles cursor placement automatically
-// }
-
-//   /**
-//    * Handle element edit
-//    */
-//   private onElementEdit(element: HTMLElement): void {
-//     const originalText = element.dataset['originalText'] || '';
-//     const currentText = element.textContent || '';
-
-//     if (originalText !== currentText) {
-//       element.classList.add('edited');
-//     } else {
-//       element.classList.remove('edited');
-//     }
-//   }
-
-//   /**
-//    * Save edited template
-//    */
-// saveEditedTemplate(): void {
-//   const container = document.querySelector('.editable-preview-container');
-//   if (!container) return;
-
-//   const parser = new DOMParser();
-//   const originalDoc = parser.parseFromString(this.originalGoldenHtml, 'text/html');
-//   const editedElements = container.querySelectorAll('.edited');
-  
-//   console.log(`✏️ Processing ${editedElements.length} edited elements`);
-
-//   editedElements.forEach((element: Element) => {
-//     const htmlElement = element as HTMLElement;
-//     const originalText = htmlElement.dataset['originalText'] || '';
-//     const newText = htmlElement.textContent || ''; // ✅ Just text, no HTML
-    
-//     if (!originalText || originalText === newText) return;
-
-//     // Find matching element in original doc
-//     const tagName = htmlElement.tagName.toLowerCase();
-//     const candidates = Array.from(originalDoc.querySelectorAll(tagName));
-    
-//     const match = candidates.find(candidate => 
-//       candidate.textContent?.trim() === originalText.trim()
-//     );
-    
-//     if (match) {
-//       // ✅ Replace ONLY textContent - preserves original HTML structure!
-//       match.textContent = newText;
-//       console.log('✅ Replaced text in:', tagName);
-//     }
-//   });
-
-//   // Get updated HTML
-//   let updatedHtml: string;
-//   if (this.originalGoldenHtml.trim().startsWith('<!DOCTYPE') || 
-//       this.originalGoldenHtml.trim().startsWith('<html')) {
-//     updatedHtml = '<!DOCTYPE html>\n' + originalDoc.documentElement.outerHTML;
-//   } else if (this.originalGoldenHtml.trim().startsWith('<body')) {
-//     updatedHtml = originalDoc.body.outerHTML;
-//   } else {
-//     updatedHtml = originalDoc.body.innerHTML;
-//   }
-
-//   // Save
-//   const currentGolden = this.goldenSubject.value;
-//   if (currentGolden) {
-//     const updatedGolden = { ...currentGolden, html: updatedHtml };
-//     this.goldenSubject.next(updatedGolden);
-//     if (this.templateId) {
-//       this.qa.saveGoldenToCache(this.templateId, updatedGolden);
-//     }
-//   }
-
-//   this.showSuccess('Golden template updated successfully!');
-//   this.closeEditModal();
-// }
-
-// // Check if element only has simple inline children (like <strong>, <em>, <a>)
-// private hasOnlySimpleChildren(element: Element): boolean {
-//   const simpleInlineTags = ['strong', 'em', 'b', 'i', 'u', 'a', 'span', 'sup', 'sub'];
-  
-//   for (const child of Array.from(element.children)) {
-//     if (!simpleInlineTags.includes(child.tagName.toLowerCase())) {
-//       return false;
-//     }
-//   }
-  
-//   return true;
-// }
-
-// // DELETE the old replaceTextInElement method - not needed anymore
-
-// // Helper method to replace text while preserving child elements
-// private replaceTextInElement(element: Element, oldText: string, newText: string): void {
-//   const oldWords = oldText.split(/(\s+)/); // Keep whitespace
-//   const newWords = newText.split(/(\s+)/);
-  
-//   // Walk through child nodes
-//   const walker = document.createTreeWalker(
-//     element,
-//     NodeFilter.SHOW_TEXT,
-//     null
-//   );
-  
-//   let node: Node | null;
-//   let wordIndex = 0;
-  
-//   while ((node = walker.nextNode()) && wordIndex < oldWords.length) {
-//     const textContent = node.textContent || '';
-//     const trimmed = textContent.trim();
-    
-//     if (!trimmed) continue; // Skip empty text nodes
-    
-//     // Find matching word
-//     for (let i = wordIndex; i < oldWords.length; i++) {
-//       const oldWord = oldWords[i].trim();
-//       if (oldWord && trimmed.includes(oldWord)) {
-//         const newWord = newWords[i] || oldWord;
-//         node.textContent = textContent.replace(oldWord, newWord);
-//         wordIndex = i + 1;
-//         break;
-//       }
-//     }
-//   }
-// }
-
-
-
-
-
-onBypassVariants(): void {
-  if (!this.templateId) {
-    this.showWarning('Template ID not found');
-    return;
+    this.showSuccess('Bypassing variants - using Golden Template directly...');
+    this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
   }
 
-  const golden = this.goldenSubject.value;
-  
-  if (!golden?.html) {
-    this.showWarning('No golden template available to bypass with');
-    return;
+  onSkipToChat(): void {
+    if (!this.templateId) {
+      this.showWarning('Template ID not found');
+      return;
+    }
+
+    if (!this.templateHtml || this.templateLoading) {
+      this.showWarning('Template is still loading. Please wait...');
+      return;
+    }
+
+    const syntheticRun: VariantsRun = {
+      runId: `skip-${this.templateId}`,
+      target: 1,
+      items: [{
+        no: 1,
+        html: this.templateHtml,
+        changes: [],
+        why: ['Original template - skipped generation'],
+        artifacts: { usedIdeas: [] }
+      }]
+    };
+
+    this.qa.clearChatForRun(syntheticRun.runId, 1);
+    this.qa.clearSnapsForRun(syntheticRun.runId);
+    
+    try {
+      sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
+    } catch (e) {
+      console.error('Failed to store synthetic run:', e);
+    }
+
+    this.showSuccess('Skipping to chat interface with original template...');
+    this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
   }
 
-  // Create a synthetic variant run with the golden template
-  const syntheticRun: VariantsRun = {
-    runId: `bypass-${this.templateId}`,
-    target: 1,
-    items: [{
-      no: 1,
-      html: golden.html,
-      changes: [],
-      why: ['Using Golden Template directly - variants generation bypassed'],
-      artifacts: { usedIdeas: [] }
-    }]
-  };
+  onGenerateGolden(id: string) {
+    if (this.goldenLoading) return;
+    
+    this.goldenLoading = true;
+    this.goldenAborted = false;
+    this.cdr.markForCheck();
 
-  // ✅ SIMPLE FIX: Clear cache BEFORE navigating
-  this.qa.clearChatForRun(syntheticRun.runId, 1);
-  this.qa.clearSnapsForRun(syntheticRun.runId);
-  
-  // ✅ Store in sessionStorage
-  try {
-    sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
-  } catch (e) {
-    console.error('Failed to store synthetic run:', e);
-  }
+    this.goldenTimeoutId = window.setTimeout(() => {
+      this.handleGoldenTimeout();
+    }, this.GOLDEN_TIMEOUT);
 
-  this.showSuccess('Bypassing variants - using Golden Template directly...');
-
-  // Navigate to use-variant page
-  this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
-}
-  // ============================================
-  // SKIP TO CHAT METHOD
-  // ============================================
-onSkipToChat(): void {
-  if (!this.templateId) {
-    this.showWarning('Template ID not found');
-    return;
-  }
-
-  if (!this.templateHtml || this.templateLoading) {
-    this.showWarning('Template is still loading. Please wait...');
-    return;
-  }
-
-  // Create a synthetic variant run with the original template
-  const syntheticRun: VariantsRun = {
-    runId: `skip-${this.templateId}`,
-    target: 1,
-    items: [{
-      no: 1,
-      html: this.templateHtml,
-      changes: [],
-      why: ['Original template - skipped generation'],
-      artifacts: { usedIdeas: [] }
-    }]
-  };
-
-  // ✅ SIMPLE FIX: Clear cache BEFORE navigating
-  this.qa.clearChatForRun(syntheticRun.runId, 1);
-  this.qa.clearSnapsForRun(syntheticRun.runId);
-  
-  // ✅ Store in sessionStorage
-  try {
-    sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
-  } catch (e) {
-    console.error('Failed to store synthetic run:', e);
-  }
-
-  this.showSuccess('Skipping to chat interface with original template...');
-
-  // Navigate to use-variant page
-  this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
-}
-
-  // ============================================
-  // GENERATE GOLDEN TEMPLATE
-  // ============================================
-onGenerateGolden(id: string) {
-  if (this.goldenLoading) return;
-  
-  this.goldenLoading = true;
-  this.goldenAborted = false;
-  
-  console.log('🔵 Golden loading started:', this.goldenLoading);
-  
-  this.cdr.markForCheck();
-
-  this.goldenTimeoutId = window.setTimeout(() => {
-    this.handleGoldenTimeout();
-  }, this.GOLDEN_TIMEOUT);
-
-  this.goldenSub = this.qa.generateGolden(id, true).pipe( // ✅ ADD true HERE
-    timeout(this.GOLDEN_TIMEOUT),
-    retry({ count: 2, delay: 3000, resetOnSuccess: true }),
-    catchError(error => {
-      if (error.name === 'TimeoutError') {
-        throw new Error('Golden template generation timed out. Please try again.');
-      }
-      throw error;
-    })
-  ).subscribe({
+    this.goldenSub = this.qa.generateGolden(id, true).pipe(
+      timeout(this.GOLDEN_TIMEOUT),
+      retry({ count: 2, delay: 3000, resetOnSuccess: true }),
+      catchError(error => {
+        if (error.name === 'TimeoutError') {
+          throw new Error('Golden template generation timed out. Please try again.');
+        }
+        throw error;
+      })
+    ).subscribe({
       next: (res) => {
         if (this.goldenAborted) return;
-        console.log('✅ Golden received:', res);
         
         if (this.goldenTimeoutId) {
           clearTimeout(this.goldenTimeoutId);
@@ -647,9 +458,6 @@ onGenerateGolden(id: string) {
       },
       error: (e) => {
         if (this.goldenAborted) return;
-        console.error('❌ Golden error:', e);
-        
-        console.error('Golden generation error:', e);
         
         if (this.goldenTimeoutId) {
           clearTimeout(this.goldenTimeoutId);
@@ -666,11 +474,7 @@ onGenerateGolden(id: string) {
       },
       complete: () => {
         if (this.goldenAborted) return;
-        console.log('🟢 Golden complete, loading:', this.goldenLoading); 
-        
         this.goldenLoading = false;
-
-        console.log('🟢 Golden loading set to false:', this.goldenLoading);
         this.cdr.markForCheck();
       }
     });
@@ -707,9 +511,6 @@ onGenerateGolden(id: string) {
     this.cdr.markForCheck();
   }
 
-  // ============================================
-  // GENERATE SUBJECTS
-  // ============================================
   onGenerateSubjects(id: string) {
     if (this.subjectsLoading) return;
     
@@ -745,8 +546,6 @@ onGenerateGolden(id: string) {
       error: (e) => {
         if (this.subjectsAborted) return;
         
-        console.error('Subjects generation error:', e);
-        
         if (this.subjectsTimeoutId) {
           clearTimeout(this.subjectsTimeoutId);
           this.subjectsTimeoutId = undefined;
@@ -762,7 +561,6 @@ onGenerateGolden(id: string) {
       },
       complete: () => {
         if (this.subjectsAborted) return;
-        
         this.subjectsLoading = false;
         this.cdr.markForCheck();
       }
@@ -797,9 +595,6 @@ onGenerateGolden(id: string) {
     this.cdr.markForCheck();
   }
 
-  // ============================================
-  // ANALYZE SUGGESTIONS
-  // ============================================
   onAnalyzeSuggestions(id: string) {
     if (this.suggestionsLoading) return;
     
@@ -851,8 +646,6 @@ onGenerateGolden(id: string) {
       error: (e) => {
         if (this.suggestionsAborted) return;
         
-        console.error('Suggestions generation error:', e);
-        
         if (this.suggestionsTimeoutId) {
           clearTimeout(this.suggestionsTimeoutId);
           this.suggestionsTimeoutId = undefined;
@@ -868,7 +661,6 @@ onGenerateGolden(id: string) {
       },
       complete: () => {
         if (this.suggestionsAborted) return;
-        
         this.suggestionsLoading = false;
         this.cdr.markForCheck();
       }
@@ -904,9 +696,6 @@ onGenerateGolden(id: string) {
     this.cdr.markForCheck();
   }
 
-  // ============================================
-  // GENERATE VARIANTS
-  // ============================================
   async onGenerateVariants(templateId: string) {
     if (this.variantsGenerating) return;
 
@@ -919,12 +708,11 @@ onGenerateGolden(id: string) {
 
     this.variantsGenerating = true;
     this.variantsAborted = false;
-      // ✅ ADD JUST THIS - Initialize with empty state to show the progress bar
-      this.variantsSubject.next({ 
-        runId: 'initializing', 
-        target: 5, 
-        items: [] 
-      });
+    this.variantsSubject.next({ 
+      runId: 'initializing', 
+      target: 5, 
+      items: [] 
+    });
     this.cdr.markForCheck();
 
     this.variantsTotalTimeoutId = window.setTimeout(() => {
@@ -1012,10 +800,6 @@ onGenerateGolden(id: string) {
           this.qa.saveVariantsRun(templateId, run);
           this.cdr.markForCheck();
 
-          // if ((i + 1) % 2 === 0) {
-          //   this.showInfo(`Generated ${i + 1} of ${start.target} variants...`);
-          // }
-
         } catch (variantError) {
           console.error(`Failed to generate variant ${i + 1}:`, variantError);
           this.showWarning(`Variant ${i + 1} failed, continuing with others...`);
@@ -1101,9 +885,6 @@ onGenerateGolden(id: string) {
     this.cdr.markForCheck();
   }
 
-  // ============================================
-  // UTILITY METHODS
-  // ============================================
   private getErrorMessage(error: any, operation: string): string {
     if (error?.message?.includes('timeout') || error?.name === 'TimeoutError') {
       return `${operation} timed out. The server might be busy. Please try again.`;
@@ -1160,55 +941,54 @@ onGenerateGolden(id: string) {
     });
   }
 
-private loadOriginalTemplate(templateId: string) {
-  console.log('Loading template from cache/service:', templateId);
-  this.templateLoading = true;
-  this.templateHtml = '';
-  
-  const cachedHtml = this.previewCache.get(templateId) || this.previewCache.getPersisted(templateId);
-  
-  if (cachedHtml) {
-    console.log('Found template in cache');
-    this.templateHtml = cachedHtml;
-    this.templateLoading = false;
-    this.cdr.markForCheck(); // ✅ ADD THIS
-    return;
+  private loadOriginalTemplate(templateId: string) {
+    console.log('Loading template from cache/service:', templateId);
+    this.templateLoading = true;
+    this.templateHtml = '';
+    
+    const cachedHtml = this.previewCache.get(templateId) || this.previewCache.getPersisted(templateId);
+    
+    if (cachedHtml) {
+      console.log('Found template in cache');
+      this.templateHtml = cachedHtml;
+      this.templateLoading = false;
+      this.cdr.markForCheck();
+      return;
+    }
+    
+    const currentState = this.templatesService.snapshot;
+    const template = currentState.items.find(item => item.id === templateId);
+    
+    if (template?.content) {
+      console.log('Found template in service');
+      this.templateHtml = template.content;
+      this.templateLoading = false;
+      this.cdr.markForCheck();
+      return;
+    }
+    
+    console.log('Template not found in cache or service, fetching from API');
+    this.http.get(`/api/templates/${templateId}/raw`, { responseType: 'text' })
+      .subscribe({
+        next: (html) => {
+          console.log('Template loaded from API');
+          this.templateHtml = html;
+          this.templateLoading = false;
+          this.cdr.markForCheck();
+        },
+        error: (error) => {
+          console.error('Failed to load template:', error);
+          this.templateHtml = 'Failed to load template';
+          this.templateLoading = false;
+          this.cdr.markForCheck();
+        }
+      });
   }
-  
-  const currentState = this.templatesService.snapshot;
-  const template = currentState.items.find(item => item.id === templateId);
-  
-  if (template?.content) {
-    console.log('Found template in service');
-    this.templateHtml = template.content;
-    this.templateLoading = false;
-    this.cdr.markForCheck(); // ✅ ADD THIS
-    return;
-  }
-  
-  console.log('Template not found in cache or service, fetching from API');
-  this.http.get(`/api/templates/${templateId}/raw`, { responseType: 'text' })
-    .subscribe({
-      next: (html) => {
-        console.log('Template loaded from API');
-        this.templateHtml = html;
-        this.templateLoading = false;
-        this.cdr.markForCheck(); // ✅ ADD THIS
-      },
-      error: (error) => {
-        console.error('Failed to load template:', error);
-        this.templateHtml = 'Failed to load template';
-        this.templateLoading = false;
-        this.cdr.markForCheck(); // ✅ ADD THIS
-      }
-    });
-}
 
   onUseVariant(templateId: string, runId: string, no: number) {
     this.router.navigate(['/qa', templateId, 'use', runId, no]);
   }
 
-    trackByIndex = (i: number) => i;
-    trackByEdit = (i: number, e: any) => e.before + '|' + e.after + '|' + (e.parent || '');
+  trackByIndex = (i: number) => i;
+  trackByEdit = (i: number, e: any) => e.before + '|' + e.after + '|' + (e.parent || '');
 }
-
