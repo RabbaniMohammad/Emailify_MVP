@@ -181,26 +181,27 @@
     <div class="finalize-grid">
       <!-- Left: Screenshots -->
       <div class="screenshots-col">
-        <div class="col-header">
-          <h4>Link Screenshots</h4>
-          <div class="quick-capture">
-            <input
-              type="text"
-              placeholder="Paste URL to test"
-              #newUrl
-              (keyup.enter)="captureUrl(newUrl)" />
-            <button
-              mat-icon-button
-              class="capture-btn"
-              (click)="captureUrl(newUrl)"
-              matTooltip="Capture Screenshot">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-                <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-              </svg>
-            </button>
-          </div>
-        </div>
+        <!-- FIND AND REPLACE this entire section in screenshots-col -->
+<div class="col-header">
+  <h4>
+    <span class="header-text-full">Link Screenshots</span>
+    <span class="header-text-short">Link</span>
+  </h4>
+  
+  <div class="submit-template-wrapper">
+    <button
+      mat-raised-button
+      class="submit-template-btn"
+      (click)="openTemplateModal()"
+      [disabled]="finalizing$ | async">
+      <!-- <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg> -->
+      <span class="btn-text-full">Submit Template</span>
+      <span class="btn-text-short">Submit</span>
+    </button>
+  </div>
+</div>
 
         <!-- Loading state wrapper -->
         <div class="snaps-list-wrapper" [class.loading]="finalizing$ | async">
@@ -348,9 +349,28 @@
 
       <!-- Right: Validation -->
       <div class="validation-col">
-        <div class="col-header">
-          <h4>Link Validation</h4>
-        </div>
+        <!-- REPLACE the .col-header div in screenshots-col with this: -->
+<div class="col-header">
+  <h4>
+    <span class="header-text-full">Link Screenshots</span>
+    <span class="header-text-short">Link</span>
+  </h4>
+  
+  <!-- Move submit button INSIDE col-header
+  <div class="submit-template-wrapper">
+    <button
+      mat-raised-button
+      class="submit-template-btn"
+      (click)="openTemplateModal()"
+      [disabled]="finalizing$ | async">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <span class="btn-text-full">Submit Template</span>
+      <span class="btn-text-short">Submit</span>
+    </button>
+  </div> -->
+</div> 
 
         <div class="upload-section">
           <label class="upload-label">
@@ -436,4 +456,24 @@
       </div>
     </div>
   </div>
+  <!-- Template Information Modal -->
+<div class="template-modal" *ngIf="templateModalOpen$ | async" @fadeInOut>
+  <div class="template-modal-backdrop"></div>
+  <div class="template-modal-content">
+    <button class="template-modal-close" (click)="closeTemplateModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+    
+    <div class="template-modal-header">
+      <h2>Template Information</h2>
+    </div>
+    
+    <div class="template-modal-body">
+      <!-- Empty content placeholder - will be filled later -->
+    </div>
+  </div>
+</div>
 </div>

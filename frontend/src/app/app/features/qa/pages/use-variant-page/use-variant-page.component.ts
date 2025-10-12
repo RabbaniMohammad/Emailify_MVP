@@ -99,6 +99,15 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   applyingIndex: number | null = null;
 
   editInputValue: string = '';
+
+  // Add these AFTER the existing subjects (around line 94)
+  private templateModalOpenSubject!: BehaviorSubject<boolean>;
+  readonly templateModalOpen$!: Observable<boolean>;
+  private templateModalKey = '';
+
+  get isTemplateModalOpen(): boolean { 
+    return this.templateModalOpenSubject.value; 
+  }
   
 
   private snapsSubject = new BehaviorSubject<SnapResult[]>([]);
@@ -140,6 +149,7 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   private routerSub?: Subscription;
   private refreshSub?: Subscription;
   private navigationRefreshSub?: Subscription;
+  // private modalOverflowSub?: Subscription;
 
 
 readonly linkChecks$ = combineLatest([this.validLinks$, this.htmlLinks$]).pipe(
@@ -171,30 +181,29 @@ readonly linkChecks$ = combineLatest([this.validLinks$, this.htmlLinks$]).pipe(
   })
 );
 
-  ngOnInit() {
-    window.scrollTo(0, 0);
-    
-    // Set up reactive subscription for future route changes
-    combineLatest([this.runId$, this.no$]).subscribe(([runId, no]) => {
-      this.editorStateKey = `editor_state_${runId}_${no}`;
-      this.draftMessageKey = `draft_message_${runId}_${no}`;
-    });
-    
-    // Subscribe to input changes to auto-save draft
-    this.input.valueChanges.subscribe(value => {
-      this.saveDraft(value);
-    });
-  }
+ngOnInit() {
+  window.scrollTo(0, 0);
+  
+  combineLatest([this.runId$, this.no$]).subscribe(([runId, no]) => {
+    this.editorStateKey = `editor_state_${runId}_${no}`;
+    this.draftMessageKey = `draft_message_${runId}_${no}`;
+    this.templateModalKey = `template_modal_${runId}_${no}`;
+  });
+  
+  this.input.valueChanges.subscribe(value => {
+    this.saveDraft(value);
+  });
+}
 
-  ngOnDestroy(): void {
-    this.routerSub?.unsubscribe();
-    this.refreshSub?.unsubscribe();
-    this.navigationRefreshSub?.unsubscribe();
-    
-    if (this.loadingTimeout) {
-      clearTimeout(this.loadingTimeout);
-    }
+ngOnDestroy(): void {
+  this.routerSub?.unsubscribe();
+  this.refreshSub?.unsubscribe();
+  this.navigationRefreshSub?.unsubscribe();
+  
+  if (this.loadingTimeout) {
+    clearTimeout(this.loadingTimeout);
   }
+}
 
 constructor() {
   // RESTORE STATE FIRST - before any template rendering
@@ -202,6 +211,11 @@ constructor() {
   const no = this.ar.snapshot.paramMap.get('no');
 
   if (runId && no) {
+    // ✅ INITIALIZE TEMPLATE MODAL STATE FIRST
+    this.templateModalKey = `template_modal_${runId}_${no}`;
+    const wasModalOpen = this.restoreTemplateModalState();
+    this.templateModalOpenSubject = new BehaviorSubject<boolean>(wasModalOpen);
+    
     this.editorStateKey = `editor_state_${runId}_${no}`;
     this.draftMessageKey = `draft_message_${runId}_${no}`;
     
@@ -213,9 +227,12 @@ constructor() {
       this.input.setValue(savedDraft);
     }
   } else {
+    this.templateModalOpenSubject = new BehaviorSubject<boolean>(false);
     this.editorOpenSubject = new BehaviorSubject<boolean>(false);
   }
 
+  // ✅ CREATE OBSERVABLES
+  this.templateModalOpen$ = this.templateModalOpenSubject.asObservable();
   this.editorOpen$ = this.editorOpenSubject.asObservable();
 
   // Timeout safety
@@ -229,10 +246,11 @@ constructor() {
 
   // Subscribe to runId changes
   this.runId$.subscribe(async (runId) => {
+    // ... rest of existing runId subscription code stays the same
     const no = Number(this.ar.snapshot.paramMap.get('no')!);
 
     try {
-      console.log('🔄 Loading variant data for runId:', runId, 'no:', no);
+      console.log('📄 Loading variant data for runId:', runId, 'no:', no);
 
       // ✅ PRIORITY 1: Check for SYNTHETIC run in sessionStorage FIRST
       let syntheticRun = null;
@@ -382,6 +400,9 @@ constructor() {
       this.positionChatAtBottom();
     }
   });
+   if (this.templateModalOpenSubject.value) {
+    document.body.style.overflow = 'hidden';
+  }
 }
 
 
@@ -436,6 +457,48 @@ canDeactivate(): boolean {
     this.saveEditorState(false);
     this.cdr.detectChanges();
   }
+
+  // ============================================
+// TEMPLATE MODAL METHODS
+// ============================================
+
+openTemplateModal(): void {
+  if (this.isFinalizing) return;
+  
+  this.templateModalOpenSubject.next(true);
+  this.saveTemplateModalState(true);
+  document.body.style.overflow = 'hidden';
+  this.cdr.markForCheck();
+}
+
+closeTemplateModal(): void {
+  this.templateModalOpenSubject.next(false);
+  this.saveTemplateModalState(false);
+  document.body.style.overflow = 'auto';
+  this.cdr.markForCheck();
+}
+
+private saveTemplateModalState(isOpen: boolean): void {
+  try {
+    if (this.templateModalKey) {
+      sessionStorage.setItem(this.templateModalKey, isOpen.toString());
+    }
+  } catch (error) {
+    console.warn('Failed to save template modal state:', error);
+  }
+}
+
+private restoreTemplateModalState(): boolean {
+  try {
+    if (this.templateModalKey) {
+      const saved = sessionStorage.getItem(this.templateModalKey);
+      return saved === 'true';
+    }
+  } catch (error) {
+    console.warn('Failed to restore template modal state:', error);
+  }
+  return false;
+}
 
   onEditorClose(): void {
     this.closeEditor();
