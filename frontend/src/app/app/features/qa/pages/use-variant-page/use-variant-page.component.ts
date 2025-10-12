@@ -1,6 +1,6 @@
 import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, AfterViewInit, OnInit, OnDestroy, HostListener  } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router  } from '@angular/router';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { BehaviorSubject, firstValueFrom, map, shareReplay, combineLatest, Subscription, Observable  } from 'rxjs';
 import { FormControl, ReactiveFormsModule , FormsModule} from '@angular/forms';
@@ -68,6 +68,7 @@ type LinkCheck = { url: string; inFile: boolean; inHtml: boolean };
 })
 export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy {
   private ar = inject(ActivatedRoute);
+  private router = inject(Router);
   private qa = inject(QaService);
   private cdr = inject(ChangeDetectorRef);
   private snackBar = inject(MatSnackBar);
@@ -186,55 +187,56 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
     }
   }
 
-  constructor() {
-    // RESTORE STATE FIRST - before any template rendering
-    const runId = this.ar.snapshot.paramMap.get('runId');
-    const no = this.ar.snapshot.paramMap.get('no');
+constructor() {
+  // RESTORE STATE FIRST - before any template rendering
+  const runId = this.ar.snapshot.paramMap.get('runId');
+  const no = this.ar.snapshot.paramMap.get('no');
 
-    if (runId && no) {
-      this.editorStateKey = `editor_state_${runId}_${no}`;
-      this.draftMessageKey = `draft_message_${runId}_${no}`;
-      
-      const wasEditorOpen = this.restoreEditorState();
-      this.editorOpenSubject = new BehaviorSubject<boolean>(wasEditorOpen);
-      
-      const savedDraft = this.restoreDraft();
-      if (savedDraft) {
-        this.input.setValue(savedDraft);
-      }
-    } else {
-      this.editorOpenSubject = new BehaviorSubject<boolean>(false);
+  if (runId && no) {
+    this.editorStateKey = `editor_state_${runId}_${no}`;
+    this.draftMessageKey = `draft_message_${runId}_${no}`;
+    
+    const wasEditorOpen = this.restoreEditorState();
+    this.editorOpenSubject = new BehaviorSubject<boolean>(wasEditorOpen);
+    
+    const savedDraft = this.restoreDraft();
+    if (savedDraft) {
+      this.input.setValue(savedDraft);
     }
+  } else {
+    this.editorOpenSubject = new BehaviorSubject<boolean>(false);
+  }
 
-    this.editorOpen$ = this.editorOpenSubject.asObservable();
+  this.editorOpen$ = this.editorOpenSubject.asObservable();
 
-    // Now continue with existing constructor code
-    this.loadingTimeout = window.setTimeout(() => {
-      if (this.loadingVariant) {
-        console.warn('Loading timeout reached, forcing completion');
-        this.loadingVariant = false;
-        this.cdr.markForCheck();
-      }
-    }, 10000);
+  // Now continue with existing constructor code
+  this.loadingTimeout = window.setTimeout(() => {
+    if (this.loadingVariant) {
+      console.warn('Loading timeout reached, forcing completion');
+      this.loadingVariant = false;
+      this.cdr.markForCheck();
+    }
+  }, 10000);
 
-    this.runId$.subscribe(async (runId) => {
-      const no = Number(this.ar.snapshot.paramMap.get('no')!);
+  this.runId$.subscribe(async (runId) => {
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
 
+    try {
+      // ✅ CHECK FOR SYNTHETIC RUN IN SESSIONSTORAGE
+      let syntheticRun = null;
       try {
-        const cachedThread = this.qa.getChatCached(runId, no);
-        if (cachedThread?.html) {
-          this.htmlSubject.next(cachedThread.html);
-          this.messagesSubject.next(cachedThread.messages || []);
-          
-          this.snapsSubject.next(this.qa.getSnapsCached(runId));
-          return;
+        const stored = sessionStorage.getItem(`synthetic_run_${runId}`);
+        if (stored) {
+          syntheticRun = JSON.parse(stored);
         }
-
-        const run = this.qa.getVariantsRunById(runId);
-        const item = run?.items?.find(it => it.no === no) || null;
+      } catch (e) {
+        console.error('Failed to load synthetic run:', e);
+      }
+      
+      if (syntheticRun && syntheticRun.runId === runId) {
+        const item = syntheticRun.items?.find((it: any) => it.no === no);
         if (item?.html) {
           this.htmlSubject.next(item.html);
-
           const intro: ChatTurn = {
             role: 'assistant',
             text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line.',
@@ -243,61 +245,99 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
           };
           const thread: ChatThread = { html: item.html, messages: [intro] };
           this.messagesSubject.next(thread.messages);
+          
+          // ✅ SAVE TO CACHE so it persists
           this.qa.saveChat(runId, no, thread);
           
-          this.snapsSubject.next(this.qa.getSnapsCached(runId));
+          this.snapsSubject.next([]);
+          this.loadingVariant = false;
+          if (this.loadingTimeout) {
+            clearTimeout(this.loadingTimeout);
+            this.loadingTimeout = undefined;
+          }
+          this.cdr.markForCheck();
+          this.positionChatAtBottom();
           return;
         }
+      }
 
-        try {
-          const status = await firstValueFrom(this.qa.getVariantsStatus(runId));
-          const fromApi = status.items.find(it => it.no === no) || null;
-          const html = fromApi?.html || '';
-          this.htmlSubject.next(html);
-
-          const intro: ChatTurn = {
-            role: 'assistant',
-            text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line.',
-            json: null,
-            ts: Date.now(),
-          };
-          const thread: ChatThread = { html, messages: [intro] };
-          this.messagesSubject.next(thread.messages);
-          this.qa.saveChat(runId, no, thread);
-        } catch (apiError) {
-          console.error('Failed to load from API:', apiError);
-          const intro: ChatTurn = {
-            role: 'assistant',
-            text: "I couldn't restore this variant from the server. If you go back and reopen it from the Variants list, I'll pick it up.",
-            json: null,
-            ts: Date.now(),
-          };
-          this.messagesSubject.next([intro]);
-        }
-
+      const cachedThread = this.qa.getChatCached(runId, no);
+      if (cachedThread?.html) {
+        this.htmlSubject.next(cachedThread.html);
+        this.messagesSubject.next(cachedThread.messages || []);
+        
         this.snapsSubject.next(this.qa.getSnapsCached(runId));
-      } catch (error) {
-        console.error('Error during component initialization:', error);
-        const errorMessage: ChatTurn = {
+        return;
+      }
+
+      const run = this.qa.getVariantsRunById(runId);
+      const item = run?.items?.find(it => it.no === no) || null;
+      if (item?.html) {
+        this.htmlSubject.next(item.html);
+
+        const intro: ChatTurn = {
           role: 'assistant',
-          text: 'An error occurred while loading this variant. Please try refreshing the page.',
+          text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line.',
           json: null,
           ts: Date.now(),
         };
-        this.messagesSubject.next([errorMessage]);
-        this.snapsSubject.next([]);
-      } finally {
-        this.loadingVariant = false;
-        if (this.loadingTimeout) {
-          clearTimeout(this.loadingTimeout);
-          this.loadingTimeout = undefined;
-        }
-        this.cdr.markForCheck();
+        const thread: ChatThread = { html: item.html, messages: [intro] };
+        this.messagesSubject.next(thread.messages);
+        this.qa.saveChat(runId, no, thread);
         
-        this.positionChatAtBottom();
+        this.snapsSubject.next(this.qa.getSnapsCached(runId));
+        return;
       }
-    });
-  }
+
+      try {
+        const status = await firstValueFrom(this.qa.getVariantsStatus(runId));
+        const fromApi = status.items.find(it => it.no === no) || null;
+        const html = fromApi?.html || '';
+        this.htmlSubject.next(html);
+
+        const intro: ChatTurn = {
+          role: 'assistant',
+          text: 'Hi! I can suggest ideas or make targeted changes. Ask about any line.',
+          json: null,
+          ts: Date.now(),
+        };
+        const thread: ChatThread = { html, messages: [intro] };
+        this.messagesSubject.next(thread.messages);
+        this.qa.saveChat(runId, no, thread);
+      } catch (apiError) {
+        console.error('Failed to load from API:', apiError);
+        const intro: ChatTurn = {
+          role: 'assistant',
+          text: "I couldn't restore this variant from the server. If you go back and reopen it from the Variants list, I'll pick it up.",
+          json: null,
+          ts: Date.now(),
+        };
+        this.messagesSubject.next([intro]);
+      }
+
+      this.snapsSubject.next(this.qa.getSnapsCached(runId));
+    } catch (error) {
+      console.error('Error during component initialization:', error);
+      const errorMessage: ChatTurn = {
+        role: 'assistant',
+        text: 'An error occurred while loading this variant. Please try refreshing the page.',
+        json: null,
+        ts: Date.now(),
+      };
+      this.messagesSubject.next([errorMessage]);
+      this.snapsSubject.next([]);
+    } finally {
+      this.loadingVariant = false;
+      if (this.loadingTimeout) {
+        clearTimeout(this.loadingTimeout);
+        this.loadingTimeout = undefined;
+      }
+      this.cdr.markForCheck();
+      
+      this.positionChatAtBottom();
+    }
+  });
+}
 
   // EDITOR METHODS - UPDATED TO PERSIST STATE
   openEditor(): void {

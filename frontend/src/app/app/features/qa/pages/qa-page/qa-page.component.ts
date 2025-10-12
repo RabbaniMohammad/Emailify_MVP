@@ -518,24 +518,17 @@ constructor() {
 
 
 onBypassVariants(): void {
-  console.log('🚀 onBypassVariants() called');
-  
   if (!this.templateId) {
-    console.warn('❌ Template ID not found');
     this.showWarning('Template ID not found');
     return;
   }
-  console.log('✅ Template ID:', this.templateId);
 
   const golden = this.goldenSubject.value;
-  console.log('📋 Golden template value:', golden);
   
   if (!golden?.html) {
-    console.warn('❌ No golden template HTML available');
     this.showWarning('No golden template available to bypass with');
     return;
   }
-  console.log('✅ Golden HTML length:', golden.html.length, 'characters');
 
   // Create a synthetic variant run with the golden template
   const syntheticRun: VariantsRun = {
@@ -549,72 +542,60 @@ onBypassVariants(): void {
       artifacts: { usedIdeas: [] }
     }]
   };
-  console.log('🔧 Created synthetic run:', {
-    runId: syntheticRun.runId,
-    target: syntheticRun.target,
-    itemsCount: syntheticRun.items.length
-  });
 
-  // Save the synthetic run
-  this.qa.saveVariantsRun(this.templateId, syntheticRun);
-  console.log('💾 Saved synthetic run to cache');
+  // ✅ Store in sessionStorage with special prefix
+  try {
+    sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
+  } catch (e) {
+    console.error('Failed to store synthetic run:', e);
+  }
 
   // Show success message
   this.showSuccess('Bypassing variants - using Golden Template directly...');
-  console.log('✅ Success message shown');
 
   // Navigate to use-variant page
-  const navigationPath = ['/qa', this.templateId, 'use', syntheticRun.runId, 1];
-  console.log('🧭 Navigating to:', navigationPath.join('/'));
-  this.router.navigate(navigationPath);
-  console.log('✅ Navigation initiated');
+  this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
 }
-
   // ============================================
   // SKIP TO CHAT METHOD
   // ============================================
-  onSkipToChat(): void {
-    if (!this.templateId) {
-      this.showWarning('Template ID not found');
-      return;
-    }
-
-    if (!this.templateHtml || this.templateLoading) {
-      this.showWarning('Template is still loading. Please wait...');
-      return;
-    }
-
-    // Create a minimal "golden" with just the original HTML
-    const golden: GoldenResult = {
-      html: this.templateHtml,
-      edits: []
-    };
-    
-    // Save to cache
-    this.qa.saveGoldenToCache(this.templateId, golden);
-
-    // Create a synthetic variant run with the original template
-    const syntheticRun: VariantsRun = {
-      runId: `skip-${this.templateId}-${Date.now()}`,
-      target: 1,
-      items: [{
-        no: 1,
-        html: this.templateHtml,
-        changes: [],
-        why: ['Original template - skipped generation'],
-        artifacts: { usedIdeas: [] }
-      }]
-    };
-
-    // Save the synthetic run
-    this.qa.saveVariantsRun(this.templateId, syntheticRun);
-
-    // Show success message
-    this.showSuccess('Skipping to chat interface with original template...');
-
-    // Navigate to use-variant page
-    this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
+onSkipToChat(): void {
+  if (!this.templateId) {
+    this.showWarning('Template ID not found');
+    return;
   }
+
+  if (!this.templateHtml || this.templateLoading) {
+    this.showWarning('Template is still loading. Please wait...');
+    return;
+  }
+
+  // Create a synthetic variant run with the original template
+  const syntheticRun: VariantsRun = {
+    runId: `skip-${this.templateId}-${Date.now()}`,
+    target: 1,
+    items: [{
+      no: 1,
+      html: this.templateHtml,
+      changes: [],
+      why: ['Original template - skipped generation'],
+      artifacts: { usedIdeas: [] }
+    }]
+  };
+
+  // ✅ Store in sessionStorage with special prefix
+  try {
+    sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
+  } catch (e) {
+    console.error('Failed to store synthetic run:', e);
+  }
+
+  // Show success message
+  this.showSuccess('Skipping to chat interface with original template...');
+
+  // Navigate to use-variant page
+  this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
+}
 
   // ============================================
   // GENERATE GOLDEN TEMPLATE
@@ -1171,45 +1152,49 @@ onGenerateGolden(id: string) {
     });
   }
 
-  private loadOriginalTemplate(templateId: string) {
-    console.log('Loading template from cache/service:', templateId);
-    this.templateLoading = true;
-    this.templateHtml = '';
-    
-    const cachedHtml = this.previewCache.get(templateId) || this.previewCache.getPersisted(templateId);
-    
-    if (cachedHtml) {
-      console.log('Found template in cache');
-      this.templateHtml = cachedHtml;
-      this.templateLoading = false;
-      return;
-    }
-    
-    const currentState = this.templatesService.snapshot;
-    const template = currentState.items.find(item => item.id === templateId);
-    
-    if (template?.content) {
-      console.log('Found template in service');
-      this.templateHtml = template.content;
-      this.templateLoading = false;
-      return;
-    }
-    
-    console.log('Template not found in cache or service, fetching from API');
-    this.http.get(`/api/templates/${templateId}/raw`, { responseType: 'text' })
-      .subscribe({
-        next: (html) => {
-          console.log('Template loaded from API');
-          this.templateHtml = html;
-          this.templateLoading = false;
-        },
-        error: (error) => {
-          console.error('Failed to load template:', error);
-          this.templateHtml = 'Failed to load template';
-          this.templateLoading = false;
-        }
-      });
+private loadOriginalTemplate(templateId: string) {
+  console.log('Loading template from cache/service:', templateId);
+  this.templateLoading = true;
+  this.templateHtml = '';
+  
+  const cachedHtml = this.previewCache.get(templateId) || this.previewCache.getPersisted(templateId);
+  
+  if (cachedHtml) {
+    console.log('Found template in cache');
+    this.templateHtml = cachedHtml;
+    this.templateLoading = false;
+    this.cdr.markForCheck(); // ✅ ADD THIS
+    return;
   }
+  
+  const currentState = this.templatesService.snapshot;
+  const template = currentState.items.find(item => item.id === templateId);
+  
+  if (template?.content) {
+    console.log('Found template in service');
+    this.templateHtml = template.content;
+    this.templateLoading = false;
+    this.cdr.markForCheck(); // ✅ ADD THIS
+    return;
+  }
+  
+  console.log('Template not found in cache or service, fetching from API');
+  this.http.get(`/api/templates/${templateId}/raw`, { responseType: 'text' })
+    .subscribe({
+      next: (html) => {
+        console.log('Template loaded from API');
+        this.templateHtml = html;
+        this.templateLoading = false;
+        this.cdr.markForCheck(); // ✅ ADD THIS
+      },
+      error: (error) => {
+        console.error('Failed to load template:', error);
+        this.templateHtml = 'Failed to load template';
+        this.templateLoading = false;
+        this.cdr.markForCheck(); // ✅ ADD THIS
+      }
+    });
+}
 
   onUseVariant(templateId: string, runId: string, no: number) {
     this.router.navigate(['/qa', templateId, 'use', runId, no]);
