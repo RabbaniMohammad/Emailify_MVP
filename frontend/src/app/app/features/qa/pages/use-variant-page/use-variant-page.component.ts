@@ -117,6 +117,10 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   
   private finalizingSubject = new BehaviorSubject<boolean>(false);
   readonly finalizing$ = this.finalizingSubject.asObservable();
+
+  // Template grammar check state
+  private grammarCheckLoadingSubject = new BehaviorSubject<boolean>(false);
+  readonly grammarCheckLoading$ = this.grammarCheckLoadingSubject.asObservable();
   
   private finalizeClickedInSession = false;
   
@@ -180,6 +184,18 @@ readonly linkChecks$ = combineLatest([this.validLinks$, this.htmlLinks$]).pipe(
     return checks;
   })
 );
+
+private grammarCheckResultSubject = new BehaviorSubject<{
+  hasErrors: boolean;
+  mistakes: Array<{ word: string; suggestion: string; context: string }>;
+  count: number;
+  message: string;
+} | null>(null);
+readonly grammarCheckResult$ = this.grammarCheckResultSubject.asObservable();
+
+get isGrammarChecking(): boolean {
+  return this.grammarCheckLoadingSubject.value;
+}
 
 ngOnInit() {
   window.scrollTo(0, 0);
@@ -465,17 +481,96 @@ canDeactivate(): boolean {
 openTemplateModal(): void {
   if (this.isFinalizing) return;
   
+  // Reset grammar check state when opening modal
+  this.grammarCheckLoadingSubject.next(false);
+  this.grammarCheckResultSubject.next(null);
+  
   this.templateModalOpenSubject.next(true);
   this.saveTemplateModalState(true);
   document.body.style.overflow = 'hidden';
+  
+  // Auto-trigger grammar check after modal opens
+  setTimeout(() => {
+    this.checkTemplateGrammar();
+  }, 300); // Small delay for smooth UX
+  
   this.cdr.markForCheck();
 }
 
 closeTemplateModal(): void {
+  // Clean up state
+  this.grammarCheckLoadingSubject.next(false);
+  this.grammarCheckResultSubject.next(null);
+  
   this.templateModalOpenSubject.next(false);
   this.saveTemplateModalState(false);
   document.body.style.overflow = 'auto';
   this.cdr.markForCheck();
+}
+
+// ============================================
+// GRAMMAR CHECK
+// ============================================
+
+async checkTemplateGrammar(): Promise<void> {
+  console.log('=== 🚀 Starting Grammar Check ===');
+  
+  const html = this.htmlSubject.value;
+  
+  if (!html || !html.trim()) {
+    console.warn('No HTML to check');
+    this.grammarCheckResultSubject.next({
+      hasErrors: false,
+      mistakes: [],
+      count: 0,
+      message: 'No content to check'
+    });
+    return;
+  }
+
+  // Set loading state
+  this.grammarCheckLoadingSubject.next(true);
+  this.cdr.markForCheck();
+
+  try {
+    console.log('📤 Sending HTML to backend...');
+    console.log('HTML length:', html.length);
+
+    const response = await firstValueFrom(
+      this.qa.checkTemplateGrammar(html)
+    );
+
+    console.log('📥 Received response:', response);
+
+    this.grammarCheckResultSubject.next({
+      hasErrors: response.hasErrors || false,
+      mistakes: response.mistakes || [],
+      count: response.count || 0,
+      message: response.message || 'Check complete'
+    });
+
+    console.log('✅ Grammar check complete');
+    console.log('Errors found:', response.hasErrors);
+    console.log('Mistake count:', response.count);
+
+  } catch (error) {
+    console.error('❌ Grammar check failed:', error);
+    
+    this.grammarCheckResultSubject.next({
+      hasErrors: false,
+      mistakes: [],
+      count: 0,
+      message: 'Check failed. Please try again.'
+    });
+  } finally {
+    this.grammarCheckLoadingSubject.next(false);
+    this.cdr.markForCheck();
+  }
+}
+
+// Manual retry method
+retryGrammarCheck(): void {
+  this.checkTemplateGrammar();
 }
 
 private saveTemplateModalState(isOpen: boolean): void {

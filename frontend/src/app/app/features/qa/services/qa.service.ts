@@ -318,6 +318,21 @@ clearChatForRun(runId: string, no: number): void {
   }
 }
 
+checkTemplateGrammar(html: string): Observable<{
+  hasErrors: boolean;
+  mistakes: Array<{ word: string; suggestion: string; context: string }>;
+  count: number;
+  message: string;
+}> {
+  return this.http.post<{
+    hasErrors: boolean;
+    mistakes: Array<{ word: string; suggestion: string; context: string }>;
+    count: number;
+    message: string;
+  }>('/api/qa/template/grammar-check', { html }); // ✅ Fixed: removed ${this.qaUrl}
+}
+
+
 /**
  * Clear all snapshots for a run
  */

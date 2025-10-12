@@ -997,6 +997,106 @@ function chatSystemPrompt(): string {
   ].join('\n');
 }
 
+/* ------------------------------------------------------------------ */
+/*                    Template Grammar Check (Spelling Only)          */
+/* ------------------------------------------------------------------ */
+
+router.post('/template/grammar-check', async (req: Request, res: Response) => {
+  try {
+    const html: string = String(req.body?.html || '').trim();
+    
+    if (!html) {
+      return res.status(400).json({ 
+        code: 'GRAMMAR_CHECK_BAD_REQUEST', 
+        message: 'HTML is required' 
+      });
+    }
+
+    // Extract visible text from HTML
+    const $ = cheerio.load(html);
+    $('script, style, noscript').remove();
+    const visibleText = $('body').text().replace(/\s+/g, ' ').trim();
+
+    if (!visibleText) {
+      return res.json({ 
+        hasErrors: false, 
+        mistakes: [],
+        message: 'No text content found to check'
+      });
+    }
+
+    // ChatGPT system prompt for SPELLING ONLY
+    const systemPrompt = [
+      'You are a spelling checker. Check ONLY for spelling mistakes.',
+      'DO NOT check grammar, punctuation, or style.',
+      'DO NOT change numbers, prices, brand names, URLs, or merge tags (*|FNAME|*).',
+      'Return ONLY valid JSON with this exact structure:',
+      '{',
+      '  "mistakes": [',
+      '    {',
+      '      "word": "<misspelled word>",',
+      '      "suggestion": "<correct spelling>",',
+      '      "context": "<sentence where it appears>"',
+      '    }',
+      '  ]',
+      '}',
+      '',
+      'Rules:',
+      '- Only flag clear spelling errors',
+      '- Ignore proper nouns, brand names, and technical terms',
+      '- Max 20 mistakes',
+    ].join('\n');
+
+    const completion = await openai.chat.completions.create({
+      model: OPENAI_MODEL,
+      temperature: 0,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Check spelling in this text:\n\n${visibleText}` }
+      ],
+      response_format: { type: 'json_object' as const }
+    });
+
+    let mistakes: Array<{ word: string; suggestion: string; context: string }> = [];
+    
+    try {
+      const raw = completion.choices[0]?.message?.content || '{"mistakes":[]}';
+      const parsed: unknown = JSON.parse(raw);
+      
+      if (parsed && typeof parsed === 'object') {
+        const m = (parsed as any).mistakes;
+        if (Array.isArray(m)) {
+          mistakes = m.map((item: any) => ({
+            word: String(item?.word || ''),
+            suggestion: String(item?.suggestion || ''),
+            context: String(item?.context || '')
+          })).filter(item => item.word && item.suggestion);
+        }
+      }
+    } catch (_e: unknown) {
+      // Ignore JSON parse errors
+    }
+
+    const hasErrors = mistakes.length > 0;
+
+    res.json({
+      hasErrors,
+      mistakes,
+      count: mistakes.length,
+      message: hasErrors 
+        ? `Found ${mistakes.length} spelling mistake${mistakes.length > 1 ? 's' : ''}`
+        : 'No spelling mistakes found'
+    });
+
+  } catch (err: unknown) {
+    res.status(500).json({ 
+      code: 'GRAMMAR_CHECK_ERROR', 
+      message: errMsg(err) 
+    });
+  }
+});
+
+
 router.post('/variants/:runId/chat/message', async (req: Request, res: Response) => {
   try {
     const runId: string = String(req.params.runId);
