@@ -333,6 +333,55 @@ checkTemplateGrammar(html: string): Observable<{
 }
 
 
+// ============================================
+// GRAMMAR CHECK PERSISTENCE
+// ============================================
+
+saveGrammarCheck(runId: string, no: number, result: {
+  hasErrors: boolean;
+  mistakes: Array<{ word: string; suggestion: string; context: string }>;
+  count: number;
+  message: string;
+}): void {
+  try {
+    const key = `grammar_${runId}_${no}`;
+    localStorage.setItem(key, JSON.stringify(result));
+    console.log('✅ Grammar check saved to localStorage');
+  } catch (error) {
+    console.warn('Failed to save grammar check:', error);
+  }
+}
+
+getGrammarCheckCached(runId: string, no: number): {
+  hasErrors: boolean;
+  mistakes: Array<{ word: string; suggestion: string; context: string }>;
+  count: number;
+  message: string;
+} | null {
+  try {
+    const key = `grammar_${runId}_${no}`;
+    const stored = localStorage.getItem(key);
+    if (!stored) return null;
+    
+    const result = JSON.parse(stored);
+    console.log('✅ Grammar check restored from localStorage');
+    return result;
+  } catch (error) {
+    console.warn('Failed to restore grammar check:', error);
+    return null;
+  }
+}
+
+clearGrammarCheck(runId: string, no: number): void {
+  try {
+    const key = `grammar_${runId}_${no}`;
+    localStorage.removeItem(key);
+    console.log('🗑️ Grammar check cleared from localStorage');
+  } catch (error) {
+    console.warn('Failed to clear grammar check:', error);
+  }
+}
+
 /**
  * Clear all snapshots for a run
  */

@@ -189,17 +189,17 @@
   </h4>
   
   <div class="submit-template-wrapper">
-    <button
-      mat-raised-button
-      class="submit-template-btn"
-      (click)="openTemplateModal()"
-      [disabled]="finalizing$ | async">
-      <!-- <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-      </svg> -->
-      <span class="btn-text-full">Submit Template</span>
-      <span class="btn-text-short">Submit</span>
-    </button>
+<button
+  mat-raised-button
+  class="submit-template-btn"
+  (click)="openTemplateModal()" 
+  [disabled]="(finalizing$ | async) || !canSubmitTemplate()"
+  [class.needs-finalize]="!canSubmitTemplate()"
+  [matTooltip]="!canSubmitTemplate() ? 'Finalize template first' : ''"
+  matTooltipPosition="left">
+  <span class="btn-text-full">Submit Template</span>
+  <span class="btn-text-short">Submit</span>
+</button>
   </div>
 </div>
 
@@ -221,13 +221,24 @@
           <!-- Existing snaps list -->
           <div class="snaps-list" *ngIf="(snaps$ | async) as snaps">
             <div *ngIf="!snaps.length && !(finalizing$ | async)" class="empty-state">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-                <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-              </svg>
-              <p>No screenshots yet</p>
-              <small>Click "Finalize" or paste a URL above</small>
-            </div>
+  <ng-container *ngIf="hasValidLinks(); else noLinksTemplate">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+      <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+    </svg>
+    <p>No screenshots yet</p>
+    <small>{{ getValidLinkCount() }} link(s) detected - Click "Finalize" to capture</small>
+  </ng-container>
+  
+  <ng-template #noLinksTemplate>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+      <line x1="3" y1="3" x2="21" y2="21" stroke-width="2"/>
+    </svg>
+    <p>No links to capture</p>
+    <small>This template contains no valid HTTP/HTTPS links</small>
+  </ng-template>
+</div>
 
             <div class="snap-item" *ngFor="let s of snaps; trackBy: trackBySnap">
               <div class="snap-preview" (click)="openImageModal(s)" style="cursor: pointer;">
@@ -604,19 +615,133 @@
         </div>
 
         <!-- ✅ RIGHT SECTION: Placeholder -->
-        <div class="modal-right-section">
-          <div class="section-card placeholder-card">
-            <div class="placeholder-content">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <path d="M3 9h18M9 21V9"/>
-              </svg>
-              <p>Additional features coming soon...</p>
-            </div>
-          </div>
-        </div>
+        <!-- âœ… RIGHT SECTION: Campaign Submit Trigger -->
+<div class="modal-right-section">
+  <div class="section-card campaign-trigger-card">
+    <div class="card-header">
+      <div class="header-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h3>Ready to Submit?</h3>
+        <p>Send your template to Mailchimp</p>
+      </div>
+    </div>
+
+    <div class="campaign-trigger-content">
+<div class="trigger-info">
+  <!-- ✅ Grammar Check Status -->
+  <div class="info-item" 
+       [class.completed]="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && !(grammarCheckResult$ | async)!.hasErrors"
+       [class.pending]="(grammarCheckLoading$ | async) || !(grammarCheckResult$ | async)"
+       [class.error]="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors">
+    <!-- Success Icon -->
+    <svg *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === false" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <!-- Warning Icon -->
+    <svg *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === true" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+    <!-- Loading Icon -->
+    <svg *ngIf="(grammarCheckLoading$ | async) || !(grammarCheckResult$ | async)" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10" opacity="0.3"/>
+    </svg>
+    <span>
+      <ng-container *ngIf="grammarCheckLoading$ | async">Checking grammar...</ng-container>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === false">Grammar checked</ng-container>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === true">
+        Grammar issues ({{ (grammarCheckResult$ | async)!.count }})
+      </ng-container>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && !(grammarCheckResult$ | async)">Grammar check pending</ng-container>
+    </span>
+  </div>
+
+  <!-- ✅ Template Ready Status -->
+  <div class="info-item completed">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span>Template ready</span>
+  </div>
+
+  <!-- ✅ Link Validation Status -->
+  <div class="info-item" 
+       [class.completed]="hasValidLinks() && (snaps$ | async) && (snaps$ | async)!.length > 0"
+       [class.pending]="hasValidLinks() && (!(snaps$ | async) || (snaps$ | async)!.length === 0)"
+       [class.not-applicable]="!hasValidLinks()">
+    <!-- Success Icon -->
+    <svg *ngIf="hasValidLinks() && (snaps$ | async) && (snaps$ | async)!.length > 0" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <!-- Pending Icon -->
+    <svg *ngIf="hasValidLinks() && (!(snaps$ | async) || (snaps$ | async)!.length === 0)" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10" opacity="0.3"/>
+    </svg>
+    <!-- Not Applicable Icon -->
+    <svg *ngIf="!hasValidLinks()" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+    </svg>
+    <span>
+      <ng-container *ngIf="!hasValidLinks()">
+        No links to validate
+      </ng-container>
+      <ng-container *ngIf="hasValidLinks() && (snaps$ | async) && (snaps$ | async)!.length > 0">
+        Links captured ({{ (snaps$ | async)!.length }})
+      </ng-container>
+      <ng-container *ngIf="hasValidLinks() && (!(snaps$ | async) || (snaps$ | async)!.length === 0)">
+        Links not validated ({{ getValidLinkCount() }} detected)
+      </ng-container>
+    </span>
+  </div>
+</div>
+      <button 
+        mat-raised-button
+        class="proceed-to-campaign-btn"
+        (click)="proceedToCampaignSubmit()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+        </svg>
+        <span>Proceed to Campaign Setup</span>
+      </button>
+    </div>
+  </div>
+</div>
 
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Campaign Submit Modal -->
+<div class="campaign-modal" *ngIf="campaignModalOpen$ | async" @fadeInOut>
+  <div class="campaign-modal-backdrop" (click)="closeCampaignModal()"></div>
+  <div class="campaign-modal-content">
+    <button class="campaign-modal-close" (click)="closeCampaignModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+    
+    <div class="campaign-modal-header">
+      <h2>Submit Campaign</h2>
+      <p>Configure and schedule your email campaign</p>
+    </div>
+    
+    <div class="campaign-modal-body">
+      <app-campaign-submit
+        [templateHtml]="(html$ | async) || ''"
+        (closeRequested)="closeCampaignModal()">
+      </app-campaign-submit>
     </div>
   </div>
 </div>

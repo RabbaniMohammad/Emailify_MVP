@@ -24,6 +24,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ViewChild, ElementRef } from '@angular/core';
 
+import { CampaignSubmitComponent } from '../../components/campaign-submit/campaign-submit.component';
+
 // import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, AfterViewInit, OnInit, OnDestroy, HostListener  } from '@angular/core';
 // import { CommonModule } from '@angular/common';
 // import { ActivatedRoute, Router  } from '@angular/router';
@@ -54,6 +56,7 @@ type LinkCheck = { url: string; inFile: boolean; inHtml: boolean };
     MatFormFieldModule,
     MatTooltipModule,
     FormsModule, 
+    CampaignSubmitComponent
   ],
   templateUrl: './use-variant-page.component.html',
   styleUrls: ['./use-variant-page.component.scss'],
@@ -107,6 +110,15 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
 
   get isTemplateModalOpen(): boolean { 
     return this.templateModalOpenSubject.value; 
+  }
+
+  // Add these AFTER the existing templateModalOpenSubject
+  private campaignModalOpenSubject!: BehaviorSubject<boolean>;
+  readonly campaignModalOpen$!: Observable<boolean>;
+  private campaignModalKey = '';
+
+  get isCampaignModalOpen(): boolean { 
+    return this.campaignModalOpenSubject?.value || false; 
   }
   
 
@@ -232,6 +244,11 @@ constructor() {
     const wasModalOpen = this.restoreTemplateModalState();
     this.templateModalOpenSubject = new BehaviorSubject<boolean>(wasModalOpen);
     
+    // ✅ INITIALIZE CAMPAIGN MODAL STATE
+    this.campaignModalKey = `campaign_modal_${runId}_${no}`;
+    const wasCampaignModalOpen = this.restoreCampaignModalState();
+    this.campaignModalOpenSubject = new BehaviorSubject<boolean>(wasCampaignModalOpen);
+    
     this.editorStateKey = `editor_state_${runId}_${no}`;
     this.draftMessageKey = `draft_message_${runId}_${no}`;
     
@@ -244,11 +261,13 @@ constructor() {
     }
   } else {
     this.templateModalOpenSubject = new BehaviorSubject<boolean>(false);
+    this.campaignModalOpenSubject = new BehaviorSubject<boolean>(false);
     this.editorOpenSubject = new BehaviorSubject<boolean>(false);
   }
 
   // ✅ CREATE OBSERVABLES
   this.templateModalOpen$ = this.templateModalOpenSubject.asObservable();
+  this.campaignModalOpen$ = this.campaignModalOpenSubject.asObservable();
   this.editorOpen$ = this.editorOpenSubject.asObservable();
 
   // Timeout safety
@@ -316,52 +335,68 @@ constructor() {
       }
 
       // ✅ PRIORITY 2: Check localStorage cache (persists across refresh)
-      const cachedThread = this.qa.getChatCached(runId, no);
-      if (cachedThread?.html) {
-        console.log('✅ Restored from localStorage cache');
-        this.htmlSubject.next(cachedThread.html);
-        this.messagesSubject.next(cachedThread.messages || []);
-        this.snapsSubject.next(this.qa.getSnapsCached(runId));
-        
-        this.loadingVariant = false;
-        if (this.loadingTimeout) {
-          clearTimeout(this.loadingTimeout);
-          this.loadingTimeout = undefined;
-        }
-        this.cdr.markForCheck();
-        this.positionChatAtBottom();
-        return;
-      }
+// ✅ PRIORITY 2: Check localStorage cache (persists across refresh)
+// ✅ PRIORITY 2: Check localStorage cache (persists across refresh)
+const cachedThread = this.qa.getChatCached(runId, no);
+if (cachedThread?.html) {
+  console.log('✅ Restored from localStorage cache');
+  this.htmlSubject.next(cachedThread.html);
+  this.messagesSubject.next(cachedThread.messages || []);
+  this.snapsSubject.next(this.qa.getSnapsCached(runId));
+  
+  // ✅ RESTORE GRAMMAR CHECK RESULTS
+  const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
+  if (cachedGrammar) {
+    console.log('✅ Restored grammar check from localStorage');
+    this.grammarCheckResultSubject.next(cachedGrammar);
+  }
+  
+  this.loadingVariant = false;
+  if (this.loadingTimeout) {
+    clearTimeout(this.loadingTimeout);
+    this.loadingTimeout = undefined;
+  }
+  this.cdr.markForCheck();
+  this.positionChatAtBottom();
+  return;
+}
 
       // ✅ PRIORITY 3: Check memory cache (variants run)
-      const run = this.qa.getVariantsRunById(runId);
-      const item = run?.items?.find(it => it.no === no) || null;
-      if (item?.html) {
-        console.log('✅ Using variants run from cache');
-        this.htmlSubject.next(item.html);
+const run = this.qa.getVariantsRunById(runId);
+const item = run?.items?.find(it => it.no === no) || null;
+if (item?.html) {
+  console.log('✅ Using variants run from cache');
+  this.htmlSubject.next(item.html);
 
-        const intro: ChatTurn = {
-          role: 'assistant',
-          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n•Please use editor is replacement won't happen\n\nWhat would you like to improve?",
-          json: null,
-          ts: Date.now(),
-        };
-        const thread: ChatThread = { html: item.html, messages: [intro] };
-        this.messagesSubject.next(thread.messages);
-        
-        // ✅ SAVE TO localStorage
-        this.qa.saveChat(runId, no, thread);
-        
-        this.snapsSubject.next(this.qa.getSnapsCached(runId));
-        this.loadingVariant = false;
-        if (this.loadingTimeout) {
-          clearTimeout(this.loadingTimeout);
-          this.loadingTimeout = undefined;
-        }
-        this.cdr.markForCheck();
-        this.positionChatAtBottom();
-        return;
-      }
+  const intro: ChatTurn = {
+    role: 'assistant',
+    text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n•Please use editor is replacement won't happen\n\nWhat would you like to improve?",
+    json: null,
+    ts: Date.now(),
+  };
+  const thread: ChatThread = { html: item.html, messages: [intro] };
+  this.messagesSubject.next(thread.messages);
+  
+  // ✅ SAVE TO localStorage
+  this.qa.saveChat(runId, no, thread);
+  
+  this.snapsSubject.next(this.qa.getSnapsCached(runId));
+  
+  // ✅ ADD THESE 4 LINES HERE (BEFORE loadingVariant = false)
+  const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
+  if (cachedGrammar) {
+    this.grammarCheckResultSubject.next(cachedGrammar);
+  }
+  
+  this.loadingVariant = false;
+  if (this.loadingTimeout) {
+    clearTimeout(this.loadingTimeout);
+    this.loadingTimeout = undefined;
+  }
+  this.cdr.markForCheck();
+  this.positionChatAtBottom();
+  return;
+}
 
       // ✅ PRIORITY 4: Fallback to API
       try {
@@ -416,7 +451,12 @@ constructor() {
       this.positionChatAtBottom();
     }
   });
-   if (this.templateModalOpenSubject.value) {
+  
+  // ✅ Handle modal overflow states
+  if (this.templateModalOpenSubject.value) {
+    document.body.style.overflow = 'hidden';
+  }
+  if (this.campaignModalOpenSubject.value) {
     document.body.style.overflow = 'hidden';
   }
 }
@@ -481,23 +521,50 @@ canDeactivate(): boolean {
 openTemplateModal(): void {
   if (this.isFinalizing) return;
   
-  // Reset grammar check state when opening modal
-  this.grammarCheckLoadingSubject.next(false);
-  this.grammarCheckResultSubject.next(null);
+  // ✅ CHECK: Block if has links but not finalized
+  if (!this.canSubmitTemplate()) {
+    const message = this.getSubmitBlockMessage();
+    alert(message);
+    
+    // Scroll to finalize section
+    const el = document.getElementById('finalize');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    return;
+  }
+  
+  // ✅ DON'T RESET IF ALREADY HAS RESULTS
+  const hasExistingResults = this.grammarCheckResultSubject.value !== null;
+  
+  if (!hasExistingResults) {
+    this.grammarCheckLoadingSubject.next(false);
+    this.grammarCheckResultSubject.next(null);
+  }
   
   this.templateModalOpenSubject.next(true);
   this.saveTemplateModalState(true);
   document.body.style.overflow = 'hidden';
   
-  // Auto-trigger grammar check after modal opens
-  setTimeout(() => {
-    this.checkTemplateGrammar();
-  }, 300); // Small delay for smooth UX
+  // ✅ ONLY AUTO-TRIGGER IF NO EXISTING RESULTS
+  if (!hasExistingResults) {
+    setTimeout(() => {
+      this.checkTemplateGrammar();
+    }, 300);
+  }
   
   this.cdr.markForCheck();
 }
 
 closeTemplateModal(): void {
+  // ✅ CLEAR GRAMMAR CHECK STATE AND STORAGE
+  const runId = this.ar.snapshot.paramMap.get('runId');
+  const no = this.ar.snapshot.paramMap.get('no');
+  
+  if (runId && no) {
+    this.qa.clearGrammarCheck(runId, Number(no));
+  }
+  
   // Clean up state
   this.grammarCheckLoadingSubject.next(false);
   this.grammarCheckResultSubject.next(null);
@@ -507,6 +574,133 @@ closeTemplateModal(): void {
   document.body.style.overflow = 'auto';
   this.cdr.markForCheck();
 }
+
+proceedToCampaignSubmit(): void {
+  // Close grammar check modal
+  this.closeTemplateModal();
+  
+  // Small delay for smooth transition
+  setTimeout(() => {
+    // Open campaign modal
+    this.openCampaignModal();
+  }, 300);
+}
+
+/**
+ * Check if template has any valid links to capture
+ */
+hasValidLinks(): boolean {
+  const html = this.htmlSubject.value;
+  if (!html) return false;
+  
+  const links = this.extractAllLinks(html);
+  
+  // Filter out invalid/placeholder links
+  const validLinks = links.filter(url => {
+    const trimmed = url.trim().toLowerCase();
+    // Exclude empty, hash, javascript:, mailto:, tel:, and single-char links
+    return trimmed && 
+           trimmed !== '#' && 
+           trimmed !== 'javascript:void(0)' &&
+           !trimmed.startsWith('mailto:') &&
+           !trimmed.startsWith('tel:') &&
+           trimmed.length > 1;
+  });
+  
+  return validLinks.length > 0;
+}
+
+
+/**
+ * Check if template can be submitted
+ * Returns true if:
+ * - Template has no valid links (nothing to finalize)
+ * - OR template has been finalized (has snapshots)
+ */
+canSubmitTemplate(): boolean {
+  const snaps = this.snapsSubject.value;
+  
+  // If no valid links exist, allow submission
+  if (!this.hasValidLinks()) {
+    return true;
+  }
+  
+  // If has valid links, must be finalized (has snaps)
+  return snaps.length > 0;
+}
+
+/**
+ * Get message for why template can't be submitted
+ */
+getSubmitBlockMessage(): string {
+  if (!this.hasValidLinks()) {
+    return '';
+  }
+  
+  const linkCount = this.getValidLinkCount();
+  return `Please finalize the template first.\n\n${linkCount} link${linkCount > 1 ? 's' : ''} detected but not yet captured.`;
+}
+
+/**
+ * Get count of valid extractable links
+ */
+getValidLinkCount(): number {
+  const html = this.htmlSubject.value;
+  if (!html) return 0;
+  
+  const links = this.extractAllLinks(html);
+  return links.filter(url => {
+    const trimmed = url.trim().toLowerCase();
+    return trimmed && 
+           trimmed !== '#' && 
+           trimmed !== 'javascript:void(0)' &&
+           !trimmed.startsWith('mailto:') &&
+           !trimmed.startsWith('tel:') &&
+           trimmed.length > 1;
+  }).length;
+}
+// ============================================
+// CAMPAIGN MODAL METHODS
+// ============================================
+
+openCampaignModal(): void {
+  if (this.isFinalizing) return;
+  
+  this.campaignModalOpenSubject.next(true);
+  this.saveCampaignModalState(true);
+  document.body.style.overflow = 'hidden';
+  this.cdr.markForCheck();
+}
+
+closeCampaignModal(): void {
+  this.campaignModalOpenSubject.next(false);
+  this.saveCampaignModalState(false);
+  document.body.style.overflow = 'auto';
+  this.cdr.markForCheck();
+}
+
+private saveCampaignModalState(isOpen: boolean): void {
+  try {
+    if (this.campaignModalKey) {
+      sessionStorage.setItem(this.campaignModalKey, isOpen.toString());
+    }
+  } catch (error) {
+    console.warn('Failed to save campaign modal state:', error);
+  }
+}
+
+private restoreCampaignModalState(): boolean {
+  try {
+    if (this.campaignModalKey) {
+      const saved = sessionStorage.getItem(this.campaignModalKey);
+      return saved === 'true';
+    }
+  } catch (error) {
+    console.warn('Failed to restore campaign modal state:', error);
+  }
+  return false;
+}
+
 
 // ============================================
 // GRAMMAR CHECK
@@ -542,14 +736,23 @@ async checkTemplateGrammar(): Promise<void> {
 
     console.log('📥 Received response:', response);
 
-    this.grammarCheckResultSubject.next({
+    // ✅ CREATE RESULT OBJECT
+    const result = {
       hasErrors: response.hasErrors || false,
       mistakes: response.mistakes || [],
       count: response.count || 0,
       message: response.message || 'Check complete'
-    });
+    };
 
-    console.log('✅ Grammar check complete');
+    // ✅ UPDATE STATE
+    this.grammarCheckResultSubject.next(result);
+
+    // ✅ SAVE TO LOCALSTORAGE
+    const runId = this.ar.snapshot.paramMap.get('runId')!;
+    const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    this.qa.saveGrammarCheck(runId, no, result);
+
+    console.log('✅ Grammar check complete and saved');
     console.log('Errors found:', response.hasErrors);
     console.log('Mistake count:', response.count);
 
@@ -567,7 +770,6 @@ async checkTemplateGrammar(): Promise<void> {
     this.cdr.markForCheck();
   }
 }
-
 // Manual retry method
 retryGrammarCheck(): void {
   this.checkTemplateGrammar();
@@ -1250,14 +1452,25 @@ async onValidLinksUpload(e: Event) {
    * - Regular anchor hrefs
    * - Button URLs from various attributes and onclick handlers
    */
-  private extractAllLinks(html: string): string[] {
-    const anchorLinks = this.extractHttpLinks(html);
-    const buttonLinks = this.extractButtonUrls(html);
-    
-    // Combine and dedupe
-    const allLinks = [...anchorLinks, ...buttonLinks];
-    return this.dedupe(allLinks);
-  }
+private extractAllLinks(html: string): string[] {
+  const anchorLinks = this.extractHttpLinks(html);
+  const buttonLinks = this.extractButtonUrls(html);
+  
+  // Combine and dedupe
+  const allLinks = [...anchorLinks, ...buttonLinks];
+  const deduped = this.dedupe(allLinks);
+  
+  // ✅ FILTER OUT INVALID/PLACEHOLDER LINKS
+  return deduped.filter(url => {
+    const trimmed = url.trim().toLowerCase();
+    return trimmed && 
+           trimmed !== '#' && 
+           trimmed !== 'javascript:void(0)' &&
+           !trimmed.startsWith('mailto:') &&
+           !trimmed.startsWith('tel:') &&
+           trimmed.length > 1;
+  });
+}
 
   /**
    * Extract HTTP(S) links from anchor tags

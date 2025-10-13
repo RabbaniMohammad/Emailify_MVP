@@ -10,6 +10,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import express, { Request, Response, NextFunction } from 'express';
 import logger from 'jet-logger';
+import campaignRoutes from './routes/campaign.routes';
 
 import connectDB from '@src/config/database';
 import passport from '@src/config/passport';
@@ -154,6 +155,8 @@ app.get('/api/ping', async (_req, res) => {
     res.status(status).json({ ok: false, message: e?.message || e?.response?.text || 'Ping failed' });
   }
 });
+
+app.use('/api', campaignRoutes);
 
 /******************************************************************************
                              Start HTTP server
