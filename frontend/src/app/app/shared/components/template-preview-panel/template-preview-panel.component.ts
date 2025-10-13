@@ -119,23 +119,51 @@ export class TemplatePreviewPanelComponent implements OnChanges {
     this.runTests.emit();
   }
 
-  toggleFullscreen(): void {
-    const element = document.querySelector('.preview-root') as HTMLElement;
-    if (!element) return;
-
-    if (!this.isFullscreen) {
-      if (element.requestFullscreen) {
-        element.requestFullscreen();
-      }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
-    }
-    this.isFullscreen = !this.isFullscreen;
-    this.cdr.markForCheck();
+toggleFullscreen(): void {
+  console.log('🖥️ [Preview Panel] Fullscreen toggle');
+  const element = document.querySelector('.preview-root') as HTMLElement;
+  
+  if (!element) {
+    console.error('❌ [Preview Panel] .preview-root not found');
+    return;
   }
 
+  if (!this.isFullscreen) {
+    console.log('➡️ [Preview Panel] Entering fullscreen...');
+    if (element.requestFullscreen) {
+      element.requestFullscreen().then(() => {
+        console.log('✅ [Preview Panel] Fullscreen entered');
+        this.isFullscreen = true;
+        this.cdr.markForCheck();
+        
+        // 🔧 FIX: Move overlay container inside fullscreen element
+        setTimeout(() => {
+          const overlayContainer = document.querySelector('.cdk-overlay-container');
+          if (overlayContainer && document.fullscreenElement) {
+            console.log('🔧 [Preview Panel] Moving overlay into fullscreen');
+            document.fullscreenElement.appendChild(overlayContainer);
+          }
+        }, 100);
+      });
+    }
+  } else {
+    console.log('⬅️ [Preview Panel] Exiting fullscreen...');
+    
+    // 🔧 FIX: Restore overlay container to body before exiting
+    const overlayContainer = document.querySelector('.cdk-overlay-container');
+    if (overlayContainer && overlayContainer.parentElement !== document.body) {
+      console.log('🔧 [Preview Panel] Restoring overlay to body');
+      document.body.appendChild(overlayContainer);
+    }
+    
+    if (document.exitFullscreen) {
+      document.exitFullscreen().then(() => {
+        this.isFullscreen = false;
+        this.cdr.markForCheck();
+      });
+    }
+  }
+}
   onRefresh(): void {
     if (this.html) {
       this.setFromHtml(this.html);

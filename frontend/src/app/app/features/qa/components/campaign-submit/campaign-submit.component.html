@@ -374,6 +374,7 @@
   </div>
 </div>
   </div>
+  </div>
 
   <!-- ============================================ -->
   <!-- STEP 5: TEST EMAIL -->
@@ -421,26 +422,26 @@
       </div>
     </div>
 
-    <!-- ✅ TEST EMAIL BUTTON (ENABLED ONLY IF EMAILS EXIST) -->
-<button 
-  mat-raised-button
-  class="test-email-btn"
-  (click)="sendTestEmail()"
-  [disabled]="!canSendTest || (testEmailLoading$ | async) === 'loading'"
-  [matTooltip]="getTestEmailTooltip()"
-  [matTooltipDisabled]="canSendTest"
-  matTooltipPosition="above"
-  matTooltipShowDelay="300">
-  <mat-progress-spinner
-    *ngIf="(testEmailLoading$ | async) === 'loading'"
-    diameter="18"
-    mode="indeterminate">
-  </mat-progress-spinner>
-  <!-- <svg *ngIf="(testEmailLoading$ | async) !== 'loading'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-  </svg> -->
-  <span>{{ (testEmailLoading$ | async) === 'loading' ? 'Sending...' : 'Send Test Email' }}</span>
-</button>
+    <!-- ✅ TEST EMAIL BUTTON WITH TOOLTIP -->
+   <!-- TEST EMAIL BUTTON WITH WRAPPER -->
+<div class="button-wrapper"
+     [matTooltip]="getTestEmailTooltip()"
+     [matTooltipDisabled]="canSendTest"
+     matTooltipPosition="above"
+     matTooltipShowDelay="300">
+  <button 
+    mat-raised-button
+    class="test-email-btn"
+    (click)="sendTestEmail()"
+    [disabled]="!canSendTest || (testEmailLoading$ | async) === 'loading'">
+    <mat-progress-spinner
+      *ngIf="(testEmailLoading$ | async) === 'loading'"
+      diameter="18"
+      mode="indeterminate">
+    </mat-progress-spinner>
+    <span>{{ (testEmailLoading$ | async) === 'loading' ? 'Sending...' : 'Send Test Email' }}</span>
+  </button>
+</div>
 
     <!-- Test Email Status -->
     <div class="test-status" *ngIf="testEmailSent">
@@ -466,11 +467,16 @@
   </div>
 </div>
 
-  <!-- ============================================ -->
-  <!-- STEP 6: FINAL SUBMIT -->
-  <!-- ============================================ -->
-<!-- ✅ STEP 6: FINAL SUBMIT (ALWAYS VISIBLE) -->
+<!-- ============================================ -->
+<!-- STEP 6: FINAL SUBMIT -->
+<!-- ============================================ -->
 <div class="submit-section">
+  <!-- SUBMIT CAMPAIGN BUTTON WITH WRAPPER -->
+<div class="button-wrapper"
+     [matTooltip]="getSubmitTooltip()"
+     [matTooltipDisabled]="canSubmit"
+     matTooltipPosition="above"
+     matTooltipShowDelay="300">
   <button 
     mat-raised-button
     class="submit-btn"
@@ -481,26 +487,18 @@
       diameter="20"
       mode="indeterminate">
     </mat-progress-spinner>
-    <!-- <svg *ngIf="(submitLoading$ | async) !== 'loading'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M5 12h14M12 5l7 7-7 7"/>
-    </svg> -->
     <span>{{ (submitLoading$ | async) === 'loading' ? 'Submitting...' : 'Submit Campaign' }}</span>
   </button>
+</div>
 
   <!-- ⚠️ Warning Banner -->
   <div class="warning-banner" *ngIf="testEmails.length === 0 && masterData.length > 0">
-    <!-- <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-    </svg> -->
     <span>⚠️ No test emails available - Campaign will be submitted untested</span>
   </div>
 
   <div class="warning-banner" *ngIf="!testEmailSent && testEmails.length > 0">
-    <!-- <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-    </svg> -->
     <span>⚠️ Test email not sent - Extra confirmation will be required</span>
   </div>
 </div>
 
-</div>
+<!-- </div> -->

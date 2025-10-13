@@ -260,11 +260,11 @@
               <div class="snap-info">
                 <div class="snap-url-container">
                   <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <a [href]="s.finalUrl || s.url" target="_blank" class="snap-url">
-                      {{ s.finalUrl || s.url }}
+                    <a [href]="getOriginalUrl(s)" target="_blank" class="snap-url">
+                      {{ getOriginalUrl(s) }}
                     </a>
-                    
-                    <!-- Edit icon button -->
+
+                  
                     <button 
                       mat-icon-button 
                       class="edit-snap-btn"
@@ -314,18 +314,20 @@
   </button>
   
   <!-- ✅ Retest button -->
-  <button
-    mat-stroked-button
-    class="retest-btn-inline"
-    (click)="onRetestUrl(s.finalUrl || s.url, editUrlInput.value)"
-    [disabled]="isSnapping(editUrlInput.value || s.finalUrl || s.url)">
-    <mat-progress-spinner
-      *ngIf="isSnapping(editUrlInput.value || s.finalUrl || s.url)"
-      diameter="16"
-      mode="indeterminate">
-    </mat-progress-spinner>
-    <span *ngIf="!isSnapping(editUrlInput.value || s.finalUrl || s.url)">Test</span>
-  </button>
+<!-- ✅ Retest button -->
+<!-- ✅ Retest button -->
+<button
+  mat-stroked-button
+  class="retest-btn-inline"
+  (click)="onRetestUrl(s, editUrlInput.value)"
+  [disabled]="isSnapping(s)">
+  <mat-progress-spinner
+    *ngIf="isSnapping(s)"
+    diameter="16"
+    mode="indeterminate">
+  </mat-progress-spinner>
+  <span *ngIf="!isSnapping(s)">Test</span>
+</button>
 
       <button 
       mat-stroked-button
@@ -339,19 +341,21 @@
 
                 
                 <!-- Regular Retest button (when not in edit mode) -->
-                <button
-                  *ngIf="!isSnapInEditMode(s)"
-                  mat-button
-                  class="retest-btn"
-                  (click)="onRetestUrl(s.finalUrl || s.url)"
-                  [disabled]="isSnapping(s.finalUrl || s.url)">
-                  <mat-progress-spinner
-                    *ngIf="isSnapping(s.finalUrl || s.url)"
-                    diameter="16"
-                    mode="indeterminate">
-                  </mat-progress-spinner>
-                  <span *ngIf="!isSnapping(s.finalUrl || s.url)">Retest</span>
-                </button>
+<!-- Regular Retest button (when not in edit mode) -->
+<!-- Regular Retest button (when not in edit mode) -->
+<button
+  *ngIf="!isSnapInEditMode(s)"
+  mat-button
+  class="retest-btn"
+  (click)="onRetestUrl(s)"
+  [disabled]="isSnapping(s)">
+  <mat-progress-spinner
+    *ngIf="isSnapping(s)"
+    diameter="16"
+    mode="indeterminate">
+  </mat-progress-spinner>
+  <span *ngIf="!isSnapping(s)">Retest</span>
+</button>
               </div>
             </div>
           </div>
@@ -431,15 +435,15 @@
                 <div class="validation-reason" *ngIf="c.inFile && !c.inHtml">Missing from HTML</div>
                 <div class="validation-reason" *ngIf="!c.inFile && c.inHtml">Extra link in HTML</div>
               </div>
-              <button
-                mat-icon-button
-                class="capture-mini-btn"
-                (click)="onRetestUrl(c.url)"
-                matTooltip="Capture">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-                </svg>
-              </button>
+<button
+  mat-icon-button
+  class="capture-mini-btn"
+  (click)="onSnapUrl(c.url)"
+  matTooltip="Capture">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+  </svg>
+</button>
             </div>
           </div>
 

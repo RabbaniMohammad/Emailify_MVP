@@ -1194,3 +1194,101 @@
 
   }
 }
+
+// // ============================================================================
+// // FULLSCREEN DROPDOWN FIX - Complete Visibility Solution
+// // ============================================================================
+
+// ::ng-deep {
+//   // When in fullscreen mode
+//   body:has(*:fullscreen),
+//   body:has(*:-webkit-full-screen),
+//   body:has(*:-moz-full-screen) {
+    
+//     // Fix overlay container
+//     .cdk-overlay-container {
+//       position: fixed !important;
+//       top: 0 !important;
+//       left: 0 !important;
+//       right: 0 !important;
+//       bottom: 0 !important;
+//       z-index: 2147483647 !important;
+//       pointer-events: none !important;
+//     }
+    
+//     // Enable interactions on overlays
+//     .cdk-overlay-pane {
+//       pointer-events: auto !important;
+//       z-index: 2147483647 !important;
+//       visibility: visible !important;
+//       opacity: 1 !important;
+//     }
+    
+//     .cdk-overlay-backdrop {
+//       pointer-events: auto !important;
+//       z-index: 2147483646 !important;
+//     }
+    
+//     // Force menu panel visibility and styling
+//     .mat-mdc-menu-panel {
+//       pointer-events: auto !important;
+//       visibility: visible !important;
+//       opacity: 1 !important;
+//       display: block !important;
+//       background: white !important;
+//       box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25) !important;
+//       border-radius: 12px !important;
+//       min-width: 200px !important;
+//       max-height: 90vh !important;
+//       overflow: visible !important;
+//     }
+    
+//     // Force menu content visibility
+//     .mat-mdc-menu-content {
+//       visibility: visible !important;
+//       opacity: 1 !important;
+//       display: block !important;
+//       padding: 0.5rem !important;
+//     }
+    
+//     // Force menu items visibility
+//     .mat-mdc-menu-item {
+//       pointer-events: auto !important;
+//       visibility: visible !important;
+//       opacity: 1 !important;
+//       display: flex !important;
+//       color: #1e293b !important;
+//       background: transparent !important;
+      
+//       &:hover {
+//         background: rgba(109, 40, 217, 0.08) !important;
+//       }
+//     }
+    
+//     // Ensure text is visible
+//     .mat-mdc-menu-item-text {
+//       visibility: visible !important;
+//       opacity: 1 !important;
+//       display: flex !important;
+//       color: inherit !important;
+//     }
+    
+//     // Ensure icons are visible
+//     mat-icon {
+//       visibility: visible !important;
+//       opacity: 1 !important;
+//       color: inherit !important;
+//     }
+    
+//     // Make sure the template preview panel dropdown is visible too
+//     app-template-preview-panel {
+//       .mat-mdc-menu-panel,
+//       .mat-mdc-menu-content,
+//       .mat-mdc-menu-item {
+//         visibility: visible !important;
+//         opacity: 1 !important;
+//         display: flex !important;
+//       }
+//     }
+//   }
+// }

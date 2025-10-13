@@ -1194,90 +1194,43 @@ async onFinalize() {
   }
 }
 
-onRetestUrl(url: string, newUrl?: string) {
+onRetestUrl(snap: SnapResult, newUrl?: string) {
   console.log('=== 🔄 onRetestUrl CALLED ===');
-  console.log('Input url parameter:', url);
-  console.log('Input newUrl parameter:', newUrl);
-  console.log('Current editInputValue:', this.editInputValue);
-  console.log('Current originalSnapUrls Map:', Array.from(this.originalSnapUrls.entries()));
   
+  const url = this.getValidSnapUrl(snap);
   const runId = this.ar.snapshot.paramMap.get('runId')!;
-  if (!runId || !url) {
-    console.log('❌ Missing runId or url, exiting');
-    return;
-  }
-  console.log('RunId:', runId);
+  if (!runId || !url) return;
   
   let targetUrl = newUrl?.trim() || url;
-  console.log('Initial targetUrl:', targetUrl);
   
   if (newUrl !== undefined) {
-    console.log('🔵 newUrl is provided');
     this.editInputValue = newUrl.trim();
-    console.log('Updated editInputValue to:', this.editInputValue);
     
-    // ✅ FIXED: Store the TRUE ORIGINAL URL (not the current one)
-    if (newUrl.trim() && newUrl.trim() !== url) {
-      // Get the true original URL (either from map, or url itself if not in map)
-      const trueOriginalUrl = this.originalSnapUrls.get(url) || url;
+    // ✅ Store original URL mapping BEFORE retest using SNAP KEY
+    if (newUrl.trim()) {
+      const snapKey = this.getSnapKey(snap);  // ✅ Use snap key!
       
-      console.log('📌 STORING original URL mapping...');
-      console.log('  - Current URL (will be replaced):', url);
-      console.log('  - True original URL (from HTML):', trueOriginalUrl);
-      console.log('  - New URL to test:', newUrl.trim());
+      // Get the TRUE original URL (from map if exists, or current if first time)
+      const trueOriginalUrl = this.originalSnapUrls.get(snapKey) || url;  // ✅ Get by snap key!
       
-      // Store: newTestUrl -> trueOriginalUrl
-      this.originalSnapUrls.set(newUrl.trim(), trueOriginalUrl);
-      console.log('  ✅ Stored mapping:', newUrl.trim(), '->', trueOriginalUrl);
+      console.log('📌 Preserving original URL before retest:');
+      console.log('  - Snap key:', snapKey);
+      console.log('  - True original:', trueOriginalUrl);
+      console.log('  - Will test:', targetUrl);
       
-      // Delete the old entry (for current URL) since it will be replaced
-      if (this.originalSnapUrls.has(url)) {
-        console.log('  🗑️ Deleting old mapping for:', url);
-        this.originalSnapUrls.delete(url);
-      }
-      
-      console.log('✅ Updated map! Now has:', this.originalSnapUrls.size, 'entries');
-      console.log('  - Full map:', Array.from(this.originalSnapUrls.entries()));
-    } else {
-      console.log('⏭️ Not storing - newUrl is empty or same as current url');
+      // ✅ Store mapping: snapKey → originalURL
+      this.originalSnapUrls.set(snapKey, trueOriginalUrl);  // ✅ Store by snap key!
     }
-  } else {
-    console.log('⏭️ newUrl is undefined, using existing url');
   }
   
   if (newUrl !== undefined && !newUrl.trim()) {
-    console.log('⚠️ Empty newUrl provided, showing confirmation dialog');
     const confirmed = confirm('Input field is empty. It will only test the original link');
-    console.log('User confirmation result:', confirmed);
-    if (!confirmed) {
-      console.log('❌ User cancelled, exiting');
-      return;
-    }
+    if (!confirmed) return;
     targetUrl = url;
-    console.log('Using original url as targetUrl:', targetUrl);
   }
   
-  console.log('Final targetUrl to capture:', targetUrl);
-  
-  const existingSnap = this.snapsSubject.value.find(s => 
-    this.getValidSnapUrl(s) === url
-  );
-  console.log('Looking for existing snap with url:', url);
-  console.log('Existing snap found:', !!existingSnap);
-  
-  if (existingSnap) {
-    console.log('✅ Calling captureAndReplace with:', {
-      runId,
-      targetUrl,
-      existingSnapUrl: this.getValidSnapUrl(existingSnap)
-    });
-    this.captureAndReplace(runId, targetUrl, existingSnap);
-  } else {
-    console.log('✅ Calling captureOne with:', { runId, targetUrl });
-    this.captureOne(runId, targetUrl);
-  }
-  
-  console.log('=== ✅ onRetestUrl COMPLETE ===\n');
+  console.log('✅ Calling captureAndReplace with specific snap');
+  this.captureAndReplace(runId, targetUrl, snap);
 }
   // ✅ NEW: Handle Enter key in edit input field
 // ✅ NEW: Handle Enter key in edit input field
@@ -1285,13 +1238,22 @@ onEditInputKeyDown(event: KeyboardEvent, snap: SnapResult, inputElement: HTMLInp
   if (event.key === 'Enter') {
     event.preventDefault();
     const newUrl = inputElement.value.trim();
-    this.onRetestUrl(this.getValidSnapUrl(snap), newUrl || undefined);
+    this.onRetestUrl(snap, newUrl || undefined);
   }
 }
 
-  isSnapping(url: string): boolean {
-    return !!this.snapping.get(url.toLowerCase());
-  }
+isSnapping(snap: SnapResult): boolean {
+  const key = this.getSnapKey(snap);
+  return !!this.snapping.get(key);
+}
+
+// Add new helper method
+private getSnapKey(snap: SnapResult): string {
+  const url = this.getValidSnapUrl(snap).toLowerCase();
+  const ts = snap.ts || 0;
+  return `${url}_${ts}`;
+}
+
 
   onSnapUrl(raw: string) {
     const url = (raw || '').trim();
@@ -1714,54 +1676,28 @@ private extractAllLinks(html: string): string[] {
   }
 
 // Toggle edit mode for a snap
+// Toggle edit mode for a snap
 onEditSnap(snap: SnapResult): void {
-  console.log('=== 🎯 onEditSnap CALLED ===');
-  
-  const snapKey = this.getValidSnapUrl(snap);
-  console.log('Snap key:', snapKey);
-  console.log('Snap object:', snap);
-  console.log('Current editingSnapUrl (before change):', this.editingSnapUrl);
-  console.log('Current editInputValue (before change):', this.editInputValue);
+  const snapKey = this.getSnapKey(snap);  // ✅ Use snap key!
   
   if (this.editingSnapUrl === snapKey) {
-    // Closing edit mode
-    console.log('❌ CLOSING edit mode');
     this.editingSnapUrl = null;
     this.editInputValue = '';
-    console.log('✅ Edit mode closed');
-    console.log('New editingSnapUrl:', this.editingSnapUrl);
-    console.log('New editInputValue:', this.editInputValue);
   } else {
-    // Opening edit mode
-    console.log('✅ OPENING edit mode');
-    console.log('Storing original URL in map:', snapKey);
-    this.editingSnapUrl = snapKey;
-    this.editInputValue = ''; // Reset input when opening
-    console.log('New editingSnapUrl:', this.editingSnapUrl);
-    console.log('New editInputValue:', this.editInputValue);
+    this.editingSnapUrl = snapKey;  // ✅ Store snap key!
+    this.editInputValue = '';
   }
   
   this.cdr.markForCheck();
-  console.log('=== ✅ onEditSnap COMPLETE ===\n');
 }
 
 /**
  * Cancel edit mode without making changes
  */
 onCancelEdit(snap: SnapResult): void {
-  console.log('=== ❌ onCancelEdit CALLED ===');
-  
-  const snapKey = this.getValidSnapUrl(snap);
-  console.log('Closing edit mode for:', snapKey);
-  
-  // Clear edit state
   this.editingSnapUrl = null;
   this.editInputValue = '';
-  
-  console.log('✅ Edit mode cancelled and closed');
   this.cdr.markForCheck();
-  
-  console.log('=== ✅ onCancelEdit COMPLETE ===\n');
 }
 
 /**
@@ -1777,166 +1713,85 @@ private getValidSnapUrl(snap: SnapResult): string {
 }
 
  // Check if snap is in edit mode
+// Check if snap is in edit mode
 isSnapInEditMode(snap: SnapResult): boolean {
-  const snapKey = this.getValidSnapUrl(snap);
-  return this.editingSnapUrl === snapKey;
+  const snapKey = this.getSnapKey(snap);  // ✅ Use snap key!
+  return this.editingSnapUrl === snapKey;  // ✅ Compare snap keys!
 }
 
 canReplace(snap: SnapResult): boolean {
-  console.log('🔍 canReplace CHECK:');
-  const currentSnapUrl = this.getValidSnapUrl(snap);
-  console.log('  - Current snap URL:', currentSnapUrl);
-  console.log('  - editInputValue:', this.editInputValue);
-  console.log('  - Has entry in map?', this.originalSnapUrls.has(currentSnapUrl));
-  
-  // Replace is enabled when:
-  // 1. Input has value AND
-  // 2. A retest was performed (entry exists in originalSnapUrls map)
+  const snapKey = this.getSnapKey(snap);  // ✅ Use snap key!
   const hasValue = !!this.editInputValue?.trim();
-  const hasMapEntry = this.originalSnapUrls.has(currentSnapUrl);
-  const canReplace = hasValue && hasMapEntry;
-  
-  console.log('  - Has value?', hasValue);
-  console.log('  - Has map entry?', hasMapEntry);
-  console.log('  ✅ Can replace?', canReplace);
-  
-  return canReplace;
+  const hasMapEntry = this.originalSnapUrls.has(snapKey);  // ✅ Check by snap key!
+  return hasValue && hasMapEntry;
 }
 
 
   // ✅ UPDATED: Replace button with confirmation and HTML URL replacement
 // ✅ UPDATED: Replace button with confirmation and HTML URL replacement
 onReplaceSnap(snap: SnapResult, inputElement: HTMLInputElement): void {
-  console.log('=== 🔵 onReplaceSnap CALLED ===');
-  console.log('Snap object:', snap);
-  console.log('Input element:', inputElement);
-  console.log('Input element value (raw):', inputElement.value);
-  
   const newUrl = inputElement.value.trim();
-  console.log('New URL (trimmed):', newUrl);
-  console.log('Current editInputValue state:', this.editInputValue);
-  console.log('Current originalSnapUrls Map:', Array.from(this.originalSnapUrls.entries()));
   
   if (!newUrl) {
-    console.log('❌ Input is empty');
     const confirmed = confirm('Input field is empty. Do you want to close edit mode without replacing?');
-    console.log('User confirmation (close without replace):', confirmed);
-    
     if (confirmed) {
-      console.log('Closing edit mode and clearing state...');
       this.editingSnapUrl = null;
       this.editInputValue = '';
       inputElement.value = '';
-      console.log('State after clearing:', {
-        editingSnapUrl: this.editingSnapUrl,
-        editInputValue: this.editInputValue,
-        inputElementValue: inputElement.value
-      });
       this.cdr.markForCheck();
-    } else {
-      console.log('User cancelled, keeping edit mode open');
     }
-    console.log('=== ❌ onReplaceSnap EXITED (empty input) ===\n');
     return;
   }
   
+  const snapKey = this.getSnapKey(snap);  // ✅ Use snap key!
   const currentSnapUrl = this.getValidSnapUrl(snap);
-  console.log('Current snap URL:', currentSnapUrl);
-  console.log('Snap details:', {
-    url: snap.url,
-    finalUrl: snap.finalUrl,
-    ok: snap.ok,
-    status: snap.status
-  });
-  
-  // ✅ GET THE ORIGINAL URL (before retest)
-  console.log('🔍 Looking up original URL from map...');
-  console.log('  - Using key:', currentSnapUrl);
-  const originalUrl = this.originalSnapUrls.get(currentSnapUrl) || currentSnapUrl;
-  console.log('  - Found original URL:', originalUrl);
-  console.log('  - Is it from map?', this.originalSnapUrls.has(currentSnapUrl));
-  console.log('  - Map has', this.originalSnapUrls.size, 'entries');
+  const originalUrl = this.originalSnapUrls.get(snapKey) || currentSnapUrl;  // ✅ Get by snap key!
   
   console.log('📋 REPLACEMENT SUMMARY:');
+  console.log('  - Snap key:', snapKey);
   console.log('  - Original URL (in HTML):', originalUrl);
   console.log('  - Current snap URL:', currentSnapUrl);
   console.log('  - New URL (replacement):', newUrl);
-  console.log('  - Are they different?', originalUrl !== newUrl);
   
   try {
-    console.log('🟢 Calling replaceUrlInHtml...');
     this.replaceUrlInHtml(originalUrl, newUrl, snap);
-    console.log('✅ replaceUrlInHtml completed successfully');
-    
     this.showSuccess('✓ Replace successful! Link updated in HTML.');
     
-    // Clean up the stored original URL from map
-    console.log('🧹 Cleaning up: Deleting', currentSnapUrl, 'from originalSnapUrls map');
-    const deleted = this.originalSnapUrls.delete(currentSnapUrl);
-    console.log('Delete result:', deleted);
-    console.log('Map size after deletion:', this.originalSnapUrls.size);
+    // ✅ Clean up using snap key
+    this.originalSnapUrls.delete(snapKey);  // ✅ Delete by snap key!
   } catch (error) {
-    console.error('🔴 Replace failed with error:', error);
-    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
     alert('Replace failed. Please use the editor for manual changes.');
-    console.log('=== ❌ onReplaceSnap EXITED (error) ===\n');
     return;
   }
   
-  // ✅ CLOSE EDIT MODE after successful replace
   this.editingSnapUrl = null;
   this.editInputValue = '';
   inputElement.value = '';
-  
-  console.log('State after update (edit mode CLOSED):', {
-    editingSnapUrl: this.editingSnapUrl,
-    editInputValue: this.editInputValue,
-    inputElementValue: inputElement.value
-  });
-  
   this.cdr.markForCheck();
-  console.log('Change detection marked');
-  
-  console.log('=== ✅ onReplaceSnap COMPLETE (edit mode CLOSED) ===\n');
 }
 getOriginalUrl(snap: SnapResult): string {
-  console.log('🔍 getOriginalUrl CHECK:');
+  const snapKey = this.getSnapKey(snap);  // ✅ Use snap key!
   const currentSnapUrl = this.getValidSnapUrl(snap);
-  console.log('  - Current snap URL:', currentSnapUrl);
-  
-  // If there's an entry in the map, that's the original URL from HTML
-  const originalUrl = this.originalSnapUrls.get(currentSnapUrl);
-  console.log('  - Map has entry?', !!originalUrl);
-  console.log('  - Original URL:', originalUrl || currentSnapUrl);
-  
+  const originalUrl = this.originalSnapUrls.get(snapKey);  // ✅ Get by snap key!
   return originalUrl || currentSnapUrl;
 }
 
 getLatestTestedUrl(snap: SnapResult): string | null {
-  console.log('🔍 getLatestTestedUrl CHECK:');
+  const snapKey = this.getSnapKey(snap);  // ✅ Use snap key!
   const currentSnapUrl = this.getValidSnapUrl(snap);
-  console.log('  - Current snap URL:', currentSnapUrl);
-  
-  // If there's an entry in the map, current URL is the "latest tested" URL
-  const hasBeenRetested = this.originalSnapUrls.has(currentSnapUrl);
-  console.log('  - Has been retested?', hasBeenRetested);
+  const hasBeenRetested = this.originalSnapUrls.has(snapKey);  // ✅ Check by snap key!
   
   if (hasBeenRetested) {
-    console.log('  - Latest tested URL:', currentSnapUrl);
     return currentSnapUrl;
   }
   
-  console.log('  - No retest performed yet');
   return null;
 }
 
 hasBeenRetested(snap: SnapResult): boolean {
-  const currentSnapUrl = this.getValidSnapUrl(snap);
-  const result = this.originalSnapUrls.has(currentSnapUrl);
-  console.log('🔍 hasBeenRetested:', result, 'for', currentSnapUrl);
-  return result;
+  const snapKey = this.getSnapKey(snap);  // ✅ Use snap key!
+  return this.originalSnapUrls.has(snapKey);  // ✅ Check by snap key!
 }
-
   // ✅ NEW: Replace URL in HTML with 1-to-1 mapping for duplicates
 private replaceUrlInHtml(oldUrl: string, newUrl: string, snap: SnapResult): void {
   console.log('=== 🔧 replaceUrlInHtml CALLED ===');
@@ -2149,213 +2004,109 @@ private replaceUrlInHtml(oldUrl: string, newUrl: string, snap: SnapResult): void
 }
   // ✅ FIXED: Capture and replace with proper edit mode persistence
 // ✅ FIXED: Capture and replace with proper edit mode persistence
+// ✅ FIXED: Capture and replace with proper edit mode persistence
 private captureAndReplace(runId: string, newUrl: string, oldSnap: SnapResult) {
-  console.log('=== 🔄 captureAndReplace CALLED ===');
-  console.log('📥 INPUTS:');
-  console.log('  - runId:', runId);
-  console.log('  - newUrl:', newUrl);
-  console.log('  - oldSnap:', oldSnap);
-  console.log('  - oldSnap URL:', this.getValidSnapUrl(oldSnap));
+  const snapKey = this.getSnapKey(oldSnap);  // ✅ Use snap key!
   
-  const key = newUrl.toLowerCase();
-  console.log('  - Snap key (lowercase):', key);
-  console.log('  - Current snapping map:', Array.from(this.snapping.entries()));
-  
-  if (this.snapping.get(key)) {
-    console.log('⏭️ Already snapping this URL, exiting');
-    return;
-  }
-  
-  console.log('✅ Setting snapping flag to true');
-  this.snapping.set(key, true);
+  if (this.snapping.get(snapKey)) return;
+  this.snapping.set(snapKey, true);
 
-  // Find the index of the old snap
-  console.log('\n🔍 FINDING OLD SNAP INDEX:');
   const currentSnaps = [...this.snapsSubject.value];
-  console.log('  - Total snaps:', currentSnaps.length);
-  console.log('  - All snap URLs:', currentSnaps.map(s => this.getValidSnapUrl(s)));
-  
   const oldIndex = currentSnaps.findIndex(s => s === oldSnap);
-  console.log('  - Old snap index:', oldIndex);
 
   if (oldIndex === -1) {
-    console.error('❌ Could not find snap to replace!');
-    console.error('  - Looking for snap:', oldSnap);
-    console.error('  - In array:', currentSnaps);
-    this.snapping.set(key, false);
-    console.log('  - Snapping flag cleared');
-    console.log('=== ❌ captureAndReplace EXITED (snap not found) ===\n');
+    this.snapping.set(snapKey, false);
     return;
   }
-  
-  console.log('  ✅ Found old snap at index:', oldIndex);
 
-  // Create loading placeholder
-  console.log('\n🔄 CREATING LOADING PLACEHOLDER:');
   const loadingSnap: SnapResult = {
     url: newUrl,
-    ts: Date.now(),
+    ts: oldSnap.ts,  // ✅ Preserve timestamp
   } as SnapResult;
-  console.log('  - Loading snap:', loadingSnap);
   
   currentSnaps[oldIndex] = loadingSnap;
-  console.log('  - Replaced snap at index', oldIndex, 'with loading placeholder');
-  
   this.snapsSubject.next(currentSnaps);
-  console.log('  ✅ Updated snapsSubject with loading placeholder');
-  
   this.cdr.markForCheck();
-  console.log('  ✅ Change detection marked');
 
-  // Make API call
-  console.log('\n🌐 MAKING API CALL:');
-  console.log('  - Calling qa.snapUrl with:', { runId, newUrl });
-  
   this.qa.snapUrl(runId, newUrl).subscribe({
     next: ({ snap, snaps }) => {
-      console.log('\n✅ API CALL SUCCESS:');
-      console.log('  - Response snap:', snap);
-      console.log('  - Response snaps array length:', snaps.length);
-      console.log('  - Response snaps URLs:', snaps.map(s => this.getValidSnapUrl(s)));
-      
-      // Find the new snap from API response
-      console.log('\n🔍 FINDING NEW SNAP IN RESPONSE:');
-      console.log('  - Looking for URL:', newUrl);
-      
-      const newSnap = snaps.find(s => 
+      const matchingSnaps = snaps.filter(s => 
         s.url.toLowerCase() === newUrl.toLowerCase() || 
         s.finalUrl?.toLowerCase() === newUrl.toLowerCase()
       );
-      console.log('  - New snap found:', !!newSnap);
-      console.log('  - New snap details:', newSnap);
+      
+      const newSnap = matchingSnaps.length > 0 
+        ? matchingSnaps.reduce((latest, current) => 
+            current.ts > latest.ts ? current : latest
+          )
+        : null;
 
       if (!newSnap) {
-        console.error('❌ New snap not found in response!');
-        console.error('  - Searched for:', newUrl.toLowerCase());
-        console.error('  - In snaps:', snaps.map(s => ({ url: s.url, finalUrl: s.finalUrl })));
-        this.snapping.set(key, false);
-        console.log('  - Snapping flag cleared');
-        console.log('=== ❌ captureAndReplace EXITED (new snap not found) ===\n');
+        this.snapping.set(snapKey, false);
         return;
       }
-      
-      console.log('  ✅ Found new snap:', this.getValidSnapUrl(newSnap));
 
-      // Get fresh copy and remove the loading placeholder
-      console.log('\n🔄 UPDATING SNAPS ARRAY:');
       const updatedSnaps = this.snapsSubject.value.filter(s => s !== loadingSnap);
-      console.log('  - Removed loading placeholder');
-      console.log('  - Array length after filter:', updatedSnaps.length);
-      
-      // Insert new snap at the old position
-      console.log('  - Inserting new snap at index:', oldIndex);
       updatedSnaps.splice(oldIndex, 0, newSnap);
-      console.log('  - Array length after insert:', updatedSnaps.length);
-      console.log('  - Updated snaps URLs:', updatedSnaps.map(s => this.getValidSnapUrl(s)));
-      
       this.snapsSubject.next(updatedSnaps);
-      console.log('  ✅ snapsSubject updated');
-      
       this.qa.saveSnaps(runId, updatedSnaps);
-      console.log('  ✅ Snaps saved to storage');
+      this.snapping.set(snapKey, false);
       
-      this.snapping.set(key, false);
-      console.log('  ✅ Snapping flag cleared');
+      // ✅ CRITICAL: Transfer map entry from old snap key to new snap key
+      const newSnapKey = this.getSnapKey(newSnap);  // ✅ Use snap key!
       
-      // ✅ CRITICAL FIX: Update editingSnapUrl AND update map key
-      console.log('\n🔄 UPDATING EDIT MODE STATE:');
-      console.log('  - Current editingSnapUrl:', this.editingSnapUrl);
-      console.log('  - Current originalSnapUrls Map:', Array.from(this.originalSnapUrls.entries()));
+      console.log('🗺️ MAP KEY TRANSFER:');
+      console.log('  - Old snap key:', snapKey);
+      console.log('  - New snap key:', newSnapKey);
       
-      if (this.editingSnapUrl) {
-        const newSnapUrl = this.getValidSnapUrl(newSnap);
-        console.log('  - Edit mode is active, updating to new URL:', newSnapUrl);
+      // ✅ Transfer the mapping to new snap key
+      if (this.originalSnapUrls.has(snapKey)) {  // ✅ Check by snap key!
+        const originalUrl = this.originalSnapUrls.get(snapKey)!;  // ✅ Get by snap key!
+        console.log('  - Original URL:', originalUrl);
+        console.log('  - Transferring to new key');
         
-        // ✅ UPDATE MAP: Transfer original URL from old key to new key
-        const oldKey = this.editingSnapUrl;
-        console.log('  - Old map key:', oldKey);
-        console.log('  - New map key:', newSnapUrl);
+        this.originalSnapUrls.set(newSnapKey, originalUrl);  // ✅ Store by new snap key!
         
-        if (this.originalSnapUrls.has(oldKey)) {
-          const originalUrl = this.originalSnapUrls.get(oldKey)!;
-          console.log('  - Found entry in map with original URL:', originalUrl);
-          console.log('  - Deleting old key from map...');
-          this.originalSnapUrls.delete(oldKey);
-          console.log('  - Setting new key in map...');
-          this.originalSnapUrls.set(newSnapUrl, originalUrl);
-          console.log('  ✅ Map key updated!');
-          console.log('  - Updated map:', Array.from(this.originalSnapUrls.entries()));
-        } else {
-          console.log('  ⚠️ Old key not found in map, no transfer needed');
+        // ✅ Only delete old key if different from new key
+        if (snapKey !== newSnapKey) {
+          this.originalSnapUrls.delete(snapKey);  // ✅ Delete by snap key!
         }
-        
-        this.editingSnapUrl = newSnapUrl;
-        console.log('  ✅ editingSnapUrl updated to:', this.editingSnapUrl);
-      } else {
-        console.log('  ⏭️ Edit mode not active, no update needed');
+      }
+      
+      console.log('  - Map size:', this.originalSnapUrls.size);
+      console.log('  - Map entries:', Array.from(this.originalSnapUrls.entries()));
+      
+      // ✅ Update editingSnapUrl using SNAP KEYS if in edit mode
+      if (this.editingSnapUrl === snapKey) {  // ✅ Compare old snap key
+        this.editingSnapUrl = newSnapKey;  // ✅ Update to new snap key
       }
       
       this.cdr.markForCheck();
-      console.log('  ✅ Change detection marked');
-      
-      console.log('\n=== ✅ captureAndReplace SUCCESS ===\n');
     },
     error: (err) => {
-      console.error('\n❌ API CALL FAILED:');
-      console.error('  - Error:', err);
-      console.error('  - Error message:', err?.message);
-      console.error('  - Error stack:', err?.stack);
-      
-      // Show error at the same position
-      console.log('\n🔄 CREATING ERROR SNAP:');
       const errorSnap: SnapResult = {
         url: newUrl,
         ok: false,
         error: err?.message || 'Capture failed',
-        ts: Date.now(),
+        ts: oldSnap.ts,
       };
-      console.log('  - Error snap:', errorSnap);
       
       const errorSnaps = [...this.snapsSubject.value];
-      console.log('  - Current snaps count:', errorSnaps.length);
-      
       const loadingIndex = errorSnaps.findIndex(s => s === loadingSnap);
-      console.log('  - Loading placeholder index:', loadingIndex);
       
       if (loadingIndex !== -1) {
-        console.log('  - Replacing loading placeholder with error snap at index:', loadingIndex);
         errorSnaps[loadingIndex] = errorSnap;
-      } else {
-        console.warn('  ⚠️ Loading placeholder not found, error snap not inserted');
       }
       
       this.snapsSubject.next(errorSnaps);
-      console.log('  ✅ snapsSubject updated with error snap');
-      
       this.qa.saveSnaps(runId, errorSnaps);
-      console.log('  ✅ Error snaps saved to storage');
+      this.snapping.set(snapKey, false);
       
-      this.snapping.set(key, false);
-      console.log('  ✅ Snapping flag cleared');
-      
-      // ✅ On error, CLOSE edit mode instead of keeping it open with error URL
-      console.log('\n🔄 UPDATING EDIT MODE STATE (ERROR):');
-      console.log('  - Current editingSnapUrl:', this.editingSnapUrl);
-      console.log('  - Capture failed, closing edit mode');
-      
-      // Close edit mode on error
       this.editingSnapUrl = null;
       this.editInputValue = '';
-      console.log('  ✅ Edit mode closed due to capture error');
       
       this.cdr.markForCheck();
-      console.log('  ✅ Change detection marked');
-      
-      console.log('\n=== ❌ captureAndReplace ERROR HANDLED ===\n');
     },
   });
-  
-  console.log('🌐 API call initiated (async)');
-  console.log('=== ⏳ captureAndReplace WAITING FOR API ===\n');
 }
 }

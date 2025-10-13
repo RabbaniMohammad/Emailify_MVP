@@ -115,17 +115,6 @@ export class GeneratePageComponent implements OnInit, OnDestroy {
     this.messages$.next([welcomeMessage]);
   }
 
-  // ⭐ ADD: Fullscreen toggle
-    toggleFullscreen(): void {
-    const element = document.querySelector('.preview-wrapper') as HTMLElement;
-    if (!element) return;
-
-    if (!document.fullscreenElement) {
-        element.requestFullscreen();
-    } else {
-        document.exitFullscreen();
-    }
-    }
 
   private loadConversation(conversationId: string): void {
     this.conversationId = conversationId;
@@ -656,6 +645,40 @@ onSaveTemplate(): void {
   input.value = ''; // Reset input
   console.log('🧹 Input value reset');
 }
+
+// Add this method to your GeneratePageComponent class
+// Add this method to your GeneratePageComponent class
+toggleFullscreen(): void {
+  console.log('🖥️ [Fullscreen] Toggle clicked');
+  const element = document.querySelector('.preview-wrapper') as HTMLElement;
+  
+  if (!element) {
+    console.error('❌ [Fullscreen] Element not found!');
+    return;
+  }
+
+  if (!document.fullscreenElement) {
+    console.log('➡️ [Fullscreen] Entering fullscreen...');
+    element.requestFullscreen().then(() => {
+      console.log('✅ [Fullscreen] Entered successfully');
+      
+      // 🔍 DEBUG: Check overlay container location
+      setTimeout(() => {
+        const overlayContainer = document.querySelector('.cdk-overlay-container');
+        console.log('📍 [Fullscreen] Overlay container:', overlayContainer);
+        console.log('📍 [Fullscreen] Parent:', overlayContainer?.parentElement);
+        console.log('📍 [Fullscreen] Fullscreen element:', document.fullscreenElement);
+        console.log('📍 [Fullscreen] Is overlay inside fullscreen?', 
+          document.fullscreenElement?.contains(overlayContainer as Node));
+      }, 100);
+    });
+  } else {
+    console.log('⬅️ [Fullscreen] Exiting fullscreen...');
+    document.exitFullscreen();
+  }
+}
+
+
 async processImage(file: File): Promise<void> {
   console.log('📄 processImage() called for:', file.name);
   console.log('📝 File details:', {

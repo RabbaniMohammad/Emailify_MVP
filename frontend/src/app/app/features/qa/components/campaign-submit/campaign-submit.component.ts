@@ -489,6 +489,28 @@ getTestEmailTooltip(): string {
     const immediateGroup = this.scheduleGroups.find(g => g.isImmediate);
     return immediateGroup?.count || 0;
   }
+  /**
+ * Get tooltip text for Submit Campaign button
+ */
+getSubmitTooltip(): string {
+  if (!this.subjectControl.valid || !this.subjectControl.value.trim()) {
+    return 'Add subject line first';
+  }
+  
+  if (!this.reconciliation) {
+    return 'Upload and reconcile audience data first';
+  }
+  
+  if (this.scheduleGroups.length === 0) {
+    return 'No scheduled recipients found';
+  }
+  
+  if (this.submitLoadingSubject.value === 'loading') {
+    return 'Submitting campaign...';
+  }
+  
+  return 'Submit campaign to Mailchimp';
+}
 
   getTimezoneWarningMessage(): string {
     if (!this.timezoneAnalysis) return '';

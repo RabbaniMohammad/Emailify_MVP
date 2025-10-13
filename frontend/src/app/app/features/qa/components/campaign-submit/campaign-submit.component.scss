@@ -167,10 +167,35 @@
 // AUDIENCE LIST
 // ============================================
 
+// ============================================
+// STEP 1: AUDIENCE LIST - INCREASED HEIGHT
+// ============================================
 .audience-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  max-height: 400px; // ✅ NEW - Add scrollable height
+  overflow-y: auto; // ✅ NEW - Enable scrolling
+  padding-right: 0.5rem; // ✅ NEW - Space for scrollbar
+  
+  // ✅ NEW - Custom scrollbar
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(109, 40, 217, 0.3);
+    border-radius: 3px;
+    
+    &:hover {
+      background: rgba(109, 40, 217, 0.5);
+    }
+  }
 }
 
 .audience-item {
@@ -596,17 +621,46 @@
   gap: 1.25rem;
 }
 
+// ============================================
+// STEP 5: TEST EMAIL SECTION - INCREASED HEIGHT
+// ============================================
 .test-emails-preview {
   padding: 1rem;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
+  max-height: 300px; // ✅ NEW - Add scrollable height
+  overflow-y: auto; // ✅ NEW - Enable scrolling
+  
+  // ✅ NEW - Custom scrollbar
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(109, 40, 217, 0.3);
+    border-radius: 3px;
+    
+    &:hover {
+      background: rgba(109, 40, 217, 0.5);
+    }
+  }
   
   .preview-label {
     font-size: 0.875rem;
     font-weight: 500;
     color: #374151;
     margin-bottom: 0.75rem;
+    position: sticky; // ✅ Keep label visible while scrolling
+    top: 0;
+    background: #f9fafb;
+    z-index: 1;
+    padding-bottom: 0.5rem;
   }
 }
 
@@ -1212,4 +1266,9 @@
     color: #fbbf24;
     font-weight: 500;
   }
+}
+
+.button-wrapper {
+  display: inline-block; // Important for tooltip to work
+  width: 100%; // Match button width
 }
