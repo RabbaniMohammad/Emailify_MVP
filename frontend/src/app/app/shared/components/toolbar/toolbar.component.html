@@ -77,6 +77,22 @@
 
           <mat-divider></mat-divider>
 
+          <!-- Visual Editor Button ✅ NEW -->
+        <button 
+          mat-menu-item 
+          class="menu-item visual-editor-item"
+          (click)="navigateTo('/visual-editor')">
+          <div class="menu-item-icon visual-editor-icon">
+            <mat-icon>design_services</mat-icon>
+          </div>
+          <div class="menu-item-content">
+            <span class="menu-item-title">Visual Editor</span>
+            <span class="menu-item-subtitle">Drag & drop designer</span>
+          </div>
+        </button>
+
+        <mat-divider></mat-divider>
+
           <!-- Logout Button -->
           <button mat-menu-item class="menu-item logout-item" (click)="logout()">
             <div class="menu-item-icon logout-icon">

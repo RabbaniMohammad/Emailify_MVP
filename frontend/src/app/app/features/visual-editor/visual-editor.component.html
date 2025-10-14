@@ -1,0 +1,71 @@
+<div class="visual-editor-page">
+  <!-- Header -->
+  <div class="editor-header">
+    <button mat-button class="back-btn" (click)="goBack()">
+      <mat-icon>arrow_back</mat-icon>
+      <span>Back to Dashboard</span>
+    </button>
+    
+    <div class="header-title">
+      <mat-icon>design_services</mat-icon>
+      <h1>Visual Template Editor</h1>
+    </div>
+    
+<div class="header-actions">
+ <button mat-stroked-button class="action-btn" (click)="openImportModal()">
+    <mat-icon>file_upload</mat-icon>
+    Import HTML
+  </button>
+  <button mat-stroked-button class="action-btn" (click)="saveTemplate()">
+    <mat-icon>save</mat-icon>
+    Save
+  </button>
+  <button mat-raised-button class="action-btn primary" (click)="exportHTML()">
+    <mat-icon>file_download</mat-icon>
+    Export HTML
+  </button>
+</div>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-container" *ngIf="loading">
+    <mat-progress-spinner diameter="48" mode="indeterminate"></mat-progress-spinner>
+    <p>Loading Visual Editor...</p>
+  </div>
+
+  <!-- Editor Container -->
+<!-- Editor Container -->
+<div class="editor-wrapper" [class.hidden]="loading">
+  <div #editorContainer id="gjs" class="grapesjs-editor"></div>
+</div>
+
+<!-- Import HTML Modal -->
+<div class="import-modal" *ngIf="showImportModal">
+  <div class="modal-backdrop" (click)="closeImportModal()"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Import HTML Code</h2>
+      <button mat-icon-button (click)="closeImportModal()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+    <div class="modal-body">
+      <textarea 
+        [(ngModel)]="importHtmlCode"
+        placeholder="Paste your HTML code here..."
+        rows="15"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button mat-button (click)="closeImportModal()">Cancel</button>
+      <button 
+        mat-raised-button 
+        class="primary" 
+        (click)="importHTML()"
+        [disabled]="!importHtmlCode.trim()">
+        Import
+      </button>
+    </div>
+  </div>
+</div>
+
+</div>
