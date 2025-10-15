@@ -42,44 +42,43 @@
 
     <!-- Column 2: Actions + Results -->
     <section class="col col-2 glass-card" [@fadeInUp] style="height: 800px !important; min-height: 800px !important; display: flex; flex-direction: column;">
-<div class="card-header sticky-header">
-  <div class="header-icon">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
-    </svg>
-  </div>
-  <h3 class="section-title">AI Tools & Analysis</h3>
-  <div class="title-underline"></div>
-  
-  <!-- Info Icon Button -->
-  <button 
-    mat-icon-button 
-    class="qa-info-btn"
-    [matMenuTriggerFor]="qaInfoMenu"
-    matTooltip="Important Information">
-    <mat-icon>info_outline</mat-icon>
-  </button>
+      <div class="card-header sticky-header">
+        <div class="header-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+          </svg>
+        </div>
+        <h3 class="section-title">AI Tools & Analysis</h3>
+        <div class="title-underline"></div>
+        
+        <!-- Info Icon Button -->
+        <button 
+          mat-icon-button 
+          class="qa-info-btn"
+          [matMenuTriggerFor]="qaInfoMenu"
+          matTooltip="Important Information">
+          <mat-icon>info_outline</mat-icon>
+        </button>
 
-  <!-- Info Menu -->
-  <mat-menu #qaInfoMenu="matMenu" class="qa-info-menu">
-    <div class="qa-info-content" (click)="$event.stopPropagation()">
-      <h4>⚠️ Important Notice</h4>
-      
-      <div class="info-section">
-        <p>AI will make mistakes due to its unpredictable nature and text replacement using AI will only happen under manual supervision.</p>
-      </div>
+        <!-- Info Menu -->
+        <mat-menu #qaInfoMenu="matMenu" class="qa-info-menu">
+          <div class="qa-info-content" (click)="$event.stopPropagation()">
+            <h4>⚠️ Important Notice</h4>
+            
+            <div class="info-section">
+              <p>AI will make mistakes due to its unpredictable nature and text replacement using AI will only happen under manual supervision.</p>
+            </div>
 
-      <div class="info-section">
-        <p>Editing HTML using AI is astonishingly difficult due to the HTML complexity, poorly written HTML, and not following best practices.</p>
-      </div>
+            <div class="info-section">
+              <p>Editing HTML using AI is astonishingly difficult due to the HTML complexity, poorly written HTML, and not following best practices.</p>
+            </div>
 
-      <div class="info-note">
-        <!-- <mat-icon>verified_user</mat-icon> -->
-        Always review AI changes before applying! and use editor if required.
+            <div class="info-note">
+              Always review AI changes before applying! and use editor if required.
+            </div>
+          </div>
+        </mat-menu>
       </div>
-    </div>
-  </mat-menu>
-</div>
 
       <div class="scrollable-content" style="flex: 1; overflow-y: auto; min-height: 0;">
         <!-- Primary Actions -->
@@ -150,6 +149,190 @@
           </button>
         </div>
 
+                <!-- ✅ Stats Summary Card -->
+        <ng-container *ngIf="golden$ | async as golden">
+          <div class="info-panel stats-panel" *ngIf="golden?.stats" [@slideIn]>
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+              </div>
+              <h4>Verification Summary</h4>
+              <button 
+                mat-icon-button 
+                class="debug-toggle-btn"
+                (click)="toggleDebugInfo()"
+                [class.active]="showDebugInfo"
+                matTooltip="Toggle Debug Info">
+                <mat-icon>bug_report</mat-icon>
+              </button>
+            </div>
+
+            <div class="stats-grid">
+              <div class="stat-card total">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                  </svg>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-value">{{ golden.stats?.total || 0 }}</span>
+                  <span class="stat-label">Total</span>
+                </div>
+              </div>
+
+              <div class="stat-card success">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-value">{{ golden.stats?.applied || 0 }}</span>
+                  <span class="stat-label">Applied</span>
+                </div>
+              </div>
+
+              <div class="stat-card error" *ngIf="(golden.stats?.failed || 0) > 0">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-value">{{ golden.stats?.failed || 0 }}</span>
+                  <span class="stat-label">Failed</span>
+                </div>
+              </div>
+
+              <div class="stat-card blocked" *ngIf="(golden.stats?.blocked || 0) > 0">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                  </svg>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-value">{{ golden.stats?.blocked || 0 }}</span>
+                  <span class="stat-label">Blocked</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Timings (Debug Mode) -->
+            <div class="debug-section" *ngIf="showDebugInfo && golden?.timings" [@expandIn]>
+              <div class="debug-header">
+                <mat-icon>schedule</mat-icon>
+                <span>Performance Metrics</span>
+              </div>
+              <div class="timings-grid">
+                <div class="timing-item">
+                  <span class="timing-label">Total:</span>
+                  <span class="timing-value">{{ golden.timings?.total || 0 }}ms</span>
+                </div>
+                <div class="timing-item">
+                  <span class="timing-label">Parsing:</span>
+                  <span class="timing-value">{{ golden.timings?.parsing || 0 }}ms</span>
+                </div>
+                <div class="timing-item">
+                  <span class="timing-label">Processing:</span>
+                  <span class="timing-value">{{ golden.timings?.processing || 0 }}ms</span>
+                </div>
+                <div class="timing-item">
+                  <span class="timing-label">Verification:</span>
+                  <span class="timing-value">{{ golden.timings?.verification || 0 }}ms</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ✅ Failed Edits Panel -->
+          <div class="info-panel failed-edits-panel" *ngIf="golden?.failedEdits && (golden.failedEdits?.length || 0) > 0" [@slideIn]>
+            <div class="panel-header">
+              <div class="panel-icon error-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+              <h4>Could Not Apply</h4>
+              <span class="count-badge error">{{ golden.failedEdits?.length || 0 }}</span>
+            </div>
+
+            <ul class="failed-edits-list">
+              <li *ngFor="let edit of golden.failedEdits; trackBy: trackByFailedEdit" 
+                  class="failed-edit-item" 
+                  [@listAnimation]>
+                
+                <!-- Status Badge -->
+                <div class="status-badge" [class]="getStatusColor(edit.status || 'not_found')">
+                  <mat-icon>{{ getStatusIcon(edit.status || 'not_found') }}</mat-icon>
+                  <span>{{ getStatusLabel(edit.status || 'not_found') }}</span>
+                </div>
+
+                <!-- Edit Details -->
+                <div class="failed-edit-content">
+                  <div class="edit-text">
+                    <span class="label">Wanted to change:</span>
+                    <code class="text-find">"{{ edit.find || '' }}"</code>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-mini">
+                      <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                    </svg>
+                    <code class="text-replace">"{{ edit.replace || '' }}"</code>
+                  </div>
+
+                  <!-- Reason -->
+                  <div class="failure-reason">
+                    <mat-icon class="info-icon">info</mat-icon>
+                    <span>{{ edit.reason || 'No reason provided' }}</span>
+                  </div>
+
+                  <!-- Recommendation -->
+                  <div class="recommendation">
+                    <mat-icon class="bulb-icon">lightbulb</mat-icon>
+                    <span>{{ getFailureRecommendation(edit) }}</span>
+                  </div>
+
+                  <!-- Context (if available) -->
+                  <div class="context-preview" *ngIf="edit.before_context || edit.after_context">
+                    <span class="context-label">Context:</span>
+                    <code class="context-text">
+                      <span class="dim">{{ edit.before_context || '' }}</span>
+                      <span class="highlight">{{ edit.find || '' }}</span>
+                      <span class="dim">{{ edit.after_context || '' }}</span>
+                    </code>
+                  </div>
+
+                  <!-- Diagnostics (Debug Mode) -->
+                  <div class="diagnostics-section" *ngIf="showDebugInfo && edit.diagnostics" [@expandIn]>
+                    <div class="diagnostics-header">
+                      <mat-icon>analytics</mat-icon>
+                      <span>Diagnostics</span>
+                    </div>
+                    <div class="diagnostics-grid">
+                      <div class="diag-item" *ngIf="edit.diagnostics?.rawOccurrences !== undefined">
+                        <span class="diag-label">Raw Occurrences:</span>
+                        <span class="diag-value">{{ edit.diagnostics.rawOccurrences }}</span>
+                      </div>
+                      <div class="diag-item" *ngIf="edit.diagnostics?.normalizedOccurrences !== undefined">
+                        <span class="diag-label">Normalized Occurrences:</span>
+                        <span class="diag-value">{{ edit.diagnostics.normalizedOccurrences }}</span>
+                      </div>
+                      <div class="diag-item" *ngIf="edit.diagnostics?.contextMatched !== undefined">
+                        <span class="diag-label">Context Matched:</span>
+                        <span class="diag-value">{{ edit.diagnostics.contextMatched ? '✓ Yes' : '✗ No' }}</span>
+                      </div>
+                      <div class="diag-item" *ngIf="edit.diagnostics?.crossesBoundary !== undefined">
+                        <span class="diag-label">Crosses Boundary:</span>
+                        <span class="diag-value">{{ edit.diagnostics.crossesBoundary ? '✓ Yes' : '✗ No' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </ng-container>
+        
         <!-- Subjects Panel -->
         <ng-container *ngIf="subjects$ | async as subjects">
           <div class="info-panel subjects-panel" *ngIf="subjects?.length" [@slideIn]>
@@ -171,36 +354,38 @@
           </div>
         </ng-container>
 
-        <!-- Edits Panel -->
-        <ng-container *ngIf="golden$ | async as golden">
-          <div class="info-panel edits-panel" *ngIf="golden?.edits?.length" [@slideIn]>
-            <div class="panel-header">
-              <div class="panel-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                </svg>
-              </div>
-              <h4>Applied Edits</h4>
-              <span class="count-badge">{{ golden.edits.length }}</span>
-            </div>
-            <ul class="edits-list">
-              <li *ngFor="let e of golden.edits; trackBy: trackByEdit" class="edit-item" [@listAnimation]>
-                <div class="edit-context">
-                  <code class="context-before">{{ e.before_context }}</code>
-                  <code class="context-find">{{ e.find }}</code>
-                  <code class="context-after">{{ e.after_context }}</code>
-                </div>
-                <div class="edit-replace">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon">
-                    <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-                  </svg>
-                  <span>{{ e.replace }}</span>
-                </div>
-                <div class="edit-reason" *ngIf="e.reason">{{ e.reason }}</div>
-              </li>
-            </ul>
-          </div>
-        </ng-container>
+        <!-- ✅ Applied Edits - ONLY SUCCESSFUL CHANGES -->
+        <!-- ✅ Applied Edits - ONLY SUCCESSFUL CHANGES -->
+<!-- Edits Panel -->
+<ng-container *ngIf="golden$ | async as golden">
+  <div class="info-panel edits-panel" *ngIf="golden?.changes?.length" [@slideIn]>
+    <div class="panel-header">
+      <div class="panel-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+      </div>
+      <h4>Applied Edits</h4>
+      <span class="count-badge">{{ golden.changes?.length || 0 }}</span>
+    </div>
+    <ul class="edits-list">
+      <li *ngFor="let c of golden.changes; trackBy: trackByEdit" class="edit-item" [@listAnimation]>
+        <div class="edit-context">
+          <code class="context-before">{{ c.before }}</code>
+        </div>
+        <div class="edit-replace">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon">
+            <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+          </svg>
+          <span>{{ c.after }}</span>
+        </div>
+        <div class="edit-reason" *ngIf="c.reason">{{ c.reason }}</div>
+      </li>
+    </ul>
+  </div>
+</ng-container>
+
+
 
         <!-- Suggestions Panel -->
         <ng-container *ngIf="suggestions$ | async as sug">
@@ -267,7 +452,6 @@
         <h3 class="section-title">Golden Preview</h3>
         <div class="title-underline golden"></div>
         
-        <!-- Edit Button - Only show when golden template exists -->
         <button 
           *ngIf="(golden$ | async)?.html"
           mat-icon-button 
@@ -280,7 +464,6 @@
         </button>
       </div>
       <div class="card-content preview-content" style="flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column;">
-        <!-- Loading State for Golden Generation -->
         <div *ngIf="goldenLoading" class="golden-loading-state" [@fadeIn] style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem;">
           <div class="golden-loader">
             <div class="golden-spinner">
@@ -300,7 +483,6 @@
           </div>
         </div>
 
-        <!-- Golden Template Content -->
         <ng-container *ngIf="!goldenLoading">
           <ng-container *ngIf="golden$ | async as golden">
             <app-html-preview
@@ -348,7 +530,6 @@
     </div>
 
     <div class="variants-grid">
-      <!-- Actual variant cards FIRST -->
       <div class="variant-card glass-card" *ngFor="let v of vr.items; trackBy: trackByIndex" [@variantAnimation]>
         <div class="variant-left">
           <div class="variant-header">
@@ -427,7 +608,6 @@
         </div>
       </div>
 
-      <!-- Skeleton loading cards ONLY if still generating -->
       <div class="variant-skeleton glass-card" 
            *ngFor="let placeholder of getSkeletonArray(vr?.target || 5, vr?.items?.length || 0); trackBy: trackByIndex" 
            [@variantAnimation]>
@@ -449,95 +629,3 @@
     </div>
   </section>
 </div>
-
-<!-- Edit Modal - WYSIWYG Editing
-<div class="edit-modal-backdrop" 
-     *ngIf="isEditModalOpen" 
-     (click)="onModalBackdropClick($event)"
-     [@modalAnimation]>
-  <div class="edit-modal-container" 
-       [@modalContentAnimation]
-       (click)="$event.stopPropagation()">
-    <div class="edit-modal-header">
-      <div class="modal-header-left">
-        <div class="modal-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-          </svg>
-        </div>
-        <h2>Edit Golden Template</h2>
-      </div>
-      <div class="modal-header-actions">
-          <button 
-          mat-icon-button 
-          class="modal-action-btn cancel-btn"
-          (click)="closeEditModal()"
-          title="Cancel">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button> 
-
-          <button 
-          mat-icon-button 
-          class="modal-action-btn save-btn"
-          (click)="saveEditedTemplate()"
-          title="Save Changes">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M5 13l4 4L19 7"/>
-          </svg>
-        </button>
-
-        <button 
-          mat-icon-button 
-          class="bypass-icon-btn"
-          (click)="onBypassVariants()"
-          title="Skip Variants">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-          </svg>
-        </button>
-        <button 
-          mat-icon-button 
-          class="modal-close-btn"
-          (click)="closeEditModal()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-    
-    <div class="edit-modal-content" (click)="$event.stopPropagation()">
-      <div class="edit-instructions" *ngIf="isEditMode">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <p>Click any text to edit it directly. Changes are highlighted in purple.</p>
-      </div>
-
-      <div class="editable-preview-container" [innerHTML]="editableHtml"></div>
-    </div>
-    
-     <div class="edit-modal-footer">
-      <button 
-        mat-raised-button 
-        class="modern-btn secondary-btn"
-        (click)="closeEditModal()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-        Cancel
-      </button>
-      <button 
-        mat-raised-button 
-        class="modern-btn primary-btn"
-        (click)="saveEditedTemplate()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M5 13l4 4L19 7"/>
-        </svg>
-        Save Changes
-      </button>
-    </div> 
-  </div>
-</div> -->

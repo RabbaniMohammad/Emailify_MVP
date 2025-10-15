@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { BehaviorSubject, firstValueFrom, map, shareReplay, of, Subscription, Observable } from 'rxjs';
 import { timeout, catchError, retry } from 'rxjs/operators';
 import { trigger, state, style, transition, animate, query, stagger } from '@angular/animations';
-import { QaService, GoldenResult, VariantItem, VariantsRun } from '../../services/qa.service';
+import { QaService, VariantItem, VariantsRun, GoldenResult, EditStatus, EditDiagnostics } from '../../services/qa.service';
 import { HtmlPreviewComponent } from '../../components/html-preview/html-preview.component';
 import { TemplatesPageComponent } from '../../../templates/pages/templates-page/templates-page.component';
 import { MatButtonModule } from '@angular/material/button';
@@ -18,6 +18,96 @@ import { TemplatesService } from '../../../../core/services/templates.service';
 import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDialog } from '@angular/material/dialog';
+
+/* ------------------------------------------------------------------ */
+/*              ✅ NEW: Atomic Verification Types                     */
+/* ------------------------------------------------------------------ */
+
+// interface EditDiagnostics {
+//   normalizedFind?: string;
+//   rawOccurrences?: number;
+//   normalizedOccurrences?: number;
+//   contextMatched?: boolean;
+//   crossesBoundary?: boolean;
+//   locations?: Array<{
+//     tag: string;
+//     line?: number;
+//     actualContext: string;
+//     confidence: number;
+//   }>;
+//   timings?: {
+//     search: number;
+//     apply: number;
+//     verify: number;
+//   };
+// }
+
+// interface EditResult {
+//   index: number;
+//   edit: {
+//     find: string;
+//     replace: string;
+//     before_context: string;
+//     after_context: string;
+//     reason?: string;
+//   };
+//   status: EditStatus;
+//   reason?: string;
+//   change?: {
+//     before: string;
+//     after: string;
+//     parent: string;
+//     reason?: string;
+//   };
+//   diagnostics?: EditDiagnostics;
+// }
+
+// interface AtomicStats {
+//   total: number;
+//   applied: number;
+//   failed: number;
+//   blocked: number;
+//   skipped: number;
+// }
+
+// interface AtomicTimings {
+//   total: number;
+//   parsing: number;
+//   processing: number;
+//   verification: number;
+// }
+
+// ✅ UPDATED: GoldenResult interface
+// export interface GoldenResult {
+//   html: string;
+//   edits?: Array<{ find: string; replace: string; reason?: string }>;
+//   changes?: Array<{ before: string; after: string; parent: string; reason?: string }>;
+  
+//   // ✅ NEW: Atomic verification data (all optional for backward compatibility)
+//   atomicResults?: EditResult[];
+//   failedEdits?: Array<{
+//     find?: string;
+//     replace?: string;
+//     before_context?: string;
+//     after_context?: string;
+//     reason?: string;
+//     status?: EditStatus;
+//     diagnostics?: EditDiagnostics;
+//   }>;
+//   stats: {
+//     total: number;
+//     applied: number;
+//     failed: number;
+//     blocked: number;
+//     skipped: number;
+//   };
+//   timings: {
+//     total: number;
+//     parsing: number;
+//     processing: number;
+//     verification: number;
+//   };
+// }
 
 type SuggestionResult = {
   gibberish: Array<{ text: string; reason: string }>;
@@ -116,6 +206,10 @@ type SuggestionResult = {
     ])
   ]
 })
+
+
+
+
 export class QaPageComponent implements OnDestroy {
   private ar = inject(ActivatedRoute);
   private qa = inject(QaService);
@@ -178,6 +272,9 @@ export class QaPageComponent implements OnDestroy {
   readonly variants$ = this.variantsSubject.asObservable();
   variantsGenerating = false;
 
+  // ✅ NEW: Debug mode toggle
+  showDebugInfo = false;
+
   constructor() {
     const idSub = this.id$.subscribe(id => {
       this.templateId = id;
@@ -224,22 +321,16 @@ export class QaPageComponent implements OnDestroy {
   // NAVIGATION & REFRESH GUARDS
   // ============================================
 
-  /**
-   * Handle page refresh (F5) - Show browser confirmation dialog
-   */
   @HostListener('window:beforeunload', ['$event'])
   handleBeforeUnload(event: BeforeUnloadEvent): void {
     if (this.isGenerating()) {
       const message = this.getLoadingStateMessage();
       event.preventDefault();
-      event.returnValue = message; // Standard way to show browser dialog
+      event.returnValue = message;
       return;
     }
   }
 
-  /**
-   * Handle navigation away - Show custom confirmation
-   */
   canDeactivate(): boolean | Observable<boolean> {
     if (!this.isGenerating()) {
       return true;
@@ -257,34 +348,20 @@ export class QaPageComponent implements OnDestroy {
     return confirmed;
   }
 
-  /**
-   * Check if any generation is in progress
-   */
   private isGenerating(): boolean {
     return this.goldenLoading || this.subjectsLoading || this.variantsGenerating;
   }
 
-  /**
-   * Get appropriate warning message based on what's loading
-   */
-/**
- * Get appropriate warning message - ONE simple message
- */
-private getLoadingStateMessage(): string {
-  if (!this.isGenerating()) {
-    return '';
+  private getLoadingStateMessage(): string {
+    if (!this.isGenerating()) {
+      return '';
+    }
+    return '⚠️ Generation is in progress and will be lost if you leave.';
   }
 
-  return '⚠️ Generation is in progress and will be lost if you leave.';
-}
-
-  /**
-   * Clean up all active operations when navigating away
-   */
   private cleanupOnExit(): void {
     console.log('🧹 Cleaning up on exit...');
 
-    // Cancel golden
     if (this.goldenLoading) {
       this.goldenAborted = true;
       this.goldenLoading = false;
@@ -294,7 +371,6 @@ private getLoadingStateMessage(): string {
       }
     }
 
-    // Cancel subjects
     if (this.subjectsLoading) {
       this.subjectsAborted = true;
       this.subjectsLoading = false;
@@ -304,31 +380,24 @@ private getLoadingStateMessage(): string {
       }
     }
 
-    // Cancel variants
     if (this.variantsGenerating) {
       this.variantsAborted = true;
       this.variantsGenerating = false;
     }
 
-    // Clear all timeouts
     this.clearAllTimeouts();
-
     console.log('✅ Cleanup complete');
   }
 
   ngOnDestroy(): void {
     console.log('🔴 Component destroying...');
-    
-    // Clean up all active operations
     this.cleanupOnExit();
     
-    // Unsubscribe from all subscriptions
     if (this.goldenSub) this.goldenSub.unsubscribe();
     if (this.subjectsSub) this.subjectsSub.unsubscribe();
     if (this.suggestionsSub) this.suggestionsSub.unsubscribe();
     
     this.subscriptions.forEach(sub => sub.unsubscribe());
-    
     console.log('✅ Component destroyed');
   }
 
@@ -341,7 +410,7 @@ private getLoadingStateMessage(): string {
   }
 
   // ============================================
-  // REST OF THE METHODS (UNCHANGED)
+  // MAIN METHODS
   // ============================================
 
   getSkeletonArray(target: number, currentCount: number): number[] {
@@ -423,8 +492,15 @@ private getLoadingStateMessage(): string {
     this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
   }
 
+  // ============================================
+  // ✅ UPDATED: GOLDEN GENERATION
+  // ============================================
+
   onGenerateGolden(id: string) {
     if (this.goldenLoading) return;
+    
+    console.log('\n🌟 ============ GENERATE GOLDEN (Frontend) ============');
+    console.log('📋 Template ID:', id);
     
     this.goldenLoading = true;
     this.goldenAborted = false;
@@ -433,6 +509,8 @@ private getLoadingStateMessage(): string {
     this.goldenTimeoutId = window.setTimeout(() => {
       this.handleGoldenTimeout();
     }, this.GOLDEN_TIMEOUT);
+
+    const startTime = Date.now();
 
     this.goldenSub = this.qa.generateGolden(id, true).pipe(
       timeout(this.GOLDEN_TIMEOUT),
@@ -447,17 +525,67 @@ private getLoadingStateMessage(): string {
       next: (res) => {
         if (this.goldenAborted) return;
         
+        const responseTime = Date.now() - startTime;
+        console.log('\n✅ Golden response received in', responseTime, 'ms');
+        
         if (this.goldenTimeoutId) {
           clearTimeout(this.goldenTimeoutId);
           this.goldenTimeoutId = undefined;
         }
         
+        // ✅ Log atomic verification results
+        if (res.stats) {
+          console.log('📊 STATS:');
+          console.log('  Total:', res.stats.total);
+          console.log('  ✅ Applied:', res.stats.applied);
+          console.log('  ❌ Failed:', res.stats.failed);
+          console.log('  🚫 Blocked:', res.stats.blocked);
+          console.log('  ⏭️ Skipped:', res.stats.skipped);
+        }
+        
+        if (res.timings) {
+          console.log('⏱️ TIMINGS:');
+          console.log('  Total:', res.timings.total, 'ms');
+          console.log('  Parsing:', res.timings.parsing, 'ms');
+          console.log('  Processing:', res.timings.processing, 'ms');
+          console.log('  Verification:', res.timings.verification, 'ms');
+        }
+        
+        if (res.failedEdits && res.failedEdits.length > 0) {
+          console.log('\n⚠️ FAILED EDITS:', res.failedEdits.length);
+          res.failedEdits.forEach((edit, idx) => {
+            console.log(`\n  [${idx + 1}] Status: ${edit.status ?? 'unknown'}`);
+            console.log(`      Find: "${edit.find?.substring(0, 50) ?? ''}"`);
+            console.log(`      Reason: ${edit.reason ?? 'No reason provided'}`);
+            if (edit.diagnostics) {
+              console.log(`      Raw occurrences: ${edit.diagnostics.rawOccurrences ?? 0}`);
+              console.log(`      Normalized occurrences: ${edit.diagnostics.normalizedOccurrences ?? 0}`);
+            }
+          });
+        }
+        
+        console.log('==========================================\n');
+        
         this.goldenSubject.next(res);
-        this.showSuccess('Golden template generated successfully!');
+        
+        // ✅ Show appropriate success message
+        const appliedCount = res.stats?.applied ?? res.changes?.length ?? 0;
+        const failedCount = res.stats?.failed ?? 0;
+        
+        if (failedCount > 0) {
+          this.showWarning(
+            `Golden template generated! Applied ${appliedCount} change(s), but ${failedCount} edit(s) could not be applied. Check diagnostics below.`
+          );
+        } else {
+          this.showSuccess(`Golden template generated successfully! Applied ${appliedCount} change(s).`);
+        }
+        
         this.cdr.markForCheck();
       },
       error: (e) => {
         if (this.goldenAborted) return;
+        
+        console.error('❌ GOLDEN ERROR:', e);
         
         if (this.goldenTimeoutId) {
           clearTimeout(this.goldenTimeoutId);
@@ -475,6 +603,7 @@ private getLoadingStateMessage(): string {
       complete: () => {
         if (this.goldenAborted) return;
         this.goldenLoading = false;
+        console.log('✅ Golden generation complete');
         this.cdr.markForCheck();
       }
     });
@@ -510,6 +639,10 @@ private getLoadingStateMessage(): string {
     
     this.cdr.markForCheck();
   }
+
+  // ============================================
+  // SUBJECTS
+  // ============================================
 
   onGenerateSubjects(id: string) {
     if (this.subjectsLoading) return;
@@ -594,6 +727,10 @@ private getLoadingStateMessage(): string {
     
     this.cdr.markForCheck();
   }
+
+  // ============================================
+  // SUGGESTIONS
+  // ============================================
 
   onAnalyzeSuggestions(id: string) {
     if (this.suggestionsLoading) return;
@@ -695,6 +832,10 @@ private getLoadingStateMessage(): string {
     this.showWarning('Suggestions analysis cancelled.');
     this.cdr.markForCheck();
   }
+
+  // ============================================
+  // VARIANTS
+  // ============================================
 
   async onGenerateVariants(templateId: string) {
     if (this.variantsGenerating) return;
@@ -885,6 +1026,10 @@ private getLoadingStateMessage(): string {
     this.cdr.markForCheck();
   }
 
+  // ============================================
+  // UTILITY METHODS
+  // ============================================
+
   private getErrorMessage(error: any, operation: string): string {
     if (error?.message?.includes('timeout') || error?.name === 'TimeoutError') {
       return `${operation} timed out. The server might be busy. Please try again.`;
@@ -989,6 +1134,72 @@ private getLoadingStateMessage(): string {
     this.router.navigate(['/qa', templateId, 'use', runId, no]);
   }
 
+  // ============================================
+  // ✅ NEW: Helper Functions for Diagnostics
+  // ============================================
+
+  toggleDebugInfo(): void {
+    this.showDebugInfo = !this.showDebugInfo;
+    console.log('🐛 Debug mode:', this.showDebugInfo ? 'ON' : 'OFF');
+  }
+
+getStatusIcon(status: EditStatus): string {
+  const icons: Record<EditStatus, string> = {
+    'applied': 'check_circle',
+    'not_found': 'search_off',
+    'blocked': 'block',
+    'skipped': 'skip_next',
+    'context_mismatch': 'find_in_page',
+    'boundary_issue': 'link_off',
+    'already_correct': 'done_all',
+  };
+  return icons[status] || 'error';
+}
+
+getStatusColor(status: EditStatus): string {
+  const colors: Record<EditStatus, string> = {
+    'applied': 'success',
+    'not_found': 'error',
+    'blocked': 'warn',
+    'skipped': 'disabled',
+    'context_mismatch': 'warn',
+    'boundary_issue': 'warn',
+    'already_correct': 'info',
+  };
+  return colors[status] || 'error';
+}
+
+getStatusLabel(status: EditStatus): string {
+  const labels: Record<EditStatus, string> = {
+    'applied': 'Applied',
+    'not_found': 'Not Found',
+    'blocked': 'Blocked',
+    'skipped': 'Skipped',
+    'context_mismatch': 'Context Mismatch',
+    'boundary_issue': 'Boundary Issue',
+    'already_correct': 'Already Correct',
+  };
+  return labels[status] || 'Unknown';
+}
+
+  getFailureRecommendation(edit: any): string {
+    if (!edit?.status) return 'No diagnostic information available.';
+    
+    switch (edit.status) {
+      case 'not_found':
+        return 'The text may have been already corrected, or GPT hallucinated this error.';
+      case 'context_mismatch':
+        return 'The text exists but the surrounding context doesn\'t match. Manual review recommended.';
+      case 'boundary_issue':
+        return 'The text spans across interactive elements (links/buttons). Cannot be edited safely.';
+      case 'blocked':
+        return 'Blocked for safety reasons (contains URLs or merge tags).';
+      default:
+        return 'Unknown issue. Please report this to developers.';
+    }
+  }
+
   trackByIndex = (i: number) => i;
   trackByEdit = (i: number, e: any) => e.before + '|' + e.after + '|' + (e.parent || '');
+  trackByFailedEdit = (index: number, edit: any) => `${edit.find}_${edit.replace}_${index}`;
 }

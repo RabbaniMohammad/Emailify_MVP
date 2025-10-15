@@ -2,6 +2,10 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, map, of, tap, throwError, switchMap, Observable, shareReplay, finalize } from 'rxjs';
 
+
+
+
+
 /* ----------------------------- Types (keep existing) ----------------------------- */
 export type GoldenEdit = {
   find: string;
@@ -11,16 +15,58 @@ export type GoldenEdit = {
   reason?: string;
 };
 
-export type GoldenResult = {
-  html: string;
-  edits: GoldenEdit[];
-  stats?: {
-    totalSuggestions: number;
-    autoApplied: number;
-    manualReview: number;
-    successRate: string;
+// ✅ Add these types at the top of qa.service.ts (after imports)
+export type EditStatus = 'applied' | 'not_found' | 'blocked' | 'skipped' | 'context_mismatch' | 'boundary_issue' | 'already_correct';
+
+export interface EditDiagnostics {
+  normalizedFind?: string;
+  rawOccurrences?: number;
+  normalizedOccurrences?: number;
+  contextMatched?: boolean;
+  crossesBoundary?: boolean;
+  locations?: Array<{
+    tag: string;
+    line?: number;
+    actualContext: string;
+    confidence: number;
+  }>;
+  timings?: {
+    search: number;
+    apply: number;
+    verify: number;
   };
-};
+}
+
+export interface GoldenResult {
+  html: string;
+  edits?: GoldenEdit[];  // ✅ Changed from inline Array type
+  changes?: Array<{ before: string; after: string; parent: string; reason?: string }>;
+  
+  // ✅ NEW: Atomic verification data (all optional for backward compatibility)
+  atomicResults?: any[];
+  failedEdits?: Array<{
+    find?: string;
+    replace?: string;
+    before_context?: string;
+    after_context?: string;
+    reason?: string;
+    status?: EditStatus;
+    diagnostics?: EditDiagnostics;
+  }>;
+  stats?: {
+    total: number;
+    applied: number;
+    failed: number;
+    blocked: number;
+    skipped: number;
+  };
+  timings?: {
+    total: number;
+    parsing: number;
+    processing: number;
+    verification: number;
+  };
+}
 
 export type VariantItem = {
   no: number;
