@@ -1082,35 +1082,44 @@ export class QaPageComponent implements OnDestroy {
     this.cdr.markForCheck();
   }
 
-  navigateToVisualEditor(): void {
-    if (!this.templateId) {
-      this.showError('Template ID not found');
-      return;
-    }
-    
-    const golden = this.goldenSubject.value;
-    
-    if (!golden?.html) {
-      this.showError('Golden template not found. Please generate golden template first.');
-      return;
-    }
-    
-    const goldenKey = `visual_editor_${this.templateId}_golden_html`;
-    sessionStorage.setItem(goldenKey, golden.html);
-    
-    if (golden.failedEdits && golden.failedEdits.length > 0) {
-      const failedKey = `visual_editor_${this.templateId}_failed_edits`;
-      sessionStorage.setItem(failedKey, JSON.stringify(golden.failedEdits));
-    }
-    
-    if (golden.stats) {
-      const statsKey = `visual_editor_${this.templateId}_original_stats`;
-      sessionStorage.setItem(statsKey, JSON.stringify(golden.stats));
-    }
-    
-    this.closeVisualEditorModal();
-    this.router.navigate(['/visual-editor', this.templateId]);
+navigateToVisualEditor(): void {
+  if (!this.templateId) {
+    this.showError('Template ID not found');
+    return;
   }
+  
+  const golden = this.goldenSubject.value;
+  
+  if (!golden?.html) {
+    this.showError('Golden template not found. Please generate golden template first.');
+    return;
+  }
+  
+  // ✅ CRITICAL: Save current golden HTML as GOLDEN (will be edited)
+  const goldenKey = `visual_editor_${this.templateId}_golden_html`;
+  sessionStorage.setItem(goldenKey, golden.html);
+  
+  // ✅ NEW: Save a SNAPSHOT of golden HTML BEFORE editing (for comparison)
+  const snapshotKey = `visual_editor_${this.templateId}_snapshot_html`;
+  sessionStorage.setItem(snapshotKey, golden.html);
+  
+  console.log('📸 Snapshot created for comparison');
+  
+  // Save failed edits
+  if (golden.failedEdits && golden.failedEdits.length > 0) {
+    const failedKey = `visual_editor_${this.templateId}_failed_edits`;
+    sessionStorage.setItem(failedKey, JSON.stringify(golden.failedEdits));
+  }
+  
+  // Save original stats
+  if (golden.stats) {
+    const statsKey = `visual_editor_${this.templateId}_original_stats`;
+    sessionStorage.setItem(statsKey, JSON.stringify(golden.stats));
+  }
+  
+  this.closeVisualEditorModal();
+  this.router.navigate(['/visual-editor', this.templateId]);
+}
 
   /**
    * ✅ SOLID COMPARISON: Handles return from visual editor
@@ -1127,147 +1136,334 @@ export class QaPageComponent implements OnDestroy {
    * 6. Update golden template with edited HTML
    * 7. Update button color based on remaining failed edits
    */
-  private async handleVisualEditorReturn(
-    templateId: string,
-    editedHtml: string
-  ): Promise<void> {
-    console.log('🔄 Processing return from visual editor');
+private async handleVisualEditorReturn(
+  templateId: string,
+  editedHtml: string
+): Promise<void> {
+  console.log('🎯 [WORD BOUNDARY] Starting comparison');
+  
+  const golden = this.goldenSubject.value;
+  
+  if (!golden) {
+    this.showError('Original golden template not found');
+    return;
+  }
+  
+  // Get snapshot
+  const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
+  const snapshotHtml = sessionStorage.getItem(snapshotKey);
+  
+  if (!snapshotHtml) {
+    console.error('❌ No snapshot found!');
+    this.showError('Snapshot not found. Cannot detect changes.');
+    return;
+  }
+  
+  console.log('📸 Snapshot retrieved');
+  
+  // Extract text
+  const originalText = this.extractVisibleText(snapshotHtml);
+  const editedText = this.extractVisibleText(editedHtml);
+  
+  console.log('📊 Snapshot length:', originalText.length);
+  console.log('📊 Edited length:', editedText.length);
+  console.log('📝 Snapshot preview:', originalText.substring(0, 150));
+  console.log('📝 Edited preview:', editedText.substring(0, 150));
+  
+  // Check if identical
+  if (originalText === editedText) {
+    console.log('⚠️ No changes detected');
+    sessionStorage.removeItem(snapshotKey);
+    this.showInfo('No changes detected in the template.');
+    return;
+  }
+  
+  const failedEdits = golden.failedEdits || [];
+  
+  if (failedEdits.length === 0) {
+    console.log('ℹ️ No failed edits - updating HTML only');
     
-    const golden = this.goldenSubject.value;
-    
-    if (!golden || !golden.html) {
-      this.showError('Original golden template not found');
-      return;
-    }
-    
-    const originalText = this.extractVisibleText(golden.html);
-    const editedText = this.extractVisibleText(editedHtml);
-    
-    const htmlChanged = originalText !== editedText;
-    
-    if (!htmlChanged) {
-      this.showInfo('No changes detected in the template.');
-      return;
-    }
-    
-    const failedEdits = golden.failedEdits || [];
-    let fixedCount = 0;
-    const remainingFailedEdits: any[] = [];
-    
-    // Check each failed edit
-    failedEdits.forEach((edit, index) => {
-      const findText = edit.find;
-      
-      if (!findText) {
-        remainingFailedEdits.push(edit);
-        return;
-      }
-      
-      // Normalize for comparison
-      const findNormalized = findText.toLowerCase().trim();
-      const originalNormalized = originalText.toLowerCase();
-      const editedNormalized = editedText.toLowerCase();
-      
-      // Check if "find" text exists in original
-      const existsInOriginal = originalNormalized.includes(findNormalized);
-      
-      if (!existsInOriginal) {
-        // Text wasn't in original, keep as failed
-        remainingFailedEdits.push(edit);
-        return;
-      }
-      
-      // Check if "find" text still exists in edited
-      const stillExistsInEdited = editedNormalized.includes(findNormalized);
-      
-      if (stillExistsInEdited) {
-        // Text still exists unchanged - NOT FIXED
-        remainingFailedEdits.push(edit);
-      } else {
-        // Text was removed/changed - FIXED ✅
-        fixedCount++;
-        console.log(`✅ Fixed: "${findText}"`);
-      }
-    });
-    
-    // Update stats
-    const currentStats = golden.stats || {
-      total: 0,
-      applied: 0,
-      failed: 0,
-      blocked: 0,
-      skipped: 0
-    };
-    
-    const updatedStats = {
-      ...currentStats,
-      applied: currentStats.applied + fixedCount,
-      failed: Math.max(0, currentStats.failed - fixedCount)
-    };
-    
-    console.log(`📊 Stats: Fixed ${fixedCount}/${failedEdits.length}`);
-    
-    // Create updated golden
     const updatedGolden: GoldenResult = {
       ...golden,
-      html: editedHtml,
-      stats: updatedStats,
-      failedEdits: remainingFailedEdits
+      html: editedHtml
     };
     
-    // Update BehaviorSubject
     this.goldenSubject.next(updatedGolden);
-    
-    // Save to cache
     this.qa.saveGoldenToCache(templateId, updatedGolden);
-    
-    // Update button color
-    this.updateVisualEditorButtonColor(remainingFailedEdits);
-    
-    // Force change detection
     this.cdr.detectChanges();
     
-    setTimeout(() => {
-      this.cdr.detectChanges();
-    }, 0);
+    sessionStorage.removeItem(snapshotKey);
+    this.showSuccess('✅ Template updated successfully!');
+    return;
+  }
+  
+  console.log(`🔍 Analyzing ${failedEdits.length} failed edits...`);
+  
+  // Deduplicate
+  const uniqueFailedEdits = this.deduplicateFailedEdits(failedEdits);
+  console.log(`📋 Unique edits: ${uniqueFailedEdits.length}`);
+  
+  let fixedCount = 0;
+  const remainingFailedEdits: any[] = [];
+  
+  uniqueFailedEdits.forEach((edit, index) => {
+    const findText = (edit.find || '').trim();
+    const replaceText = (edit.replace || '').trim();
     
-    // Show message
-    if (fixedCount > 0) {
-      if (remainingFailedEdits.length > 0) {
-        this.showSuccess(
-          `✅ Applied ${fixedCount} edit(s)! ${remainingFailedEdits.length} still need attention.`
-        );
-      } else {
-        this.showSuccess(
-          `🎉 All failed edits fixed! ${fixedCount} correction(s) applied.`
-        );
-      }
-    } else {
-      this.showInfo('Template updated with your changes.');
+    if (!findText) {
+      console.log(`⚠️ [Edit ${index}] Empty find text`);
+      remainingFailedEdits.push(edit);
+      return;
     }
     
-    // Scroll to golden preview
-    setTimeout(() => {
-      const goldenPreview = document.querySelector('.col-3');
-      if (goldenPreview) {
-        goldenPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    console.log(`\n🔍 [Edit ${index}] Checking: "${findText}" → "${replaceText}"`);
+    
+    // ✅ WORD BOUNDARY MATCHING - Count whole words only
+    const inSnapshotCount = this.countWholeWordOccurrences(originalText, findText);
+    const inEditedCount = this.countWholeWordOccurrences(editedText, findText);
+    
+    console.log(`   📍 In snapshot: ${inSnapshotCount} whole word occurrence(s)`);
+    console.log(`   📍 In edited: ${inEditedCount} whole word occurrence(s)`);
+    
+    // Also check if replacement exists
+    if (replaceText) {
+      const replaceCount = this.countWholeWordOccurrences(editedText, replaceText);
+      console.log(`   📍 Replacement found: ${replaceCount} occurrence(s)`);
+    }
+    
+    // ✅ FIXED if ALL whole word occurrences are gone
+    if (inSnapshotCount > 0 && inEditedCount === 0) {
+      fixedCount++;
+      console.log(`   ✅ FIXED - All ${inSnapshotCount} whole word instance(s) removed`);
+    }
+    // ⚠️ PARTIALLY FIXED
+    else if (inSnapshotCount > inEditedCount && inEditedCount > 0) {
+      console.log(`   ⚠️ PARTIAL - ${inSnapshotCount - inEditedCount}/${inSnapshotCount} fixed`);
+      remainingFailedEdits.push(edit);
+    }
+    // ❌ NOT FIXED
+    else {
+      if (inSnapshotCount === 0) {
+        console.log(`   ❌ NOT FOUND - Never existed as whole word in snapshot`);
+      } else {
+        console.log(`   ❌ NOT FIXED - Still ${inEditedCount} whole word instance(s)`);
       }
-    }, 300);
+      remainingFailedEdits.push(edit);
+    }
+  });
+  
+  console.log(`\n📊 [FINAL] Fixed: ${fixedCount}/${uniqueFailedEdits.length}`);
+  console.log(`📊 [FINAL] Remaining: ${remainingFailedEdits.length}`);
+  
+  // Update stats
+  const currentStats = golden.stats || {
+    total: 0,
+    applied: 0,
+    failed: 0,
+    blocked: 0,
+    skipped: 0
+  };
+  
+  console.log('📊 Current stats:', currentStats);
+  
+  const updatedStats = {
+    ...currentStats,
+    applied: currentStats.applied + fixedCount,
+    failed: Math.max(0, currentStats.failed - fixedCount)
+  };
+  
+  console.log('📊 Updated stats:', updatedStats);
+  
+  // Create updated golden
+  const updatedGolden: GoldenResult = {
+    ...golden,
+    html: editedHtml,
+    stats: updatedStats,
+    failedEdits: remainingFailedEdits
+  };
+  
+  console.log('💾 Saving updated golden...');
+  
+  // Update and save
+  this.goldenSubject.next(updatedGolden);
+  this.qa.saveGoldenToCache(templateId, updatedGolden);
+  this.updateVisualEditorButtonColor(remainingFailedEdits);
+  
+  // Clean up snapshot
+  sessionStorage.removeItem(snapshotKey);
+  console.log('🧹 Snapshot cleaned up');
+  
+  // Force UI update
+  this.cdr.detectChanges();
+  setTimeout(() => {
+    this.cdr.detectChanges();
+    console.log('🔄 Change detection complete');
+  }, 100);
+  
+  // Show message
+  if (fixedCount > 0) {
+    console.log(`✅ Success: ${fixedCount} fixed`);
+    if (remainingFailedEdits.length > 0) {
+      this.showSuccess(
+        `✅ Fixed ${fixedCount} edit(s)! ${remainingFailedEdits.length} still need attention.`
+      );
+    } else {
+      this.showSuccess(
+        `🎉 All failed edits fixed! ${fixedCount} correction(s) applied successfully.`
+      );
+    }
+  } else {
+    console.log('ℹ️ No fixes detected');
+    this.showInfo('📝 Template updated, but no failed edits were resolved. Please check the changes.');
   }
+  
+  // Scroll to preview
+  setTimeout(() => {
+    const goldenPreview = document.querySelector('.col-3');
+    if (goldenPreview) {
+      goldenPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, 300);
+}
+
+/**
+ * ✅ NEW: Count whole word occurrences using word boundaries
+ * 
+ * Examples:
+ * - countWholeWordOccurrences("This is legant design", "legant") = 1 ✅
+ * - countWholeWordOccurrences("This is elegant design", "legant") = 0 ✅
+ * - countWholeWordOccurrences("legant and legant", "legant") = 2 ✅
+ */
+private countWholeWordOccurrences(text: string, searchWord: string): number {
+  if (!text || !searchWord) return 0;
+  
+  // Escape special regex characters in search word
+  const escapedWord = searchWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  // ✅ Use word boundary \b to match whole words only
+  // \b matches position between word and non-word character
+  const regex = new RegExp(`\\b${escapedWord}\\b`, 'gi');
+  
+  const matches = text.match(regex);
+  const count = matches ? matches.length : 0;
+  
+  // Debug logging
+  if (matches) {
+    console.log(`      🔎 Matches found:`, matches);
+  }
+  
+  return count;
+}
+
+private countExactOccurrences(text: string, search: string): number {
+  if (!text || !search) return 0;
+  
+  let count = 0;
+  let position = 0;
+  
+  while ((position = text.indexOf(search, position)) !== -1) {
+    count++;
+    position += search.length;
+  }
+  
+  return count;
+}
+
+
+
+private computeWordDiff(oldText: string, newText: string): {
+  deletions: string[];
+  additions: string[];
+} {
+  // Split into words
+  const oldWords = this.tokenizeText(oldText);
+  const newWords = this.tokenizeText(newText);
+  
+  console.log(`📝 Old words: ${oldWords.length}, New words: ${newWords.length}`);
+  
+  // Find deletions (in old but not in new)
+  const deletions: string[] = [];
+  oldWords.forEach(word => {
+    const oldCount = oldWords.filter(w => w === word).length;
+    const newCount = newWords.filter(w => w === word).length;
+    
+    if (newCount < oldCount) {
+      // This word appeared fewer times - it was deleted
+      for (let i = 0; i < (oldCount - newCount); i++) {
+        if (!deletions.includes(word)) {
+          deletions.push(word);
+        }
+      }
+    }
+  });
+  
+  // Find additions (in new but not in old)
+  const additions: string[] = [];
+  newWords.forEach(word => {
+    const oldCount = oldWords.filter(w => w === word).length;
+    const newCount = newWords.filter(w => w === word).length;
+    
+    if (newCount > oldCount) {
+      // This word appeared more times - it was added
+      for (let i = 0; i < (newCount - oldCount); i++) {
+        if (!additions.includes(word)) {
+          additions.push(word);
+        }
+      }
+    }
+  });
+  
+  return { deletions, additions };
+}
+private tokenizeText(text: string): string[] {
+  // Split by whitespace and punctuation, keep only words
+  return text
+    .toLowerCase()
+    .split(/[\s\.,;:!?()[\]{}"']+/)
+    .filter(word => word.length > 0);
+}
+
+private deduplicateFailedEdits(edits: any[]): any[] {
+  const seen = new Map<string, any>();
+  
+  edits.forEach(edit => {
+    const key = `${edit.find}|||${edit.replace}`;
+    if (!seen.has(key)) {
+      seen.set(key, edit);
+    }
+  });
+  
+  return Array.from(seen.values());
+}
+
+private countOccurrences(text: string, search: string): number {
+  if (!text || !search) return 0;
+  
+  const textLower = text.toLowerCase();
+  const searchLower = search.toLowerCase().trim();
+  
+  let count = 0;
+  let position = 0;
+  
+  while ((position = textLower.indexOf(searchLower, position)) !== -1) {
+    count++;
+    position += searchLower.length;
+  }
+  
+  return count;
+}
 
   /**
    * Extracts visible text content from HTML
    */
-  private extractVisibleText(html: string): string {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
-    
-    const nonVisible = tempDiv.querySelectorAll('script, style, noscript, head, meta, link');
-    nonVisible.forEach(el => el.remove());
-    
-    const text = tempDiv.textContent || tempDiv.innerText || '';
-    const cleaned = text.replace(/\s+/g, ' ').trim();
-    
-    return cleaned;
-  }
+private extractVisibleText(html: string): string {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  
+  const nonVisible = tempDiv.querySelectorAll('script, style, noscript, head, meta, link');
+  nonVisible.forEach(el => el.remove());
+  
+  const text = tempDiv.textContent || tempDiv.innerText || '';
+  return text.replace(/\s+/g, ' ').trim();
+}
 }
