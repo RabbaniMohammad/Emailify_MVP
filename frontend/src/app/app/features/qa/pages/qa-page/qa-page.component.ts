@@ -1466,4 +1466,5 @@ private extractVisibleText(html: string): string {
   const text = tempDiv.textContent || tempDiv.innerText || '';
   return text.replace(/\s+/g, ' ').trim();
 }
+// hai
 }
