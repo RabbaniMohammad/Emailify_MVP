@@ -7,8 +7,8 @@ import { PendingApprovalComponent } from './app/features/auth/pages/auth-page/pe
 import { GeneratePageComponent } from './app/features/generate/pages/generate-page/generate-page.component';
 import { authGuard } from './app/core/guards/auth.guard';
 import { adminGuard } from './app/core/guards/admin.guard';
-import { qaDeactivateGuard } from './app/core/guards/qa-deactivate.guard'; // ✅ ADD THIS
-import {VisualEditorComponent} from '../app/app/features/visual-editor/visual-editor.component'
+import { qaDeactivateGuard } from './app/core/guards/qa-deactivate.guard';
+import { VisualEditorComponent } from '../app/app/features/visual-editor/visual-editor.component';
 
 export const routes: Routes = [
   // Public routes
@@ -48,7 +48,7 @@ export const routes: Routes = [
     path: 'qa/:id', 
     component: QaPageComponent,
     canActivate: [authGuard],
-    canDeactivate: [qaDeactivateGuard] // ✅ ADD THIS
+    canDeactivate: [qaDeactivateGuard]
   },
   { 
     path: 'qa/:id/use/:runId/:no',
@@ -56,13 +56,16 @@ export const routes: Routes = [
       import('./app/features/qa/pages/use-variant-page/use-variant-page.component')
         .then(m => m.UseVariantPageComponent),
     canActivate: [authGuard],
-    canDeactivate: [qaDeactivateGuard] // ✅ ADD THIS
+    canDeactivate: [qaDeactivateGuard]
   },
-{
-  path: 'visual-editor',
-  component: VisualEditorComponent,
-  canActivate: [authGuard]
-},
+  
+  // 🆕 FIXED: Visual Editor route with :id parameter
+  {
+    path: 'visual-editor/:id',
+    component: VisualEditorComponent,
+    canActivate: [authGuard]
+  },
+  
   // Wildcard
   { path: '**', redirectTo: '' },
 ];

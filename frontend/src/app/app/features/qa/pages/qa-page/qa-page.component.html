@@ -105,24 +105,24 @@
           </button>
 
           <!-- Generate Subjects Button -->
-          <button 
-            mat-stroked-button 
-            class="modern-btn secondary-btn"
-            (click)="subjectsLoading ? cancelSubjects() : onGenerateSubjects(id)"
-            [class.loading]="subjectsLoading">
-            <span class="btn-content" *ngIf="!subjectsLoading">
-              <span class="btn-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                </svg>
-              </span>
-              <span class="btn-text">Generate Subjects</span>
-            </span>
-            <span class="spinner-container" *ngIf="subjectsLoading">
-              <span class="modern-spinner"></span>
-              <span class="btn-text-loading cancel-text">Cancel</span>
-            </span>
-          </button>
+<!-- 🆕 NEW: Visual Editor Button -->
+<button 
+  mat-raised-button 
+  class="modern-btn visual-editor-btn"
+  [class.orange]="visualEditorButtonColor === 'orange'"
+  [class.red]="visualEditorButtonColor === 'red'"
+  [class.green]="visualEditorButtonColor === 'green'"
+  (click)="openVisualEditorModal()">
+  <span class="btn-content">
+    <span class="btn-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+      </svg>
+    </span>
+    <span class="btn-text">Visual Editor</span>
+    <span class="btn-shimmer"></span>
+  </span>
+</button>
         </div>
 
         <!-- Variants Action -->
@@ -246,93 +246,9 @@
             </div>
           </div>
 
-          <!-- ✅ Failed Edits Panel -->
-          <div class="info-panel failed-edits-panel" *ngIf="golden?.failedEdits && (golden.failedEdits?.length || 0) > 0" [@slideIn]>
-            <div class="panel-header">
-              <div class="panel-icon error-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-              </div>
-              <h4>Could Not Apply</h4>
-              <span class="count-badge error">{{ golden.failedEdits?.length || 0 }}</span>
-            </div>
-
-            <ul class="failed-edits-list">
-              <li *ngFor="let edit of golden.failedEdits; trackBy: trackByFailedEdit" 
-                  class="failed-edit-item" 
-                  [@listAnimation]>
-                
-                <!-- Status Badge -->
-                <div class="status-badge" [class]="getStatusColor(edit.status || 'not_found')">
-                  <mat-icon>{{ getStatusIcon(edit.status || 'not_found') }}</mat-icon>
-                  <span>{{ getStatusLabel(edit.status || 'not_found') }}</span>
-                </div>
-
-                <!-- Edit Details -->
-                <div class="failed-edit-content">
-                  <div class="edit-text">
-                    <span class="label">Wanted to change:</span>
-                    <code class="text-find">"{{ edit.find || '' }}"</code>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-mini">
-                      <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-                    </svg>
-                    <code class="text-replace">"{{ edit.replace || '' }}"</code>
-                  </div>
-
-                  <!-- Reason -->
-                  <div class="failure-reason">
-                    <mat-icon class="info-icon">info</mat-icon>
-                    <span>{{ edit.reason || 'No reason provided' }}</span>
-                  </div>
-
-                  <!-- Recommendation -->
-                  <div class="recommendation">
-                    <mat-icon class="bulb-icon">lightbulb</mat-icon>
-                    <span>{{ getFailureRecommendation(edit) }}</span>
-                  </div>
-
-                  <!-- Context (if available) -->
-                  <div class="context-preview" *ngIf="edit.before_context || edit.after_context">
-                    <span class="context-label">Context:</span>
-                    <code class="context-text">
-                      <span class="dim">{{ edit.before_context || '' }}</span>
-                      <span class="highlight">{{ edit.find || '' }}</span>
-                      <span class="dim">{{ edit.after_context || '' }}</span>
-                    </code>
-                  </div>
-
-                  <!-- Diagnostics (Debug Mode) -->
-                  <div class="diagnostics-section" *ngIf="showDebugInfo && edit.diagnostics" [@expandIn]>
-                    <div class="diagnostics-header">
-                      <mat-icon>analytics</mat-icon>
-                      <span>Diagnostics</span>
-                    </div>
-                    <div class="diagnostics-grid">
-                      <div class="diag-item" *ngIf="edit.diagnostics?.rawOccurrences !== undefined">
-                        <span class="diag-label">Raw Occurrences:</span>
-                        <span class="diag-value">{{ edit.diagnostics.rawOccurrences }}</span>
-                      </div>
-                      <div class="diag-item" *ngIf="edit.diagnostics?.normalizedOccurrences !== undefined">
-                        <span class="diag-label">Normalized Occurrences:</span>
-                        <span class="diag-value">{{ edit.diagnostics.normalizedOccurrences }}</span>
-                      </div>
-                      <div class="diag-item" *ngIf="edit.diagnostics?.contextMatched !== undefined">
-                        <span class="diag-label">Context Matched:</span>
-                        <span class="diag-value">{{ edit.diagnostics.contextMatched ? '✓ Yes' : '✗ No' }}</span>
-                      </div>
-                      <div class="diag-item" *ngIf="edit.diagnostics?.crossesBoundary !== undefined">
-                        <span class="diag-label">Crosses Boundary:</span>
-                        <span class="diag-value">{{ edit.diagnostics.crossesBoundary ? '✓ Yes' : '✗ No' }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </li>
-            </ul>
-          </div>
+          
         </ng-container>
-        
+
         <!-- Subjects Panel -->
         <ng-container *ngIf="subjects$ | async as subjects">
           <div class="info-panel subjects-panel" *ngIf="subjects?.length" [@slideIn]>
@@ -442,7 +358,13 @@
     </section>
 
     <!-- Column 3: Golden Preview -->
-    <section class="col col-3 glass-card" [@fadeInUp] style="height: 800px !important; min-height: 800px !important; display: flex; flex-direction: column;">
+<section 
+  class="col col-3 glass-card" 
+  [class.shake-animation]="shouldShake"
+  (click)="onGoldenTemplateClick()"
+  [@fadeInUp] 
+  style="height: 800px !important; min-height: 800px !important; display: flex; flex-direction: column; cursor: pointer;">
+
       <div class="card-header">
         <div class="header-icon golden-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -628,4 +550,74 @@
       </div>
     </div>
   </section>
+
+  <!-- 🆕 NEW: Visual Editor Modal -->
+<!-- 🆕 NEW: Visual Editor Modal -->
+<div class="visual-editor-modal" *ngIf="showVisualEditorModal" [@fadeIn]>
+  <!-- Backdrop (blur) -->
+  <div class="modal-backdrop" (click)="closeVisualEditorModal()"></div>
+  
+  <!-- Modal Content -->
+  <div class="modal-container" [@modalContentAnimation]>
+    <div class="modal-header">
+      <div class="modal-title">
+        <mat-icon>warning</mat-icon>
+        <h3>Could Not Apply</h3>
+        <span class="count-badge" *ngIf="(golden$ | async)?.failedEdits?.length">
+          {{ (golden$ | async)?.failedEdits?.length }}
+        </span>
+      </div>
+      <button mat-icon-button (click)="closeVisualEditorModal()" class="modal-close-btn">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+    
+    <div class="modal-body">
+      <!-- Case 1: Failed edits exist -->
+      <ng-container *ngIf="(golden$ | async)?.failedEdits?.length">
+        <div class="modal-message">
+          <mat-icon>info</mat-icon>
+          <p>The following edits could not be applied automatically. Please use the Visual Editor to fix them manually.</p>
+        </div>
+        
+        <!-- ✅ FIXED: Show ALL failed edits (removed .slice(0, 3)) -->
+        <div class="failed-edits-preview">
+          <ul class="failed-edits-list">
+            <li *ngFor="let edit of (golden$ | async)?.failedEdits" class="failed-edit-item">
+              <div class="status-badge" [class]="getStatusColor(edit.status || 'not_found')">
+                <mat-icon>{{ getStatusIcon(edit.status || 'not_found') }}</mat-icon>
+                <span>{{ getStatusLabel(edit.status || 'not_found') }}</span>
+              </div>
+              <!-- ✅ FIXED: Show full text (no truncation) -->
+              <div class="edit-preview">
+                <code class="preview-find">"{{ edit.find }}"</code>
+                <mat-icon class="arrow-icon">arrow_forward</mat-icon>
+                <code class="preview-replace">"{{ edit.replace }}"</code>
+              </div>
+            </li>
+          </ul>
+          
+          <!-- ✅ REMOVED: No more "+ X more edits" text -->
+        </div>
+      </ng-container>
+      
+      <!-- Case 2: No failed edits -->
+      <ng-container *ngIf="!(golden$ | async)?.failedEdits?.length">
+        <div class="success-state">
+          <mat-icon>check_circle</mat-icon>
+          <h4>All Edits Applied Successfully!</h4>
+          <p>No manual fixes needed. You can still use the Visual Editor to make custom changes.</p>
+        </div>
+      </ng-container>
+    </div>
+    
+    <div class="modal-footer">
+      <button mat-button (click)="closeVisualEditorModal()">Cancel</button>
+      <button mat-raised-button class="primary" (click)="navigateToVisualEditor()">
+        <mat-icon>edit</mat-icon>
+        Open Visual Editor
+      </button>
+    </div>
+  </div>
+</div>
 </div>

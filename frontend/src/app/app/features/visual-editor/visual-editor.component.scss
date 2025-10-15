@@ -199,3 +199,41 @@
     }
   }
 }
+
+
+// ============================================
+// 🆕 NEW: CHECK PREVIEW BUTTON STYLES
+// ============================================
+
+.check-preview-btn {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.3);
+  transition: all 0.3s ease;
+  
+  mat-icon {
+    margin-right: 0.5rem;
+  }
+  
+  &:hover:not(:disabled) {
+    box-shadow: 0 6px 20px rgba(109, 40, 217, 0.4);
+    transform: translateY(-2px);
+  }
+  
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+  }
+}
+
+// Ensure action buttons are properly spaced
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}

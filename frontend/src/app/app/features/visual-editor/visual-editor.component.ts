@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import grapesjs from 'grapesjs';
 import grapesjsPresetNewsletter from 'grapesjs-preset-newsletter';
@@ -30,6 +30,7 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private router = inject(Router);
   private cacheService = inject(CacheService);
   private authService = inject(AuthService);
+  private route = inject(ActivatedRoute);
   
   private editor: any;
   loading = true;
@@ -38,9 +39,24 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   
   private readonly EDITOR_CACHE_KEY = 'visual-editor-content';
 
-  ngOnInit(): void {
-    console.log('🟢 [ngOnInit] Visual Editor initialized');
-  }
+  templateId: string | null = null;
+originalGoldenHtml: string = '';
+
+ngOnInit(): void {
+  console.log('🟢 [ngOnInit] Visual Editor initialized');
+  
+  // 🆕 NEW: Get template ID from route params
+  this.route.paramMap.subscribe(params => {
+    this.templateId = params.get('id');
+    console.log('📋 [ngOnInit] Template ID from route:', this.templateId);
+    
+    if (this.templateId) {
+      this.loadGoldenHtml(this.templateId);
+    } else {
+      console.warn('⚠️ [ngOnInit] No template ID in route');
+    }
+  });
+}
 
   ngAfterViewInit(): void {
     console.log('🟢 [ngAfterViewInit] Called');
@@ -64,6 +80,33 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       this.editor.destroy();
     }
   }
+
+  /**
+ * Loads golden HTML from sessionStorage
+ */
+private loadGoldenHtml(templateId: string): void {
+  console.log('🔍 [loadGoldenHtml] Loading golden HTML from sessionStorage');
+  console.log('📋 [loadGoldenHtml] Template ID:', templateId);
+  
+  const goldenKey = `visual_editor_${templateId}_golden_html`;
+  const goldenHtml = sessionStorage.getItem(goldenKey);
+  
+  if (!goldenHtml) {
+    console.error('❌ [loadGoldenHtml] No golden HTML found in sessionStorage');
+    console.error('❌ [loadGoldenHtml] Expected key:', goldenKey);
+    alert('No template data found. Please generate golden template first.');
+    this.router.navigate(['/qa', templateId]);
+    return;
+  }
+  
+  console.log('✅ [loadGoldenHtml] Golden HTML loaded from sessionStorage');
+  console.log('📊 [loadGoldenHtml] HTML length:', goldenHtml.length);
+  
+  this.originalGoldenHtml = goldenHtml;
+  
+  // HTML will be loaded into editor when editor initializes (in initGrapesJS -> 'load' event)
+  console.log('💾 [loadGoldenHtml] Golden HTML stored in component property');
+}
 
   private initGrapesJS(): void {
     console.log('🟢 [initGrapesJS] Starting initialization');
@@ -89,16 +132,34 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       console.log('✅ [initGrapesJS] GrapesJS instance created');
       console.log('🔍 [initGrapesJS] Editor object:', this.editor);
       
-      this.editor.on('load', () => {
-        console.log('🟢 [Editor Event] LOAD event fired');
-        console.log('🔍 [Editor Event] Editor ready state:', this.editor);
-        
-        this.setupCodeEditor();
-        this.restoreProgress();
-        
-        this.loading = false;
-        console.log('✅ [Editor Event] Loading complete');
-      });
+this.editor.on('load', () => {
+  console.log('🟢 [Editor Event] LOAD event fired');
+  console.log('🔍 [Editor Event] Editor ready state:', this.editor);
+  
+  this.setupCodeEditor();
+  
+  // 🆕 NEW: Load golden HTML if available (from QA page)
+  if (this.originalGoldenHtml) {
+    console.log('📥 [Editor Event] Loading golden HTML into editor');
+    console.log('📊 [Editor Event] HTML length:', this.originalGoldenHtml.length);
+    
+    try {
+      this.editor.setComponents(this.originalGoldenHtml);
+      console.log('✅ [Editor Event] Golden HTML loaded successfully');
+    } catch (error) {
+      console.error('❌ [Editor Event] Failed to load golden HTML:', error);
+      // Fall back to restore progress if loading fails
+      this.restoreProgress();
+    }
+  } else {
+    // ✅ EXISTING: Restore progress from cache if no golden HTML
+    console.log('ℹ️ [Editor Event] No golden HTML, restoring from cache');
+    this.restoreProgress();
+  }
+  
+  this.loading = false;
+  console.log('✅ [Editor Event] Loading complete');
+});
       
       this.editor.on('update', () => {
         console.log('📝 [Editor Event] UPDATE event fired');
@@ -110,6 +171,56 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       this.loading = false;
     }
   }
+
+
+  /**
+ * Saves edited HTML and navigates back to QA page for preview
+ */
+onCheckPreview(): void {
+  console.log('👀 [onCheckPreview] Check preview clicked');
+  
+  if (!this.editor) {
+    console.error('❌ [onCheckPreview] No editor instance');
+    alert('Editor not initialized');
+    return;
+  }
+  
+  if (!this.templateId) {
+    console.error('❌ [onCheckPreview] No template ID');
+    alert('Template ID not found');
+    return;
+  }
+  
+  console.log('📤 [onCheckPreview] Getting edited HTML from editor');
+  
+  // Get edited HTML + CSS
+  const html = this.editor.getHtml();
+  const css = this.editor.getCss();
+  const fullHtml = `<style>${css}</style>${html}`;
+  
+  console.log('✅ [onCheckPreview] Edited HTML extracted');
+  console.log('📊 [onCheckPreview] Edited HTML length:', fullHtml.length);
+  console.log('📊 [onCheckPreview] Original HTML length:', this.originalGoldenHtml.length);
+  console.log('📊 [onCheckPreview] Difference:', fullHtml.length - this.originalGoldenHtml.length, 'characters');
+  
+  // Store edited HTML in sessionStorage
+  const editedKey = `visual_editor_${this.templateId}_edited_html`;
+  sessionStorage.setItem(editedKey, fullHtml);
+  console.log(`✅ [onCheckPreview] Stored edited HTML: ${editedKey}`);
+  
+  // Set return flag
+  const returnKey = `visual_editor_${this.templateId}_return_flag`;
+  sessionStorage.setItem(returnKey, 'true');
+  console.log(`✅ [onCheckPreview] Set return flag: ${returnKey}`);
+  
+  // Auto-save current state (in case user comes back)
+  this.autoSave();
+  console.log('✅ [onCheckPreview] Auto-saved current editor state');
+  
+  // Navigate back to QA page
+  console.log(`🧭 [onCheckPreview] Navigating to /qa/${this.templateId}`);
+  this.router.navigate(['/qa', this.templateId]);
+}
 
   private setupCodeEditor(): void {
     console.log('🟢 [setupCodeEditor] Starting setup');

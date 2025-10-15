@@ -20,8 +20,8 @@ export class AuthPageComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
       // 🔓 TEMPORARY: Skip authentication
-      this.router.navigate(['/']);
-      return;
+      // this.router.navigate(['/']);
+      // return;
     // Listen for messages from OAuth popup
     window.addEventListener('message', this.handleAuthMessage.bind(this));
 

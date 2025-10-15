@@ -1,0 +1,1521 @@
+# 🎯 Complete Implementation Plan - Visual Editor Integration
+
+---
+
+## **🔍 Problem Statement & Context**
+
+### **The Core Problem:**
+When GPT tries to fix grammar/spelling in HTML templates, it sometimes **fails to apply edits** because:
+- Text crosses HTML boundaries (inside/outside links)
+- Context doesn't match (surrounding text changed)
+- Text not found in HTML (GPT hallucinated the error)
+
+**Current State:**
+- ✅ Successfully applied edits are shown in "Applied Edits" section
+- ❌ Failed edits are shown in "Could Not Apply" section
+- 📊 Statistics show: Total, Applied, Failed, Blocked
+- ⚠️ **Problem:** Users can't do anything about failed edits - they're stuck!
+
+### **The Solution:**
+Give users a **Visual Editor** where they can:
+1. See which edits failed
+2. Manually fix them in a WYSIWYG editor
+3. Come back to QA page with updated template
+4. System intelligently detects what was fixed
+5. Statistics update automatically
+
+---
+
+## **🏗️ Architecture & Design Decisions**
+
+### **Decision 1: Modal vs Inline Display**
+**Options:**
+- A) Inline expansion (show failed edits in QA page)
+- B) Modal overlay (popup)
+- C) Separate page
+
+**Chosen:** **B) Modal overlay**
+
+**Reasoning:**
+- ✅ Non-intrusive (doesn't break existing layout)
+- ✅ Focuses user attention on the problem
+- ✅ Can show detailed information without cluttering
+- ✅ Easy to dismiss and re-open
+- ✅ Matches existing UI patterns (you already use modals)
+
+---
+
+### **Decision 2: Button Placement**
+**Options:**
+- A) Replace "Generate Subjects" button entirely
+- B) Add as 4th button alongside existing
+- C) Add in header
+
+**Chosen:** **A) Replace "Generate Subjects"**
+
+**Reasoning:**
+- ✅ You explicitly requested this position
+- ✅ Subjects feature is separate from QA workflow
+- ✅ Visual Editor is part of QA workflow (fixing issues)
+- ✅ Keeps UI clean (not too many buttons)
+
+---
+
+### **Decision 3: Data Passing Method**
+**Options:**
+- A) Router state (Angular NavigationExtras)
+- B) SessionStorage
+- C) Shared service (BehaviorSubject)
+- D) Backend API (store in DB)
+
+**Chosen:** **B) SessionStorage (like your current implementation)**
+
+**Reasoning:**
+- ✅ Already used in `onBypassVariants()` and `onSkipToChat()`
+- ✅ Persists across page refreshes
+- ✅ Tab-specific (multiple tabs = independent sessions)
+- ✅ No backend changes needed
+- ✅ Simple and reliable
+- ❌ Router state can be lost on refresh
+- ❌ Shared service doesn't persist
+- ❌ Backend adds complexity
+
+**SessionStorage Keys:**
+```typescript
+`visual_editor_${templateId}_golden_html`      // Original golden HTML
+`visual_editor_${templateId}_failed_edits`     // JSON array of failed edits
+`visual_editor_${templateId}_edited_html`      // HTML after user edits
+`visual_editor_${templateId}_return_flag`      // Flag to detect return
+`qa_shake_animation_${templateId}`             // Shake animation flag
+```
+
+---
+
+### **Decision 4: Statistics Update Logic**
+**Options:**
+- A) Re-run full atomic verification (call backend)
+- B) Manual text comparison (frontend only)
+- C) Ask user to confirm fixes
+
+**Chosen:** **B) Manual text comparison**
+
+**Reasoning:**
+- ✅ Instant feedback (no API call)
+- ✅ User already made changes, no need to re-verify
+- ✅ Cheaper (no GPT API cost)
+- ✅ Simple logic: "Did user change the text?"
+- ❌ Option A: Too slow, expensive, unnecessary
+- ❌ Option C: Bad UX (extra clicks)
+
+---
+
+### **Decision 5: Button Color States**
+**Color Coding:**
+- 🟠 **Orange:** Initial state (golden not generated yet OR no failed edits info)
+- 🔴 **Red:** Failed edits exist (`failedEdits.length > 0`)
+- 🟢 **Green:** All edits successful (`failedEdits.length === 0`)
+
+**Reasoning:**
+- 🟠 Orange = Neutral (no action needed yet, or always available)
+- 🔴 Red = Alert (user needs to fix something)
+- 🟢 Green = Success (all good, but button still available)
+- ✅ Standard color psychology
+- ✅ Matches existing UI (red errors, green success)
+
+---
+
+### **Decision 6: Shake Animation Trigger**
+**When to trigger:**
+- Only after golden generation completes
+- Only if `failedEdits.length > 0`
+- Only ONCE per session
+
+**Why ONCE?**
+- User already saw it, don't be annoying
+- Clear indication there's a problem
+- Directs attention to failed edits
+
+**Why sessionStorage flag?**
+- Persists across page refreshes
+- Per-template (different templates = fresh animation)
+- Cleared when browser closed
+
+---
+
+## **📋 Complete Implementation Flow (Step-by-Step)**
+
+---
+
+### **🎬 Scene 1: Initial Page Load**
+
+**File:** `qa-page.component.ts`
+
+**Function:** `ngOnInit()`
+
+```typescript
+ngOnInit() {
+  // 1. Check if returning from visual editor
+  this.checkForVisualEditorReturn();
+  
+  // 2. Existing initialization
+  const idSub = this.id$.subscribe(id => {
+    this.templateId = id;
+    // ... existing code
+  });
+}
+```
+
+**Thought Process:**
+- First thing on page load: Check if user is returning from visual editor
+- If yes, handle the return (update template, stats)
+- If no, proceed normally
+
+---
+
+### **🎬 Scene 2: User Generates Golden Template**
+
+**File:** `qa-page.component.ts`
+
+**Function:** `onGenerateGolden()` (MODIFIED)
+
+**Current flow:**
+1. Call API: `this.qa.generateGolden(id)`
+2. Get response with `html`, `edits`, `changes`, `failedEdits`, `stats`
+3. Update `goldenSubject.next(res)`
+4. Show success/warning message
+
+**NEW additions:**
+```typescript
+onGenerateGolden(id: string) {
+  // ... existing code ...
+  
+  this.goldenSub = this.qa.generateGolden(id, true).subscribe({
+    next: (res) => {
+      if (this.goldenAborted) return;
+      
+      // ✅ EXISTING CODE
+      this.goldenSubject.next(res);
+      
+      // 🆕 NEW: Update visual editor button color
+      this.updateVisualEditorButtonColor(res.failedEdits);
+      
+      // 🆕 NEW: Trigger shake animation if failed edits exist
+      if (res.failedEdits && res.failedEdits.length > 0) {
+        this.triggerShakeAnimationOnce(id);
+      }
+      
+      // ✅ EXISTING: Show messages
+      const appliedCount = res.stats?.applied ?? 0;
+      const failedCount = res.stats?.failed ?? 0;
+      
+      if (failedCount > 0) {
+        this.showWarning(`Applied ${appliedCount}, but ${failedCount} failed.`);
+      } else {
+        this.showSuccess(`Applied ${appliedCount} changes!`);
+      }
+      
+      this.cdr.markForCheck();
+    },
+    // ... error handling ...
+  });
+}
+```
+
+**Thought Process:**
+1. After successful golden generation, we have all the data
+2. Update button color based on failed edits count
+3. If failures exist, trigger shake animation
+4. This gives immediate visual feedback to user
+
+---
+
+### **🎬 Scene 3: Visual Editor Button Color Update**
+
+**File:** `qa-page.component.ts`
+
+**New Function:** `updateVisualEditorButtonColor()`
+
+```typescript
+private updateVisualEditorButtonColor(failedEdits: any[] | undefined): void {
+  console.log('🎨 [updateVisualEditorButtonColor] Updating button color');
+  console.log('📊 [updateVisualEditorButtonColor] Failed edits count:', failedEdits?.length || 0);
+  
+  if (!failedEdits || failedEdits.length === 0) {
+    this.visualEditorButtonColor = 'green';
+    console.log('✅ [updateVisualEditorButtonColor] No failed edits → GREEN');
+  } else {
+    this.visualEditorButtonColor = 'red';
+    console.log('🔴 [updateVisualEditorButtonColor] Failed edits exist → RED');
+  }
+  
+  this.cdr.markForCheck();
+}
+```
+
+**Thought Process:**
+- Simple logic: Failed edits exist? Red. None? Green.
+- Orange is only for initial state (before golden generation)
+- Separate function = reusable, testable, clear responsibility
+
+---
+
+### **🎬 Scene 4: Shake Animation (One-Time)**
+
+**File:** `qa-page.component.ts`
+
+**New Function:** `triggerShakeAnimationOnce()`
+
+```typescript
+private triggerShakeAnimationOnce(templateId: string): void {
+  console.log('🔔 [triggerShakeAnimationOnce] Checking shake animation');
+  
+  const shakeKey = `qa_shake_animation_${templateId}`;
+  const alreadyShown = sessionStorage.getItem(shakeKey);
+  
+  if (alreadyShown === 'true') {
+    console.log('⏭️ [triggerShakeAnimationOnce] Already shown, skipping');
+    return;
+  }
+  
+  console.log('🎯 [triggerShakeAnimationOnce] Triggering shake animation');
+  
+  // Set flag to prevent repeat
+  sessionStorage.setItem(shakeKey, 'true');
+  
+  // Trigger animation via property
+  this.shouldShake = true;
+  this.cdr.markForCheck();
+  
+  // Remove animation class after 1 second
+  setTimeout(() => {
+    this.shouldShake = false;
+    this.cdr.markForCheck();
+    console.log('✅ [triggerShakeAnimationOnce] Animation complete');
+  }, 1000);
+}
+```
+
+**Thought Process:**
+1. **Check flag first:** Has animation already played?
+2. **If not:** Set flag (prevent future triggers)
+3. **Trigger animation:** Set `shouldShake = true`
+4. **Auto-remove:** After 1 second, set back to false
+5. **SessionStorage:** Persists across refreshes, per template
+
+**Why setTimeout?**
+- CSS animation duration is 1 second
+- Need to remove class so it can be re-applied if needed (edge case)
+- Clean state after animation completes
+
+---
+
+### **🎬 Scene 5: User Clicks Visual Editor Button**
+
+**File:** `qa-page.component.html`
+
+**New Button:**
+```html
+<button 
+  mat-raised-button 
+  class="modern-btn visual-editor-btn"
+  [class.orange]="visualEditorButtonColor === 'orange'"
+  [class.red]="visualEditorButtonColor === 'red'"
+  [class.green]="visualEditorButtonColor === 'green'"
+  (click)="openVisualEditorModal()">
+  <span class="btn-content">
+    <span class="btn-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+      </svg>
+    </span>
+    <span class="btn-text">Visual Editor</span>
+  </span>
+</button>
+```
+
+**Thought Process:**
+- Same structure as other buttons (consistency)
+- Three color classes (only one active at a time)
+- SVG icon = edit/pencil (visual indicator)
+- Click triggers modal opening
+
+---
+
+### **🎬 Scene 6: Modal Opens**
+
+**File:** `qa-page.component.ts`
+
+**New Function:** `openVisualEditorModal()`
+
+```typescript
+openVisualEditorModal(): void {
+  console.log('🚪 [openVisualEditorModal] Opening modal');
+  
+  const golden = this.goldenSubject.value;
+  console.log('📊 [openVisualEditorModal] Failed edits count:', golden?.failedEdits?.length || 0);
+  
+  this.showVisualEditorModal = true;
+  this.cdr.markForCheck();
+}
+```
+
+**Thought Process:**
+- Simple toggle: `showVisualEditorModal = true`
+- Modal visibility controlled by `*ngIf` in template
+- Log for debugging
+
+---
+
+**File:** `qa-page.component.html`
+
+**New Modal:**
+```html
+<!-- Visual Editor Modal -->
+<div class="visual-editor-modal" *ngIf="showVisualEditorModal" [@fadeIn]>
+  <!-- Backdrop (blur) -->
+  <div class="modal-backdrop" (click)="closeVisualEditorModal()"></div>
+  
+  <!-- Modal Content -->
+  <div class="modal-container" [@modalContentAnimation]>
+    <div class="modal-header">
+      <div class="modal-title">
+        <mat-icon>warning</mat-icon>
+        <h3>Could Not Apply</h3>
+        <span class="count-badge" *ngIf="(golden$ | async)?.failedEdits?.length">
+          {{ (golden$ | async)?.failedEdits?.length }}
+        </span>
+      </div>
+      <button mat-icon-button (click)="closeVisualEditorModal()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+    
+    <div class="modal-body">
+      <!-- Case 1: Failed edits exist -->
+      <ng-container *ngIf="(golden$ | async)?.failedEdits?.length">
+        <div class="modal-message">
+          <mat-icon>info</mat-icon>
+          <p>The following edits could not be applied automatically. Please use the Visual Editor to fix them manually.</p>
+        </div>
+        
+        <!-- Failed Edits List (reuse existing component styling) -->
+        <div class="failed-edits-preview">
+          <ul class="failed-edits-list">
+            <li *ngFor="let edit of (golden$ | async)?.failedEdits?.slice(0, 3)" class="failed-edit-item">
+              <div class="status-badge" [class]="getStatusColor(edit.status)">
+                <mat-icon>{{ getStatusIcon(edit.status) }}</mat-icon>
+                <span>{{ getStatusLabel(edit.status) }}</span>
+              </div>
+              <div class="edit-preview">
+                <code>"{{ edit.find?.substring(0, 50) }}{{ edit.find?.length > 50 ? '...' : '' }}"</code>
+                <mat-icon>arrow_forward</mat-icon>
+                <code>"{{ edit.replace?.substring(0, 50) }}{{ edit.replace?.length > 50 ? '...' : '' }}"</code>
+              </div>
+            </li>
+          </ul>
+          
+          <p class="more-edits" *ngIf="(golden$ | async)?.failedEdits?.length > 3">
+            + {{ (golden$ | async)?.failedEdits?.length - 3 }} more edits
+          </p>
+        </div>
+      </ng-container>
+      
+      <!-- Case 2: No failed edits -->
+      <ng-container *ngIf="!(golden$ | async)?.failedEdits?.length">
+        <div class="success-state">
+          <mat-icon>check_circle</mat-icon>
+          <h4>All Edits Applied Successfully!</h4>
+          <p>No manual fixes needed. You can still use the Visual Editor to make custom changes.</p>
+        </div>
+      </ng-container>
+    </div>
+    
+    <div class="modal-footer">
+      <button mat-button (click)="closeVisualEditorModal()">Cancel</button>
+      <button mat-raised-button class="primary" (click)="navigateToVisualEditor()">
+        <mat-icon>edit</mat-icon>
+        Open Visual Editor
+      </button>
+    </div>
+  </div>
+</div>
+```
+
+**Thought Process:**
+
+**Modal Structure:**
+1. **Backdrop:** Blurred background, closes modal when clicked
+2. **Container:** Centered, glassy design (matches your existing style)
+3. **Header:** Title + count badge + close button
+4. **Body:** Conditional content based on failed edits
+5. **Footer:** Cancel + Open Editor buttons
+
+**Content Logic:**
+- If `failedEdits.length > 0`: Show preview of first 3 edits + "X more" text
+- If `failedEdits.length === 0`: Show success message
+- Reuse existing failed edit styling (consistency)
+
+**UX Decisions:**
+- Show max 3 edits in modal (prevent overwhelming)
+- Full list visible in main page below
+- Close button + backdrop click (multiple ways to dismiss)
+- Primary action = "Open Visual Editor" (clear next step)
+
+---
+
+### **🎬 Scene 7: Navigate to Visual Editor**
+
+**File:** `qa-page.component.ts`
+
+**New Function:** `navigateToVisualEditor()`
+
+```typescript
+navigateToVisualEditor(): void {
+  console.log('🚀 [navigateToVisualEditor] Navigating to visual editor');
+  
+  if (!this.templateId) {
+    console.error('❌ [navigateToVisualEditor] No template ID');
+    this.showError('Template ID not found');
+    return;
+  }
+  
+  const golden = this.goldenSubject.value;
+  
+  if (!golden?.html) {
+    console.error('❌ [navigateToVisualEditor] No golden HTML');
+    this.showError('Golden template not found');
+    return;
+  }
+  
+  console.log('💾 [navigateToVisualEditor] Storing data in sessionStorage');
+  
+  // Store golden HTML
+  const goldenKey = `visual_editor_${this.templateId}_golden_html`;
+  sessionStorage.setItem(goldenKey, golden.html);
+  console.log(`✅ [navigateToVisualEditor] Stored: ${goldenKey}`);
+  
+  // Store failed edits (for reference in editor)
+  if (golden.failedEdits && golden.failedEdits.length > 0) {
+    const failedKey = `visual_editor_${this.templateId}_failed_edits`;
+    sessionStorage.setItem(failedKey, JSON.stringify(golden.failedEdits));
+    console.log(`✅ [navigateToVisualEditor] Stored: ${failedKey} (${golden.failedEdits.length} edits)`);
+  }
+  
+  // Store current stats (to calculate delta later)
+  const statsKey = `visual_editor_${this.templateId}_original_stats`;
+  sessionStorage.setItem(statsKey, JSON.stringify(golden.stats));
+  console.log(`✅ [navigateToVisualEditor] Stored: ${statsKey}`);
+  
+  // Close modal
+  this.closeVisualEditorModal();
+  
+  // Navigate
+  console.log(`🧭 [navigateToVisualEditor] Navigating to /visual-editor/${this.templateId}`);
+  this.router.navigate(['/visual-editor', this.templateId]);
+}
+```
+
+**Thought Process:**
+
+**Validation:**
+1. Check `templateId` exists (should always be true, but defensive)
+2. Check `golden.html` exists (must have golden to edit)
+3. If any fail, show error and abort
+
+**Data Storage:**
+1. **Golden HTML:** Essential for loading into editor
+2. **Failed Edits:** Optional, for showing context in editor (nice-to-have)
+3. **Original Stats:** Need this to calculate changes later
+
+**SessionStorage Keys:**
+- Namespaced with `visual_editor_` prefix (avoid collisions)
+- Include `templateId` (multiple templates in different tabs)
+- Clear naming (`_golden_html`, `_failed_edits`, `_original_stats`)
+
+**Navigation:**
+- Close modal first (clean UX)
+- Route: `/visual-editor/:templateId` (RESTful, clear)
+
+---
+
+### **🎬 Scene 8: Visual Editor Page Loads**
+
+**File:** `visual-editor.component.ts`
+
+**Modified Function:** `ngOnInit()`
+
+```typescript
+ngOnInit(): void {
+  console.log('🟢 [ngOnInit] Visual Editor initialized');
+  
+  // Get template ID from route
+  this.route.paramMap.subscribe(params => {
+    this.templateId = params.get('id');
+    console.log('📋 [ngOnInit] Template ID:', this.templateId);
+    
+    if (this.templateId) {
+      this.loadGoldenHtml(this.templateId);
+    }
+  });
+}
+```
+
+**New Function:** `loadGoldenHtml()`
+
+```typescript
+private loadGoldenHtml(templateId: string): void {
+  console.log('🔍 [loadGoldenHtml] Loading golden HTML from sessionStorage');
+  
+  const goldenKey = `visual_editor_${templateId}_golden_html`;
+  const goldenHtml = sessionStorage.getItem(goldenKey);
+  
+  if (!goldenHtml) {
+    console.error('❌ [loadGoldenHtml] No golden HTML found in sessionStorage');
+    this.showError('No template data found. Please generate golden template first.');
+    this.router.navigate(['/qa', templateId]);
+    return;
+  }
+  
+  console.log('✅ [loadGoldenHtml] Golden HTML loaded, length:', goldenHtml.length);
+  this.originalGoldenHtml = goldenHtml;
+  
+  // Load into GrapesJS editor (after editor initializes)
+  // This happens in initGrapesJS() -> editor.on('load')
+}
+```
+
+**Modified Function:** `initGrapesJS()` (inside editor 'load' event)
+
+```typescript
+this.editor.on('load', () => {
+  console.log('🟢 [Editor Event] LOAD event fired');
+  
+  // ✅ EXISTING: Setup code editor
+  this.setupCodeEditor();
+  
+  // 🆕 NEW: Load golden HTML if available
+  if (this.originalGoldenHtml) {
+    console.log('📥 [Editor Event] Loading golden HTML into editor');
+    this.editor.setComponents(this.originalGoldenHtml);
+    console.log('✅ [Editor Event] Golden HTML loaded');
+  } else {
+    // ✅ EXISTING: Restore progress from cache
+    this.restoreProgress();
+  }
+  
+  this.loading = false;
+  console.log('✅ [Editor Event] Loading complete');
+});
+```
+
+**Thought Process:**
+
+**Load Flow:**
+1. Get `templateId` from route params
+2. Look up golden HTML in sessionStorage
+3. If not found: Error message + redirect back to QA
+4. If found: Store in component property
+5. Wait for GrapesJS to initialize
+6. Load HTML into editor
+
+**Why wait for 'load' event?**
+- GrapesJS needs to initialize first
+- Calling `setComponents()` too early = error
+- 'load' event = editor ready to accept content
+
+**Priority:**
+- Golden HTML > Cached progress
+- If golden HTML exists, use it (overrides cache)
+- If not, fall back to cached progress
+
+---
+
+### **🎬 Scene 9: User Edits Template**
+
+**Current State:**
+- User sees golden HTML in GrapesJS visual editor
+- Can drag/drop, edit text, change styles, etc.
+- All existing GrapesJS features work
+
+**No changes needed here!** ✅
+
+---
+
+### **🎬 Scene 10: User Clicks "Check Preview"**
+
+**File:** `visual-editor.component.html`
+
+**New Button in Header:**
+```html
+<div class="header-actions">
+  <button mat-stroked-button class="action-btn" (click)="openImportModal()">
+    <mat-icon>file_upload</mat-icon>
+    Import HTML
+  </button>
+  
+  <button mat-stroked-button class="action-btn" (click)="saveTemplate()">
+    <mat-icon>save</mat-icon>
+    Save
+  </button>
+  
+  <!-- 🆕 NEW: Check Preview Button -->
+  <button 
+    mat-raised-button 
+    class="action-btn primary check-preview-btn"
+    (click)="onCheckPreview()"
+    [disabled]="!templateId">
+    <mat-icon>visibility</mat-icon>
+    Check Preview
+  </button>
+  
+  <button mat-raised-button class="action-btn primary" (click)="exportHTML()">
+    <mat-icon>file_download</mat-icon>
+    Export HTML
+  </button>
+</div>
+```
+
+**Thought Process:**
+- Position: After "Save", before "Export HTML"
+- Primary button (colored, raised) - important action
+- Icon: "visibility" (eye icon) - indicates preview
+- Disabled if no `templateId` (edge case protection)
+
+---
+
+**File:** `visual-editor.component.ts`
+
+**New Function:** `onCheckPreview()`
+
+```typescript
+onCheckPreview(): void {
+  console.log('👀 [onCheckPreview] Check preview clicked');
+  
+  if (!this.editor) {
+    console.error('❌ [onCheckPreview] No editor instance');
+    this.showError('Editor not initialized');
+    return;
+  }
+  
+  if (!this.templateId) {
+    console.error('❌ [onCheckPreview] No template ID');
+    this.showError('Template ID not found');
+    return;
+  }
+  
+  console.log('📤 [onCheckPreview] Getting edited HTML from editor');
+  
+  // Get edited HTML + CSS
+  const html = this.editor.getHtml();
+  const css = this.editor.getCss();
+  const fullHtml = `<style>${css}</style>${html}`;
+  
+  console.log('✅ [onCheckPreview] Edited HTML length:', fullHtml.length);
+  console.log('📊 [onCheckPreview] Original HTML length:', this.originalGoldenHtml.length);
+  console.log('📊 [onCheckPreview] Difference:', fullHtml.length - this.originalGoldenHtml.length, 'characters');
+  
+  // Store edited HTML in sessionStorage
+  const editedKey = `visual_editor_${this.templateId}_edited_html`;
+  sessionStorage.setItem(editedKey, fullHtml);
+  console.log(`✅ [onCheckPreview] Stored: ${editedKey}`);
+  
+  // Set return flag
+  const returnKey = `visual_editor_${this.templateId}_return_flag`;
+  sessionStorage.setItem(returnKey, 'true');
+  console.log(`✅ [onCheckPreview] Set return flag: ${returnKey}`);
+  
+  // Auto-save current state (in case user comes back)
+  this.autoSave();
+  console.log('✅ [onCheckPreview] Auto-saved current state');
+  
+  // Navigate back to QA page
+  console.log(`🧭 [onCheckPreview] Navigating to /qa/${this.templateId}`);
+  this.router.navigate(['/qa', this.templateId]);
+}
+```
+
+**Thought Process:**
+
+**Validation:**
+- Check editor exists (should always be true)
+- Check templateId exists (defensive programming)
+
+**HTML Extraction:**
+- Get HTML from editor: `this.editor.getHtml()`
+- Get CSS from editor: `this.editor.getCss()`
+- Combine: `<style>${css}</style>${html}`
+- This matches your existing `exportHTML()` logic
+
+**Logging:**
+- Log lengths (original vs edited)
+- Log difference (helps debugging)
+- Can see if user made substantial changes
+
+**SessionStorage:**
+1. **Edited HTML:** Full HTML with styles
+2. **Return flag:** Indicates user is returning (not fresh page load)
+
+**Auto-save:**
+- Save current editor state to cache
+- If user clicks "Back" button instead, state is preserved
+- Good UX: Work isn't lost
+
+**Navigation:**
+- Go back to QA page: `/qa/:templateId`
+- QA page will detect return and process changes
+
+---
+
+### **🎬 Scene 11: Return to QA Page**
+
+**File:** `qa-page.component.ts`
+
+**Modified Function:** `ngOnInit()` (already has call to `checkForVisualEditorReturn()`)
+
+**New Function:** `checkForVisualEditorReturn()`
+
+```typescript
+private checkForVisualEditorReturn(): void {
+  console.log('🔍 [checkForVisualEditorReturn] Checking for return from visual editor');
+  
+  const idSub = this.id$.subscribe(async (templateId) => {
+    if (!templateId) return;
+    
+    const returnKey = `visual_editor_${templateId}_return_flag`;
+    const editedKey = `visual_editor_${templateId}_edited_html`;
+    
+    const returnFlag = sessionStorage.getItem(returnKey);
+    const editedHtml = sessionStorage.getItem(editedKey);
+    
+    console.log('🔍 [checkForVisualEditorReturn] Return flag:', returnFlag);
+    console.log('🔍 [checkForVisualEditorReturn] Edited HTML exists:', !!editedHtml);
+    
+    if (returnFlag === 'true' && editedHtml) {
+      console.log('✅ [checkForVisualEditorReturn] User returned from visual editor');
+      
+      // Process the return
+      await this.handleVisualEditorReturn(templateId, editedHtml);
+      
+      // Clear flags (prevent re-processing on refresh)
+      sessionStorage.removeItem(returnKey);
+      console.log('🗑️ [checkForVisualEditorReturn] Cleared return flag');
+      
+      // Keep edited HTML (might need it for debugging)
+      // sessionStorage.removeItem(editedKey); // Optional
+    } else {
+      console.log('ℹ️ [checkForVisualEditorReturn] Normal page load (not returning from editor)');
+    }
+  });
+  
+  this.subscriptions.push(idSub);
+}
+```
+
+**Thought Process:**
+
+**Detection Logic:**
+1. Check `return_flag` = 'true' (set by visual editor)
+2. Check `edited_html` exists (the actual data)
+3. Both must be true = user returning from editor
+
+**Why both checks?**
+- Return flag alone: Could be stale from old session
+- Edited HTML alone: Could be from auto-save, not intentional return
+- Both together: High confidence user completed workflow
+
+**Cleanup:**
+- Remove return flag (prevent re-processing on page refresh)
+- Keep edited HTML temporarily (useful for debugging)
+- Could remove later or let session cleanup handle it
+
+---
+
+### **🎬 Scene 12: Process Visual Editor Return**
+
+**File:** `qa-page.component.ts`
+
+**New Function:** `handleVisualEditorReturn()`
+
+```typescript
+private async handleVisualEditorReturn(
+  templateId: string,
+  editedHtml: string
+): Promise<void> {
+  console.log('🔄 [handleVisualEditorReturn] Processing return from visual editor');
+  
+  const golden = this.goldenSubject.value;
+  
+  if (!golden || !golden.html) {
+    console.error('❌ [handleVisualEditorReturn] No golden template found');
+    this.showError('Original golden template not found');
+    return;
+  }
+  
+  console.log('📊 [handleVisualEditorReturn] Original golden HTML length:', golden.html.length);
+  console.log('📊 [handleVisualEditorReturn] Edited HTML length:', editedHtml.length);
+  
+  // Step 1: Compare and calculate newly applied edits
+  const failedEdits = golden.failedEdits || [];
+  console.log('📊 [handleVisualEditorReturn] Failed edits count:', failedEdits.length);
+  
+  let newlyAppliedCount = 0;
+  
+  if (failedEdits.length > 0) {
+    console.log('🔍 [handleVisualEditorReturn] Comparing edited HTML with failed edits');
+    newlyAppliedCount = this.compareAndUpdateStats(
+      golden.html,
+      editedHtml,
+      failedEdits
+    );
+    console.log('✅ [handleVisualEditorReturn] Newly applied edits:', newlyAppliedCount);
+  } else {
+    console.log('ℹ️ [handleVisualEditorReturn] No failed edits to check');
+  }
+  
+  // Step 2: Update statistics
+  const currentStats = golden.stats || {
+    total: 0,
+    applied: 0,
+    failed: 0,
+    blocked: 0,
+    skipped: 0
+  };
+  
+  const updatedStats = {
+    ...currentStats,
+    applied: currentStats.applied + newlyAppliedCount,
+    failed: Math.max(0, currentStats.failed - newlyAppliedCount) // Prevent negative
+  };
+  
+  console.log('📊 [handleVisualEditorReturn] Stats before:', currentStats);
+  console.log('📊 [handleVisualEditorReturn] Stats after:', updatedStats);
+  
+  // Step 3: Update golden template
+  const updatedGolden: GoldenResult = {
+    ...golden,
+    html: editedHtml,
+    stats: updatedStats,
+    failedEdits: [] // Clear failed edits (no longer tracking)
+  };
+  
+  this.goldenSubject.next(updatedGolden);
+  console.log('✅ [handleVisualEditorReturn] Golden template updated');
+  
+  // Step 4: Update button color
+  this.updateVisualEditorButtonColor([]);
+  console.log('✅ [handleVisualEditorReturn] Button color updated to green');
+  
+  // Step 5: Show success message
+  if (newlyAppliedCount > 0) {
+    this.showSuccess(
+      `Template updated! ${newlyAppliedCount} additional edit(s) applied. New total: ${updatedStats.applied}`
+    );
+  } else {
+    this.showInfo('Template updated with your changes.');
+  }
+  
+  // Step 6: Scroll to golden template
+  setTimeout(() => {
+    const goldenPreview = document.querySelector('.col-3');
+    if (goldenPreview) {
+      goldenPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      console.log('✅ [handleVisualEditorReturn] Scrolled to golden preview');
+    }
+  }, 300);
+  
+  this.cdr.markForCheck();
+  console.log('✅ [handleVisualEditorReturn] Return processing complete');
+}
+```
+
+**Thought Process:**
+
+**Step 1: Compare HTML**
+- Extract text from both HTMLs
+- Loop through failed edits
+- Check if text was changed
+- Count how many were fixed
+
+**Step 2: Update Statistics**
+- Increment `applied` by newly fixed count
+- Decrement `failed` by same amount
+- Use `Math.max(0, ...)` to prevent negative numbers
+
+**Step 3: Update Golden Template**
+- Replace `html` with edited version
+- Update `stats` object
+- Clear `failedEdits` array (no longer needed)
+- Create new `GoldenResult` object
+- Update BehaviorSubject
+
+**Step 4: Update Button Color**
+- Pass empty array to `updateVisualEditorButtonColor([])`
+- This sets button to GREEN (no failed edits)
+
+**Step 5: User Feedback**
+- Show success message with count
+- Inform user of new total
+- Or generic message if no changes detected
+
+**Step 6: Scroll to Preview**
+- Auto-scroll to golden preview column
+- User sees updated template immediately
+- Smooth animation (good UX)
+
+---
+
+### **🎬 Scene 13: Compare HTML and Detect Changes**
+
+**File:** `qa-page.component.ts`
+
+**New Function:** `compareAndUpdateStats()`
+
+```typescript
+private compareAndUpdateStats(
+  originalHtml: string,
+  editedHtml: string,
+  failedEdits: any[]
+): number {
+  console.log('🔍 [compareAndUpdateStats] Starting comparison');
+  console.log('📊 [compareAndUpdateStats] Failed edits to check:', failedEdits.length);
+  
+  let fixedCount = 0;
+  
+  // Extract visible text from both HTMLs
+  const originalText = this.extractVisibleText(originalHtml);
+  const editedText = this.extractVisibleText(editedHtml);
+  
+  console.log('📊 [compareAndUpdateStats] Original text length:', originalText.length);
+  console.log('📊 [compareAndUpdateStats] Edited text length:', editedText.length);
+  
+  // Loop through each failed edit
+  failedEdits.forEach((failedEdit, index) => {
+    const findText = failedEdit.find;
+    
+    if (!findText) {
+      console.warn(`⚠️ [compareAndUpdateStats] Edit ${index + 1}: No find text, skipping`);
+      return;
+    }
+    
+    console.log(`\n🔍 [compareAndUpdateStats] Edit ${index + 1}/${failedEdits.length}`);
+    console.log(`   Find: "${findText.substring(0, 50)}${findText.length > 50 ? '...' : ''}"`);
+    
+    // Case-insensitive comparison
+    const findNormalized = findText.toLowerCase();
+    const originalNormalized = originalText.toLowerCase();
+    const editedNormalized = editedText.toLowerCase();
+    
+    // Check if text exists in original
+    const existsInOriginal = originalNormalized.includes(findNormalized);
+    
+    if (!existsInOriginal) {
+      console.log(`   ❌ Text not found in original HTML, skipping`);
+      return;
+    }
+    
+    console.log(`   ✅ Text found in original HTML`);
+    
+    // Check if text still exists in edited (unchanged)
+    const stillExistsInEdited = editedNormalized.includes(findNormalized);
+    
+    if (stillExistsInEdited) {
+      console.log(`   ❌ Text still exists unchanged in edited HTML`);
+      return;
+    }
+    
+    // Text was in original, but changed/removed in edited
+    console.log(`   ✅ Text was changed! Counting as fixed`);
+    fixedCount++;
+  });
+  
+  console.log(`\n✅ [compareAndUpdateStats] Comparison complete`);
+  console.log(`📊 [compareAndUpdateStats] Total fixed: ${fixedCount}/${failedEdits.length}`);
+  
+  return fixedCount;
+}
+```
+
+**New Helper Function:** `extractVisibleText()`
+
+```typescript
+private extractVisibleText(html: string): string {
+  console.log('📄 [extractVisibleText] Extracting visible text from HTML');
+  
+  // Create temporary DOM element
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  
+  // Remove non-visible elements
+  const nonVisible = tempDiv.querySelectorAll('script, style, noscript, head');
+  nonVisible.forEach(el => el.remove());
+  
+  // Get text content
+  const text = tempDiv.textContent || tempDiv.innerText || '';
+  
+  // Clean up whitespace (but preserve spaces)
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  
+  console.log('✅ [extractVisibleText] Extracted text length:', cleaned.length);
+  
+  return cleaned;
+}
+```
+
+**Thought Process:**
+
+**Why this approach?**
+1. **Simple:** Just compare text content (no complex HTML parsing)
+2. **Reliable:** Matches backend logic (`extractVisibleText()`)
+3. **Fast:** No API calls, instant results
+4. **User-friendly:** If user changed the text, count it
+
+**Algorithm:**
+```
+For each failed edit:
+  1. Get the "find" text (what GPT wanted to change)
+  2. Check if it exists in ORIGINAL golden HTML
+     - If not found: Skip (shouldn't happen, but defensive)
+  3. Check if it still exists in EDITED HTML
+     - If YES: User didn't change it → Don't count
+     - If NO: User changed/removed it → Count as fixed! ✅
+```
+
+**Edge Cases Handled:**
+- Empty `find` text: Skip
+- Text not in original: Skip (invalid failed edit)
+- Text unchanged: Skip (user didn't fix it)
+- Text changed: Count! ✅
+
+**Case-Insensitive:**
+- Convert both to lowercase
+- "Hello World" matches "hello world"
+- As requested by user
+
+**Whitespace Normalization:**
+- Multiple spaces → single space
+- But spaces are preserved (not removed)
+- "Hello  World" becomes "Hello World"
+- If user added space, text is different → counts as changed
+
+**Important Logic:**
+```typescript
+const stillExistsInEdited = editedNormalized.includes(findNormalized);
+
+if (stillExistsInEdited) {
+  // Text unchanged
+  return;
+}
+
+// Text changed!
+fixedCount++;
+```
+
+**Explanation:**
+- If the EXACT original text still exists → user didn't fix it
+- If text is gone/modified → user made a change → count it!
+- We don't care if they used the GPT suggestion or their own fix
+- ANY change = successful fix (per user requirements)
+
+---
+
+## **🎨 Styling Implementation**
+
+### **File: `qa-page.component.scss`**
+
+**New Styles Needed:**
+
+#### **1. Visual Editor Button**
+```scss
+.visual-editor-btn {
+  position: relative;
+  transition: all var(--transition-normal);
+  
+  // Base state (orange)
+  &.orange {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.3);
+    
+    &:hover:not(:disabled) {
+      box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
+    }
+  }
+  
+  // Failed edits state (red)
+  &.red {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+    
+    &:hover:not(:disabled) {
+      box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+    }
+    
+    // Pulse animation when red
+    animation: pulse-red 2s infinite;
+  }
+  
+  // Success state (green)
+  &.green {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+    
+    &:hover:not(:disabled) {
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+    }
+  }
+}
+
+@keyframes pulse-red {
+  0%, 100% {
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgba(239, 68, 68, 0.6);
+  }
+}
+```
+
+#### **2. Shake Animation**
+```scss
+.col-3 {
+  &.shake-animation {
+    animation: violent-shake 1s cubic-bezier(.36,.07,.19,.97);
+    animation-iteration-count: 1;
+  }
+}
+
+@keyframes violent-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-10px) rotate(-1deg);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(10px) rotate(1deg);
+  }
+}
+```
+
+**Thought Process:**
+- **Violent shake:** Large movements (-10px, +10px)
+- **Rotation:** Adds extra emphasis (±1deg)
+- **Cubic-bezier:** Natural easing (not linear)
+- **1 second:** Long enough to notice, not annoying
+- **Single iteration:** Plays once then stops
+
+#### **3. Visual Editor Modal**
+```scss
+.visual-editor-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+  }
+  
+  .modal-container {
+    position: relative;
+    z-index: 10000;
+    width: 100%;
+    max-width: 800px;
+    max-height: 80vh;
+    background: var(--glass-white);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem 2rem;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, rgba(220, 38, 38, 0.05) 100%);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
+    
+    .modal-title {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex: 1;
+      
+      mat-icon {
+        color: var(--error-red);
+        font-size: 28px;
+        width: 28px;
+        height: 28px;
+      }
+      
+      h3 {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1f2937;
+      }
+      
+      .count-badge {
+        background: var(--gradient-accent);
+        color: white;
+        font-size: 0.875rem;
+        font-weight: 700;
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(236, 72, 153, 0.3);
+      }
+    }
+  }
+  
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2rem;
+    
+    .modal-message {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1.25rem;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(109, 40, 217, 0.08) 100%);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: var(--radius-md);
+      margin-bottom: 1.5rem;
+      
+      mat-icon {
+        color: var(--accent-blue);
+        font-size: 24px;
+        width: 24px;
+        height: 24px;
+        flex-shrink: 0;
+      }
+      
+      p {
+        margin: 0;
+        font-size: 0.9375rem;
+        line-height: 1.6;
+        color: #374151;
+      }
+    }
+    
+    .failed-edits-preview {
+      .failed-edits-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      
+      .failed-edit-item {
+        padding: 1rem;
+        background: white;
+        border: 2px solid rgba(239, 68, 68, 0.15);
+        border-radius: var(--radius-md);
+        transition: all var(--transition-normal);
+        
+        &:hover {
+          border-color: rgba(239, 68, 68, 0.3);
+          box-shadow: 0 4px 16px rgba(239, 68, 68, 0.1);
+        }
+        
+        .edit-preview {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-top: 0.75rem;
+          font-family: 'SF Mono', Monaco, monospace;
+          font-size: 0.8125rem;
+          
+          code {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 0.375rem 0.625rem;
+            border-radius: 6px;
+          }
+          
+          mat-icon {
+            color: #9ca3af;
+            font-size: 18px;
+            width: 18px;
+            height: 18px;
+          }
+        }
+      }
+      
+      .more-edits {
+        margin-top: 1rem;
+        text-align: center;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #6b7280;
+      }
+    }
+    
+    .success-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+      text-align: center;
+      
+      mat-icon {
+        font-size: 64px;
+        width: 64px;
+        height: 64px;
+        color: var(--success-green);
+        margin-bottom: 1rem;
+      }
+      
+      h4 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1f2937;
+      }
+      
+      p {
+        margin: 0;
+        font-size: 0.9375rem;
+        color: #6b7280;
+        line-height: 1.6;
+      }
+    }
+  }
+  
+  .modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding: 1.5rem 2rem;
+    background: rgba(249, 250, 251, 0.8);
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
+    
+    button.primary {
+      background: var(--gradient-primary);
+      color: white;
+      
+      mat-icon {
+        margin-right: 0.5rem;
+      }
+    }
+  }
+}
+```
+
+**Thought Process:**
+- **Glassy effect:** `backdrop-filter: blur(20px)`
+- **Layered shadows:** Depth and dimension
+- **Gradient backgrounds:** Matches existing style
+- **Smooth transitions:** Professional feel
+- **Responsive:** `max-width`, `max-height`, `overflow-y: auto`
+
+---
+
+## **📱 Responsive Considerations**
+
+```scss
+@media (max-width: 768px) {
+  .visual-editor-modal {
+    padding: 1rem;
+    
+    .modal-container {
+      max-height: 90vh;
+    }
+    
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+      padding: 1.25rem;
+    }
+    
+    .modal-header .modal-title h3 {
+      font-size: 1.25rem;
+    }
+  }
+}
+```
+
+---
+
+## **🧪 Testing Strategy**
+
+### **Manual Testing Checklist:**
+
+1. ✅ **Button Colors:**
+   - [ ] Orange on initial load (before golden)
+   - [ ] Red after golden with failed edits
+   - [ ] Green after golden with no failed edits
+   - [ ] Green after returning from visual editor
+
+2. ✅ **Shake Animation:**
+   - [ ] Triggers once after golden generation
+   - [ ] Only if failed edits exist
+   - [ ] Doesn't repeat on refresh
+   - [ ] Smooth and noticeable
+
+3. ✅ **Modal:**
+   - [ ] Opens when button clicked
+   - [ ] Shows correct content (failed vs success)
+   - [ ] Closes on backdrop click
+   - [ ] Closes on X button
+   - [ ] Responsive on mobile
+
+4. ✅ **Navigation:**
+   - [ ] SessionStorage keys set correctly
+   - [ ] Visual editor loads golden HTML
+   - [ ] Check Preview returns to QA page
+   - [ ] Stats update correctly
+
+5. ✅ **Edge Cases:**
+   - [ ] No golden template (error handling)
+   - [ ] No failed edits (success message)
+   - [ ] Large number of failed edits (modal scroll)
+   - [ ] Back button from visual editor (no errors)
+   - [ ] Multiple tabs (independent sessions)
+
+---
+
+## **🚀 Summary**
+
+**We're building a complete workflow:**
+1. User generates golden template → sees failed edits
+2. Button changes color to indicate status
+3. Golden preview shakes once (attention grabber)
+4. User clicks Visual Editor → modal opens
+5. User clicks Open Editor → navigates with data
+6. User edits template → clicks Check Preview
+7. System intelligently detects fixes → updates stats
+8. Golden template replaced with edited version
+9. Button turns green → success!
+
+**All backward compatible:**
+- Existing features unchanged
+- New button replaces Generate Subjects (as requested)
+- SessionStorage pattern matches your existing code
+- No breaking changes
+
+---
+
+**Ready to start coding?** 🎯

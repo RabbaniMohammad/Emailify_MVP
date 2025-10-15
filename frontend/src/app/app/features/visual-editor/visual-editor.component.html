@@ -12,7 +12,7 @@
     </div>
     
 <div class="header-actions">
- <button mat-stroked-button class="action-btn" (click)="openImportModal()">
+  <button mat-stroked-button class="action-btn" (click)="openImportModal()">
     <mat-icon>file_upload</mat-icon>
     Import HTML
   </button>
@@ -20,6 +20,17 @@
     <mat-icon>save</mat-icon>
     Save
   </button>
+  
+  <!-- 🆕 NEW: Check Preview Button -->
+  <button 
+    mat-raised-button 
+    class="action-btn check-preview-btn"
+    (click)="onCheckPreview()"
+    [disabled]="!templateId || loading">
+    <mat-icon>visibility</mat-icon>
+    Check Preview
+  </button>
+  
   <button mat-raised-button class="action-btn primary" (click)="exportHTML()">
     <mat-icon>file_download</mat-icon>
     Export HTML

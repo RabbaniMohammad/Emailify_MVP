@@ -263,6 +263,22 @@ export class QaPageComponent implements OnDestroy {
   readonly subjects$ = this.subjectsSubject.asObservable();
   subjectsLoading = false;
 
+    // ============================================
+  // 🆕 NEW: Visual Editor Properties
+  // ============================================
+
+  // Visual Editor Modal state
+  showVisualEditorModal = false;
+
+  // Visual Editor button color state
+  visualEditorButtonColor: 'orange' | 'red' | 'green' = 'orange';
+
+  // Shake animation flag
+  shouldShake = false;
+
+  // SessionStorage keys
+  private readonly SHAKE_FLAG_KEY = 'qa_shake_animation';
+
   private suggestionsSubject = new BehaviorSubject<SuggestionResult | null>(null);
   readonly suggestions$ = this.suggestionsSubject.asObservable();
   suggestionsLoading = false;
@@ -275,48 +291,54 @@ export class QaPageComponent implements OnDestroy {
   // ✅ NEW: Debug mode toggle
   showDebugInfo = false;
 
-  constructor() {
-    const idSub = this.id$.subscribe(id => {
-      this.templateId = id;
+constructor() {
+  const idSub = this.id$.subscribe(id => {
+    this.templateId = id;
 
-      const cachedGolden = this.qa.getGoldenCached(id);
-      const cachedSubjects = this.qa.getSubjectsCached(id);
-      const cachedSuggestions = this.qa.getSuggestionsCached(id);
-      
-      this.goldenSubject.next(cachedGolden);
-      this.subjectsSubject.next(cachedSubjects);
-      this.suggestionsSubject.next(cachedSuggestions);
-      
-      if (cachedGolden?.html) {
-        this.goldenLoading = false;
-        console.log('✅ Restored cached golden');
-      }
-      
-      if (cachedSubjects?.length) {
-        this.subjectsLoading = false;
-        console.log('✅ Restored cached subjects');
-      }
-      
-      if (cachedSuggestions) {
-        this.suggestionsLoading = false;
-        console.log('✅ Restored cached suggestions');
-      }
-
-      const prevRun = this.qa.getVariantsRunCached(id);
-      if (prevRun) {
-        this.variantsSubject.next(prevRun);
-        this.variantsGenerating = false;
-        console.log('✅ Restored cached variants');
-      }
-      this.variantsRunId = prevRun?.runId || null;
-      
-      this.loadOriginalTemplate(id);
-      this.cdr.markForCheck();
-    });
+    const cachedGolden = this.qa.getGoldenCached(id);
+    const cachedSubjects = this.qa.getSubjectsCached(id);
+    const cachedSuggestions = this.qa.getSuggestionsCached(id);
     
-    this.subscriptions.push(idSub);
-  }
+    this.goldenSubject.next(cachedGolden);
+    this.subjectsSubject.next(cachedSubjects);
+    this.suggestionsSubject.next(cachedSuggestions);
+    
+    if (cachedGolden?.html) {
+      this.goldenLoading = false;
+      console.log('✅ Restored cached golden');
+      
+      // 🆕 NEW: Update button color based on cached golden
+      this.updateVisualEditorButtonColor(cachedGolden.failedEdits);
+    }
+    
+    if (cachedSubjects?.length) {
+      this.subjectsLoading = false;
+      console.log('✅ Restored cached subjects');
+    }
+    
+    if (cachedSuggestions) {
+      this.suggestionsLoading = false;
+      console.log('✅ Restored cached suggestions');
+    }
 
+    const prevRun = this.qa.getVariantsRunCached(id);
+    if (prevRun) {
+      this.variantsSubject.next(prevRun);
+      this.variantsGenerating = false;
+      console.log('✅ Restored cached variants');
+    }
+    this.variantsRunId = prevRun?.runId || null;
+    
+    this.loadOriginalTemplate(id);
+    
+    // 🆕 MOVED HERE: Check for return from visual editor AFTER everything is loaded
+    this.checkForVisualEditorReturn();
+    
+    this.cdr.markForCheck();
+  });
+  
+  this.subscriptions.push(idSub);
+}
   // ============================================
   // NAVIGATION & REFRESH GUARDS
   // ============================================
@@ -496,118 +518,135 @@ export class QaPageComponent implements OnDestroy {
   // ✅ UPDATED: GOLDEN GENERATION
   // ============================================
 
-  onGenerateGolden(id: string) {
-    if (this.goldenLoading) return;
-    
-    console.log('\n🌟 ============ GENERATE GOLDEN (Frontend) ============');
-    console.log('📋 Template ID:', id);
-    
-    this.goldenLoading = true;
-    this.goldenAborted = false;
-    this.cdr.markForCheck();
+onGenerateGolden(id: string) {
+  if (this.goldenLoading) return;
+  
+  console.log('\n🌟 ============ GENERATE GOLDEN (Frontend) ============');
+  console.log('📋 Template ID:', id);
+  
+  this.goldenLoading = true;
+  this.goldenAborted = false;
+  this.cdr.markForCheck();
 
-    this.goldenTimeoutId = window.setTimeout(() => {
-      this.handleGoldenTimeout();
-    }, this.GOLDEN_TIMEOUT);
+   // 🆕 NEW: Clear shake animation flag for new generation
+  const shakeKey = `${this.SHAKE_FLAG_KEY}_${id}`;
+  sessionStorage.removeItem(shakeKey);
+  console.log('🗑️ [onGenerateGolden] Cleared shake flag for new generation:', shakeKey);
 
-    const startTime = Date.now();
+  this.goldenTimeoutId = window.setTimeout(() => {
+    this.handleGoldenTimeout();
+  }, this.GOLDEN_TIMEOUT);
 
-    this.goldenSub = this.qa.generateGolden(id, true).pipe(
-      timeout(this.GOLDEN_TIMEOUT),
-      retry({ count: 2, delay: 3000, resetOnSuccess: true }),
-      catchError(error => {
-        if (error.name === 'TimeoutError') {
-          throw new Error('Golden template generation timed out. Please try again.');
-        }
-        throw error;
-      })
-    ).subscribe({
-      next: (res) => {
-        if (this.goldenAborted) return;
-        
-        const responseTime = Date.now() - startTime;
-        console.log('\n✅ Golden response received in', responseTime, 'ms');
-        
-        if (this.goldenTimeoutId) {
-          clearTimeout(this.goldenTimeoutId);
-          this.goldenTimeoutId = undefined;
-        }
-        
-        // ✅ Log atomic verification results
-        if (res.stats) {
-          console.log('📊 STATS:');
-          console.log('  Total:', res.stats.total);
-          console.log('  ✅ Applied:', res.stats.applied);
-          console.log('  ❌ Failed:', res.stats.failed);
-          console.log('  🚫 Blocked:', res.stats.blocked);
-          console.log('  ⏭️ Skipped:', res.stats.skipped);
-        }
-        
-        if (res.timings) {
-          console.log('⏱️ TIMINGS:');
-          console.log('  Total:', res.timings.total, 'ms');
-          console.log('  Parsing:', res.timings.parsing, 'ms');
-          console.log('  Processing:', res.timings.processing, 'ms');
-          console.log('  Verification:', res.timings.verification, 'ms');
-        }
-        
-        if (res.failedEdits && res.failedEdits.length > 0) {
-          console.log('\n⚠️ FAILED EDITS:', res.failedEdits.length);
-          res.failedEdits.forEach((edit, idx) => {
-            console.log(`\n  [${idx + 1}] Status: ${edit.status ?? 'unknown'}`);
-            console.log(`      Find: "${edit.find?.substring(0, 50) ?? ''}"`);
-            console.log(`      Reason: ${edit.reason ?? 'No reason provided'}`);
-            if (edit.diagnostics) {
-              console.log(`      Raw occurrences: ${edit.diagnostics.rawOccurrences ?? 0}`);
-              console.log(`      Normalized occurrences: ${edit.diagnostics.normalizedOccurrences ?? 0}`);
-            }
-          });
-        }
-        
-        console.log('==========================================\n');
-        
-        this.goldenSubject.next(res);
-        
-        // ✅ Show appropriate success message
-        const appliedCount = res.stats?.applied ?? res.changes?.length ?? 0;
-        const failedCount = res.stats?.failed ?? 0;
-        
-        if (failedCount > 0) {
-          this.showWarning(
-            `Golden template generated! Applied ${appliedCount} change(s), but ${failedCount} edit(s) could not be applied. Check diagnostics below.`
-          );
-        } else {
-          this.showSuccess(`Golden template generated successfully! Applied ${appliedCount} change(s).`);
-        }
-        
-        this.cdr.markForCheck();
-      },
-      error: (e) => {
-        if (this.goldenAborted) return;
-        
-        console.error('❌ GOLDEN ERROR:', e);
-        
-        if (this.goldenTimeoutId) {
-          clearTimeout(this.goldenTimeoutId);
-          this.goldenTimeoutId = undefined;
-        }
-        
-        this.goldenLoading = false;
-        this.goldenAborted = true;
-        
-        const errorMessage = this.getErrorMessage(e, 'golden template generation');
-        this.showError(errorMessage);
-        
-        this.cdr.markForCheck();
-      },
-      complete: () => {
-        if (this.goldenAborted) return;
-        this.goldenLoading = false;
-        console.log('✅ Golden generation complete');
-        this.cdr.markForCheck();
+  const startTime = Date.now();
+
+  this.goldenSub = this.qa.generateGolden(id, true).pipe(
+    timeout(this.GOLDEN_TIMEOUT),
+    retry({ count: 2, delay: 3000, resetOnSuccess: true }),
+    catchError(error => {
+      if (error.name === 'TimeoutError') {
+        throw new Error('Golden template generation timed out. Please try again.');
       }
-    });
-  }
+      throw error;
+    })
+  ).subscribe({
+    next: (res) => {
+      if (this.goldenAborted) return;
+      
+      const responseTime = Date.now() - startTime;
+      console.log('\n✅ Golden response received in', responseTime, 'ms');
+      
+      if (this.goldenTimeoutId) {
+        clearTimeout(this.goldenTimeoutId);
+        this.goldenTimeoutId = undefined;
+      }
+      
+      // ✅ Log atomic verification results
+      if (res.stats) {
+        console.log('📊 STATS:');
+        console.log('  Total:', res.stats.total);
+        console.log('  ✅ Applied:', res.stats.applied);
+        console.log('  ❌ Failed:', res.stats.failed);
+        console.log('  🚫 Blocked:', res.stats.blocked);
+        console.log('  ⏭️ Skipped:', res.stats.skipped);
+      }
+      
+      if (res.timings) {
+        console.log('⏱️ TIMINGS:');
+        console.log('  Total:', res.timings.total, 'ms');
+        console.log('  Parsing:', res.timings.parsing, 'ms');
+        console.log('  Processing:', res.timings.processing, 'ms');
+        console.log('  Verification:', res.timings.verification, 'ms');
+      }
+      
+      if (res.failedEdits && res.failedEdits.length > 0) {
+        console.log('\n⚠️ FAILED EDITS:', res.failedEdits.length);
+        res.failedEdits.forEach((edit, idx) => {
+          console.log(`\n  [${idx + 1}] Status: ${edit.status ?? 'unknown'}`);
+          console.log(`      Find: "${edit.find?.substring(0, 50) ?? ''}"`);
+          console.log(`      Reason: ${edit.reason ?? 'No reason provided'}`);
+          if (edit.diagnostics) {
+            console.log(`      Raw occurrences: ${edit.diagnostics.rawOccurrences ?? 0}`);
+            console.log(`      Normalized occurrences: ${edit.diagnostics.normalizedOccurrences ?? 0}`);
+          }
+        });
+      }
+      
+      console.log('==========================================\n');
+      
+      this.goldenSubject.next(res);
+      
+      // 🆕 NEW: Update visual editor button color
+      console.log('🎨 [onGenerateGolden] Updating visual editor button color');
+      this.updateVisualEditorButtonColor(res.failedEdits);
+      
+      // 🆕 NEW: Trigger shake animation if failed edits exist
+      if (res.failedEdits && res.failedEdits.length > 0) {
+        console.log('🔔 [onGenerateGolden] Failed edits detected, triggering shake animation');
+        this.triggerShakeAnimationOnce(id);
+      } else {
+        console.log('✅ [onGenerateGolden] No failed edits, no shake animation needed');
+      }
+      
+      // ✅ Show appropriate success message
+      const appliedCount = res.stats?.applied ?? res.changes?.length ?? 0;
+      const failedCount = res.stats?.failed ?? 0;
+      
+      if (failedCount > 0) {
+        this.showWarning(
+          `Golden template generated! Applied ${appliedCount} change(s), but ${failedCount} edit(s) could not be applied. Check diagnostics below.`
+        );
+      } else {
+        this.showSuccess(`Golden template generated successfully! Applied ${appliedCount} change(s).`);
+      }
+      
+      this.cdr.markForCheck();
+    },
+    error: (e) => {
+      if (this.goldenAborted) return;
+      
+      console.error('❌ GOLDEN ERROR:', e);
+      
+      if (this.goldenTimeoutId) {
+        clearTimeout(this.goldenTimeoutId);
+        this.goldenTimeoutId = undefined;
+      }
+      
+      this.goldenLoading = false;
+      this.goldenAborted = true;
+      
+      const errorMessage = this.getErrorMessage(e, 'golden template generation');
+      this.showError(errorMessage);
+      
+      this.cdr.markForCheck();
+    },
+    complete: () => {
+      if (this.goldenAborted) return;
+      this.goldenLoading = false;
+      console.log('✅ Golden generation complete');
+      this.cdr.markForCheck();
+    }
+  });
+}
 
   private handleGoldenTimeout(): void {
     console.error('Golden template generation timed out');
@@ -1202,4 +1241,405 @@ getStatusLabel(status: EditStatus): string {
   trackByIndex = (i: number) => i;
   trackByEdit = (i: number, e: any) => e.before + '|' + e.after + '|' + (e.parent || '');
   trackByFailedEdit = (index: number, edit: any) => `${edit.find}_${edit.replace}_${index}`;
+
+    // ============================================
+  // 🆕 NEW: Visual Editor Functions
+  // ============================================
+
+  /**
+   * Updates the visual editor button color based on failed edits
+   */
+  private updateVisualEditorButtonColor(failedEdits: any[] | undefined): void {
+    console.log('🎨 [updateVisualEditorButtonColor] Updating button color');
+    console.log('📊 [updateVisualEditorButtonColor] Failed edits count:', failedEdits?.length || 0);
+    
+    if (!failedEdits || failedEdits.length === 0) {
+      this.visualEditorButtonColor = 'green';
+      console.log('✅ [updateVisualEditorButtonColor] No failed edits → GREEN');
+    } else {
+      this.visualEditorButtonColor = 'red';
+      console.log('🔴 [updateVisualEditorButtonColor] Failed edits exist → RED');
+    }
+    
+    this.cdr.markForCheck();
+}
+
+/**
+ * Triggers shake animation once per session when failed edits are detected
+ */
+/**
+ * Triggers shake animation once per session when failed edits are detected (AUTO)
+ */
+private triggerShakeAnimationOnce(templateId: string): void {
+  console.log('🔔 [triggerShakeAnimationOnce] Checking shake animation');
+  
+  const shakeKey = `${this.SHAKE_FLAG_KEY}_${templateId}`;
+  const alreadyShown = sessionStorage.getItem(shakeKey);
+  
+  if (alreadyShown === 'true') {
+    console.log('⏭️ [triggerShakeAnimationOnce] Already shown this session, skipping');
+    return;
+  }
+  
+  console.log('🎯 [triggerShakeAnimationOnce] Triggering shake animation NOW');
+  
+  // Set flag to prevent repeat AUTO-trigger
+  sessionStorage.setItem(shakeKey, 'true');
+  console.log('💾 [triggerShakeAnimationOnce] Saved flag:', shakeKey);
+  
+  // Trigger animation
+  this.triggerShakeAnimation();
+}
+
+/**
+ * Triggers shake animation (MANUAL - no session check)
+ */
+private triggerShakeAnimation(): void {
+  console.log('🎯 [triggerShakeAnimation] Triggering shake animation');
+  
+  // Trigger animation via property
+  this.shouldShake = true;
+  this.cdr.markForCheck();
+  
+  // Remove animation class after 1 second
+  setTimeout(() => {
+    this.shouldShake = false;
+    this.cdr.markForCheck();
+    console.log('✅ [triggerShakeAnimation] Shake animation complete');
+  }, 1000);
+}
+
+/**
+ * Handles click on golden template preview - triggers shake if failed edits exist
+ */
+/**
+ * Handles click on golden template preview - triggers shake if failed edits exist
+ */
+onGoldenTemplateClick(): void {
+  console.log('🖱️ [onGoldenTemplateClick] Golden template clicked');
+  
+  const golden = this.goldenSubject.value;
+  const failedCount = golden?.failedEdits?.length || 0;
+  
+  console.log('📊 [onGoldenTemplateClick] Failed edits count:', failedCount);
+  
+  if (failedCount > 0) {
+    console.log('🔔 [onGoldenTemplateClick] Failed edits exist - triggering shake');
+    this.triggerShakeAnimation(); // ✅ NEW - no session check, shakes every time
+  } else {
+    console.log('ℹ️ [onGoldenTemplateClick] No failed edits, no shake needed');
+  }
+}
+
+/**
+ * Opens the Visual Editor modal
+ */
+openVisualEditorModal(): void {
+  console.log('🚪 [openVisualEditorModal] Opening modal');
+  
+  const golden = this.goldenSubject.value;
+  const failedCount = golden?.failedEdits?.length || 0;
+  console.log('📊 [openVisualEditorModal] Failed edits count:', failedCount);
+  
+  this.showVisualEditorModal = true;
+  this.cdr.markForCheck();
+  
+  console.log('✅ [openVisualEditorModal] Modal opened');
+}
+
+/**
+ * Closes the Visual Editor modal
+ */
+closeVisualEditorModal(): void {
+  console.log('🚪 [closeVisualEditorModal] Closing modal');
+  
+  this.showVisualEditorModal = false;
+  this.cdr.markForCheck();
+  
+  console.log('✅ [closeVisualEditorModal] Modal closed');
+}
+
+/**
+ * Navigates to Visual Editor with golden HTML
+ */
+navigateToVisualEditor(): void {
+  console.log('🚀 [navigateToVisualEditor] Starting navigation to visual editor');
+  
+  if (!this.templateId) {
+    console.error('❌ [navigateToVisualEditor] No template ID found');
+    this.showError('Template ID not found');
+    return;
+  }
+  
+  const golden = this.goldenSubject.value;
+  
+  if (!golden?.html) {
+    console.error('❌ [navigateToVisualEditor] No golden HTML found');
+    this.showError('Golden template not found. Please generate golden template first.');
+    return;
+  }
+  
+  console.log('💾 [navigateToVisualEditor] Storing data in sessionStorage');
+  console.log('📊 [navigateToVisualEditor] Golden HTML length:', golden.html.length);
+  console.log('📊 [navigateToVisualEditor] Failed edits count:', golden.failedEdits?.length || 0);
+  
+  // Store golden HTML
+  const goldenKey = `visual_editor_${this.templateId}_golden_html`;
+  sessionStorage.setItem(goldenKey, golden.html);
+  console.log(`✅ [navigateToVisualEditor] Stored golden HTML: ${goldenKey}`);
+  
+  // Store failed edits (for reference in editor)
+  if (golden.failedEdits && golden.failedEdits.length > 0) {
+    const failedKey = `visual_editor_${this.templateId}_failed_edits`;
+    sessionStorage.setItem(failedKey, JSON.stringify(golden.failedEdits));
+    console.log(`✅ [navigateToVisualEditor] Stored failed edits: ${failedKey} (${golden.failedEdits.length} edits)`);
+  }
+  
+  // Store current stats (to calculate delta later)
+  if (golden.stats) {
+    const statsKey = `visual_editor_${this.templateId}_original_stats`;
+    sessionStorage.setItem(statsKey, JSON.stringify(golden.stats));
+    console.log(`✅ [navigateToVisualEditor] Stored original stats: ${statsKey}`);
+  }
+  
+  // Close modal
+  this.closeVisualEditorModal();
+  
+  // Navigate
+  console.log(`🧭 [navigateToVisualEditor] Navigating to /visual-editor/${this.templateId}`);
+  this.router.navigate(['/visual-editor', this.templateId]);
+}
+/**
+ * Checks if user is returning from visual editor and processes changes
+ */
+private checkForVisualEditorReturn(): void {
+  console.log('🔍 [checkForVisualEditorReturn] Checking for return from visual editor');
+  
+  const idSub = this.id$.subscribe(async (templateId) => {
+    if (!templateId) {
+      console.log('⏭️ [checkForVisualEditorReturn] No template ID, skipping');
+      return;
+    }
+    
+    const returnKey = `visual_editor_${templateId}_return_flag`;
+    const editedKey = `visual_editor_${templateId}_edited_html`;
+    
+    const returnFlag = sessionStorage.getItem(returnKey);
+    const editedHtml = sessionStorage.getItem(editedKey);
+    
+    console.log('🔍 [checkForVisualEditorReturn] Return flag:', returnFlag);
+    console.log('🔍 [checkForVisualEditorReturn] Edited HTML exists:', !!editedHtml);
+    console.log('🔍 [checkForVisualEditorReturn] Edited HTML length:', editedHtml?.length || 0);
+    
+    if (returnFlag === 'true' && editedHtml) {
+      console.log('✅ [checkForVisualEditorReturn] User returned from visual editor - processing changes');
+      
+      // Process the return
+      await this.handleVisualEditorReturn(templateId, editedHtml);
+      
+      // Clear return flag (prevent re-processing on refresh)
+      sessionStorage.removeItem(returnKey);
+      console.log('🗑️ [checkForVisualEditorReturn] Cleared return flag');
+      
+      // Optionally clear edited HTML (keep for now for debugging)
+      // sessionStorage.removeItem(editedKey);
+    } else {
+      console.log('ℹ️ [checkForVisualEditorReturn] Normal page load (not returning from editor)');
+    }
+  });
+  
+  this.subscriptions.push(idSub);
+}
+/**
+ * Handles return from visual editor - updates golden template and statistics
+ */
+private async handleVisualEditorReturn(
+  templateId: string,
+  editedHtml: string
+): Promise<void> {
+  console.log('🔄 [handleVisualEditorReturn] Processing return from visual editor');
+  console.log('📊 [handleVisualEditorReturn] Template ID:', templateId);
+  console.log('📊 [handleVisualEditorReturn] Edited HTML length:', editedHtml.length);
+  
+  const golden = this.goldenSubject.value;
+  
+  if (!golden || !golden.html) {
+    console.error('❌ [handleVisualEditorReturn] No golden template found');
+    this.showError('Original golden template not found');
+    return;
+  }
+  
+  console.log('📊 [handleVisualEditorReturn] Original golden HTML length:', golden.html.length);
+  
+  // Step 1: Compare and calculate newly applied edits
+  const failedEdits = golden.failedEdits || [];
+  console.log('📊 [handleVisualEditorReturn] Failed edits count:', failedEdits.length);
+  
+  let newlyAppliedCount = 0;
+  
+  if (failedEdits.length > 0) {
+    console.log('🔍 [handleVisualEditorReturn] Comparing edited HTML with failed edits');
+    newlyAppliedCount = this.compareAndUpdateStats(
+      golden.html,
+      editedHtml,
+      failedEdits
+    );
+    console.log('✅ [handleVisualEditorReturn] Newly applied edits:', newlyAppliedCount);
+  } else {
+    console.log('ℹ️ [handleVisualEditorReturn] No failed edits to check');
+  }
+  
+  // Step 2: Update statistics
+  const currentStats = golden.stats || {
+    total: 0,
+    applied: 0,
+    failed: 0,
+    blocked: 0,
+    skipped: 0
+  };
+  
+  const updatedStats = {
+    ...currentStats,
+    applied: currentStats.applied + newlyAppliedCount,
+    failed: Math.max(0, currentStats.failed - newlyAppliedCount) // Prevent negative
+  };
+  
+  console.log('📊 [handleVisualEditorReturn] Stats BEFORE:', JSON.stringify(currentStats));
+  console.log('📊 [handleVisualEditorReturn] Stats AFTER:', JSON.stringify(updatedStats));
+  
+  // Step 3: Update golden template
+  const updatedGolden: GoldenResult = {
+    ...golden,
+    html: editedHtml,
+    stats: updatedStats,
+    failedEdits: [] // Clear failed edits (no longer tracking)
+  };
+  
+  this.goldenSubject.next(updatedGolden);
+  console.log('✅ [handleVisualEditorReturn] Golden template updated in BehaviorSubject');
+  
+  // Step 4: Update button color to green (no failed edits)
+  this.updateVisualEditorButtonColor([]);
+  console.log('✅ [handleVisualEditorReturn] Button color updated to GREEN');
+  
+  // Step 5: Show success message
+  if (newlyAppliedCount > 0) {
+    this.showSuccess(
+      `Template updated! ${newlyAppliedCount} additional edit(s) applied. New total: ${updatedStats.applied}`
+    );
+    console.log('✅ [handleVisualEditorReturn] Success message shown (with count)');
+  } else {
+    this.showInfo('Template updated with your changes.');
+    console.log('✅ [handleVisualEditorReturn] Info message shown (no new fixes detected)');
+  }
+  
+  // Step 6: Scroll to golden template preview
+  setTimeout(() => {
+    const goldenPreview = document.querySelector('.col-3');
+    if (goldenPreview) {
+      goldenPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      console.log('✅ [handleVisualEditorReturn] Scrolled to golden preview');
+    } else {
+      console.warn('⚠️ [handleVisualEditorReturn] Golden preview element not found');
+    }
+  }, 300);
+  
+  this.cdr.markForCheck();
+  console.log('✅ [handleVisualEditorReturn] Return processing complete');
+}
+
+/**
+ * Compares edited HTML with original and detects which failed edits were fixed
+ * Returns count of newly applied edits
+ */
+private compareAndUpdateStats(
+  originalHtml: string,
+  editedHtml: string,
+  failedEdits: any[]
+): number {
+  console.log('🔍 [compareAndUpdateStats] Starting comparison');
+  console.log('📊 [compareAndUpdateStats] Original HTML length:', originalHtml.length);
+  console.log('📊 [compareAndUpdateStats] Edited HTML length:', editedHtml.length);
+  console.log('📊 [compareAndUpdateStats] Failed edits to check:', failedEdits.length);
+  
+  let fixedCount = 0;
+  
+  // Extract visible text from both HTMLs
+  const originalText = this.extractVisibleText(originalHtml);
+  const editedText = this.extractVisibleText(editedHtml);
+  
+  console.log('📊 [compareAndUpdateStats] Original text length:', originalText.length);
+  console.log('📊 [compareAndUpdateStats] Edited text length:', editedText.length);
+  
+  // Loop through each failed edit
+  failedEdits.forEach((failedEdit, index) => {
+    const findText = failedEdit.find;
+    
+    if (!findText) {
+      console.warn(`⚠️ [compareAndUpdateStats] Edit ${index + 1}: No find text, skipping`);
+      return;
+    }
+    
+    console.log(`\n🔍 [compareAndUpdateStats] Edit ${index + 1}/${failedEdits.length}`);
+    console.log(`   Find: "${findText.substring(0, 50)}${findText.length > 50 ? '...' : ''}"`);
+    
+    // Case-insensitive comparison
+    const findNormalized = findText.toLowerCase();
+    const originalNormalized = originalText.toLowerCase();
+    const editedNormalized = editedText.toLowerCase();
+    
+    // Check if text exists in original
+    const existsInOriginal = originalNormalized.includes(findNormalized);
+    
+    if (!existsInOriginal) {
+      console.log(`   ❌ Text not found in original HTML, skipping`);
+      return;
+    }
+    
+    console.log(`   ✅ Text found in original HTML`);
+    
+    // Check if text still exists unchanged in edited
+    const stillExistsInEdited = editedNormalized.includes(findNormalized);
+    
+    if (stillExistsInEdited) {
+      console.log(`   ❌ Text still exists unchanged in edited HTML`);
+      return;
+    }
+    
+    // Text was in original, but changed/removed in edited
+    console.log(`   ✅ Text was CHANGED! Counting as fixed`);
+    fixedCount++;
+  });
+  
+  console.log(`\n✅ [compareAndUpdateStats] Comparison complete`);
+  console.log(`📊 [compareAndUpdateStats] Total fixed: ${fixedCount}/${failedEdits.length}`);
+  
+  return fixedCount;
+}
+/**
+ * Extracts visible text content from HTML (removes scripts, styles, etc.)
+ */
+private extractVisibleText(html: string): string {
+  console.log('📄 [extractVisibleText] Extracting visible text from HTML');
+  
+  // Create temporary DOM element
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  
+  // Remove non-visible elements
+  const nonVisible = tempDiv.querySelectorAll('script, style, noscript, head');
+  nonVisible.forEach(el => el.remove());
+  
+  // Get text content
+  const text = tempDiv.textContent || tempDiv.innerText || '';
+  
+  // Clean up whitespace (but preserve spaces between words)
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  
+  console.log('✅ [extractVisibleText] Extracted text length:', cleaned.length);
+  console.log('📄 [extractVisibleText] Preview:', cleaned.substring(0, 100) + '...');
+  
+  return cleaned;
+}
+
 }
