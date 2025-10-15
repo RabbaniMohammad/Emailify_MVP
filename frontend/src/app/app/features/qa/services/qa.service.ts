@@ -24,12 +24,31 @@ export interface EditDiagnostics {
   normalizedOccurrences?: number;
   contextMatched?: boolean;
   crossesBoundary?: boolean;
+  
+  // ✅ ENHANCED: More detailed location tracking
   locations?: Array<{
     tag: string;
     line?: number;
     actualContext: string;
     confidence: number;
+    xpath?: string;              // ✅ NEW: Path to element
+    htmlSnippet?: string;        // ✅ NEW: Raw HTML around match
+    spanningElements?: string[]; // ✅ NEW: Tags it crosses
+    visualPreview?: string;      // ✅ NEW: What user would see
   }>;
+  
+  // ✅ NEW: Manual fix guidance for failed edits
+  manualFixGuidance?: {
+    strategy: 'split-across-boundary' | 'not-found' | 'context-mismatch' | 'normalization-issue';
+    recommendation: string;
+    searchHints?: string[];      // Alternative ways to find it
+    affectedElements?: Array<{
+      tag: string;
+      xpath: string;
+      textContent: string;
+    }>;
+  };
+  
   timings?: {
     search: number;
     apply: number;

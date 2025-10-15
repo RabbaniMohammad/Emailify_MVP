@@ -14,7 +14,7 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /* ------------------------------------------------------------------ */
-/*                    âœ… NEW: Atomic Verification Types                */
+/*                    ✅ NEW: Enhanced Atomic Types                    */
 /* ------------------------------------------------------------------ */
 
 type EditStatus = 'applied' | 'not_found' | 'blocked' | 'skipped' | 'context_mismatch' | 'boundary_issue' | 'already_correct';
@@ -30,7 +30,21 @@ type EditDiagnostics = {
     line?: number;
     actualContext: string;
     confidence: number;
+    xpath?: string;
+    htmlSnippet?: string;
+    spanningElements?: string[];
+    visualPreview?: string;
   }>;
+  manualFixGuidance?: {
+    strategy: 'split-across-boundary' | 'not-found' | 'context-mismatch' | 'normalization-issue';
+    recommendation: string;
+    searchHints?: string[];
+    affectedElements?: Array<{
+      tag: string;
+      xpath: string;
+      textContent: string;
+    }>;
+  };
   timings?: {
     search: number;
     apply: number;
@@ -76,9 +90,16 @@ type AtomicEditResponse = {
   };
 };
 
+type TextNodeMap = {
+  node: any;
+  startInConsolidated: number;
+  endInConsolidated: number;
+};
+
 /* ------------------------------------------------------------------ */
 /*                       Helpers & safe typings                        */
 /* ------------------------------------------------------------------ */
+
 function isGeneratedTemplate(id: string): boolean {
   return id.startsWith('gen_') || id.startsWith('Generated_');
 }
@@ -95,7 +116,6 @@ async function getGeneratedTemplateHtml(id: string): Promise<{ name: string; htm
     html: template.html
   };
 }
-
 
 function errMsg(err: unknown): string {
   if (typeof err === 'object' && err && 'message' in err) {
@@ -183,12 +203,10 @@ async function getTemplateHtmlViaCampaign(id: string): Promise<string> {
 }
 
 export async function getRobustTemplateHtml(id: string): Promise<{ name: string; html: string }> {
-  // ✅ NEW: Check if it's a generated template first
   if (isGeneratedTemplate(id)) {
     return await getGeneratedTemplateHtml(id);
   }
   
-  // Original Mailchimp logic
   const { name, html: direct } = await getTemplateHtmlDirect(id);
   if (direct) return { name, html: ensureFullDocShell(name, direct) };
   let html = await getTemplateHtmlViaCampaign(id);
@@ -354,7 +372,6 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
   const bRaw = String(beforeCtx || '');
   const aRaw = String(afterCtx || '');
 
-  // 1) exact raw match + raw context
   let i = raw.indexOf(nRaw);
   while (i >= 0) {
     const okBefore = bRaw ? raw.slice(Math.max(0, i - bRaw.length), i).endsWith(bRaw) : true;
@@ -367,7 +384,6 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
     i = raw.indexOf(nRaw, i + 1);
   }
 
-  // 2) normalized match + normalized context (entity-aware)
   const H = normalizeAndMap(raw);
   const nNeedle = normalizeOnly(nRaw);
   const nBefore = normalizeOnly(bRaw);
@@ -386,7 +402,6 @@ function findWithContextSpan(haystack: string, needle: string, beforeCtx: string
     ni = H.norm.indexOf(nNeedle, ni + 1);
   }
 
-  // 3) contextual fallbacks
   if (bRaw || nBefore) {
     const biRaw = bRaw ? raw.indexOf(bRaw) : -1;
     if (biRaw >= 0) {
@@ -438,16 +453,7 @@ function isBlockElement(tag: string): boolean {
   return blockTags.has(tag);
 }
 
-// ✅ NEW: Consolidate text nodes from an element with mapping
-type TextNodeMap = {
-  node: any;
-  startInConsolidated: number;
-  endInConsolidated: number;
-};
-
-// ✅ FIXED: Only consolidate DIRECT text children, not nested elements
-// ✅ FIXED: Recursively collect ALL text nodes in subtree
-function consolidateTextNodes(
+function consolidateTextNodesRecursive(
   $: any,
   element: any
 ): { fullText: string; nodeMap: TextNodeMap[] } {
@@ -465,7 +471,6 @@ function consolidateTextNodes(
           nodeMap.push({ node: child, startInConsolidated, endInConsolidated });
         }
       } else if (child.type === 'tag') {
-        // ✅ Traverse ALL child elements (inline AND block)
         traverse(child);
       }
     });
@@ -474,15 +479,19 @@ function consolidateTextNodes(
   traverse(element);
   return { fullText, nodeMap };
 }
-// ✅ NEW: Apply replacement across consolidated text and map back to nodes
+
 function applyReplacementToNodes(
   nodeMap: TextNodeMap[],
   matchStart: number,
   matchEnd: number,
   replacement: string
 ): boolean {
-  // Find which nodes the match spans
-  const affectedNodes: { node: any; localStart: number; localEnd: number }[] = [];
+  const affectedNodes: { 
+    node: any; 
+    localStart: number; 
+    localEnd: number;
+    nodeLength: number;
+  }[] = [];
   
   for (const mapping of nodeMap) {
     const { node, startInConsolidated, endInConsolidated } = mapping;
@@ -491,96 +500,150 @@ function applyReplacementToNodes(
       continue;
     }
     
+    const nodeLength = endInConsolidated - startInConsolidated;
     const localStart = Math.max(0, matchStart - startInConsolidated);
-    const localEnd = Math.min(
-      endInConsolidated - startInConsolidated,
-      matchEnd - startInConsolidated
-    );
+    const localEnd = Math.min(nodeLength, matchEnd - startInConsolidated);
     
-    affectedNodes.push({ node, localStart, localEnd });
+    affectedNodes.push({ node, localStart, localEnd, nodeLength });
   }
   
-  if (affectedNodes.length === 0) return false;
+  if (affectedNodes.length === 0) {
+    console.log('⚠️ No affected nodes found');
+    return false;
+  }
   
-  // ✅ CHECK: Reject if match crosses interactive element boundaries
   if (affectedNodes.length > 1) {
     const interactiveTags = ['a', 'button'];
-    
-    // Find the interactive ancestor for each node (if any)
-    const interactiveParents = affectedNodes.map((n, idx) => {
+    const interactiveParents = affectedNodes.map((n) => {
       let current = n.node.parent;
-      let depth = 0;
-      
-      let temp = n.node.parent;
-      while (temp && depth < 10) {
-        // console.log(`  ${depth}: ${temp.type} ${temp.tagName || temp.name || ''}`);
-        temp = temp.parent;
-        depth++;
-      }
-      
-      current = n.node.parent;
       while (current) {
         const tag = current.tagName?.toLowerCase();
-        // console.log(`  Checking: ${current.type} tag=${tag}`);
         if (tag && interactiveTags.includes(tag)) {
-          // console.log(`  ✅ Found interactive: ${tag}`);
           return current;
         }
         current = current.parent;
       }
-      // console.log(`  ❌ No interactive parent found`);
       return null;
     });
-    
-    // console.log('\n--- Final check ---');
-    // console.log('interactiveParents:', interactiveParents.map(p => p?.tagName || 'null'));
     
     const hasInteractive = interactiveParents.some(p => p !== null);
     const hasNonInteractive = interactiveParents.some(p => p === null);
     
-    // console.log('hasInteractive:', hasInteractive);
-    // console.log('hasNonInteractive:', hasNonInteractive);
-    
     if (hasInteractive && hasNonInteractive) {
-      // console.log('🚫 BLOCKING: crosses interactive boundary');
+      console.log('🚫 Rejected: crosses interactive boundary');
       return false;
     }
     
     const uniqueInteractive = new Set(interactiveParents.filter(p => p !== null));
-    // console.log('uniqueInteractive.size:', uniqueInteractive.size);
-    
     if (uniqueInteractive.size > 1) {
-      // console.log('🚫 BLOCKING: multiple interactive elements');
+      console.log('🚫 Rejected: multiple interactive elements');
       return false;
     }
-    
-    // console.log('✅ ALLOWING: passed all checks');
   }
   
-  // Apply replacement
-  if (affectedNodes.length === 1) {
-    const { node, localStart, localEnd } = affectedNodes[0];
-    const original = String(node.data || '');
-    node.data = original.slice(0, localStart) + replacement + original.slice(localEnd);
-    return true;
-  } else {
-    const first = affectedNodes[0];
-    const original = String(first.node.data || '');
-    first.node.data = original.slice(0, first.localStart) + replacement;
-    
-    for (let i = 1; i < affectedNodes.length; i++) {
-      const { node, localEnd } = affectedNodes[i];
+  try {
+    if (affectedNodes.length === 1) {
+      const { node, localStart, localEnd } = affectedNodes[0];
       const original = String(node.data || '');
-      node.data = original.slice(localEnd);
+      
+      console.log(`  Single node: "${original.substring(localStart, localEnd)}" → "${replacement}"`);
+      
+      node.data = original.substring(0, localStart) + replacement + original.substring(localEnd);
+      
+      return true;
+      
+    } else {
+      console.log(`  Multi-node (${affectedNodes.length} nodes)`);
+      
+      const first = affectedNodes[0];
+      const firstOriginal = String(first.node.data || '');
+      first.node.data = firstOriginal.substring(0, first.localStart) + replacement;
+      
+      console.log(`  First: "${firstOriginal}" → "${first.node.data}"`);
+      
+      for (let i = 1; i < affectedNodes.length - 1; i++) {
+        const middle = affectedNodes[i];
+        const middleOriginal = String(middle.node.data || '');
+        middle.node.data = '';
+        console.log(`  Middle[${i}]: "${middleOriginal}" → ""`);
+      }
+      
+      const last = affectedNodes[affectedNodes.length - 1];
+      const lastOriginal = String(last.node.data || '');
+      last.node.data = lastOriginal.substring(last.localEnd);
+      
+      console.log(`  Last: "${lastOriginal}" → "${last.node.data}"`);
+      
+      return true;
     }
-    return true;
+  } catch (error) {
+    console.error('❌ Error in applyReplacementToNodes:', error);
+    return false;
   }
 }
 
 /* ------------------------------------------------------------------ */
-/*         âœ… REPLACED: Atomic Verification with Full Diagnostics      */
+/*         ✅ NEW: Helper Functions for Enhanced Diagnostics          */
 /* ------------------------------------------------------------------ */
-// applyContextEditswithtracking
+
+function findAffectedNodes(
+  nodeMap: TextNodeMap[],
+  matchStart: number,
+  matchEnd: number
+): Array<{ 
+  node: any; 
+  localStart: number; 
+  localEnd: number;
+  nodeLength: number;
+}> {
+  const affectedNodes: Array<{ 
+    node: any; 
+    localStart: number; 
+    localEnd: number;
+    nodeLength: number;
+  }> = [];
+  
+  for (const mapping of nodeMap) {
+    const { node, startInConsolidated, endInConsolidated } = mapping;
+    
+    if (matchEnd <= startInConsolidated || matchStart >= endInConsolidated) {
+      continue;
+    }
+    
+    const nodeLength = endInConsolidated - startInConsolidated;
+    const localStart = Math.max(0, matchStart - startInConsolidated);
+    const localEnd = Math.min(nodeLength, matchEnd - startInConsolidated);
+    
+    affectedNodes.push({ node, localStart, localEnd, nodeLength });
+  }
+  
+  return affectedNodes;
+}
+
+function generateXPath($: any, element: any): string {
+  const segments: string[] = [];
+  let current = element;
+  
+  while (current && current.tagName) {
+    const tag = current.tagName.toLowerCase();
+    const siblings = $(current.parent).children(tag);
+    const index = siblings.index(current) + 1;
+    
+    segments.unshift(`${tag}[${index}]`);
+    current = current.parent;
+  }
+  
+  return '/' + segments.join('/');
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/* ------------------------------------------------------------------ */
+/*         ✅ ENHANCED: Atomic Verification with Full Diagnostics      */
+/* ------------------------------------------------------------------ */
+
 function applyContextEdits(
   html: string,
   edits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string }>
@@ -603,7 +666,6 @@ function applyContextEdits(
   
   const processingStart = Date.now();
   
-  // âœ… Process each edit atomically
   edits.forEach((originalEdit, index) => {
     const editStart = Date.now();
     console.log(`\n--- [EDIT ${index + 1}/${edits.length}] ---`);
@@ -623,9 +685,8 @@ function applyContextEdits(
       locations: [],
     };
 
-    // âœ… Validation checks
     if (!edit.find || !edit.replace) {
-      console.log('âŒ [SKIP] Empty find or replace');
+      console.log('⏭️ [SKIP] Empty find or replace');
       results.push({
         index,
         edit: originalEdit,
@@ -638,7 +699,7 @@ function applyContextEdits(
     }
 
     if (edit.find === edit.replace) {
-      console.log('âŒ [SKIP] Find equals replace');
+      console.log('⏭️ [SKIP] Find equals replace');
       results.push({
         index,
         edit: originalEdit,
@@ -650,7 +711,6 @@ function applyContextEdits(
       return;
     }
 
-    // âœ… Safety checks
     if (/https?:\/\//i.test(edit.find) || /https?:\/\//i.test(edit.replace)) {
       console.log('🚫 [BLOCKED] Contains URL');
       results.push({
@@ -677,13 +737,10 @@ function applyContextEdits(
       return;
     }
 
-    // âœ… Try to apply the edit
     const searchStart = Date.now();
     let applied = false;
     let appliedTag = '';
-    let attemptCount = 0;
 
-    // âœ… Pre-flight: Check raw HTML for text existence
     const rawHtml = $.html();
     const rawOccurrences = (rawHtml.match(new RegExp(escapeRegex(edit.find), 'g')) || []).length;
     const normalized = normalizeOnly(edit.find);
@@ -699,6 +756,19 @@ function applyContextEdits(
     if (rawOccurrences === 0 && normalizedOccurrences === 0) {
       console.log('❌ [NOT_FOUND] Text does not exist in HTML');
       diagnostics.timings!.search = Date.now() - searchStart;
+      
+      diagnostics.manualFixGuidance = {
+        strategy: 'not-found',
+        recommendation: 'Text may have already been corrected, or GPT hallucinated this error.',
+        searchHints: [
+          edit.find,
+          normalized,
+          edit.find.toLowerCase(),
+          edit.find.split(/\s+/).slice(1).join(' '),
+          edit.find.split(/\s+/).slice(0, -1).join(' ')
+        ].filter((hint, idx, arr) => arr.indexOf(hint) === idx && hint.length > 0)
+      };
+      
       results.push({
         index,
         edit: originalEdit,
@@ -710,10 +780,18 @@ function applyContextEdits(
       return;
     }
 
-    // âœ… Try to find and apply in each block element
+    const boundaryInfo: Array<{
+      element: any;
+      tag: string;
+      fullText: string;
+      matchPosition: { start: number; end: number };
+      spanningElements: string[];
+      htmlSnippet: string;
+      xpath: string;
+    }> = [];
+
     $('body *').each((_: any, el: any) => {
-      if (applied) return false; // Stop after first successful application
-      attemptCount++;
+      if (applied) return false;
 
       const tag = (el as any).tagName?.toLowerCase?.() || '';
       if (deny.has(tag)) return;
@@ -722,60 +800,141 @@ function applyContextEdits(
       const { fullText, nodeMap } = consolidateTextNodesRecursive($, el);
       if (!fullText.trim()) return;
 
-      // Try to find with context
       const span = findWithContextSpan(fullText, edit.find, edit.before, edit.after);
       
-      if (span) {
-        diagnostics.contextMatched = true;
-        console.log('✅ [CONTEXT] Matched in', tag, 'tag');
-        
-        // Try to apply
-        const applyStart = Date.now();
-        const applySuccess = applyReplacementToNodes(nodeMap, span.start, span.end, edit.replace);
-        diagnostics.timings!.apply = Date.now() - applyStart;
-        
-        if (applySuccess) {
-          // âœ… Verification: Check if the change actually took effect
-          const verifyStart = Date.now();
-          const { fullText: newFullText } = consolidateTextNodesRecursive($, el);
-          const verificationPassed = !newFullText.includes(edit.find) && newFullText.includes(edit.replace);
-          diagnostics.timings!.verify = Date.now() - verifyStart;
-          
-          if (verificationPassed) {
-            console.log('✅ [APPLIED] Successfully applied and verified');
-            applied = true;
-            appliedTag = tag;
-            return false; // Stop iteration
-          } else {
-            console.log('⚠️ [VERIFY_FAIL] Applied but verification failed');
-            diagnostics.crossesBoundary = true;
-          }
-        } else {
-          console.log('❌ [APPLY_FAIL] Failed to apply (boundary issue)');
-          diagnostics.crossesBoundary = true;
-        }
-      } else {
-        // Track location even without context match
+if (span) {
+  diagnostics.contextMatched = true;
+  console.log('✅ [CONTEXT] Matched in', tag, 'tag');
+  
+  // ✅ NEW: Find affected nodes and save their original state BEFORE applying
+  const affectedNodes = findAffectedNodes(nodeMap, span.start, span.end);
+  
+  // ✅ NEW: Save original state for rollback
+  const originalNodeStates: Array<{ node: any; originalData: string }> = [];
+  affectedNodes.forEach(n => {
+    originalNodeStates.push({
+      node: n.node,
+      originalData: String(n.node.data || '')
+    });
+  });
+  console.log(`💾 [BACKUP] Saved ${originalNodeStates.length} node(s) original state`);
+  
+  // Detect boundary issues
+  if (affectedNodes.length > 1) {
+    const spanningElements = affectedNodes.map(n => {
+      let parent = n.node.parent;
+      while (parent && !parent.tagName) {
+        parent = parent.parent;
+      }
+      return parent?.tagName?.toLowerCase() || 'unknown';
+    }).filter((t, i, arr) => arr.indexOf(t) === i);
+    
+    const $el = $(el);
+    const htmlSnippet = $el.html()?.substring(
+      Math.max(0, span.start - 100),
+      Math.min($el.html()?.length || 0, span.end + 100)
+    ) || '';
+    
+    const xpath = generateXPath($, el);
+    
+    boundaryInfo.push({
+      element: el,
+      tag,
+      fullText,
+      matchPosition: span,
+      spanningElements,
+      htmlSnippet,
+      xpath
+    });
+    
+    console.log('🔍 [BOUNDARY] Text spans across:', spanningElements.join(' → '));
+  }
+  
+  // Try to apply the replacement
+  const applyStart = Date.now();
+  const applySuccess = applyReplacementToNodes(nodeMap, span.start, span.end, edit.replace);
+  diagnostics.timings!.apply = Date.now() - applyStart;
+  
+  if (applySuccess) {
+    // ✅ Verify the changes
+    const verifyStart = Date.now();
+    const { fullText: newFullText } = consolidateTextNodesRecursive($, el);
+    
+    const oldTextGone = !newFullText.includes(edit.find);
+    const newTextPresent = newFullText.includes(edit.replace);
+    
+    const replacementWords = edit.replace.split(/\s+/);
+    const allWordsPresent = replacementWords.every(word => 
+      word.length < 3 || newFullText.includes(word)
+    );
+    
+    const verificationPassed = oldTextGone && newTextPresent && allWordsPresent;
+    
+    diagnostics.timings!.verify = Date.now() - verifyStart;
+    
+    console.log(`  Verification: oldTextGone=${oldTextGone}, newTextPresent=${newTextPresent}, allWordsPresent=${allWordsPresent}`);
+    
+    if (verificationPassed) {
+      console.log('✅ [APPLIED] Successfully applied and verified');
+      applied = true;
+      appliedTag = tag;
+      return false; // Stop iteration
+    } else {
+      // ✅ NEW: ROLLBACK on verification failure
+      console.log('⚠️ [VERIFY_FAIL] Verification failed - ROLLING BACK changes');
+      console.log(`   Find text still present: ${newFullText.includes(edit.find)}`);
+      console.log(`   Replace text present: ${newTextPresent}`);
+      
+      originalNodeStates.forEach(({ node, originalData }) => {
+        node.data = originalData;
+      });
+      
+      console.log(`🔄 [ROLLBACK] Successfully restored ${originalNodeStates.length} node(s) to original state`);
+      
+      // ✅ Verify rollback worked
+      const { fullText: rolledBackText } = consolidateTextNodesRecursive($, el);
+      const rollbackVerified = rolledBackText === fullText;
+      console.log(`   Rollback verification: text restored = ${rollbackVerified}`);
+      
+      diagnostics.crossesBoundary = true;
+    }
+  } else {
+    // ✅ NEW: ROLLBACK on apply failure
+    console.log('❌ [APPLY_FAIL] Failed to apply - ROLLING BACK changes');
+    
+    originalNodeStates.forEach(({ node, originalData }) => {
+      node.data = originalData;
+    });
+    
+    console.log(`🔄 [ROLLBACK] Successfully restored ${originalNodeStates.length} node(s) to original state`);
+    
+    diagnostics.crossesBoundary = true;
+  }
+}else {
         const spanNoContext = findWithContextSpan(fullText, edit.find, '', '');
         if (spanNoContext) {
           const contextBefore = fullText.substring(Math.max(0, spanNoContext.start - 40), spanNoContext.start);
           const contextAfter = fullText.substring(spanNoContext.end, Math.min(fullText.length, spanNoContext.end + 40));
           
+          const xpath = generateXPath($, el);
+          
           diagnostics.locations!.push({
             tag,
             actualContext: contextBefore + '[' + edit.find + ']' + contextAfter,
-            confidence: 0, // No context match
-                // ✅ ADD THIS DEBUG LOGGING
+            confidence: 0,
+            xpath,
+            visualPreview: `${contextBefore}${edit.find}${contextAfter}`
           });
-            console.log('\n🔍 [CONTEXT MISMATCH DEBUG]');
-            console.log('GPT Expected:');
-            console.log('  Before: "' + edit.before + '"');
-            console.log('  Find:   "' + edit.find + '"');
-            console.log('  After:  "' + edit.after + '"');
-            console.log('');
-            console.log('Actually Found in HTML:');
-            console.log('  "' + contextBefore + '[' + edit.find + ']' + contextAfter + '"');
-            console.log('  Tag: <' + tag + '>');
+          
+          console.log('\n🔍 [CONTEXT MISMATCH DEBUG]');
+          console.log('GPT Expected:');
+          console.log('  Before: "' + edit.before + '"');
+          console.log('  Find:   "' + edit.find + '"');
+          console.log('  After:  "' + edit.after + '"');
+          console.log('');
+          console.log('Actually Found in HTML:');
+          console.log('  "' + contextBefore + '[' + edit.find + ']' + contextAfter + '"');
+          console.log('  Tag: <' + tag + '>');
         }
       }
     });
@@ -784,7 +943,6 @@ function applyContextEdits(
     const editTime = Date.now() - editStart;
     console.log('⏱️ [TIMING] Edit processed in', editTime, 'ms');
 
-    // âœ… Record the result
     if (applied) {
       console.log('✅ [SUCCESS] Edit applied successfully');
       results.push({
@@ -801,23 +959,99 @@ function applyContextEdits(
       });
       appliedCount++;
     } else {
-      // âœ… Detailed failure diagnosis
       let failureReason = 'Unknown failure';
       let status: EditStatus = 'not_found';
+      let manualFixGuidance: EditDiagnostics['manualFixGuidance'];
       
       if (diagnostics.contextMatched && diagnostics.crossesBoundary) {
         failureReason = 'Text found but spans across element boundaries (e.g., inside/outside links)';
         status = 'boundary_issue';
+        
+        if (boundaryInfo.length > 0) {
+          const info = boundaryInfo[0];
+          
+          diagnostics.locations!.push({
+            tag: info.tag,
+            actualContext: info.fullText.substring(
+              Math.max(0, info.matchPosition.start - 50),
+              Math.min(info.fullText.length, info.matchPosition.end + 50)
+            ),
+            confidence: 100,
+            xpath: info.xpath,
+            htmlSnippet: info.htmlSnippet,
+            spanningElements: info.spanningElements,
+            visualPreview: info.fullText.substring(
+              Math.max(0, info.matchPosition.start - 20),
+              Math.min(info.fullText.length, info.matchPosition.end + 20)
+            )
+          });
+          
+          const affectedNodesData = findAffectedNodes(
+            consolidateTextNodesRecursive($, info.element).nodeMap,
+            info.matchPosition.start,
+            info.matchPosition.end
+          );
+          
+          manualFixGuidance = {
+            strategy: 'split-across-boundary',
+            recommendation: `The text "${edit.find}" is split across ${info.spanningElements.length} elements (${info.spanningElements.join(' → ')}). Use the visual editor to manually fix this by editing each part separately.`,
+            affectedElements: affectedNodesData.map((n: any) => {
+              let parent = n.node.parent;
+              while (parent && !parent.tagName) {
+                parent = parent.parent;
+              }
+              return {
+                tag: parent?.tagName?.toLowerCase() || 'text',
+                xpath: generateXPath($, parent),
+                textContent: String(n.node.data || '').substring(n.localStart, n.localEnd)
+              };
+            }),
+            searchHints: [
+              edit.find,
+              ...info.spanningElements.map(tag => `Text in <${tag}> element`),
+              `Look for: "${info.fullText.substring(Math.max(0, info.matchPosition.start - 10), Math.min(info.fullText.length, info.matchPosition.end + 10))}"`
+            ]
+          };
+        }
+        
       } else if (diagnostics.locations && diagnostics.locations.length > 0) {
         failureReason = `Text found ${diagnostics.locations.length} time(s) but context didn't match`;
         status = 'context_mismatch';
+        
+        manualFixGuidance = {
+          strategy: 'context-mismatch',
+          recommendation: `Found the text in ${diagnostics.locations.length} location(s), but the surrounding context doesn't match what GPT expected. Review each location in the visual editor.`,
+          searchHints: diagnostics.locations.map(loc => 
+            `In <${loc.tag}>: "${loc.visualPreview || loc.actualContext}"`
+          )
+        };
+        
       } else if (normalizedOccurrences > 0) {
         failureReason = 'Text exists after normalization but could not be located';
         status = 'not_found';
+        
+        manualFixGuidance = {
+          strategy: 'normalization-issue',
+          recommendation: 'The text exists but may have special characters or formatting. Try searching for it manually in the visual editor.',
+          searchHints: [
+            edit.find,
+            normalized,
+            edit.find.replace(/\s+/g, ' ').trim()
+          ]
+        };
+        
       } else {
         failureReason = 'Text not found in HTML';
         status = 'not_found';
+        
+        manualFixGuidance = {
+          strategy: 'not-found',
+          recommendation: 'Text was not found - it may have already been corrected, or GPT hallucinated this error.',
+          searchHints: [edit.find]
+        };
       }
+      
+      diagnostics.manualFixGuidance = manualFixGuidance;
       
       console.log('❌ [FAILED]', status, '-', failureReason);
       
@@ -858,39 +1092,6 @@ function applyContextEdits(
   };
 }
 
-// âœ… Helper function for regex escaping
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// ✅ NEW FUNCTION: Recursively collect text nodes
-function consolidateTextNodesRecursive(
-  $: any,
-  element: any
-): { fullText: string; nodeMap: TextNodeMap[] } {
-  let fullText = '';
-  const nodeMap: TextNodeMap[] = [];
-  
-  function traverse(node: any) {
-    $(node).contents().each((_: any, child: any) => {
-      if (child.type === 'text') {
-        const txt = String(child.data || '');
-        if (txt) {
-          const startInConsolidated = fullText.length;
-          fullText += txt;
-          const endInConsolidated = fullText.length;
-          nodeMap.push({ node: child, startInConsolidated, endInConsolidated });
-        }
-      } else if (child.type === 'tag') {
-        // ✅ Recursively traverse nested elements
-        traverse(child);
-      }
-    });
-  }
-  
-  traverse(element);
-  return { fullText, nodeMap };
-}
 /* ------------------------------------------------------------------ */
 /*                      Loose word fallback (safe)                     */
 /* ------------------------------------------------------------------ */
@@ -991,11 +1192,6 @@ async function getSuggestionsFromHtml(html: string): Promise<{ gibberish: Array<
 /*                               Routes                                */
 /* ------------------------------------------------------------------ */
 
-// GOLDEN
-/* ------------------------------------------------------------------ */
-/*                    âœ… UPDATED: GOLDEN Route                         */
-/* ------------------------------------------------------------------ */
-
 router.post('/:id/golden', async (req: Request, res: Response) => {
   const requestStart = Date.now();
   console.log('\n🌟 ============ GOLDEN TEMPLATE REQUEST ============');
@@ -1020,7 +1216,7 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
       
       const completion = await openai.chat.completions.create({
         model: OPENAI_MODEL,
-        temperature: 0,
+        temperature: 0.2,
         messages: [
           { role: 'system', content: grammarSystemPrompt() },
           { role: 'user', content: `Visible email text:\n\n${chunk || 'No text.'}` }
@@ -1054,13 +1250,11 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
 
     console.log('\n✅ GPT analysis complete. Total edits suggested:', allEdits.length);
     
-    // âœ… Use new atomic verification
     console.log('\n🔬 Starting atomic verification...');
     const atomicResult = applyContextEdits(html, allEdits);
     
     const doc = ensureFullDocShell(name, atomicResult.html);
 
-    // âœ… Prepare detailed response
     const appliedEdits = atomicResult.results.filter(r => r.status === 'applied');
     const failedEdits = atomicResult.results.filter(r => r.status !== 'applied' && r.status !== 'skipped');
     const changes = appliedEdits.map(r => r.change!).filter(Boolean);
@@ -1073,13 +1267,10 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
     console.log('⏱️ Total time:', Date.now() - requestStart, 'ms');
     console.log('==========================================\n');
 
-    // âœ… Backward compatible response
     res.json({
       html: doc,
-      edits: allEdits, // Original GPT suggestions
-      changes, // Successfully applied changes
-      
-      // âœ… NEW: Atomic verification data
+      edits: allEdits,
+      changes,
       atomicResults: atomicResult.results,
       failedEdits: failedEdits.map(r => ({
         ...r.edit,
@@ -1096,7 +1287,7 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
     res.status(500).json({ code: 'QA_GOLDEN_ERROR', message: errMsg(err) });
   }
 });
-// SUBJECTS
+
 router.post('/:id/subjects', async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -1133,7 +1324,6 @@ router.post('/:id/subjects', async (req: Request, res: Response) => {
   }
 });
 
-// SUGGESTIONS
 router.post('/:id/suggestions', async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -1145,7 +1335,9 @@ router.post('/:id/suggestions', async (req: Request, res: Response) => {
   }
 });
 
-// -------------------------- VARIANTS (single-click sequential) --------------------------
+/* ------------------------------------------------------------------ */
+/*                            Variants                                 */
+/* ------------------------------------------------------------------ */
 
 type VariantChange = { before: string; after: string; parent: string; reason?: string };
 type VariantArtifacts = { usedIdeas: string[] };
@@ -1295,7 +1487,9 @@ router.get('/variants/:runId/status', async (req: Request, res: Response) => {
   });
 });
 
-// ---------------------------- CHATBOT (Use Variant) ----------------------------
+/* ------------------------------------------------------------------ */
+/*                         Chat & Other Routes                         */
+/* ------------------------------------------------------------------ */
 
 type ChatIntent = 'suggest' | 'edit' | 'both' | 'clarify';
 
@@ -1344,10 +1538,6 @@ function chatSystemPrompt(): string {
   ].join('\n');
 }
 
-/* ------------------------------------------------------------------ */
-/*                    Template Grammar Check (Spelling Only)          */
-/* ------------------------------------------------------------------ */
-
 router.post('/template/grammar-check', async (req: Request, res: Response) => {
   try {
     const html: string = String(req.body?.html || '').trim();
@@ -1359,7 +1549,6 @@ router.post('/template/grammar-check', async (req: Request, res: Response) => {
       });
     }
 
-    // Extract visible text from HTML
     const $ = cheerio.load(html);
     $('script, style, noscript').remove();
     const visibleText = $('body').text().replace(/\s+/g, ' ').trim();
@@ -1372,7 +1561,6 @@ router.post('/template/grammar-check', async (req: Request, res: Response) => {
       });
     }
 
-    // ChatGPT system prompt for SPELLING ONLY
     const systemPrompt = [
       'You are a spelling checker. Check ONLY for spelling mistakes.',
       'DO NOT check grammar, punctuation, or style.',
@@ -1420,9 +1608,7 @@ router.post('/template/grammar-check', async (req: Request, res: Response) => {
           })).filter(item => item.word && item.suggestion);
         }
       }
-    } catch (_e: unknown) {
-      // Ignore JSON parse errors
-    }
+    } catch (_e: unknown) {}
 
     const hasErrors = mistakes.length > 0;
 
@@ -1442,7 +1628,6 @@ router.post('/template/grammar-check', async (req: Request, res: Response) => {
     });
   }
 });
-
 
 router.post('/variants/:runId/chat/message', async (req: Request, res: Response) => {
   try {
@@ -1538,10 +1723,6 @@ router.post('/variants/:runId/chat/apply', async (req: Request, res: Response) =
   }
 });
 
-/* ------------------------------------------------------------------ */
-/*                          Headless screenshot                        */
-/* ------------------------------------------------------------------ */
-
 router.post('/snap', async (req: Request, res: Response) => {
   const url = String(req.body?.url || '').trim();
   if (!/^https?:\/\//i.test(url)) {
@@ -1579,6 +1760,5 @@ router.post('/snap', async (req: Request, res: Response) => {
     try { await browser?.close(); } catch {}
   }
 });
-
 
 export default router;
