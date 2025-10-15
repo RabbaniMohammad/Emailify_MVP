@@ -131,10 +131,9 @@
         <div 
           class="suggestion-item"
           *ngFor="let edit of failedEdits; let i = index"
-          [class.applied]="isEditApplied(i)"
-          [class.selected]="selectedEditIndex === i">
+          [class.applied]="isEditApplied(i)">
           
-          <!-- Status Indicator -->
+
           <div 
             class="status-indicator"
             [class.pending]="!isEditApplied(i)"
@@ -164,27 +163,6 @@
               {{ edit.reason }}
             </div>
             
-            <!-- Multi-Match Navigation -->
-            <div 
-              class="multi-match-nav" 
-              *ngIf="selectedEditIndex === i && totalMatchesForSelected > 1">
-              <button mat-icon-button (click)="navigateToPreviousMatch()">
-                <mat-icon>keyboard_arrow_left</mat-icon>
-              </button>
-              <span class="match-counter">
-                {{ currentMatchIndex + 1 }} / {{ totalMatchesForSelected }}
-              </span>
-              <button mat-icon-button (click)="navigateToNextMatch()">
-                <mat-icon>keyboard_arrow_right</mat-icon>
-              </button>
-              <button 
-                mat-icon-button 
-                class="apply-current-btn"
-                (click)="applyToCurrentMatch()"
-                matTooltip="Apply to this match">
-                <mat-icon>check</mat-icon>
-              </button>
-            </div>
           </div>
           
           <!-- Apply Button -->

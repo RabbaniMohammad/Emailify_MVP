@@ -11,8 +11,16 @@ import { CacheService } from '../../core/services/cache.service';
 import { AuthService } from '../../core/services/auth.service';
 import { trigger, state, style, transition, animate } from '@angular/animations';
 
-// ✅ Fixed: Import Mark.js properly for Angular
-declare const Mark: any;
+interface MatchOverlay {
+  id: string;
+  range: Range;
+  rect: DOMRect;
+  overlayElement: HTMLElement;
+  badgeElement: HTMLElement;
+  matchNumber: number;
+  searchText: string;
+  replaceText: string;
+}
 
 @Component({
   selector: 'app-visual-editor',
@@ -60,13 +68,9 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private longPressTimer: any;
 
-  // ✅ Mark.js instance for highlighting
-  private markInstance: any = null;
-  private currentHighlightedElements: HTMLElement[] = [];
-
-  // ============================================
-  // FLOATING SUGGESTIONS WIDGET PROPERTIES
-  // ============================================
+  // Simple overlay tracking
+  private overlays: MatchOverlay[] = [];
+  private overlayContainer: HTMLElement | null = null;
 
   // Failed Edits Data
   failedEdits: Array<{
@@ -90,25 +94,8 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   dragEnabled = false;
   private dragOffset = { x: 0, y: 0 };
 
-  // Text Markers in Editor
-  textMarkers: Array<{
-    editIndex: number;
-    find: string;
-    replace: string;
-    status: 'pending' | 'success' | 'failed';
-    element?: HTMLElement;
-    matchIndex?: number;
-    totalMatches?: number;
-  }> = [];
-
-  // Selected Edit for Multi-Match Navigation
-  selectedEditIndex: number | null = null;
-  currentMatchIndex = 0;
-  totalMatchesForSelected = 0;
-
   // Storage Keys
   private readonly WIDGET_POSITION_KEY = 'visual_editor_widget_position';
-  private readonly WIDGET_STATE_KEY = 'visual_editor_widget_state';
   private readonly APPLIED_EDITS_KEY = 'visual_editor_applied_edits';
   private readonly PULSE_SHOWN_KEY = 'visual_editor_pulse_shown';
   
@@ -133,9 +120,6 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     });
     
     this.restoreWidgetPosition();
-    
-    // ✅ Load Mark.js dynamically
-    this.loadMarkJS();
   }
 
   ngAfterViewInit(): void {
@@ -154,25 +138,6 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.editor) {
       this.editor.destroy();
     }
-  }
-
-  /**
-   * ✅ Load Mark.js library dynamically
-   */
-  private loadMarkJS(): void {
-    if (typeof Mark !== 'undefined') {
-      return; // Already loaded
-    }
-    
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/mark.js@8.11.1/dist/mark.min.js';
-    script.onload = () => {
-      console.log('✅ Mark.js loaded successfully');
-    };
-    script.onerror = () => {
-      console.error('❌ Failed to load Mark.js');
-    };
-    document.head.appendChild(script);
   }
 
   onTouchStart(event: TouchEvent): void {
@@ -469,10 +434,6 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.cacheService.invalidate(this.EDITOR_CACHE_KEY);
   }
 
-  // ============================================
-  // FLOATING SUGGESTIONS WIDGET FUNCTIONS
-  // ============================================
-
   private loadFailedEdits(templateId: string): void {
     const failedKey = `visual_editor_${templateId}_failed_edits`;
     const failedEditsJson = sessionStorage.getItem(failedKey);
@@ -613,314 +574,220 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   // ============================================
-  // ✅ MARK.JS FIND & HIGHLIGHT SYSTEM
+  // ✅ SIMPLE HIGHLIGHTING ONLY (No interactions!)
   // ============================================
 
   /**
-   * ✅ CORRECTED: Apply suggestion with Mark.js highlighting
+   * Apply suggestion - Just highlights, NO clicking, NO hover
    */
-applySuggestion(editIndex: number): void {
-  if (!this.editor) {
-    this.showToast('Editor not initialized', 'error');
-    return;
-  }
-  
-  const edit = this.failedEdits[editIndex];
-  if (!edit || !edit.find) {
-    this.showToast('Invalid edit data', 'error');
-    return;
-  }
-  
-  if (typeof Mark === 'undefined') {
-    this.showToast('Highlight library loading... Please try again', 'warning');
-    return;
-  }
-  
-  const iframe = document.querySelector('.gjs-frame') as HTMLIFrameElement;
-  if (!iframe || !iframe.contentDocument) {
-    this.showToast('Editor iframe not found', 'error');
-    return;
-  }
-  
-  const iframeBody = iframe.contentDocument.body;
-  
-  this.clearHighlights();
-  this.markInstance = new Mark(iframeBody);
-  
-  const searchText = edit.find;
-  const replaceText = edit.replace;
-  let matchCount = 0;
-  const matchElements: HTMLElement[] = [];
-  
-  this.markInstance.mark(searchText, {
-    separateWordSearch: false,
-    accuracy: 'exactly',
-    caseSensitive: false,
-    className: 'ai-highlight',
-    each: (element: HTMLElement) => {
-      matchCount++;
-      matchElements.push(element);
-      
-      const badge = document.createElement('span');
-      badge.className = 'match-number-badge';
-      badge.textContent = matchCount.toString();
-      element.appendChild(badge);
-      
-      element.style.cursor = 'pointer';
-      element.title = `Click to replace with: "${replaceText}"`;
-      
-      // ✅ FIX: Pass only THIS element, not all
-      element.onclick = (e) => {
-        e.stopPropagation();
-        this.handleHighlightClick(element, replaceText, editIndex);
-      };
-    },
-    done: () => {
-      if (matchCount === 0) {
-        this.showToast('❌ Text not found - May have been already edited', 'error');
-        this.updateMarkerStatus(editIndex, 'failed');
-      } else if (matchCount === 1) {
-        this.showToast(`🔍 Found 1 match - Click to replace`, 'info');
-        matchElements[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        this.showToast(`🔍 Found ${matchCount} matches - Click any to replace`, 'info');
-        matchElements[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      
-      this.currentHighlightedElements = matchElements;
+  applySuggestion(editIndex: number): void {
+    if (!this.editor) {
+      this.showToast('Editor not initialized', 'error');
+      return;
     }
-  });
-}
-
-  /**
-   * ✅ NEW: Handle click on highlighted text
-   */
-/**
- * ✅ FIXED: Handle click on highlighted text - PRESERVES LAYOUT & CSS
- */
-private handleHighlightClick(
-  clickedElement: HTMLElement, 
-  replaceText: string,
-  editIndex: number
-): void {
-  // ✅ FIX: Check if THIS SINGLE element is cross-boundary
-  if (this.isSingleElementCrossBoundary(clickedElement)) {
-    this.showToast('⚠️ This text spans multiple elements - Please edit manually', 'warning');
-    return;
-  }
-  
-  // Remove badge from clicked element
-  const badge = clickedElement.querySelector('.match-number-badge');
-  if (badge) badge.remove();
-  
-  const originalText = clickedElement.textContent || '';
-  
-  // Replace in the text node
-  const textNode = this.findTextNode(clickedElement, originalText);
-  
-  if (textNode) {
-    textNode.textContent = replaceText;
+    
+    const edit = this.failedEdits[editIndex];
+    if (!edit || !edit.find) {
+      this.showToast('Invalid edit data', 'error');
+      return;
+    }
     
     const iframe = document.querySelector('.gjs-frame') as HTMLIFrameElement;
-    if (iframe && iframe.contentDocument) {
-      const updatedHtml = iframe.contentDocument.body.innerHTML;
-      this.editor.setComponents(updatedHtml);
-    }
-  } else {
-    // Fallback: Replace in HTML
-    const html = this.editor.getHtml();
-    const escapedOriginal = originalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const newHtml = html.replace(new RegExp(escapedOriginal, 'g'), replaceText);
-    this.editor.setComponents(newHtml);
-  }
-  
-  // ✅ Visual feedback - green flash
-  clickedElement.style.background = '#4ade80';
-  clickedElement.style.transition = 'all 0.3s';
-  
-  
-  setTimeout(() => {
-    // Unwrap only THIS mark element
-    const parent = clickedElement.parentNode;
-    if (parent) {
-      while (clickedElement.firstChild) {
-        parent.insertBefore(clickedElement.firstChild, clickedElement);
-      }
-      parent.removeChild(clickedElement);
+    if (!iframe || !iframe.contentDocument) {
+      this.showToast('Editor iframe not found', 'error');
+      return;
     }
     
-    // ✅ FIX: Don't clear all highlights, let user replace others
-    // this.clearHighlights(); // ❌ REMOVED
-  }, 1000);
-  
-  this.updateMarkerStatus(editIndex, 'success');
-  this.markEditAsApplied(editIndex);
-  
-  this.showToast(`✅ Replaced with "${this.truncateText(replaceText, 30)}"`, 'success');
-}
-
-private isSingleElementCrossBoundary(element: HTMLElement): boolean {
-  // Check if the highlighted text spans multiple parent elements
-  // by checking if there are multiple text nodes or child elements
-  
-  const children = Array.from(element.childNodes);
-  
-  // If there are element nodes (not just text), it might be cross-boundary
-  const hasElementChildren = children.some(child => {
-    // ✅ FIX: Properly check if it's an HTMLElement before accessing classList
-    if (child.nodeType === Node.ELEMENT_NODE) {
-      const elementChild = child as HTMLElement;
-      return !elementChild.classList?.contains('match-number-badge');
-    }
-    return false;
-  });
-  
-  // If text is split across multiple nodes, it's cross-boundary
-  const textNodes = children.filter(child => child.nodeType === Node.TEXT_NODE);
-  
-  return hasElementChildren || textNodes.length > 1;
-}
-
-/**
- * ✅ NEW HELPER: Find the actual text node within the marked element
- */
-private findTextNode(element: HTMLElement, searchText: string): Text | null {
-  const walker = document.createTreeWalker(
-    element,
-    NodeFilter.SHOW_TEXT,
-    null
-  );
-  
-  let node: Node | null;
-  while (node = walker.nextNode()) {
-    if (node.textContent?.includes(searchText)) {
-      return node as Text;
-    }
-  }
-  
-  return null;
-}
-
-  /**
-   * ✅ NEW: Check if highlighted elements are cross-boundary
-   */
-  // private isCrossBoundary(elements: HTMLElement[]): boolean {
-  //   if (elements.length <= 1) return false;
+    // Clear previous highlights
+    this.clearHighlights(iframe.contentDocument);
     
-  //   // Check if elements have different parents (cross-boundary indicator)
-  //   const firstParent = elements[0].parentElement;
-  //   return elements.some(el => el.parentElement !== firstParent);
-  // }
-
-  /**
-   * ✅ NEW: Clear all highlights
-   */
-  private clearHighlights(): void {
-    if (this.markInstance) {
-      this.markInstance.unmark();
-    }
-    this.currentHighlightedElements = [];
+    // Find and highlight (no interactions)
+    this.highlightMatches(iframe.contentDocument, edit.find, edit.replace);
   }
 
   /**
-   * ✅ NEW: Show toast notification
+   * Highlight all matches - SIMPLE, NO INTERACTIONS
    */
-  private showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info'): void {
-    const toast = document.createElement('div');
-    toast.className = `custom-toast toast-${type}`;
+  private highlightMatches(
+    doc: Document,
+    searchText: string,
+    replaceText: string
+  ): void {
+    const body = doc.body;
     
-    let icon = '';
-    let bgGradient = '';
+    // Create overlay container
+    this.overlayContainer = doc.createElement('div');
+    this.overlayContainer.id = 'ai-overlay-container';
+    this.overlayContainer.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 9999;
+    `;
+    body.appendChild(this.overlayContainer);
     
-    switch (type) {
-      case 'success':
-        icon = '✓';
-        bgGradient = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-        break;
-      case 'error':
-        icon = '✕';
-        bgGradient = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
-        break;
-      case 'warning':
-        icon = '⚠';
-        bgGradient = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
-        break;
-      case 'info':
-        icon = 'ℹ';
-        bgGradient = 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)';
-        break;
+    // Find all matches
+    const matches = this.findAllTextMatches(body, searchText);
+    
+    if (matches.length === 0) {
+      this.showToast(`❌ "${searchText}" not found`, 'error');
+      this.clearHighlights(doc);
+      return;
     }
     
-    toast.style.cssText = `
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: ${bgGradient};
+    // Create SIMPLE overlays (no hover, no click)
+    matches.forEach((range, index) => {
+      this.createSimpleOverlay(doc, range, index + 1);
+    });
+    
+    // Show info
+    this.showToast(
+      `🔍 Found ${matches.length} match(es)\n\n` +
+      `Find: "${this.truncateText(searchText, 30)}"\n` +
+      `Replace with: "${this.truncateText(replaceText, 30)}"\n\n` +
+      `Use Ctrl+F to find and replace manually`,
+      'info'
+    );
+    
+    // Scroll to first match
+    if (this.overlays.length > 0) {
+      this.overlays[0].overlayElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    }
+  }
+
+  /**
+   * Create simple overlay - NO hover, NO click
+   */
+  private createSimpleOverlay(
+    doc: Document,
+    range: Range,
+    matchNumber: number
+  ): void {
+    if (!this.overlayContainer) return;
+    
+    const rect = range.getBoundingClientRect();
+    const bodyRect = doc.body.getBoundingClientRect();
+    const scrollTop = doc.documentElement.scrollTop || doc.body.scrollTop;
+    
+    // Simple yellow highlight (NO hover effects)
+    const overlay = doc.createElement('div');
+    overlay.style.cssText = `
+      position: absolute;
+      left: ${rect.left - bodyRect.left}px;
+      top: ${rect.top - bodyRect.top + scrollTop}px;
+      width: ${rect.width}px;
+      height: ${rect.height}px;
+      background: rgba(255, 235, 59, 0.4);
+      border: 2px solid #ffd700;
+      border-radius: 4px;
+      pointer-events: none;
+      box-sizing: border-box;
+    `;
+    
+    // Simple badge (NO animations)
+    const badge = doc.createElement('div');
+    badge.textContent = matchNumber.toString();
+    badge.style.cssText = `
+      position: absolute;
+      left: ${rect.left - bodyRect.left + rect.width + 4}px;
+      top: ${rect.top - bodyRect.top + scrollTop - 12}px;
+      background: #667eea;
       color: white;
-      padding: 14px 20px;
-      border-radius: 10px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      font-size: 11px;
+      font-weight: bold;
+      padding: 3px 7px;
+      border-radius: 12px;
+      pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
       z-index: 10000;
-      font-weight: 600;
-      font-size: 14px;
-      max-width: 400px;
-      animation: slideInRight 0.3s ease;
-      display: flex;
-      align-items: center;
-      gap: 10px;
     `;
     
-    toast.innerHTML = `
-      <span style="font-size: 18px;">${icon}</span>
-      <span>${message}</span>
-    `;
+    this.overlayContainer.appendChild(overlay);
+    this.overlayContainer.appendChild(badge);
     
-    document.body.appendChild(toast);
-    
-    const duration = type === 'warning' ? 5000 : 3000;
-    
-    setTimeout(() => {
-      toast.style.animation = 'slideOutRight 0.3s ease';
-      setTimeout(() => toast.remove(), 300);
-    }, duration);
+    this.overlays.push({
+      id: `overlay-${matchNumber}`,
+      range: range.cloneRange(),
+      rect,
+      overlayElement: overlay,
+      badgeElement: badge,
+      matchNumber,
+      searchText: '',
+      replaceText: ''
+    });
   }
 
   /**
-   * ✅ NEW: Truncate text for display
+   * Find all text matches
    */
-  private truncateText(text: string, maxLength: number): string {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
+  private findAllTextMatches(root: HTMLElement, searchText: string): Range[] {
+    const ranges: Range[] = [];
+    const searchLower = searchText.toLowerCase();
+    
+    const walker = document.createTreeWalker(
+      root,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: (node) => {
+          const parent = node.parentElement;
+          if (!parent) return NodeFilter.FILTER_REJECT;
+          
+          const tagName = parent.tagName.toLowerCase();
+          if (tagName === 'script' || tagName === 'style' || tagName === 'noscript') {
+            return NodeFilter.FILTER_REJECT;
+          }
+          
+          if (parent.id === 'ai-overlay-container') {
+            return NodeFilter.FILTER_REJECT;
+          }
+          
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      }
+    );
+    
+    let node: Node | null;
+    while (node = walker.nextNode()) {
+      const text = node.textContent || '';
+      const textLower = text.toLowerCase();
+      
+      let startIndex = 0;
+      let foundIndex: number;
+      
+      while ((foundIndex = textLower.indexOf(searchLower, startIndex)) !== -1) {
+        const range = document.createRange();
+        range.setStart(node, foundIndex);
+        range.setEnd(node, foundIndex + searchText.length);
+        ranges.push(range);
+        
+        startIndex = foundIndex + searchText.length;
+      }
+    }
+    
+    return ranges;
   }
 
   /**
-   * Navigate to next match
+   * Clear all highlights
    */
-  navigateToNextMatch(): void {
-    if (this.currentHighlightedElements.length === 0) return;
+  private clearHighlights(doc: Document): void {
+    const existingContainer = doc.getElementById('ai-overlay-container');
+    if (existingContainer) {
+      existingContainer.remove();
+    }
     
-    this.currentMatchIndex = (this.currentMatchIndex + 1) % this.currentHighlightedElements.length;
-    const element = this.currentHighlightedElements[this.currentMatchIndex];
-    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    
-    this.showToast(`Match ${this.currentMatchIndex + 1} of ${this.currentHighlightedElements.length}`, 'info');
+    this.overlays = [];
+    this.overlayContainer = null;
   }
 
   /**
-   * Navigate to previous match
-   */
-  navigateToPreviousMatch(): void {
-    if (this.currentHighlightedElements.length === 0) return;
-    
-    this.currentMatchIndex = (this.currentMatchIndex - 1 + this.currentHighlightedElements.length) % this.currentHighlightedElements.length;
-    const element = this.currentHighlightedElements[this.currentMatchIndex];
-    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    
-    this.showToast(`Match ${this.currentMatchIndex + 1} of ${this.currentHighlightedElements.length}`, 'info');
-  }
-
-  /**
-   * ✅ FIXED: Saves edited HTML and navigates back to QA page for preview
+   * Check preview and go back to QA page
    */
   onCheckPreview(): void {
     if (!this.editor) {
@@ -948,92 +815,77 @@ private findTextNode(element: HTMLElement, searchText: string): Text | null {
   }
 
   /**
-   * Apply to current match (legacy support for multi-match navigation)
+   * Simple toast (NO animations)
    */
-  applyToCurrentMatch(): void {
-    if (this.selectedEditIndex === null) return;
+  private showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info'): void {
+    const toast = document.createElement('div');
     
-    const edit = this.failedEdits[this.selectedEditIndex];
-    if (!edit) return;
+    let icon = '';
+    let bgColor = '';
     
-    const html = this.editor.getHtml();
-    const findText = edit.find;
-    const replaceText = edit.replace;
+    switch (type) {
+      case 'success':
+        icon = '✓';
+        bgColor = '#10b981';
+        break;
+      case 'error':
+        icon = '✕';
+        bgColor = '#ef4444';
+        break;
+      case 'warning':
+        icon = '⚠';
+        bgColor = '#f59e0b';
+        break;
+      case 'info':
+        icon = 'ℹ';
+        bgColor = '#3b82f6';
+        break;
+    }
     
-    // Replace only the current match
-    let matchCount = 0;
-    const newHtml = html.replace(new RegExp(this.escapeRegex(findText), 'gi'), (match: string) => {
-      if (matchCount === this.currentMatchIndex) {
-        matchCount++;
-        return replaceText;
-      }
-      matchCount++;
-      return match;
-    });
+    toast.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: ${bgColor};
+      color: white;
+      padding: 16px 20px;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      z-index: 10000;
+      font-weight: 600;
+      font-size: 14px;
+      max-width: 400px;
+      white-space: pre-line;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    `;
     
-    // ✅ Update editor (preserves CSS)
-    this.editor.setComponents(newHtml);
+    toast.innerHTML = `
+      <span style="font-size: 18px; margin-top: 2px;">${icon}</span>
+      <span>${message}</span>
+    `;
     
-    // Update marker status
-    this.updateMarkerStatus(this.selectedEditIndex, 'success');
+    document.body.appendChild(toast);
     
-    // Mark as applied
-    this.markEditAsApplied(this.selectedEditIndex);
+    const duration = type === 'info' ? 10000 : 3000;
     
-    // Clear selection
-    this.selectedEditIndex = null;
-    this.currentMatchIndex = 0;
-    this.totalMatchesForSelected = 0;
+    setTimeout(() => {
+      toast.remove();
+    }, duration);
   }
 
   /**
-   * Helper: Escape special regex characters
+   * Truncate text
    */
-private escapeRegex(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+  private truncateText(text: string, maxLength: number): string {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  }
 
   // ============================================
   // UTILITY FUNCTIONS
   // ============================================
-
-  private storeEditorStateForUndo(): void {
-    try {
-      const html = this.editor.getHtml();
-      const css = this.editor.getCss();
-      
-      const undoKey = `${this.EDITOR_CACHE_KEY}_undo`;
-      sessionStorage.setItem(undoKey, JSON.stringify({ html, css, timestamp: Date.now() }));
-    } catch (error) {
-      console.error('Store undo state failed:', error);
-    }
-  }
-
-  private updateMarkerStatus(editIndex: number, status: 'pending' | 'success' | 'failed'): void {
-    const marker = this.textMarkers.find(m => m.editIndex === editIndex);
-    if (marker) {
-      marker.status = status;
-    }
-  }
-
-  private markEditAsApplied(editIndex: number): void {
-    if (!this.templateId) return;
-    
-    const appliedKey = `${this.APPLIED_EDITS_KEY}_${this.templateId}`;
-    const appliedEditsJson = sessionStorage.getItem(appliedKey);
-    
-    let appliedEdits: number[] = [];
-    if (appliedEditsJson) {
-      try {
-        appliedEdits = JSON.parse(appliedEditsJson);
-      } catch (error) {}
-    }
-    
-    if (!appliedEdits.includes(editIndex)) {
-      appliedEdits.push(editIndex);
-      sessionStorage.setItem(appliedKey, JSON.stringify(appliedEdits));
-    }
-  }
 
   isEditApplied(editIndex: number): boolean {
     if (!this.templateId) return false;

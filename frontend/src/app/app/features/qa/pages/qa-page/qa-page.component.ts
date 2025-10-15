@@ -1103,7 +1103,11 @@ navigateToVisualEditor(): void {
   const snapshotKey = `visual_editor_${this.templateId}_snapshot_html`;
   sessionStorage.setItem(snapshotKey, golden.html);
   
-  console.log('📸 Snapshot created for comparison');
+  // ✅ CRITICAL: Set flag to indicate we're editing GOLDEN template
+  const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
+  sessionStorage.setItem(editingModeKey, 'golden');
+  
+  console.log('📸 Snapshot created for comparison (MODE: golden)');
   
   // Save failed edits
   if (golden.failedEdits && golden.failedEdits.length > 0) {
@@ -1140,7 +1144,62 @@ private async handleVisualEditorReturn(
   templateId: string,
   editedHtml: string
 ): Promise<void> {
-  console.log('🎯 [WORD BOUNDARY] Starting comparison');
+  
+  // ✅ CRITICAL: Check editing mode flag FIRST
+  const editingModeKey = `visual_editor_${templateId}_editing_mode`;
+  const editingMode = sessionStorage.getItem(editingModeKey);
+  
+  console.log(`🎯 Editing mode detected: ${editingMode}`);
+  
+  // ========================================
+  // ✅ ORIGINAL TEMPLATE EDITING
+  // ========================================
+  if (editingMode === 'original') {
+    console.log('📥 Processing ORIGINAL template return');
+    
+    // Get snapshot for comparison
+    const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
+    const snapshotHtml = sessionStorage.getItem(snapshotKey);
+    
+    if (snapshotHtml) {
+      const originalText = this.extractVisibleText(snapshotHtml);
+      const editedText = this.extractVisibleText(editedHtml);
+      
+      if (originalText === editedText) {
+        console.log('⚠️ No changes detected in original template');
+        sessionStorage.removeItem(snapshotKey);
+        sessionStorage.removeItem(editingModeKey);
+        this.showInfo('No changes detected in the template.');
+        return;
+      }
+    }
+    
+    // Update original template preview
+    this.templateHtml = editedHtml;
+    this.cdr.detectChanges();
+    
+    // Clean up
+    sessionStorage.removeItem(snapshotKey);
+    sessionStorage.removeItem(editingModeKey);
+    
+    this.showSuccess('✅ Original template updated successfully!');
+    
+    // Scroll to original preview
+    setTimeout(() => {
+      const originalPreview = document.querySelector('.col-1');
+      if (originalPreview) {
+        originalPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+    
+    return; // ✅ EXIT - Don't process golden template logic
+  }
+  
+  // ========================================
+  // ✅ GOLDEN TEMPLATE EDITING
+  // ========================================
+  
+  console.log('🎯 [WORD BOUNDARY] Processing GOLDEN template return');
   
   const golden = this.goldenSubject.value;
   
@@ -1174,6 +1233,7 @@ private async handleVisualEditorReturn(
   if (originalText === editedText) {
     console.log('⚠️ No changes detected');
     sessionStorage.removeItem(snapshotKey);
+    sessionStorage.removeItem(editingModeKey);
     this.showInfo('No changes detected in the template.');
     return;
   }
@@ -1193,6 +1253,7 @@ private async handleVisualEditorReturn(
     this.cdr.detectChanges();
     
     sessionStorage.removeItem(snapshotKey);
+    sessionStorage.removeItem(editingModeKey);
     this.showSuccess('✅ Template updated successfully!');
     return;
   }
@@ -1236,9 +1297,11 @@ private async handleVisualEditorReturn(
       fixedCount++;
       console.log(`   ✅ FIXED - All ${inSnapshotCount} whole word instance(s) removed`);
     }
-    // ⚠️ PARTIALLY FIXED
+    // ⚠️ PARTIALLY FIXED - Still count as fixed for stats
     else if (inSnapshotCount > inEditedCount && inEditedCount > 0) {
-      console.log(`   ⚠️ PARTIAL - ${inSnapshotCount - inEditedCount}/${inSnapshotCount} fixed`);
+      const partialFixed = inSnapshotCount - inEditedCount;
+      fixedCount += partialFixed;
+      console.log(`   ⚠️ PARTIAL - ${partialFixed}/${inSnapshotCount} fixed`);
       remainingFailedEdits.push(edit);
     }
     // ❌ NOT FIXED
@@ -1289,9 +1352,10 @@ private async handleVisualEditorReturn(
   this.qa.saveGoldenToCache(templateId, updatedGolden);
   this.updateVisualEditorButtonColor(remainingFailedEdits);
   
-  // Clean up snapshot
+  // Clean up snapshot and mode flag
   sessionStorage.removeItem(snapshotKey);
-  console.log('🧹 Snapshot cleaned up');
+  sessionStorage.removeItem(editingModeKey);
+  console.log('🧹 Cleanup complete');
   
   // Force UI update
   this.cdr.detectChanges();
@@ -1317,7 +1381,7 @@ private async handleVisualEditorReturn(
     this.showInfo('📝 Template updated, but no failed edits were resolved. Please check the changes.');
   }
   
-  // Scroll to preview
+  // Scroll to golden preview
   setTimeout(() => {
     const goldenPreview = document.querySelector('.col-3');
     if (goldenPreview) {
@@ -1467,4 +1531,42 @@ private extractVisibleText(html: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 // hai
+
+/**
+ * ✅ Navigate to Visual Editor with ORIGINAL template
+ * Opens visual editor for editing the original template (not golden)
+ */
+onEditOriginalTemplate(): void {
+  if (!this.templateId) {
+    this.showError('Template ID not found');
+    return;
+  }
+  
+  if (!this.templateHtml || this.templateLoading) {
+    this.showWarning('Template is still loading. Please wait...');
+    return;
+  }
+  
+  // ✅ Save original template HTML for editing
+  const originalKey = `visual_editor_${this.templateId}_golden_html`;
+  sessionStorage.setItem(originalKey, this.templateHtml);
+  
+  // ✅ Save snapshot for comparison (before editing)
+  const snapshotKey = `visual_editor_${this.templateId}_snapshot_html`;
+  sessionStorage.setItem(snapshotKey, this.templateHtml);
+  
+  // ✅ CRITICAL: Set flag to indicate we're editing ORIGINAL template
+  const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
+  sessionStorage.setItem(editingModeKey, 'original');
+  
+  console.log('📸 Original template sent to visual editor (MODE: original)');
+  
+  // ✅ Clear any failed edits (since this is original template)
+  const failedKey = `visual_editor_${this.templateId}_failed_edits`;
+  sessionStorage.removeItem(failedKey);
+  
+  // ✅ Navigate to visual editor
+  this.router.navigate(['/visual-editor', this.templateId]);
+}
+
 }
