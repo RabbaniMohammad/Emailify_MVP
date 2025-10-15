@@ -619,84 +619,78 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   /**
    * ✅ CORRECTED: Apply suggestion with Mark.js highlighting
    */
-  applySuggestion(editIndex: number): void {
-    if (!this.editor) {
-      this.showToast('Editor not initialized', 'error');
-      return;
-    }
-    
-    const edit = this.failedEdits[editIndex];
-    if (!edit || !edit.find) {
-      this.showToast('Invalid edit data', 'error');
-      return;
-    }
-    
-    // Check if Mark.js is loaded
-    if (typeof Mark === 'undefined') {
-      this.showToast('Highlight library loading... Please try again', 'warning');
-      return;
-    }
-    
-    // Get GrapesJS iframe
-    const iframe = document.querySelector('.gjs-frame') as HTMLIFrameElement;
-    if (!iframe || !iframe.contentDocument) {
-      this.showToast('Editor iframe not found', 'error');
-      return;
-    }
-    
-    const iframeBody = iframe.contentDocument.body;
-    
-    // Clear previous highlights
-    this.clearHighlights();
-    
-    // Create Mark.js instance
-    this.markInstance = new Mark(iframeBody);
-    
-    const searchText = edit.find;
-    const replaceText = edit.replace;
-    let matchCount = 0;
-    const matchElements: HTMLElement[] = [];
-    
-    // Highlight all matches
-    this.markInstance.mark(searchText, {
-      separateWordSearch: false,
-      accuracy: 'exactly',
-      caseSensitive: false,
-      className: 'ai-highlight',
-      each: (element: HTMLElement) => {
-        matchCount++;
-        matchElements.push(element);
-        
-        // Add match number badge
-        const badge = document.createElement('span');
-        badge.className = 'match-number-badge';
-        badge.textContent = matchCount.toString();
-        element.appendChild(badge);
-        
-        // Add click handler
-        element.style.cursor = 'pointer';
-        element.title = `Click to replace with: "${replaceText}"`;
-        element.onclick = (e) => {
-          e.stopPropagation();
-          this.handleHighlightClick(element, matchElements, replaceText, editIndex);
-        };
-      },
-      done: () => {
-        if (matchCount === 0) {
-          this.showToast('❌ Text not found - May have been already edited', 'error');
-          this.updateMarkerStatus(editIndex, 'failed');
-        } else if (matchCount === 1) {
-          this.showToast(`🔍 Found 1 match - Click to replace`, 'info');
-          matchElements[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else {
-          this.showToast(`🔍 Found ${matchCount} matches - Click any to replace`, 'info');
-          matchElements[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-        
-        this.currentHighlightedElements = matchElements;
-      }
-    });
+applySuggestion(editIndex: number): void {
+  if (!this.editor) {
+    this.showToast('Editor not initialized', 'error');
+    return;
   }
+  
+  const edit = this.failedEdits[editIndex];
+  if (!edit || !edit.find) {
+    this.showToast('Invalid edit data', 'error');
+    return;
+  }
+  
+  if (typeof Mark === 'undefined') {
+    this.showToast('Highlight library loading... Please try again', 'warning');
+    return;
+  }
+  
+  const iframe = document.querySelector('.gjs-frame') as HTMLIFrameElement;
+  if (!iframe || !iframe.contentDocument) {
+    this.showToast('Editor iframe not found', 'error');
+    return;
+  }
+  
+  const iframeBody = iframe.contentDocument.body;
+  
+  this.clearHighlights();
+  this.markInstance = new Mark(iframeBody);
+  
+  const searchText = edit.find;
+  const replaceText = edit.replace;
+  let matchCount = 0;
+  const matchElements: HTMLElement[] = [];
+  
+  this.markInstance.mark(searchText, {
+    separateWordSearch: false,
+    accuracy: 'exactly',
+    caseSensitive: false,
+    className: 'ai-highlight',
+    each: (element: HTMLElement) => {
+      matchCount++;
+      matchElements.push(element);
+      
+      const badge = document.createElement('span');
+      badge.className = 'match-number-badge';
+      badge.textContent = matchCount.toString();
+      element.appendChild(badge);
+      
+      element.style.cursor = 'pointer';
+      element.title = `Click to replace with: "${replaceText}"`;
+      
+      // ✅ FIX: Pass only THIS element, not all
+      element.onclick = (e) => {
+        e.stopPropagation();
+        this.handleHighlightClick(element, replaceText, editIndex);
+      };
+    },
+    done: () => {
+      if (matchCount === 0) {
+        this.showToast('❌ Text not found - May have been already edited', 'error');
+        this.updateMarkerStatus(editIndex, 'failed');
+      } else if (matchCount === 1) {
+        this.showToast(`🔍 Found 1 match - Click to replace`, 'info');
+        matchElements[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        this.showToast(`🔍 Found ${matchCount} matches - Click any to replace`, 'info');
+        matchElements[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      
+      this.currentHighlightedElements = matchElements;
+    }
+  });
+}
 
   /**
    * ✅ NEW: Handle click on highlighted text
@@ -706,57 +700,47 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
  */
 private handleHighlightClick(
   clickedElement: HTMLElement, 
-  allElements: HTMLElement[], 
   replaceText: string,
   editIndex: number
 ): void {
-  // Check if cross-boundary
-  if (this.isCrossBoundary(allElements)) {
-    this.showToast('⚠️ Cross-boundary text detected - Please edit manually', 'warning');
+  // ✅ FIX: Check if THIS SINGLE element is cross-boundary
+  if (this.isSingleElementCrossBoundary(clickedElement)) {
+    this.showToast('⚠️ This text spans multiple elements - Please edit manually', 'warning');
     return;
   }
   
-  // Get the text to replace
+  // Remove badge from clicked element
   const badge = clickedElement.querySelector('.match-number-badge');
   if (badge) badge.remove();
   
   const originalText = clickedElement.textContent || '';
   
-  // ✅ CRITICAL FIX: Replace text while preserving HTML structure
-  // Instead of replacing in raw HTML, we update the text node directly in the iframe
+  // Replace in the text node
   const textNode = this.findTextNode(clickedElement, originalText);
   
   if (textNode) {
-    // Replace the text in the actual text node (preserves all HTML structure)
     textNode.textContent = replaceText;
     
-    // ✅ Now sync this change back to GrapesJS editor
     const iframe = document.querySelector('.gjs-frame') as HTMLIFrameElement;
     if (iframe && iframe.contentDocument) {
       const updatedHtml = iframe.contentDocument.body.innerHTML;
-      
-      // Update GrapesJS with the modified HTML (CSS remains untouched)
       this.editor.setComponents(updatedHtml);
     }
   } else {
-    // Fallback: Try to replace in HTML carefully
+    // Fallback: Replace in HTML
     const html = this.editor.getHtml();
-    
-    // Escape special characters for regex
     const escapedOriginal = originalText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    
-    // Replace only exact matches (case-sensitive to avoid breaking other content)
     const newHtml = html.replace(new RegExp(escapedOriginal, 'g'), replaceText);
-    
     this.editor.setComponents(newHtml);
   }
   
-  // Visual feedback - green flash
+  // ✅ Visual feedback - green flash
   clickedElement.style.background = '#4ade80';
   clickedElement.style.transition = 'all 0.3s';
   
+  
   setTimeout(() => {
-    // Unwrap the mark element
+    // Unwrap only THIS mark element
     const parent = clickedElement.parentNode;
     if (parent) {
       while (clickedElement.firstChild) {
@@ -765,15 +749,36 @@ private handleHighlightClick(
       parent.removeChild(clickedElement);
     }
     
-    // Clear all highlights
-    this.clearHighlights();
+    // ✅ FIX: Don't clear all highlights, let user replace others
+    // this.clearHighlights(); // ❌ REMOVED
   }, 1000);
   
-  // Update status
   this.updateMarkerStatus(editIndex, 'success');
   this.markEditAsApplied(editIndex);
   
   this.showToast(`✅ Replaced with "${this.truncateText(replaceText, 30)}"`, 'success');
+}
+
+private isSingleElementCrossBoundary(element: HTMLElement): boolean {
+  // Check if the highlighted text spans multiple parent elements
+  // by checking if there are multiple text nodes or child elements
+  
+  const children = Array.from(element.childNodes);
+  
+  // If there are element nodes (not just text), it might be cross-boundary
+  const hasElementChildren = children.some(child => {
+    // ✅ FIX: Properly check if it's an HTMLElement before accessing classList
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      const elementChild = child as HTMLElement;
+      return !elementChild.classList?.contains('match-number-badge');
+    }
+    return false;
+  });
+  
+  // If text is split across multiple nodes, it's cross-boundary
+  const textNodes = children.filter(child => child.nodeType === Node.TEXT_NODE);
+  
+  return hasElementChildren || textNodes.length > 1;
 }
 
 /**
@@ -799,13 +804,13 @@ private findTextNode(element: HTMLElement, searchText: string): Text | null {
   /**
    * ✅ NEW: Check if highlighted elements are cross-boundary
    */
-  private isCrossBoundary(elements: HTMLElement[]): boolean {
-    if (elements.length <= 1) return false;
+  // private isCrossBoundary(elements: HTMLElement[]): boolean {
+  //   if (elements.length <= 1) return false;
     
-    // Check if elements have different parents (cross-boundary indicator)
-    const firstParent = elements[0].parentElement;
-    return elements.some(el => el.parentElement !== firstParent);
-  }
+  //   // Check if elements have different parents (cross-boundary indicator)
+  //   const firstParent = elements[0].parentElement;
+  //   return elements.some(el => el.parentElement !== firstParent);
+  // }
 
   /**
    * ✅ NEW: Clear all highlights
