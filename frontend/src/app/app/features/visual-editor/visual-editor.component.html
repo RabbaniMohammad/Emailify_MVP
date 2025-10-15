@@ -11,31 +11,31 @@
       <h1>Visual Template Editor</h1>
     </div>
     
-<div class="header-actions">
-  <button mat-stroked-button class="action-btn" (click)="openImportModal()">
-    <mat-icon>file_upload</mat-icon>
-    Import HTML
-  </button>
-  <button mat-stroked-button class="action-btn" (click)="saveTemplate()">
-    <mat-icon>save</mat-icon>
-    Save
-  </button>
-  
-  <!-- 🆕 NEW: Check Preview Button -->
-  <button 
-    mat-raised-button 
-    class="action-btn check-preview-btn"
-    (click)="onCheckPreview()"
-    [disabled]="!templateId || loading">
-    <mat-icon>visibility</mat-icon>
-    Check Preview
-  </button>
-  
-  <button mat-raised-button class="action-btn primary" (click)="exportHTML()">
-    <mat-icon>file_download</mat-icon>
-    Export HTML
-  </button>
-</div>
+    <div class="header-actions">
+      <button mat-stroked-button class="action-btn" (click)="openImportModal()">
+        <mat-icon>file_upload</mat-icon>
+        Import HTML
+      </button>
+      <button mat-stroked-button class="action-btn" (click)="saveTemplate()">
+        <mat-icon>save</mat-icon>
+        Save
+      </button>
+      
+      <!-- Check Preview Button -->
+      <button 
+        mat-raised-button 
+        class="action-btn check-preview-btn"
+        (click)="onCheckPreview()"
+        [disabled]="!templateId || loading">
+        <mat-icon>visibility</mat-icon>
+        Check Preview
+      </button>
+      
+      <button mat-raised-button class="action-btn primary" (click)="exportHTML()">
+        <mat-icon>file_download</mat-icon>
+        Export HTML
+      </button>
+    </div>
   </div>
 
   <!-- Loading State -->
@@ -45,38 +45,173 @@
   </div>
 
   <!-- Editor Container -->
-<!-- Editor Container -->
-<div class="editor-wrapper" [class.hidden]="loading">
-  <div #editorContainer id="gjs" class="grapesjs-editor"></div>
-</div>
+  <div class="editor-wrapper" [class.hidden]="loading">
+    <div #editorContainer id="gjs" class="grapesjs-editor"></div>
+  </div>
 
-<!-- Import HTML Modal -->
-<div class="import-modal" *ngIf="showImportModal">
-  <div class="modal-backdrop" (click)="closeImportModal()"></div>
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2>Import HTML Code</h2>
-      <button mat-icon-button (click)="closeImportModal()">
-        <mat-icon>close</mat-icon>
-      </button>
-    </div>
-    <div class="modal-body">
-      <textarea 
-        [(ngModel)]="importHtmlCode"
-        placeholder="Paste your HTML code here..."
-        rows="15"></textarea>
-    </div>
-    <div class="modal-footer">
-      <button mat-button (click)="closeImportModal()">Cancel</button>
-      <button 
-        mat-raised-button 
-        class="primary" 
-        (click)="importHTML()"
-        [disabled]="!importHtmlCode.trim()">
-        Import
-      </button>
+  <!-- Import HTML Modal -->
+  <div class="import-modal" *ngIf="showImportModal">
+    <div class="modal-backdrop" (click)="closeImportModal()"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Import HTML Code</h2>
+        <button mat-icon-button (click)="closeImportModal()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+      <div class="modal-body">
+        <textarea 
+          [(ngModel)]="importHtmlCode"
+          placeholder="Paste your HTML code here..."
+          rows="15"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button mat-button (click)="closeImportModal()">Cancel</button>
+        <button 
+          mat-raised-button 
+          class="primary" 
+          (click)="importHTML()"
+          [disabled]="!importHtmlCode.trim()">
+          Import
+        </button>
+      </div>
     </div>
   </div>
-</div>
 
+  <!-- FLOATING SUGGESTIONS WIDGET -->
+  <div class="floating-widget-container" 
+    *ngIf="showFloatingWidget"
+    [style.left.%]="widgetPosition.x"
+    [style.top.%]="widgetPosition.y">
+    
+    <!-- Floating Button -->
+    <div 
+      class="floating-button"
+      [class.open]="isWidgetOpen"
+      [class.pulse-animate]="!hasShownPulseAnimation"
+      [class.drag-enabled]="dragEnabled"
+      (click)="onButtonClick($event)"
+      (dblclick)="onButtonDoubleClick($event)"
+      (mousedown)="onDragStart($event)"
+      (touchstart)="onTouchStart($event)"
+      (touchmove)="onTouchMove($event)"
+      (touchend)="onTouchEnd($event)">
+      
+      <!-- Icon (+ or ×) -->
+      <mat-icon class="widget-icon">{{ isWidgetOpen ? 'close' : 'add' }}</mat-icon>
+      
+      <!-- Count Badge -->
+      <div class="count-badge" *ngIf="getPendingEditsCount() > 0 && !isWidgetOpen">
+        {{ getPendingEditsCount() }}
+      </div>
+      
+      <!-- Drag Mode Indicator -->
+      <div class="drag-indicator" *ngIf="dragEnabled && !isDragging">
+        <mat-icon>open_with</mat-icon>
+      </div>
+    </div>
+    
+    <!-- Dropdown Panel -->
+    <div 
+      class="widget-dropdown" 
+      *ngIf="isWidgetOpen"
+      [@slideIn]>
+      
+      <!-- Header -->
+      <div class="dropdown-header">
+        <h3>
+          <mat-icon>report_problem</mat-icon>
+          Failed Edits
+        </h3>
+        <span class="edit-count">{{ getPendingEditsCount() }} pending</span>
+      </div>
+      
+      <!-- Scrollable List -->
+      <div class="dropdown-content">
+        <div 
+          class="suggestion-item"
+          *ngFor="let edit of failedEdits; let i = index"
+          [class.applied]="isEditApplied(i)"
+          [class.selected]="selectedEditIndex === i">
+          
+          <!-- Status Indicator -->
+          <div 
+            class="status-indicator"
+            [class.pending]="!isEditApplied(i)"
+            [class.success]="isEditApplied(i)"
+            [class.failed]="false">
+            <mat-icon *ngIf="!isEditApplied(i)">autorenew</mat-icon>
+            <mat-icon *ngIf="isEditApplied(i)">check_circle</mat-icon>
+          </div>
+          
+          <!-- Text Content -->
+          <div class="suggestion-content">
+            <!-- Find Text -->
+            <div class="text-block find-text">
+              <span class="label">Find:</span>
+              <code (dblclick)="selectText($event)">{{ edit.find }}</code>
+            </div>
+            
+            <!-- Replace Text -->
+            <div class="text-block replace-text">
+              <span class="label">Replace:</span>
+              <code (dblclick)="selectText($event)">{{ edit.replace }}</code>
+            </div>
+            
+            <!-- Reason -->
+            <div class="reason" *ngIf="edit.reason">
+              <mat-icon>info</mat-icon>
+              {{ edit.reason }}
+            </div>
+            
+            <!-- Multi-Match Navigation -->
+            <div 
+              class="multi-match-nav" 
+              *ngIf="selectedEditIndex === i && totalMatchesForSelected > 1">
+              <button mat-icon-button (click)="navigateToPreviousMatch()">
+                <mat-icon>keyboard_arrow_left</mat-icon>
+              </button>
+              <span class="match-counter">
+                {{ currentMatchIndex + 1 }} / {{ totalMatchesForSelected }}
+              </span>
+              <button mat-icon-button (click)="navigateToNextMatch()">
+                <mat-icon>keyboard_arrow_right</mat-icon>
+              </button>
+              <button 
+                mat-icon-button 
+                class="apply-current-btn"
+                (click)="applyToCurrentMatch()"
+                matTooltip="Apply to this match">
+                <mat-icon>check</mat-icon>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Apply Button -->
+          <button 
+            mat-icon-button 
+            class="apply-btn"
+            *ngIf="!isEditApplied(i)"
+            (click)="applySuggestion(i)"
+            matTooltip="Apply this change">
+            <mat-icon>play_arrow</mat-icon>
+          </button>
+        </div>
+        
+        <!-- Empty State -->
+        <div class="empty-state" *ngIf="getPendingEditsCount() === 0">
+          <mat-icon>check_circle</mat-icon>
+          <p>All edits applied!</p>
+        </div>
+      </div>
+      
+      <!-- Footer -->
+      <div class="dropdown-footer">
+        <button mat-button (click)="closeWidget()">
+          <mat-icon>close</mat-icon>
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
 </div>

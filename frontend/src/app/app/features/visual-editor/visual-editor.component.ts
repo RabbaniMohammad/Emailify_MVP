@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, inject, AfterViewInit, ViewEncapsulation } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, inject, AfterViewInit, ViewEncapsulation, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -9,6 +9,7 @@ import grapesjs from 'grapesjs';
 import grapesjsPresetNewsletter from 'grapesjs-preset-newsletter';
 import { CacheService } from '../../core/services/cache.service';
 import { AuthService } from '../../core/services/auth.service';
+import { trigger, state, style, transition, animate } from '@angular/animations';
 
 @Component({
   selector: 'app-visual-editor',
@@ -22,8 +23,31 @@ import { AuthService } from '../../core/services/auth.service';
   ],
   templateUrl: './visual-editor.component.html',
   styleUrls: ['./visual-editor.component.scss'],
-  encapsulation: ViewEncapsulation.None
+  encapsulation: ViewEncapsulation.None,
+  animations: [
+    trigger('slideIn', [
+      transition(':enter', [
+        style({ 
+          opacity: 0, 
+          transform: 'translateY(-20px) scale(0.95)' 
+        }),
+        animate('300ms cubic-bezier(0.4, 0, 0.2, 1)', 
+          style({ 
+            opacity: 1, 
+            transform: 'translateY(0) scale(1)' 
+          }))
+      ]),
+      transition(':leave', [
+        animate('200ms cubic-bezier(0.4, 0, 0.2, 1)', 
+          style({ 
+            opacity: 0, 
+            transform: 'translateY(-20px) scale(0.95)' 
+          }))
+      ])
+    ])
+  ]
 })
+
 export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('editorContainer', { static: false }) editorContainer!: ElementRef;
   
@@ -31,6 +55,58 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private cacheService = inject(CacheService);
   private authService = inject(AuthService);
   private route = inject(ActivatedRoute);
+  private longPressTimer: any;
+
+
+  // ============================================
+    // 🆕 NEW: FLOATING SUGGESTIONS WIDGET PROPERTIES
+    // ============================================
+
+    // Failed Edits Data
+    failedEdits: Array<{
+    find: string;
+    replace: string;
+    before_context?: string;
+    after_context?: string;
+    reason?: string;
+    status?: string;
+    diagnostics?: any;
+    }> = [];
+
+    // Widget State
+    showFloatingWidget = false;
+    isWidgetOpen = false;
+    hasShownPulseAnimation = false;
+
+    // Widget Position (draggable)
+    widgetPosition = { x: 50, y: 50 };
+    isDragging = false;
+    dragEnabled = false;
+    private dragOffset = { x: 0, y: 0 };
+    // private clickCount = 0; // 🆕 NEW: Count clicks for double-click detection
+    // private clickTimer: any; // 🆕 NEW: Timer for click detection
+
+    // Text Markers in Editor
+    textMarkers: Array<{
+    editIndex: number;
+    find: string;
+    replace: string;
+    status: 'pending' | 'success' | 'failed';
+    element?: HTMLElement;
+    matchIndex?: number;
+    totalMatches?: number;
+    }> = [];
+
+    // Selected Edit for Multi-Match Navigation
+    selectedEditIndex: number | null = null;
+    currentMatchIndex = 0;
+    totalMatchesForSelected = 0;
+
+    // Storage Keys
+    private readonly WIDGET_POSITION_KEY = 'visual_editor_widget_position';
+    private readonly WIDGET_STATE_KEY = 'visual_editor_widget_state';
+    private readonly APPLIED_EDITS_KEY = 'visual_editor_applied_edits';
+    private readonly PULSE_SHOWN_KEY = 'visual_editor_pulse_shown';
   
   private editor: any;
   loading = true;
@@ -52,10 +128,16 @@ ngOnInit(): void {
     
     if (this.templateId) {
       this.loadGoldenHtml(this.templateId);
+      
+      // 🆕 NEW: Load failed edits and initialize floating widget
+      this.loadFailedEdits(this.templateId);
     } else {
       console.warn('⚠️ [ngOnInit] No template ID in route');
     }
   });
+  
+  // 🆕 NEW: Restore widget position on init
+  this.restoreWidgetPosition();
 }
 
   ngAfterViewInit(): void {
@@ -80,6 +162,65 @@ ngOnInit(): void {
       this.editor.destroy();
     }
   }
+
+onTouchStart(event: TouchEvent): void {
+  this.longPressTimer = setTimeout(() => {
+    this.dragEnabled = true;
+    this.isDragging = true;
+    
+    const touch = event.touches[0];
+    const button = event.currentTarget as HTMLElement;
+    const rect = button.getBoundingClientRect();
+    
+    this.dragOffset = {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top
+    };
+    
+    // Haptic feedback
+    if ('vibrate' in navigator) {
+      navigator.vibrate(50);
+    }
+    
+    console.log('📱 [onTouchStart] Long press detected - drag enabled');
+  }, 500);
+}
+
+onTouchMove(event: TouchEvent): void {
+  if (!this.isDragging) {
+    clearTimeout(this.longPressTimer);
+    return;
+  }
+  
+  event.preventDefault();
+  
+  const touch = event.touches[0];
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const buttonSize = 60;
+  
+  let x = touch.clientX - this.dragOffset.x;
+  let y = touch.clientY - this.dragOffset.y;
+  
+  x = Math.max(0, Math.min(x, viewportWidth - buttonSize));
+  y = Math.max(0, Math.min(y, viewportHeight - buttonSize));
+  
+  this.widgetPosition = {
+    x: (x / viewportWidth) * 100,
+    y: (y / viewportHeight) * 100
+  };
+}
+
+onTouchEnd(event: TouchEvent): void {
+  clearTimeout(this.longPressTimer);
+  
+  if (this.isDragging) {
+    this.isDragging = false;
+    this.dragEnabled = false;
+    this.saveWidgetPosition();
+    console.log('📱 [onTouchEnd] Touch drag ended');
+  }
+}
 
   /**
  * Loads golden HTML from sessionStorage
@@ -533,4 +674,503 @@ const button = panels.addButton('options', {
     console.log('🗑️ [clearProgress] Clearing progress');
     this.cacheService.invalidate(this.EDITOR_CACHE_KEY);
   }
+  // ============================================
+// 🆕 NEW: FLOATING SUGGESTIONS WIDGET FUNCTIONS
+// ============================================
+
+/**
+ * Loads failed edits from sessionStorage
+ */
+private loadFailedEdits(templateId: string): void {
+  console.log('📥 [loadFailedEdits] Loading failed edits from sessionStorage');
+  
+  const failedKey = `visual_editor_${templateId}_failed_edits`;
+  const failedEditsJson = sessionStorage.getItem(failedKey);
+  
+  if (!failedEditsJson) {
+    console.log('ℹ️ [loadFailedEdits] No failed edits found');
+    this.showFloatingWidget = false;
+    return;
+  }
+  
+  try {
+    this.failedEdits = JSON.parse(failedEditsJson);
+    console.log('✅ [loadFailedEdits] Loaded', this.failedEdits.length, 'failed edits');
+    
+    if (this.failedEdits.length > 0) {
+      this.showFloatingWidget = true;
+      
+      // Check if pulse was already shown
+      const pulseKey = `${this.PULSE_SHOWN_KEY}_${templateId}`;
+      const pulseShown = sessionStorage.getItem(pulseKey);
+      
+      if (!pulseShown) {
+        this.hasShownPulseAnimation = false;
+        sessionStorage.setItem(pulseKey, 'true');
+      } else {
+        this.hasShownPulseAnimation = true;
+      }
+    } else {
+      this.showFloatingWidget = false;
+    }
+  } catch (error) {
+    console.error('❌ [loadFailedEdits] Failed to parse:', error);
+    this.showFloatingWidget = false;
+  }
+}
+
+/**
+ * Restores widget position from localStorage
+ */
+private restoreWidgetPosition(): void {
+  const savedPosition = localStorage.getItem(this.WIDGET_POSITION_KEY);
+  
+  if (savedPosition) {
+    try {
+      const position = JSON.parse(savedPosition);
+      this.widgetPosition = position;
+      console.log('✅ [restoreWidgetPosition] Restored position:', position);
+    } catch (error) {
+      console.error('❌ [restoreWidgetPosition] Failed to parse:', error);
+    }
+  } else {
+    // Default position: left-middle (10% from left, 50% from top)
+    this.widgetPosition = { x: 5, y: 50 };
+  }
+}
+
+/**
+ * Saves widget position to localStorage
+ */
+private saveWidgetPosition(): void {
+  localStorage.setItem(this.WIDGET_POSITION_KEY, JSON.stringify(this.widgetPosition));
+  console.log('💾 [saveWidgetPosition] Saved position:', this.widgetPosition);
+}
+
+/**
+ * Toggles widget open/close state
+ */
+/**
+ * Toggles widget open/close state (only on single click)
+ */
+/**
+ * Toggles widget open/close state (only on single click)
+ */
+/**
+ * Handles button clicks (detects single vs double click)
+ */
+/**
+ * Handles button clicks (detects single vs double click)
+ */
+/**
+ * Handles button clicks with SHIFT modifier for drag mode
+ */
+/**
+ * Handles single click - toggles widget
+ */
+onButtonClick(event: MouseEvent): void {
+  console.log('🔵 [onButtonClick] Single click detected');
+  
+  if (this.isDragging || this.dragEnabled) {
+    console.log('❌ [onButtonClick] BLOCKED - drag mode active');
+    return;
+  }
+  
+  this.isWidgetOpen = !this.isWidgetOpen;
+  
+  if (this.isWidgetOpen && !this.hasShownPulseAnimation) {
+    this.hasShownPulseAnimation = true;
+  }
+}
+
+/**
+ * Handles double click - enables drag mode
+ */
+/**
+ * Handles double click - enables drag mode and starts dragging
+ */
+/**
+ * Handles double click - enables drag mode and starts dragging
+ */
+/**
+ * Handles double click - enables drag mode and starts dragging
+ */
+onButtonDoubleClick(event: MouseEvent): void {
+  console.log('🔵🔵 [onButtonDoubleClick] DOUBLE CLICK DETECTED!!!');
+  
+  event.stopPropagation();
+  event.preventDefault();
+  
+  this.dragEnabled = true;
+  this.isDragging = true;
+  
+  // Close widget if open
+  if (this.isWidgetOpen) {
+    this.isWidgetOpen = false;
+  }
+  
+  // Calculate drag offset NOW
+  const button = event.currentTarget as HTMLElement;
+  const rect = button.getBoundingClientRect();
+  
+  this.dragOffset = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top
+  };
+  
+  console.log('📍 [onButtonDoubleClick] Drag offset:', this.dragOffset);
+  console.log('🔓 DRAG MODE ACTIVE - Move mouse to drag!');
+}
+/**
+ * Shows temporary "Drag Mode Enabled" message
+ */
+private showDragEnabledMessage(): void {
+  // This will be handled via CSS - add a class to show visual feedback
+  console.log('💬 [showDragEnabledMessage] Showing drag mode message');
+}
+
+/**
+ * Closes widget manually
+ */
+closeWidget(): void {
+  this.isWidgetOpen = false;
+}
+
+
+/**
+ * Handles drag start for floating button
+ */
+/**
+ * Enables drag mode on double-click
+ */
+/**
+ * Enables drag mode on double-click
+ */
+// onDoubleClick(event: MouseEvent): void {
+//   console.log('🔵🔵 [onDoubleClick] DOUBLE CLICK DETECTED!');
+//   console.log('   Event:', event);
+  
+//   event.stopPropagation();
+//   event.preventDefault();
+  
+//   this.dragEnabled = true;
+//   console.log('✅ [onDoubleClick] dragEnabled set to TRUE');
+//   console.log('   dragEnabled:', this.dragEnabled);
+//   console.log('   isDragging:', this.isDragging);
+  
+//   // Auto-disable after 5 seconds if not dragging
+//   setTimeout(() => {
+//     if (!this.isDragging) {
+//       this.dragEnabled = false;
+//       console.log('⏰ [onDoubleClick] Auto-disabled drag mode (5s timeout)');
+//     }
+//   }, 5000);
+// }
+
+/**
+ * Handles drag start for floating button (only if double-clicked first)
+ */
+/**
+ * Handles drag start for floating button (only if double-clicked first)
+ */
+/**
+ * Handles drag start for floating button (only if double-clicked first)
+ */
+/**
+ * Handles drag start
+ */
+/**
+ * Handles drag start (now only for single click detection)
+ */
+onDragStart(event: MouseEvent): void {
+  if (this.isDragging) {
+    console.log('🟢 [onDragStart] Already dragging...');
+    event.preventDefault();
+    event.stopPropagation();
+  }
+}
+/**
+ * Handles drag move for floating button
+ */
+/**
+ * Handles drag move for floating button
+ */
+/**
+ * Handles drag move for floating button
+ */
+/**
+ * Handles drag move
+ */
+onDragMove(event: MouseEvent): void {
+  if (!this.isDragging || !this.dragEnabled) return;
+  
+  event.preventDefault();
+  
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const buttonSize = 60;
+  
+  let x = event.clientX - this.dragOffset.x;
+  let y = event.clientY - this.dragOffset.y;
+  
+  x = Math.max(0, Math.min(x, viewportWidth - buttonSize));
+  y = Math.max(0, Math.min(y, viewportHeight - buttonSize));
+  
+  this.widgetPosition = {
+    x: (x / viewportWidth) * 100,
+    y: (y / viewportHeight) * 100
+  };
+}
+
+/**
+ * Handles drag end for floating button
+ */
+/**
+ * Handles drag end for floating button
+ */
+/**
+ * Handles drag end for floating button
+ */
+/**
+ * Handles drag end
+ */
+onDragEnd(event: MouseEvent): void {
+  if (this.isDragging) {
+    console.log('🔴 [onDragEnd] Drag ended');
+    
+    event.stopPropagation();
+    event.preventDefault();
+    
+    this.isDragging = false;
+    this.dragEnabled = false;
+    
+    this.saveWidgetPosition();
+    console.log('💾 [onDragEnd] Position saved:', this.widgetPosition);
+  }
+}
+
+/**
+ * Global mouse move listener for dragging
+ */
+@HostListener('document:mousemove', ['$event'])
+onDocumentMouseMove(event: MouseEvent): void {
+  if (this.isDragging && this.dragEnabled) {
+    this.onDragMove(event);
+  }
+}
+
+/**
+ * Global mouse up listener for drag end
+ */
+@HostListener('document:mouseup', ['$event'])
+onDocumentMouseUp(event: MouseEvent): void {
+  if (this.isDragging) {
+    this.onDragEnd(event);
+  }
+}
+/**
+ * Applies a suggestion (replaces find with replace text)
+ */
+applySuggestion(editIndex: number): void {
+  console.log('🔧 [applySuggestion] Applying edit:', editIndex);
+  
+  if (!this.editor) {
+    console.error('❌ [applySuggestion] No editor instance');
+    return;
+  }
+  
+  const edit = this.failedEdits[editIndex];
+  if (!edit) {
+    console.error('❌ [applySuggestion] Edit not found:', editIndex);
+    return;
+  }
+  
+  // Get current HTML
+  const html = this.editor.getHtml();
+  
+  // Find text
+  const findText = edit.find;
+  const replaceText = edit.replace;
+  
+  // Count occurrences
+  const regex = new RegExp(this.escapeRegex(findText), 'gi');
+  const matches = html.match(regex);
+  const matchCount = matches ? matches.length : 0;
+  
+  console.log('🔍 [applySuggestion] Found', matchCount, 'match(es)');
+  
+  if (matchCount === 0) {
+    alert('❌ Text not found in editor. It may have been edited manually.');
+    this.updateMarkerStatus(editIndex, 'failed');
+    return;
+  }
+  
+  if (matchCount === 1) {
+    // Single match - apply directly
+    const newHtml = html.replace(regex, replaceText);
+    this.editor.setComponents(newHtml);
+    
+    console.log('✅ [applySuggestion] Applied successfully');
+    this.updateMarkerStatus(editIndex, 'success');
+    
+    // Mark as applied in storage
+    this.markEditAsApplied(editIndex);
+  } else {
+    // Multiple matches - show navigation
+    this.selectedEditIndex = editIndex;
+    this.currentMatchIndex = 0;
+    this.totalMatchesForSelected = matchCount;
+    
+    console.log('🔢 [applySuggestion] Multiple matches found:', matchCount);
+    alert(`⚠️ Found ${matchCount} matches. Use arrows to navigate and apply to specific instance.`);
+  }
+}
+
+/**
+ * Navigates to next match (for multi-match scenarios)
+ */
+navigateToNextMatch(): void {
+  if (this.selectedEditIndex === null) return;
+  
+  this.currentMatchIndex = (this.currentMatchIndex + 1) % this.totalMatchesForSelected;
+  console.log('➡️ [navigateToNextMatch] Match', this.currentMatchIndex + 1, 'of', this.totalMatchesForSelected);
+  
+  // TODO: Highlight current match in editor
+}
+
+/**
+ * Navigates to previous match (for multi-match scenarios)
+ */
+navigateToPreviousMatch(): void {
+  if (this.selectedEditIndex === null) return;
+  
+  this.currentMatchIndex = (this.currentMatchIndex - 1 + this.totalMatchesForSelected) % this.totalMatchesForSelected;
+  console.log('⬅️ [navigateToPreviousMatch] Match', this.currentMatchIndex + 1, 'of', this.totalMatchesForSelected);
+  
+  // TODO: Highlight current match in editor
+}
+
+/**
+ * Applies edit to current match (for multi-match scenarios)
+ */
+applyToCurrentMatch(): void {
+  if (this.selectedEditIndex === null) return;
+  
+  const edit = this.failedEdits[this.selectedEditIndex];
+  if (!edit) return;
+  
+  const html = this.editor.getHtml();
+  const findText = edit.find;
+  const replaceText = edit.replace;
+  
+  // Replace only the current match
+  let matchCount = 0;
+  const newHtml = html.replace(new RegExp(this.escapeRegex(findText), 'gi'), (match: string) => {
+    if (matchCount === this.currentMatchIndex) {
+      matchCount++;
+      return replaceText;
+    }
+    matchCount++;
+    return match;
+  });
+  
+  this.editor.setComponents(newHtml);
+  console.log('✅ [applyToCurrentMatch] Applied to match', this.currentMatchIndex + 1);
+  
+  // Update marker status
+  this.updateMarkerStatus(this.selectedEditIndex, 'success');
+  
+  // Mark as applied
+  this.markEditAsApplied(this.selectedEditIndex);
+  
+  // Clear selection
+  this.selectedEditIndex = null;
+  this.currentMatchIndex = 0;
+  this.totalMatchesForSelected = 0;
+}
+
+/**
+ * Updates marker status (pending/success/failed)
+ */
+private updateMarkerStatus(editIndex: number, status: 'pending' | 'success' | 'failed'): void {
+  const marker = this.textMarkers.find(m => m.editIndex === editIndex);
+  if (marker) {
+    marker.status = status;
+    console.log('🎨 [updateMarkerStatus] Updated marker', editIndex, 'to', status);
+  }
+}
+
+/**
+ * Marks edit as applied in storage
+ */
+private markEditAsApplied(editIndex: number): void {
+  if (!this.templateId) return;
+  
+  const appliedKey = `${this.APPLIED_EDITS_KEY}_${this.templateId}`;
+  const appliedEditsJson = sessionStorage.getItem(appliedKey);
+  
+  let appliedEdits: number[] = [];
+  if (appliedEditsJson) {
+    try {
+      appliedEdits = JSON.parse(appliedEditsJson);
+    } catch (error) {
+      console.error('❌ [markEditAsApplied] Failed to parse:', error);
+    }
+  }
+  
+  if (!appliedEdits.includes(editIndex)) {
+    appliedEdits.push(editIndex);
+    sessionStorage.setItem(appliedKey, JSON.stringify(appliedEdits));
+    console.log('💾 [markEditAsApplied] Marked edit', editIndex, 'as applied');
+  }
+}
+
+/**
+ * Checks if edit was already applied
+ */
+isEditApplied(editIndex: number): boolean {
+  if (!this.templateId) return false;
+  
+  const appliedKey = `${this.APPLIED_EDITS_KEY}_${this.templateId}`;
+  const appliedEditsJson = sessionStorage.getItem(appliedKey);
+  
+  if (!appliedEditsJson) return false;
+  
+  try {
+    const appliedEdits: number[] = JSON.parse(appliedEditsJson);
+    return appliedEdits.includes(editIndex);
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Escapes special regex characters
+ */
+private escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Gets count of pending (not applied) edits
+ */
+getPendingEditsCount(): number {
+  return this.failedEdits.filter((_, index) => !this.isEditApplied(index)).length;
+}
+/**
+ * Selects all text when double-clicked (for easy copy)
+ */
+selectText(event: MouseEvent): void {
+  const target = event.target as HTMLElement;
+  
+  if (window.getSelection && document.createRange) {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    
+    console.log('✅ [selectText] Text selected');
+  }
+}
 }
