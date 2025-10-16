@@ -11,6 +11,8 @@ import { CacheService } from '../../core/services/cache.service';
 import { AuthService } from '../../core/services/auth.service';
 import { trigger, state, style, transition, animate } from '@angular/animations';
 
+import { BehaviorSubject, Observable } from 'rxjs';
+
 interface MatchOverlay {
   id: string;
   range: Range;

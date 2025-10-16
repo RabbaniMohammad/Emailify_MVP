@@ -1291,7 +1291,17 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
 router.post('/:id/subjects', async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
-    const { name, html } = await getRobustTemplateHtml(id);
+    
+    // ✅ USE REQUEST BODY HTML (fast path)
+    let html = String(req.body?.html || '').trim();
+    let name = `Template ${id}`;
+    
+    // If no HTML provided, fetch it (fallback)
+    if (!html) {
+      const fetched = await getRobustTemplateHtml(id);
+      html = fetched.html;
+      name = fetched.name;
+    }
 
     const $plain = cheerio.load(html);
     $plain('script, style, noscript').remove();
@@ -1341,7 +1351,30 @@ router.post('/:id/suggestions', async (req: Request, res: Response) => {
 
 type VariantChange = { before: string; after: string; parent: string; reason?: string };
 type VariantArtifacts = { usedIdeas: string[] };
-type VariantItem = { no: number; html: string; changes: VariantChange[]; why: string[]; artifacts: VariantArtifacts };
+type VariantItem = { 
+  no: number; 
+  html: string; 
+  changes: VariantChange[]; 
+  why: string[]; 
+  artifacts: VariantArtifacts;
+  // ✅ NEW: Add failed edits and stats
+  failedEdits?: Array<{
+    find: string;
+    replace: string;
+    before_context: string;
+    after_context: string;
+    reason?: string;
+    status: EditStatus;
+    diagnostics?: EditDiagnostics;
+  }>;
+  stats?: {
+    total: number;
+    applied: number;
+    failed: number;
+    blocked: number;
+    skipped: number;
+  };
+};
 
 type VariantRun = {
   id: string;
@@ -1451,19 +1484,32 @@ router.post('/variants/:runId/next', async (req: Request, res: Response) => {
     const sourceHtml = run.currentHtml;
     const { edits, why } = await getVariantEditsAndWhy(sourceHtml, run.usedIdeas);
 
-    const applied = applyContextEdits(sourceHtml, edits);
+    const atomicResult = applyContextEdits(sourceHtml, edits);
     const variantNo = run.variants.length + 1;
 
     const ideas = Array.from(new Set((edits || []).map((e) => (e as any).idea).filter(Boolean) as string[]));
     ideas.forEach((i) => run.usedIdeas.add(i));
 
-    const item: VariantItem = {
-      no: variantNo,
-      html: ensureFullDocShell(`Variant ${variantNo}`, applied.html),
-      changes: (applied as any).changes || [],
-      why: (why && why.length) ? why : ['Small clarity and deliverability improvements.'],
-      artifacts: { usedIdeas: ideas },
-    };
+      // ✅ Extract applied changes
+      const appliedEdits = atomicResult.results.filter(r => r.status === 'applied');
+      const failedEdits = atomicResult.results.filter(r => r.status !== 'applied' && r.status !== 'skipped');
+      const changes = appliedEdits.map(r => r.change!).filter(Boolean);
+
+      const item: VariantItem = {
+        no: variantNo,
+        html: ensureFullDocShell(`Variant ${variantNo}`, atomicResult.html),
+        changes: changes,
+        why: (why && why.length) ? why : ['Small clarity and deliverability improvements.'],
+        artifacts: { usedIdeas: ideas },
+        // ✅ NEW: Add failed edits and stats
+        failedEdits: failedEdits.map(r => ({
+          ...r.edit,
+          status: r.status,
+          reason: r.reason,
+          diagnostics: r.diagnostics,
+        })),
+        stats: atomicResult.stats,
+      };
 
     run.currentHtml = item.html;
     run.variants.push(item);
@@ -1708,16 +1754,28 @@ router.post('/variants/:runId/chat/apply', async (req: Request, res: Response) =
     const edits = Array.isArray(req.body?.edits) ? req.body.edits : [];
     if (!html) return res.status(400).json({ code: 'CHAT_APPLY_BAD_REQUEST', message: 'html is required' });
 
-    const strict = applyContextEdits(html, edits);
-    let best = strict;
+    const atomicResult = applyContextEdits(html, edits);
 
-    if (!best.changes?.length) {
-      const loose = applyLooseWordFallback(html, edits);
-      if (loose.changes.length > (best.changes?.length || 0)) best = loose;
-    }
+    // ✅ Extract results
+    const appliedEdits = atomicResult.results.filter(r => r.status === 'applied');
+    const failedEdits = atomicResult.results.filter(r => r.status !== 'applied' && r.status !== 'skipped');
+    const changes = appliedEdits.map(r => r.change!).filter(Boolean);
 
-    const doc = ensureFullDocShell('Edited Variant', best.html);
-    return res.json({ html: doc, changes: best.changes || [] });
+    const doc = ensureFullDocShell('Edited Variant', atomicResult.html);
+
+    return res.json({ 
+      html: doc, 
+      changes: changes,
+      // ✅ NEW: Return failed edits and stats
+      failedEdits: failedEdits.map(r => ({
+        ...r.edit,
+        status: r.status,
+        reason: r.reason,
+        diagnostics: r.diagnostics,
+      })),
+      atomicResults: atomicResult.results,
+      stats: atomicResult.stats,
+    });
   } catch (err: unknown) {
     res.status(500).json({ code: 'CHAT_APPLY_ERROR', message: errMsg(err) });
   }

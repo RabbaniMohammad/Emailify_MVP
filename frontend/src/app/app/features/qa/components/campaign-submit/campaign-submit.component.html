@@ -247,6 +247,75 @@
       <div class="step-badge">Step 4</div>
     </div>
 
+    <!-- ✅ Subject Line Generator Section -->
+<div class="subject-generator-section" @fadeInOut>
+  <div class="generator-header">
+    <div class="header-content">
+      <div class="icon-wrapper">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h4>AI Subject Line Generator</h4>
+        <p>Generate engaging subject lines for your campaign</p>
+      </div>
+    </div>
+    
+    <button 
+      mat-raised-button
+      class="generate-subjects-btn"
+      (click)="onGenerateSubjects()"
+      [disabled]="subjectsLoading">
+      <mat-progress-spinner
+        *ngIf="subjectsLoading"
+        diameter="18"
+        mode="indeterminate">
+      </mat-progress-spinner>
+      <svg *ngIf="!subjectsLoading" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+      </svg>
+      <span>{{ subjectsLoading ? 'Generating...' : 'Generate' }}</span>
+    </button>
+  </div>
+  
+    <!-- ✅ Subject Suggestions Grid -->
+<!-- ✅ Subject Suggestions Grid - ONLY show when NOT loading AND has subjects -->
+<!-- ✅ Subject Suggestions Grid - ONLY show when NOT loading AND has subjects -->
+<div class="subjects-grid" 
+     *ngIf="!subjectsLoading && (subjects$ | async) as subjects">
+  <div 
+    class="subject-chip"
+    *ngFor="let subject of subjects; let i = index; trackBy: trackByIndex"
+    (click)="onSelectSubject(subject)"
+    [class.selected]="isSubjectSelected(subject)">
+    <div class="chip-content">
+      <span class="chip-text">{{ subject }}</span>
+      <!-- <span class="chip-length">{{ subject.length }}/150</span> -->
+    </div>
+    <div class="chip-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 5l7 7-7 7"/>
+      </svg>
+    </div>
+  </div>
+  
+  <!-- Empty State -->
+  <div class="empty-subjects" *ngIf="subjects.length === 0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+    </svg>
+    <p>Click "Generate" to create subject line suggestions</p>
+  </div>
+</div>
+
+<!-- ✅ Loading state indicator - OUTSIDE subjects-grid -->
+<div class="subjects-loading" *ngIf="subjectsLoading">
+  <mat-progress-spinner diameter="32" mode="indeterminate"></mat-progress-spinner>
+  <p>Generating subject lines...</p>
+</div>
+
+<!-- 👇 YOUR EXISTING SUBJECT INPUT GOES HERE -->
     <!-- Subject Line -->
     <div class="input-group">
       <label class="input-label">

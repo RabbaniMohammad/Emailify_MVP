@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, Input, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, Input, Output, EventEmitter, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -6,7 +6,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { BehaviorSubject, Subject, firstValueFrom, takeUntil } from 'rxjs';
+import { BehaviorSubject, Subject, firstValueFrom, takeUntil, Subscription } from 'rxjs';
+import { timeout, catchError, retry } from 'rxjs/operators';
 import { 
   CampaignSubmitService, 
   MailchimpAudience, 
@@ -15,9 +16,10 @@ import {
   ScheduleGroup,
   TimezoneAnalysis
 } from '../../pages/use-variant-page/campaign-submit.service';
+import { QaService } from '../../services/qa.service';
+import { ActivatedRoute } from '@angular/router';
 
-
-import { FormsModule } from '@angular/forms'; // Add this
+import { FormsModule } from '@angular/forms';
 
 type LoadingState = 'idle' | 'loading' | 'success' | 'error';
 
@@ -42,6 +44,8 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
   @Output() closeRequested = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
+  private qa = inject(QaService);
+  private ar = inject(ActivatedRoute);
 
   // Form Controls
   subjectControl = new FormControl<string>('', {
@@ -67,7 +71,17 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
   private submitLoadingSubject = new BehaviorSubject<LoadingState>('idle');
   readonly submitLoading$ = this.submitLoadingSubject.asObservable();
 
-  addNewMembersToAudience = false; // ✅ Toggle state
+  // ✅ NEW: Subject line generation
+  private subjectsSubject = new BehaviorSubject<string[] | null>(null);
+  readonly subjects$ = this.subjectsSubject.asObservable();
+  subjectsLoading = false;
+  private subjectsTimeoutId?: number;
+  private subjectsAborted = false;
+  private subjectsSub?: Subscription;
+  private readonly SUBJECTS_TIMEOUT = 60000; // 60 seconds
+  // currentSubject: string = ''; // Store current subject input value
+
+  addNewMembersToAudience = false;
 
   // Data
   audiences: MailchimpAudience[] = [];
@@ -77,7 +91,6 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
   scheduleGroups: ScheduleGroup[] = [];
   testEmails: string[] = [];
   
-  // ✅ NEW: Timezone analysis
   timezoneAnalysis: TimezoneAnalysis | null = null;
   
   // Test email tracking
@@ -120,43 +133,266 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
     private snackBar: MatSnackBar
   ) {}
 
-  ngOnInit(): void {
-    this.loadMailchimpAudiences();
-    
-    // Subscribe to service observables
-    this.campaignService.audiences$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(audiences => {
-        this.audiences = audiences;
-        this.cdr.markForCheck();
-      });
+ngOnInit(): void {
+  this.loadMailchimpAudiences();
+  
+  // Subscribe to service observables
+  this.campaignService.audiences$
+    .pipe(takeUntil(this.destroy$))
+    .subscribe(audiences => {
+      this.audiences = audiences;
+      this.cdr.markForCheck();
+    });
 
-    this.campaignService.selectedAudience$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(audience => {
-        this.selectedAudience = audience;
-        this.cdr.markForCheck();
-      });
+  this.campaignService.selectedAudience$
+    .pipe(takeUntil(this.destroy$))
+    .subscribe(audience => {
+      this.selectedAudience = audience;
+      this.cdr.markForCheck();
+    });
 
-    this.campaignService.reconciliation$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(reconciliation => {
-        this.reconciliation = reconciliation;
-        this.cdr.markForCheck();
-      });
+  this.campaignService.reconciliation$
+    .pipe(takeUntil(this.destroy$))
+    .subscribe(reconciliation => {
+      this.reconciliation = reconciliation;
+      this.cdr.markForCheck();
+    });
 
-    // ✅ NEW: Subscribe to timezone analysis
-    this.campaignService.timezoneAnalysis$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(analysis => {
-        this.timezoneAnalysis = analysis;
-        this.cdr.markForCheck();
-      });
-  }
+  this.campaignService.timezoneAnalysis$
+    .pipe(takeUntil(this.destroy$))
+    .subscribe(analysis => {
+      this.timezoneAnalysis = analysis;
+      this.cdr.markForCheck();
+    });
+
+  // ✅ REMOVE: Don't load cached subjects on init
+  // Let user explicitly trigger generation
+}
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    
+    // ✅ NEW: Cleanup subjects
+    if (this.subjectsSub) this.subjectsSub.unsubscribe();
+    if (this.subjectsTimeoutId) clearTimeout(this.subjectsTimeoutId);
+  }
+
+  // ============================================
+  // ✅ NEW: SUBJECT LINE GENERATION
+  // ============================================
+
+  /**
+   * Generate AI subject line suggestions
+   */
+async onGenerateSubjects(): Promise<void> {
+  const templateId = this.ar.snapshot.paramMap.get('id');
+  if (!templateId) {
+    this.showError('Template ID not found');
+    return;
+  }
+  
+  if (this.subjectsLoading) return;
+  
+  console.log('🎯 Generating subject lines for template:', templateId);
+  
+  // ✅ CLEAR existing subjects before starting new generation
+  this.subjectsSubject.next(null);
+  
+  this.subjectsLoading = true;
+  this.subjectsAborted = false;
+  this.cdr.markForCheck();
+  
+  // Set timeout
+  this.subjectsTimeoutId = window.setTimeout(() => {
+    this.handleSubjectsTimeout();
+  }, this.SUBJECTS_TIMEOUT);
+  
+  // ✅ GET TEMPLATE HTML - Pass actual template content
+  const templateHtml = this.templateHtml || '';
+  
+  this.subjectsSub = this.qa.generateSubjects(templateId, templateHtml, true).pipe(
+    timeout(this.SUBJECTS_TIMEOUT),
+    retry({ count: 2, delay: 2000, resetOnSuccess: true }),
+    catchError(error => {
+      if (error.name === 'TimeoutError') {
+        throw new Error('Subject generation timed out. Please try again.');
+      }
+      throw error;
+    })
+  ).subscribe({
+    next: (subjects) => {
+      if (this.subjectsAborted) return;
+      
+      if (this.subjectsTimeoutId) {
+        clearTimeout(this.subjectsTimeoutId);
+        this.subjectsTimeoutId = undefined;
+      }
+      
+      console.log('✅ Generated subjects:', subjects);
+      
+      // ✅ FIX: Set loading to false HERE, before updating subjects
+      this.subjectsLoading = false;
+      
+      // Now update the subjects
+      this.subjectsSubject.next(subjects);
+      
+      this.showSuccess(`Generated ${subjects.length} subject line suggestion${subjects.length > 1 ? 's' : ''}!`);
+      this.cdr.markForCheck();
+    },
+    error: (error) => {
+      if (this.subjectsAborted) return;
+      
+      if (this.subjectsTimeoutId) {
+        clearTimeout(this.subjectsTimeoutId);
+        this.subjectsTimeoutId = undefined;
+      }
+      
+      this.subjectsLoading = false;
+      this.subjectsAborted = true;
+      
+      // ✅ CLEAR subjects on error
+      this.subjectsSubject.next(null);
+      
+      const errorMessage = this.getErrorMessage(error, 'subject generation');
+      this.showError(errorMessage);
+      
+      this.cdr.markForCheck();
+    },
+    complete: () => {
+      if (this.subjectsAborted) return;
+      // Loading already set to false in next handler
+      this.cdr.markForCheck();
+    }
+  });
+}
+
+  /**
+   * Handle subject generation timeout
+   */
+  private handleSubjectsTimeout(): void {
+    this.subjectsLoading = false;
+    this.subjectsAborted = true;
+    
+    this.showError('Subject generation is taking longer than expected. Please try again.');
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Cancel subject generation
+   */
+  cancelSubjects(): void {
+    if (!this.subjectsLoading) return;
+    
+    this.subjectsAborted = true;
+    this.subjectsLoading = false;
+    
+    if (this.subjectsSub) {
+      this.subjectsSub.unsubscribe();
+      this.subjectsSub = undefined;
+    }
+    
+    if (this.subjectsTimeoutId) {
+      clearTimeout(this.subjectsTimeoutId);
+      this.subjectsTimeoutId = undefined;
+    }
+    
+    this.showError('Subject generation cancelled.');
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Select a subject line suggestion
+   * - If no current subject: Set as current
+   * - If current subject exists: Swap with clicked suggestion
+   */
+onSelectSubject(selectedSubject: string): void {
+  const subjects = this.subjectsSubject.value || [];
+  
+  // ✅ FIX: Always get current value from form control
+  const currentFormValue = this.subjectControl.value.trim();
+  
+  // If this subject is already selected (in input), do nothing
+  if (currentFormValue === selectedSubject) {
+    console.log('ℹ️ Subject already selected');
+    return;
+  }
+  
+  console.log('🔄 Selecting subject:', selectedSubject);
+  console.log('  Current subject in form:', currentFormValue);
+  
+  // Get the index of the clicked subject
+  const clickedIndex = subjects.indexOf(selectedSubject);
+  
+  if (clickedIndex === -1) {
+    console.error('❌ Subject not found in list');
+    return;
+  }
+  
+  // Create new subjects array
+  const newSubjects = [...subjects];
+  
+  // If there's a current subject in the form, swap it back into the list
+  if (currentFormValue) {
+    console.log('  Swapping with:', currentFormValue);
+    newSubjects[clickedIndex] = currentFormValue;
+  } else {
+    // Remove the selected subject from the list (first selection)
+    console.log('  Removing from list (first selection)');
+    newSubjects.splice(clickedIndex, 1);
+  }
+  
+  // Update form control with selected subject
+  this.subjectControl.setValue(selectedSubject);
+  
+  // Update subjects list
+  this.subjectsSubject.next(newSubjects);
+  
+  // Trigger change detection
+  this.cdr.markForCheck();
+  
+  // Show success message
+  this.showSuccess(`Subject line selected!`);
+  
+  console.log('✅ New subjects list:', newSubjects);
+  console.log('✅ Selected subject:', selectedSubject);
+}
+
+
+  /**
+   * Check if a subject is currently selected (in the input)
+   */
+isSubjectSelected(subject: string): boolean {
+  // ✅ FIX: Always check against form control value
+  return this.subjectControl.value.trim() === subject;
+}
+
+  /**
+   * Track by function for subject chips
+   */
+  trackByIndex = (index: number): number => index;
+
+  /**
+   * Get error message from error object
+   */
+  private getErrorMessage(error: any, operation: string): string {
+    if (error?.message?.includes('timeout') || error?.name === 'TimeoutError') {
+      return `${operation} timed out. The server might be busy. Please try again.`;
+    }
+    
+    if (error?.status === 0 || error?.message?.includes('Http failure')) {
+      return `Cannot connect to server. Please check if the backend is running.`;
+    }
+    
+    if (error?.status === 500) {
+      return `Server error during ${operation}. Please try again.`;
+    }
+    
+    if (error?.status === 404) {
+      return `Resource not found. Please refresh the page.`;
+    }
+    
+    return error?.message || `An error occurred during ${operation}. Please try again.`;
   }
 
   // ============================================
@@ -164,7 +400,7 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
   // ============================================
 
   async loadMailchimpAudiences(): Promise<void> {
-    console.log('🔥 Loading Mailchimp audiences...');
+    console.log('📥 Loading Mailchimp audiences...');
     this.audiencesLoadingSubject.next('loading');
     
     try {
@@ -316,169 +552,167 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
   // ============================================
   // FINAL SUBMISSION
   // ============================================
-async onSubmit(): Promise<void> {
-  if (!this.canSubmit) {
-    this.showError('Complete all steps before submitting');
-    return;
-  }
-
-  const hasImmediate = this.hasImmediateSends();
-  const immediateCount = this.getImmediateSendCount();
-  const hasTimezoneIssues = this.shouldShowTimezoneWarning();
-  const hasNoTestEmails = this.testEmails.length === 0;
-  const hasNewMembers = this.reconciliation && this.reconciliation.summary.newCount > 0;
-
-  // ⚠️ CRITICAL: Block submission if no test emails AND user hasn't explicitly confirmed
-  if (hasNoTestEmails) {
-    const noTestConfirm = confirm(
-      '🚨 CRITICAL WARNING 🚨\n\n' +
-      '❌ NO TEST EMAILS FOUND\n' +
-      '🔴 Click OK ONLY if you accept full responsibility.'
-    );
-
-    if (!noTestConfirm) return;
-  }
-
-  // Build warnings
-  let warnings: string[] = [];
-
-  if (hasNoTestEmails) {
-    warnings.push('🚨 NO TEST EMAILS - Campaign is UNTESTED');
-  } else if (!this.testEmailSent) {
-    warnings.push('⚠️ Test email NOT sent');
-  }
-
-  if (hasImmediate) {
-    warnings.push(`⚡ ${immediateCount} email(s) will be sent IMMEDIATELY`);
-  }
-
-  if (hasTimezoneIssues) {
-    warnings.push(`🌍 ${this.getTimezoneWarningMessage()}`);
-  }
-
-  if (this.addNewMembersToAudience && hasNewMembers) {
-    warnings.push(`➕ ${this.reconciliation!.summary.newCount} new member(s) will be saved permanently`);
-  } else if (hasNewMembers) {
-    warnings.push(`🗄️ ${this.reconciliation!.summary.newCount} new member(s) will be archived after sending`);
-  }
-
-  // Standard warning confirmations
-  if (warnings.length > 0) {
-    const warning1 = '⚠️ SUBMISSION SUMMARY:\n\n' + 
-      warnings.map((w, i) => `${i + 1}. ${w}`).join('\n') + 
-      '\n\nProceed with submission?';
-    
-    if (!confirm(warning1)) return;
-
-    // Extra confirmation if test not sent (but test emails exist)
-    if (!hasNoTestEmails && !this.testEmailSent) {
-      const warning2 = 
-        '⚠️ FINAL WARNING ⚠️\n\n' +
-        'Test email available but NOT sent.\n' +
-        'Submitting untested campaign.\n\n' +
-        'Click OK to proceed.';
-      
-      if (!confirm(warning2)) return;
+  async onSubmit(): Promise<void> {
+    if (!this.canSubmit) {
+      this.showError('Complete all steps before submitting');
+      return;
     }
-  } else {
-    // Normal confirmation flow (all good)
-    if (!confirm(`📧 Send to ${this.reconciliation?.summary.existingCount || 0} recipients?\n\nContinue?`)) return;
-    if (!confirm('🚀 FINAL CONFIRMATION\n\nThis cannot be undone.\n\nProceed?')) return;
-  }
 
-  console.log('🚀 Submitting campaign...');
-  this.submitLoadingSubject.next('loading');
+    const hasImmediate = this.hasImmediateSends();
+    const immediateCount = this.getImmediateSendCount();
+    const hasTimezoneIssues = this.shouldShowTimezoneWarning();
+    const hasNoTestEmails = this.testEmails.length === 0;
+    const hasNewMembers = this.reconciliation && this.reconciliation.summary.newCount > 0;
 
-  try {
-    // ✅ STEP 1: ALWAYS add new members (required to send emails)
-    if (hasNewMembers && this.selectedAudience) {
-      console.log(`➕ Adding ${this.reconciliation!.summary.newCount} new members...`);
-      
-      const addResult = await firstValueFrom(
-        this.campaignService.addNewMembersToAudience(
-          this.selectedAudience.id,
-          this.reconciliation!.new
-        )
+    // ⚠️ CRITICAL: Block submission if no test emails AND user hasn't explicitly confirmed
+    if (hasNoTestEmails) {
+      const noTestConfirm = confirm(
+        '🚨 CRITICAL WARNING 🚨\n\n' +
+        '❌ NO TEST EMAILS FOUND\n' +
+        '🔴 Click OK ONLY if you accept full responsibility.'
       );
-      
-      console.log(`✅ Added ${addResult.addedCount} members`);
+
+      if (!noTestConfirm) return;
     }
 
-    // ✅ STEP 2: Submit campaign
-    const subject = this.subjectControl.value;
-    let html = this.templateHtml;
+    // Build warnings
+    let warnings: string[] = [];
 
-    if (this.bodyAdditionControl.value.trim()) {
-      html += `\n\n<!-- Additional Content -->\n${this.bodyAdditionControl.value}`;
+    if (hasNoTestEmails) {
+      warnings.push('🚨 NO TEST EMAILS - Campaign is UNTESTED');
+    } else if (!this.testEmailSent) {
+      warnings.push('⚠️ Test email NOT sent');
     }
 
-    const result = await firstValueFrom(
-      this.campaignService.submitCampaign({
-        subject,
-        bodyAddition: this.bodyAdditionControl.value || undefined,
-        templateHtml: html,
-        scheduleGroups: this.scheduleGroups,
-        testEmails: this.testEmails,
-        timezoneAnalysis: this.timezoneAnalysis!
-      })
-    );
+    if (hasImmediate) {
+      warnings.push(`⚡ ${immediateCount} email(s) will be sent IMMEDIATELY`);
+    }
 
-    // ✅ STEP 3: Archive new members if checkbox UNCHECKED
-    if (hasNewMembers && !this.addNewMembersToAudience && this.selectedAudience) {
-      console.log('🗄️ Archiving temporary members...');
+    if (hasTimezoneIssues) {
+      warnings.push(`🌍 ${this.getTimezoneWarningMessage()}`);
+    }
+
+    if (this.addNewMembersToAudience && hasNewMembers) {
+      warnings.push(`➕ ${this.reconciliation!.summary.newCount} new member(s) will be saved permanently`);
+    } else if (hasNewMembers) {
+      warnings.push(`🗄️ ${this.reconciliation!.summary.newCount} new member(s) will be archived after sending`);
+    }
+
+    // Standard warning confirmations
+    if (warnings.length > 0) {
+      const warning1 = '⚠️ SUBMISSION SUMMARY:\n\n' + 
+        warnings.map((w, i) => `${i + 1}. ${w}`).join('\n') + 
+        '\n\nProceed with submission?';
       
-      await firstValueFrom(
-        this.campaignService.cleanupTempMembers(
-          this.selectedAudience.id,
-          this.reconciliation!.new
-        )
+      if (!confirm(warning1)) return;
+
+      // Extra confirmation if test not sent (but test emails exist)
+      if (!hasNoTestEmails && !this.testEmailSent) {
+        const warning2 = 
+          '⚠️ FINAL WARNING ⚠️\n\n' +
+          'Test email available but NOT sent.\n' +
+          'Submitting untested campaign.\n\n' +
+          'Click OK to proceed.';
+        
+        if (!confirm(warning2)) return;
+      }
+    } else {
+      // Normal confirmation flow (all good)
+      if (!confirm(`📧 Send to ${this.reconciliation?.summary.existingCount || 0} recipients?\n\nContinue?`)) return;
+      if (!confirm('🚀 FINAL CONFIRMATION\n\nThis cannot be undone.\n\nProceed?')) return;
+    }
+
+    console.log('🚀 Submitting campaign...');
+    this.submitLoadingSubject.next('loading');
+
+    try {
+      // ✅ STEP 1: ALWAYS add new members (required to send emails)
+      if (hasNewMembers && this.selectedAudience) {
+        console.log(`➕ Adding ${this.reconciliation!.summary.newCount} new members...`);
+        
+        const addResult = await firstValueFrom(
+          this.campaignService.addNewMembersToAudience(
+            this.selectedAudience.id,
+            this.reconciliation!.new
+          )
+        );
+        
+        console.log(`✅ Added ${addResult.addedCount} members`);
+      }
+
+      // ✅ STEP 2: Submit campaign
+      const subject = this.subjectControl.value;
+      let html = this.templateHtml;
+
+      if (this.bodyAdditionControl.value.trim()) {
+        html += `\n\n<!-- Additional Content -->\n${this.bodyAdditionControl.value}`;
+      }
+
+      const result = await firstValueFrom(
+        this.campaignService.submitCampaign({
+          subject,
+          bodyAddition: this.bodyAdditionControl.value || undefined,
+          templateHtml: html,
+          scheduleGroups: this.scheduleGroups,
+          testEmails: this.testEmails,
+          timezoneAnalysis: this.timezoneAnalysis!
+        })
       );
+
+      // ✅ STEP 3: Archive new members if checkbox UNCHECKED
+      if (hasNewMembers && !this.addNewMembersToAudience && this.selectedAudience) {
+        console.log('🗄️ Archiving temporary members...');
+        
+        await firstValueFrom(
+          this.campaignService.cleanupTempMembers(
+            this.selectedAudience.id,
+            this.reconciliation!.new
+          )
+        );
+        
+        console.log('✅ Temporary members archived');
+      }
+
+      this.submitLoadingSubject.next('success');
       
-      console.log('✅ Temporary members archived');
+      console.log('✅ Campaign submitted');
+      console.log('📋 Campaign IDs:', result.campaignIds);
+
+      const successMsg = this.addNewMembersToAudience 
+        ? `Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled.`
+        : `Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled. New members will be archived.`;
+
+      this.showSuccess(successMsg);
+
+      setTimeout(() => {
+        this.closeRequested.emit();
+      }, 2000);
+
+    } catch (error) {
+      console.error('❌ Submission failed:', error);
+      this.submitLoadingSubject.next('error');
+      this.showError('Campaign submission failed. Please try again.');
     }
+  }
 
-    this.submitLoadingSubject.next('success');
+  getTestEmailTooltip(): string {
+    if (this.testEmails.length === 0) {
+      return 'No test emails found in uploaded file';
+    }
     
-    console.log('✅ Campaign submitted');
-    console.log('📋 Campaign IDs:', result.campaignIds);
-
-    const successMsg = this.addNewMembersToAudience 
-      ? `Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled.`
-      : `Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled. New members will be archived.`;
-
-    this.showSuccess(successMsg);
-
-    setTimeout(() => {
-      this.closeRequested.emit();
-    }, 2000);
-
-  } catch (error) {
-    console.error('❌ Submission failed:', error);
-    this.submitLoadingSubject.next('error');
-    this.showError('Campaign submission failed. Please try again.');
+    if (!this.subjectControl.valid || !this.subjectControl.value.trim()) {
+      return 'Add subject line first';
+    }
+    
+    if (this.testEmailLoadingSubject.value === 'loading') {
+      return 'Sending test email...';
+    }
+    
+    return 'Send test email to recipient(s)';
   }
-}
-
-
-getTestEmailTooltip(): string {
-  if (this.testEmails.length === 0) {
-    return 'No test emails found in uploaded file';
-  }
-  
-  if (!this.subjectControl.valid || !this.subjectControl.value.trim()) {
-    return 'Add subject line first';
-  }
-  
-  if (this.testEmailLoadingSubject.value === 'loading') {
-    return 'Sending test email...';
-  }
-  
-  return 'Send test email to recipient(s)';
-}
-
 
   // ============================================
-  // ✅ NEW: TIMEZONE HELPER METHODS
+  // TIMEZONE HELPER METHODS
   // ============================================
 
   hasImmediateSends(): boolean {
@@ -489,28 +723,29 @@ getTestEmailTooltip(): string {
     const immediateGroup = this.scheduleGroups.find(g => g.isImmediate);
     return immediateGroup?.count || 0;
   }
+
   /**
- * Get tooltip text for Submit Campaign button
- */
-getSubmitTooltip(): string {
-  if (!this.subjectControl.valid || !this.subjectControl.value.trim()) {
-    return 'Add subject line first';
+   * Get tooltip text for Submit Campaign button
+   */
+  getSubmitTooltip(): string {
+    if (!this.subjectControl.valid || !this.subjectControl.value.trim()) {
+      return 'Add subject line first';
+    }
+    
+    if (!this.reconciliation) {
+      return 'Upload and reconcile audience data first';
+    }
+    
+    if (this.scheduleGroups.length === 0) {
+      return 'No scheduled recipients found';
+    }
+    
+    if (this.submitLoadingSubject.value === 'loading') {
+      return 'Submitting campaign...';
+    }
+    
+    return 'Submit campaign to Mailchimp';
   }
-  
-  if (!this.reconciliation) {
-    return 'Upload and reconcile audience data first';
-  }
-  
-  if (this.scheduleGroups.length === 0) {
-    return 'No scheduled recipients found';
-  }
-  
-  if (this.submitLoadingSubject.value === 'loading') {
-    return 'Submitting campaign...';
-  }
-  
-  return 'Submit campaign to Mailchimp';
-}
 
   getTimezoneWarningMessage(): string {
     if (!this.timezoneAnalysis) return '';
@@ -543,10 +778,6 @@ getSubmitTooltip(): string {
   shouldShowTimezoneWarning(): boolean {
     if (!this.timezoneAnalysis) return false;
     
-    // Show warning if:
-    // 1. No timezone column exists
-    // 2. Column exists but all empty
-    // 3. Mixed (some empty)
     return !this.timezoneAnalysis.hasTimezoneColumn ||
            this.timezoneAnalysis.timezoneMode === 'none' ||
            this.timezoneAnalysis.timezoneMode === 'mixed';
@@ -555,9 +786,6 @@ getSubmitTooltip(): string {
   shouldShowTimezoneInfo(): boolean {
     if (!this.timezoneAnalysis) return false;
     
-    // Show info badge if:
-    // 1. Single timezone used
-    // 2. Multiple timezones used
     return this.timezoneAnalysis.timezoneMode === 'single' ||
            this.timezoneAnalysis.timezoneMode === 'multiple';
   }

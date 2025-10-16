@@ -2,10 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, map, of, tap, throwError, switchMap, Observable, shareReplay, finalize } from 'rxjs';
 
-
-
-
-
 /* ----------------------------- Types (keep existing) ----------------------------- */
 export type GoldenEdit = {
   find: string;
@@ -250,9 +246,9 @@ export class QaService {
   }
 
   /**
-   * ✅ UPDATED: Generate Subjects with ShareReplay
+   * ✅ UPDATED: Generate Subjects with ShareReplay and Template HTML
    */
-  generateSubjects(id: string, force = false): Observable<string[]> {
+  generateSubjects(id: string, templateHtml: string, force = false): Observable<string[]> {
     if (!force && this.subjectsCache$.has(id)) {
       console.log('🔄 Returning cached subjects observable');
       return this.subjectsCache$.get(id)!;
@@ -266,9 +262,13 @@ export class QaService {
       }
     }
     
-    console.log('🚀 Starting new subjects generation');
+    console.log('🚀 Starting new subjects generation with template HTML');
     
-    const subjects$ = this.http.post<{ subjects: string[] }>(`/api/qa/${id}/subjects`, {}).pipe(
+    // ✅ Send template HTML in request body
+    const subjects$ = this.http.post<{ subjects: string[] }>(
+      `/api/qa/${id}/subjects`, 
+      { html: templateHtml }  // ✅ Include template HTML
+    ).pipe(
       map(r => r.subjects || []),
       tap(list => {
         try {
@@ -342,123 +342,147 @@ export class QaService {
   }
 
   /**
- * Clear ALL QA data (call this on logout)
- */
-clearAllQaData(): void {
-  try {
-    // Get all localStorage keys
-    const keysToRemove: string[] = [];
-    
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('qa:')) {
-        keysToRemove.push(key);
-      }
+   * Save subjects to localStorage
+   */
+  saveSubjects(id: string, subjects: string[]): void {
+    try {
+      localStorage.setItem(this.kSubjects(id), JSON.stringify(subjects));
+      console.log('💾 Subjects saved to localStorage');
+    } catch (e) {
+      console.warn('Failed to save subjects:', e);
     }
-    
-    // Remove all QA keys
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-    
-    // Clear observable caches
-    this.goldenCache$.clear();
-    this.subjectsCache$.clear();
-    this.suggestionsCache$.clear();
-    
-    console.log(`🧹 Cleared ${keysToRemove.length} QA data entries`);
-  } catch (e) {
-    console.error('Failed to clear QA data:', e);
   }
-}
 
-/**
- * Clear chat thread for a specific variant
- */
-clearChatForRun(runId: string, no: number): void {
-  try {
-    const key = this.kChat(runId, no);
-    localStorage.removeItem(key);
-    console.log(`🧹 Cleared chat for ${runId} variant #${no}`);
-  } catch (e) {
-    console.error('Failed to clear chat:', e);
+  /**
+   * Clear subjects from cache and storage
+   */
+  clearSubjectsForTemplate(id: string): void {
+    try {
+      localStorage.removeItem(this.kSubjects(id));
+      this.subjectsCache$.delete(id);
+      console.log('🗑️ Cleared subjects for template:', id);
+    } catch (e) {
+      console.warn('Failed to clear subjects:', e);
+    }
   }
-}
 
-checkTemplateGrammar(html: string): Observable<{
-  hasErrors: boolean;
-  mistakes: Array<{ word: string; suggestion: string; context: string }>;
-  count: number;
-  message: string;
-}> {
-  return this.http.post<{
+  /**
+   * Clear ALL QA data (call this on logout)
+   */
+  clearAllQaData(): void {
+    try {
+      // Get all localStorage keys
+      const keysToRemove: string[] = [];
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('qa:')) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      // Remove all QA keys
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      
+      // Clear observable caches
+      this.goldenCache$.clear();
+      this.subjectsCache$.clear();
+      this.suggestionsCache$.clear();
+      
+      console.log(`🧹 Cleared ${keysToRemove.length} QA data entries`);
+    } catch (e) {
+      console.error('Failed to clear QA data:', e);
+    }
+  }
+
+  /**
+   * Clear chat thread for a specific variant
+   */
+  clearChatForRun(runId: string, no: number): void {
+    try {
+      const key = this.kChat(runId, no);
+      localStorage.removeItem(key);
+      console.log(`🧹 Cleared chat for ${runId} variant #${no}`);
+    } catch (e) {
+      console.error('Failed to clear chat:', e);
+    }
+  }
+
+  checkTemplateGrammar(html: string): Observable<{
     hasErrors: boolean;
     mistakes: Array<{ word: string; suggestion: string; context: string }>;
     count: number;
     message: string;
-  }>('/api/qa/template/grammar-check', { html }); // ✅ Fixed: removed ${this.qaUrl}
-}
-
-
-// ============================================
-// GRAMMAR CHECK PERSISTENCE
-// ============================================
-
-saveGrammarCheck(runId: string, no: number, result: {
-  hasErrors: boolean;
-  mistakes: Array<{ word: string; suggestion: string; context: string }>;
-  count: number;
-  message: string;
-}): void {
-  try {
-    const key = `grammar_${runId}_${no}`;
-    localStorage.setItem(key, JSON.stringify(result));
-    console.log('✅ Grammar check saved to localStorage');
-  } catch (error) {
-    console.warn('Failed to save grammar check:', error);
+  }> {
+    return this.http.post<{
+      hasErrors: boolean;
+      mistakes: Array<{ word: string; suggestion: string; context: string }>;
+      count: number;
+      message: string;
+    }>('/api/qa/template/grammar-check', { html });
   }
-}
 
-getGrammarCheckCached(runId: string, no: number): {
-  hasErrors: boolean;
-  mistakes: Array<{ word: string; suggestion: string; context: string }>;
-  count: number;
-  message: string;
-} | null {
-  try {
-    const key = `grammar_${runId}_${no}`;
-    const stored = localStorage.getItem(key);
-    if (!stored) return null;
-    
-    const result = JSON.parse(stored);
-    console.log('✅ Grammar check restored from localStorage');
-    return result;
-  } catch (error) {
-    console.warn('Failed to restore grammar check:', error);
-    return null;
-  }
-}
+  // ============================================
+  // GRAMMAR CHECK PERSISTENCE
+  // ============================================
 
-clearGrammarCheck(runId: string, no: number): void {
-  try {
-    const key = `grammar_${runId}_${no}`;
-    localStorage.removeItem(key);
-    console.log('🗑️ Grammar check cleared from localStorage');
-  } catch (error) {
-    console.warn('Failed to clear grammar check:', error);
+  saveGrammarCheck(runId: string, no: number, result: {
+    hasErrors: boolean;
+    mistakes: Array<{ word: string; suggestion: string; context: string }>;
+    count: number;
+    message: string;
+  }): void {
+    try {
+      const key = `grammar_${runId}_${no}`;
+      localStorage.setItem(key, JSON.stringify(result));
+      console.log('✅ Grammar check saved to localStorage');
+    } catch (error) {
+      console.warn('Failed to save grammar check:', error);
+    }
   }
-}
 
-/**
- * Clear all snapshots for a run
- */
-clearSnapsForRun(runId: string): void {
-  try {
-    const key = this.kSnaps(runId);
-    localStorage.removeItem(key);
-    console.log(`🧹 Cleared snaps for ${runId}`);
-  } catch (e) {
-    console.error('Failed to clear snaps:', e);
+  getGrammarCheckCached(runId: string, no: number): {
+    hasErrors: boolean;
+    mistakes: Array<{ word: string; suggestion: string; context: string }>;
+    count: number;
+    message: string;
+  } | null {
+    try {
+      const key = `grammar_${runId}_${no}`;
+      const stored = localStorage.getItem(key);
+      if (!stored) return null;
+      
+      const result = JSON.parse(stored);
+      console.log('✅ Grammar check restored from localStorage');
+      return result;
+    } catch (error) {
+      console.warn('Failed to restore grammar check:', error);
+      return null;
+    }
   }
-}
+
+  clearGrammarCheck(runId: string, no: number): void {
+    try {
+      const key = `grammar_${runId}_${no}`;
+      localStorage.removeItem(key);
+      console.log('🗑️ Grammar check cleared from localStorage');
+    } catch (error) {
+      console.warn('Failed to clear grammar check:', error);
+    }
+  }
+
+  /**
+   * Clear all snapshots for a run
+   */
+  clearSnapsForRun(runId: string): void {
+    try {
+      const key = this.kSnaps(runId);
+      localStorage.removeItem(key);
+      console.log(`🧹 Cleared snaps for ${runId}`);
+    } catch (e) {
+      console.error('Failed to clear snaps:', e);
+    }
+  }
 
   clearGolden(id: string) {
     try {

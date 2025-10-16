@@ -263,7 +263,7 @@
         </ng-container>
 
         <!-- Subjects Panel -->
-        <ng-container *ngIf="subjects$ | async as subjects">
+        <!-- <ng-container *ngIf="subjects$ | async as subjects">
           <div class="info-panel subjects-panel" *ngIf="subjects?.length" [@slideIn]>
             <div class="panel-header">
               <div class="panel-icon">
@@ -281,7 +281,7 @@
               </div>
             </div>
           </div>
-        </ng-container>
+        </ng-container> -->
 
         <!-- Edits Panel -->
         <ng-container *ngIf="golden$ | async as golden">
@@ -505,6 +505,13 @@
                 </svg>
               </div>
               <h4>What Changed</h4>
+                <button 
+                  mat-icon-button 
+                  class="variant-edit-btn"
+                  (click)="onEditVariant(vr.runId, v.no, v)"
+                  matTooltip="Edit in Visual Editor">
+                  <mat-icon>edit</mat-icon>
+                </button>
             </div>
             <ul class="changes-list">
               <li *ngFor="let c of v.changes; trackBy: trackByEdit" class="change-item">

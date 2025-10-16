@@ -3694,3 +3694,43 @@
     transform: translateY(0) scale(1);
   }
 }
+
+
+// ✅ FIXED: Variant edit button in changes panel header
+.changes-panel {
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    
+    .variant-edit-btn {
+      margin-left: auto;
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+      color: white !important;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      
+      mat-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+        color: white !important;
+      }
+      
+      &:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 12px rgba(109, 40, 217, 0.4);
+      }
+      
+      &:active {
+        transform: scale(0.95);
+      }
+    }
+  }
+}

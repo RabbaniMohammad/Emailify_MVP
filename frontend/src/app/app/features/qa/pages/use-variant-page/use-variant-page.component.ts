@@ -95,6 +95,16 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   private editorOpenSubject!: BehaviorSubject<boolean>;
   readonly editorOpen$!: Observable<boolean>;
 
+  // ✅ NEW: Subject line generation
+  private subjectsSubject = new BehaviorSubject<string[] | null>(null);
+  readonly subjects$ = this.subjectsSubject.asObservable();
+  subjectsLoading = false;
+  private subjectsTimeoutId?: number;
+  private subjectsAborted = false;
+  private subjectsSub?: Subscription;
+  private readonly SUBJECTS_TIMEOUT = 60000; // 60 seconds
+  currentSubject: string = ''; // Store current subject input value
+
   input = new FormControl<string>('', { nonNullable: true });
   loadingVariant = true;
   sending = false;
@@ -351,6 +361,14 @@ if (cachedThread?.html) {
     this.grammarCheckResultSubject.next(cachedGrammar);
   }
   
+  // ✅ RESTORE SUBJECT GENERATION RESULTS
+const cachedSubjects = this.qa.getSubjectsCached(runId);
+if (cachedSubjects?.length) {
+  console.log('✅ Restored subjects from localStorage');
+  this.subjectsSubject.next(cachedSubjects);
+  this.subjectsLoading = false;
+}
+
   this.loadingVariant = false;
   if (this.loadingTimeout) {
     clearTimeout(this.loadingTimeout);
@@ -381,6 +399,13 @@ if (item?.html) {
   this.qa.saveChat(runId, no, thread);
   
   this.snapsSubject.next(this.qa.getSnapsCached(runId));
+
+    // 👉 ADD SUBJECT CODE HERE TOO 👈
+  const cachedSubjects = this.qa.getSubjectsCached(runId);
+  if (cachedSubjects?.length) {
+    this.subjectsSubject.next(cachedSubjects);
+    this.subjectsLoading = false;
+  }
   
   // ✅ ADD THESE 4 LINES HERE (BEFORE loadingVariant = false)
   const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
@@ -459,6 +484,7 @@ if (item?.html) {
   if (this.campaignModalOpenSubject.value) {
     document.body.style.overflow = 'hidden';
   }
+  
 }
 
 

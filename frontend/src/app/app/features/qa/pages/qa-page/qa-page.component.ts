@@ -135,7 +135,6 @@ export class QaPageComponent implements OnDestroy {
   private readonly VARIANTS_TOTAL_TIMEOUT = 600000;
 
   private goldenTimeoutId?: number;
-  private subjectsTimeoutId?: number;
   private suggestionsTimeoutId?: number;
   private variantsTimeoutId?: number;
   private variantsTotalTimeoutId?: number;
@@ -143,12 +142,10 @@ export class QaPageComponent implements OnDestroy {
   templateId: string | null = null;
 
   private goldenAborted = false;
-  private subjectsAborted = false;
   private suggestionsAborted = false;
   private variantsAborted = false;
 
   private goldenSub?: Subscription;
-  private subjectsSub?: Subscription;
   private suggestionsSub?: Subscription;
   
   private subscriptions: Subscription[] = [];
@@ -161,10 +158,6 @@ export class QaPageComponent implements OnDestroy {
   private goldenSubject = new BehaviorSubject<GoldenResult | null>(null);
   readonly golden$ = this.goldenSubject.asObservable();
   goldenLoading = false;
-
-  private subjectsSubject = new BehaviorSubject<string[] | null>(null);
-  readonly subjects$ = this.subjectsSubject.asObservable();
-  subjectsLoading = false;
 
   showVisualEditorModal = false;
   visualEditorButtonColor: 'orange' | 'red' | 'green' = 'orange';
@@ -187,20 +180,14 @@ export class QaPageComponent implements OnDestroy {
       this.templateId = id;
 
       const cachedGolden = this.qa.getGoldenCached(id);
-      const cachedSubjects = this.qa.getSubjectsCached(id);
       const cachedSuggestions = this.qa.getSuggestionsCached(id);
       
       this.goldenSubject.next(cachedGolden);
-      this.subjectsSubject.next(cachedSubjects);
       this.suggestionsSubject.next(cachedSuggestions);
       
       if (cachedGolden?.html) {
         this.goldenLoading = false;
         this.updateVisualEditorButtonColor(cachedGolden.failedEdits);
-      }
-      
-      if (cachedSubjects?.length) {
-        this.subjectsLoading = false;
       }
       
       if (cachedSuggestions) {
@@ -263,7 +250,7 @@ export class QaPageComponent implements OnDestroy {
   }
 
   private isGenerating(): boolean {
-    return this.goldenLoading || this.subjectsLoading || this.variantsGenerating;
+    return this.goldenLoading || this.variantsGenerating;
   }
 
   private getLoadingStateMessage(): string {
@@ -283,14 +270,14 @@ export class QaPageComponent implements OnDestroy {
       }
     }
 
-    if (this.subjectsLoading) {
-      this.subjectsAborted = true;
-      this.subjectsLoading = false;
-      if (this.subjectsSub) {
-        this.subjectsSub.unsubscribe();
-        this.subjectsSub = undefined;
-      }
-    }
+    // if (this.subjectsLoading) {
+    //   this.subjectsAborted = true;
+    //   this.subjectsLoading = false;
+    //   if (this.subjectsSub) {
+    //     this.subjectsSub.unsubscribe();
+    //     this.subjectsSub = undefined;
+    //   }
+    // }
 
     if (this.variantsGenerating) {
       this.variantsAborted = true;
@@ -304,7 +291,7 @@ export class QaPageComponent implements OnDestroy {
     this.cleanupOnExit();
     
     if (this.goldenSub) this.goldenSub.unsubscribe();
-    if (this.subjectsSub) this.subjectsSub.unsubscribe();
+    // if (this.subjectsSub) this.subjectsSub.unsubscribe();
     if (this.suggestionsSub) this.suggestionsSub.unsubscribe();
     
     this.subscriptions.forEach(sub => sub.unsubscribe());
@@ -312,7 +299,7 @@ export class QaPageComponent implements OnDestroy {
 
   private clearAllTimeouts(): void {
     if (this.goldenTimeoutId) clearTimeout(this.goldenTimeoutId);
-    if (this.subjectsTimeoutId) clearTimeout(this.subjectsTimeoutId);
+    // if (this.subjectsTimeoutId) clearTimeout(this.subjectsTimeoutId);
     if (this.suggestionsTimeoutId) clearTimeout(this.suggestionsTimeoutId);
     if (this.variantsTimeoutId) clearTimeout(this.variantsTimeoutId);
     if (this.variantsTotalTimeoutId) clearTimeout(this.variantsTotalTimeoutId);
@@ -502,89 +489,89 @@ export class QaPageComponent implements OnDestroy {
     
     this.cdr.markForCheck();
   }
+  // this is comment because of subject
+  // onGenerateSubjects(id: string) {
+  //   if (this.subjectsLoading) return;
+    
+  //   this.subjectsLoading = true;
+  //   this.subjectsAborted = false;
+  //   this.cdr.markForCheck();
 
-  onGenerateSubjects(id: string) {
-    if (this.subjectsLoading) return;
-    
-    this.subjectsLoading = true;
-    this.subjectsAborted = false;
-    this.cdr.markForCheck();
+  //   this.subjectsTimeoutId = window.setTimeout(() => {
+  //     this.handleSubjectsTimeout();
+  //   }, this.SUBJECTS_TIMEOUT);
 
-    this.subjectsTimeoutId = window.setTimeout(() => {
-      this.handleSubjectsTimeout();
-    }, this.SUBJECTS_TIMEOUT);
+  //   this.subjectsSub = this.qa.generateSubjects(id, true).pipe(
+  //     timeout(this.SUBJECTS_TIMEOUT),
+  //     retry({ count: 2, delay: 2000, resetOnSuccess: true }),
+  //     catchError(error => {
+  //       if (error.name === 'TimeoutError') {
+  //         throw new Error('Subject generation timed out. Please try again.');
+  //       }
+  //       throw error;
+  //     })
+  //   ).subscribe({
+  //     next: (list) => {
+  //       if (this.subjectsAborted) return;
+        
+  //       if (this.subjectsTimeoutId) {
+  //         clearTimeout(this.subjectsTimeoutId);
+  //         this.subjectsTimeoutId = undefined;
+  //       }
+        
+  //       this.subjectsSubject.next(list);
+  //       this.showSuccess(`Generated ${list.length} subject idea(s)!`);
+  //     },
+  //     error: (e) => {
+  //       if (this.subjectsAborted) return;
+        
+  //       if (this.subjectsTimeoutId) {
+  //         clearTimeout(this.subjectsTimeoutId);
+  //         this.subjectsTimeoutId = undefined;
+  //       }
+        
+  //       this.subjectsLoading = false;
+  //       this.subjectsAborted = true;
+        
+  //       const errorMessage = this.getErrorMessage(e, 'subject generation');
+  //       this.showError(errorMessage);
+        
+  //       this.cdr.markForCheck();
+  //     },
+  //     complete: () => {
+  //       if (this.subjectsAborted) return;
+  //       this.subjectsLoading = false;
+  //       this.cdr.markForCheck();
+  //     }
+  //   });
+  // }
 
-    this.subjectsSub = this.qa.generateSubjects(id, true).pipe(
-      timeout(this.SUBJECTS_TIMEOUT),
-      retry({ count: 2, delay: 2000, resetOnSuccess: true }),
-      catchError(error => {
-        if (error.name === 'TimeoutError') {
-          throw new Error('Subject generation timed out. Please try again.');
-        }
-        throw error;
-      })
-    ).subscribe({
-      next: (list) => {
-        if (this.subjectsAborted) return;
-        
-        if (this.subjectsTimeoutId) {
-          clearTimeout(this.subjectsTimeoutId);
-          this.subjectsTimeoutId = undefined;
-        }
-        
-        this.subjectsSubject.next(list);
-        this.showSuccess(`Generated ${list.length} subject idea(s)!`);
-      },
-      error: (e) => {
-        if (this.subjectsAborted) return;
-        
-        if (this.subjectsTimeoutId) {
-          clearTimeout(this.subjectsTimeoutId);
-          this.subjectsTimeoutId = undefined;
-        }
-        
-        this.subjectsLoading = false;
-        this.subjectsAborted = true;
-        
-        const errorMessage = this.getErrorMessage(e, 'subject generation');
-        this.showError(errorMessage);
-        
-        this.cdr.markForCheck();
-      },
-      complete: () => {
-        if (this.subjectsAborted) return;
-        this.subjectsLoading = false;
-        this.cdr.markForCheck();
-      }
-    });
-  }
+  // private handleSubjectsTimeout(): void {
+  //   this.subjectsLoading = false;
+  //   this.subjectsAborted = true;
+    
+  //   this.showError('Subject generation is taking longer than expected. Please try again.');
+  //   this.cdr.markForCheck();
+  // }
 
-  private handleSubjectsTimeout(): void {
-    this.subjectsLoading = false;
-    this.subjectsAborted = true;
+  // cancelSubjects(): void {
+  //   if (!this.subjectsLoading) return;
     
-    this.showError('Subject generation is taking longer than expected. Please try again.');
-    this.cdr.markForCheck();
-  }
-
-  cancelSubjects(): void {
-    if (!this.subjectsLoading) return;
+  //   this.subjectsAborted = true;
+  //   this.subjectsLoading = false;
     
-    this.subjectsAborted = true;
-    this.subjectsLoading = false;
+  //   if (this.subjectsSub) {
+  //     this.subjectsSub.unsubscribe();
+  //     this.subjectsSub = undefined;
+  //   }
     
-    if (this.subjectsSub) {
-      this.subjectsSub.unsubscribe();
-      this.subjectsSub = undefined;
-    }
+  //   if (this.subjectsTimeoutId) {
+  //     clearTimeout(this.subjectsTimeoutId);
+  //     this.subjectsTimeoutId = undefined;
+  //   }
     
-    if (this.subjectsTimeoutId) {
-      clearTimeout(this.subjectsTimeoutId);
-      this.subjectsTimeoutId = undefined;
-    }
-    
-    this.cdr.markForCheck();
-  }
+  //   this.cdr.markForCheck();
+  // }
 
   onAnalyzeSuggestions(id: string) {
     if (this.suggestionsLoading) return;
@@ -1149,6 +1136,9 @@ private async handleVisualEditorReturn(
   const editingModeKey = `visual_editor_${templateId}_editing_mode`;
   const editingMode = sessionStorage.getItem(editingModeKey);
   
+  // ✅ Declare snapshotKey ONCE at the top
+  const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
+  
   console.log(`🎯 Editing mode detected: ${editingMode}`);
   
   // ========================================
@@ -1157,8 +1147,6 @@ private async handleVisualEditorReturn(
   if (editingMode === 'original') {
     console.log('📥 Processing ORIGINAL template return');
     
-    // Get snapshot for comparison
-    const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
     const snapshotHtml = sessionStorage.getItem(snapshotKey);
     
     if (snapshotHtml) {
@@ -1174,17 +1162,14 @@ private async handleVisualEditorReturn(
       }
     }
     
-    // Update original template preview
     this.templateHtml = editedHtml;
     this.cdr.detectChanges();
     
-    // Clean up
     sessionStorage.removeItem(snapshotKey);
     sessionStorage.removeItem(editingModeKey);
     
     this.showSuccess('✅ Original template updated successfully!');
     
-    // Scroll to original preview
     setTimeout(() => {
       const originalPreview = document.querySelector('.col-1');
       if (originalPreview) {
@@ -1192,7 +1177,90 @@ private async handleVisualEditorReturn(
       }
     }, 300);
     
-    return; // ✅ EXIT - Don't process golden template logic
+    return;
+  }
+
+  // ========================================
+  // ✅ VARIANT EDITING
+  // ========================================
+  if (editingMode === 'variant') {
+    console.log('📥 Processing VARIANT return');
+    
+    const variantMetaKey = `visual_editor_${templateId}_variant_meta`;
+    const variantMetaJson = sessionStorage.getItem(variantMetaKey);
+    
+    if (!variantMetaJson) {
+      this.showError('Variant metadata not found');
+      sessionStorage.removeItem(snapshotKey);
+      sessionStorage.removeItem(editingModeKey);
+      return;
+    }
+    
+    const variantMeta = JSON.parse(variantMetaJson);
+    const { runId, variantNo } = variantMeta;
+    
+    console.log(`📦 Updating variant ${variantNo} in run ${runId}`);
+    
+    const snapshotHtml = sessionStorage.getItem(snapshotKey);
+    
+    if (snapshotHtml) {
+      const originalText = this.extractVisibleText(snapshotHtml);
+      const editedText = this.extractVisibleText(editedHtml);
+      
+      if (originalText === editedText) {
+        console.log('⚠️ No changes detected in variant');
+        sessionStorage.removeItem(snapshotKey);
+        sessionStorage.removeItem(editingModeKey);
+        sessionStorage.removeItem(variantMetaKey);
+        this.showInfo('No changes detected in the variant.');
+        return;
+      }
+    }
+    
+    const currentRun = this.variantsSubject.value;
+    if (currentRun && currentRun.runId === runId) {
+      const variantIndex = currentRun.items.findIndex(v => v.no === variantNo);
+      
+      if (variantIndex !== -1) {
+        const updatedItems = [...currentRun.items];
+        updatedItems[variantIndex] = {
+          ...updatedItems[variantIndex],
+          html: editedHtml
+        };
+        
+        const updatedRun = {
+          ...currentRun,
+          items: updatedItems
+        };
+        
+        this.variantsSubject.next(updatedRun);
+        this.qa.saveVariantsRun(templateId, updatedRun);
+        
+        console.log(`✅ Variant ${variantNo} updated successfully`);
+      } else {
+        console.error(`❌ Variant ${variantNo} not found in run`);
+      }
+    } else {
+      console.error(`❌ Run ${runId} not found or doesn't match current run`);
+    }
+    
+    sessionStorage.removeItem(snapshotKey);
+    sessionStorage.removeItem(editingModeKey);
+    sessionStorage.removeItem(variantMetaKey);
+    console.log('🧹 Cleanup complete');
+    
+    this.showSuccess(`✅ Variant ${variantNo} updated successfully!`);
+    
+    this.cdr.detectChanges();
+    
+    setTimeout(() => {
+      const variantsSection = document.querySelector('.variants-section');
+      if (variantsSection) {
+        variantsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+    
+    return;
   }
   
   // ========================================
@@ -1208,8 +1276,6 @@ private async handleVisualEditorReturn(
     return;
   }
   
-  // Get snapshot
-  const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
   const snapshotHtml = sessionStorage.getItem(snapshotKey);
   
   if (!snapshotHtml) {
@@ -1220,7 +1286,6 @@ private async handleVisualEditorReturn(
   
   console.log('📸 Snapshot retrieved');
   
-  // Extract text
   const originalText = this.extractVisibleText(snapshotHtml);
   const editedText = this.extractVisibleText(editedHtml);
   
@@ -1229,7 +1294,6 @@ private async handleVisualEditorReturn(
   console.log('📝 Snapshot preview:', originalText.substring(0, 150));
   console.log('📝 Edited preview:', editedText.substring(0, 150));
   
-  // Check if identical
   if (originalText === editedText) {
     console.log('⚠️ No changes detected');
     sessionStorage.removeItem(snapshotKey);
@@ -1260,7 +1324,6 @@ private async handleVisualEditorReturn(
   
   console.log(`🔍 Analyzing ${failedEdits.length} failed edits...`);
   
-  // Deduplicate
   const uniqueFailedEdits = this.deduplicateFailedEdits(failedEdits);
   console.log(`📋 Unique edits: ${uniqueFailedEdits.length}`);
   
@@ -1279,32 +1342,27 @@ private async handleVisualEditorReturn(
     
     console.log(`\n🔍 [Edit ${index}] Checking: "${findText}" → "${replaceText}"`);
     
-    // ✅ WORD BOUNDARY MATCHING - Count whole words only
     const inSnapshotCount = this.countWholeWordOccurrences(originalText, findText);
     const inEditedCount = this.countWholeWordOccurrences(editedText, findText);
     
     console.log(`   📍 In snapshot: ${inSnapshotCount} whole word occurrence(s)`);
     console.log(`   📍 In edited: ${inEditedCount} whole word occurrence(s)`);
     
-    // Also check if replacement exists
     if (replaceText) {
       const replaceCount = this.countWholeWordOccurrences(editedText, replaceText);
       console.log(`   📍 Replacement found: ${replaceCount} occurrence(s)`);
     }
     
-    // ✅ FIXED if ALL whole word occurrences are gone
     if (inSnapshotCount > 0 && inEditedCount === 0) {
       fixedCount++;
       console.log(`   ✅ FIXED - All ${inSnapshotCount} whole word instance(s) removed`);
     }
-    // ⚠️ PARTIALLY FIXED - Still count as fixed for stats
     else if (inSnapshotCount > inEditedCount && inEditedCount > 0) {
       const partialFixed = inSnapshotCount - inEditedCount;
       fixedCount += partialFixed;
       console.log(`   ⚠️ PARTIAL - ${partialFixed}/${inSnapshotCount} fixed`);
       remainingFailedEdits.push(edit);
     }
-    // ❌ NOT FIXED
     else {
       if (inSnapshotCount === 0) {
         console.log(`   ❌ NOT FOUND - Never existed as whole word in snapshot`);
@@ -1318,7 +1376,6 @@ private async handleVisualEditorReturn(
   console.log(`\n📊 [FINAL] Fixed: ${fixedCount}/${uniqueFailedEdits.length}`);
   console.log(`📊 [FINAL] Remaining: ${remainingFailedEdits.length}`);
   
-  // Update stats
   const currentStats = golden.stats || {
     total: 0,
     applied: 0,
@@ -1337,7 +1394,6 @@ private async handleVisualEditorReturn(
   
   console.log('📊 Updated stats:', updatedStats);
   
-  // Create updated golden
   const updatedGolden: GoldenResult = {
     ...golden,
     html: editedHtml,
@@ -1347,24 +1403,20 @@ private async handleVisualEditorReturn(
   
   console.log('💾 Saving updated golden...');
   
-  // Update and save
   this.goldenSubject.next(updatedGolden);
   this.qa.saveGoldenToCache(templateId, updatedGolden);
   this.updateVisualEditorButtonColor(remainingFailedEdits);
   
-  // Clean up snapshot and mode flag
   sessionStorage.removeItem(snapshotKey);
   sessionStorage.removeItem(editingModeKey);
   console.log('🧹 Cleanup complete');
   
-  // Force UI update
   this.cdr.detectChanges();
   setTimeout(() => {
     this.cdr.detectChanges();
     console.log('🔄 Change detection complete');
   }, 100);
   
-  // Show message
   if (fixedCount > 0) {
     console.log(`✅ Success: ${fixedCount} fixed`);
     if (remainingFailedEdits.length > 0) {
@@ -1381,13 +1433,61 @@ private async handleVisualEditorReturn(
     this.showInfo('📝 Template updated, but no failed edits were resolved. Please check the changes.');
   }
   
-  // Scroll to golden preview
   setTimeout(() => {
     const goldenPreview = document.querySelector('.col-3');
     if (goldenPreview) {
       goldenPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, 300);
+}
+
+/**
+ * ✅ COMPLETE: Navigate to Visual Editor with VARIANT
+ * Handles editing a specific variant and returning with updates
+ */
+onEditVariant(runId: string, variantNo: number, variant: any): void {
+  if (!this.templateId) {
+    this.showError('Template ID not found');
+    return;
+  }
+  
+  if (!variant?.html) {
+    this.showError('Variant HTML not found');
+    return;
+  }
+  
+  console.log(`🎯 Opening variant ${variantNo} in visual editor`);
+  
+  // ✅ Save variant HTML for editing
+  const variantKey = `visual_editor_${this.templateId}_golden_html`;
+  sessionStorage.setItem(variantKey, variant.html);
+  
+  // ✅ Save snapshot for comparison (before editing)
+  const snapshotKey = `visual_editor_${this.templateId}_snapshot_html`;
+  sessionStorage.setItem(snapshotKey, variant.html);
+  
+  // ✅ CRITICAL: Set flag to indicate we're editing VARIANT
+  const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
+  sessionStorage.setItem(editingModeKey, 'variant');
+  
+  // ✅ Save variant metadata for return
+  const variantMetaKey = `visual_editor_${this.templateId}_variant_meta`;
+  sessionStorage.setItem(variantMetaKey, JSON.stringify({ runId, variantNo }));
+  
+  // ✅ Save failed edits if any exist
+  if (variant.failedEdits && variant.failedEdits.length > 0) {
+    const failedKey = `visual_editor_${this.templateId}_failed_edits`;
+    sessionStorage.setItem(failedKey, JSON.stringify(variant.failedEdits));
+    console.log(`💾 Saved ${variant.failedEdits.length} failed edits`);
+  } else {
+    // Clear failed edits if none
+    const failedKey = `visual_editor_${this.templateId}_failed_edits`;
+    sessionStorage.removeItem(failedKey);
+    console.log('🧹 No failed edits to save');
+  }
+  
+  // ✅ Navigate to visual editor
+  this.router.navigate(['/visual-editor', this.templateId]);
 }
 
 /**
