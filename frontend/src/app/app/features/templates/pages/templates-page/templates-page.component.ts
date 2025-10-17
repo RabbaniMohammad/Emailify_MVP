@@ -158,21 +158,26 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
         }
       });
 
-    // Always load templates on init
-    console.log('Component init - loading templates');
-    
-    // Check if we have items already loaded
-    if (this.svc.snapshot.items.length === 0) {
-      console.log('No items in state, calling search');
-      this.svc.search('');
-    } else {
-      console.log('Items already in state:', this.svc.snapshot.items.length);
+    // ✅ RESTORE SEARCH QUERY FROM SERVICE STATE
+    const currentState = this.svc.snapshot;
+    if (currentState.searchQuery) {
+      console.log('✅ Restoring search query:', currentState.searchQuery);
+      this.searchQuery = currentState.searchQuery;
     }
+
+    // Always load templates on init
+    console.log('Component init - loading templates with query:', this.searchQuery);
     
-    // After initial setup, mark as no longer initial load
+    // ✅ ALWAYS call search to trigger reordering, even if items exist
+    // This ensures the last-selected template appears first on navigation back
+    console.log('Calling search to ensure proper ordering');
+    this.svc.search(this.searchQuery);
+    
+    // ✅ Scroll to top when component loads (shows selected template first)
     setTimeout(() => {
+      this.scrollToTop();
       this.isInitialLoad = false;
-    }, 0);
+    }, 100);
   }
 
   ngOnDestroy(): void {
@@ -191,6 +196,9 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   onSearch(query: string): void {
     this.searchQuery = query;
     this.svc.search(query);
+    
+    // ✅ Scroll to top after search to show results from beginning
+    setTimeout(() => this.scrollToTop(), 100);
   }
 
   // Template list methods with double-click prevention
@@ -213,6 +221,12 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   }
 
   onRunTests(id: string): void {
+    // ✅ Before navigating, ensure this template is marked as last selected
+    const item = this.svc.snapshot.items.find(t => t.id === id);
+    if (item) {
+      this.svc.select(id, item.name);
+    }
+    
     this.router.navigate(['/qa', id]);
   }
 
@@ -293,83 +307,83 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   }
 
   deleteTemplate(): void {
-  // Prevent concurrent deletions
-  if (this.isDeleting) {
-    console.log('⏳ Delete already in progress');
-    return;
-  }
-
-  const currentId = this.svc.snapshot.selectedId;
-  const currentName = this.svc.snapshot.selectedName;
-  
-  if (!currentId) {
-    console.warn('No template selected');
-    return;
-  }
-  
-  const confirmed = confirm(
-    `Are you sure you want to delete "${currentName}"?\n\nThis action cannot be undone and will permanently remove the template from Mailchimp.`
-  );
-  
-  if (!confirmed) {
-    console.log('Delete cancelled by user');
-    return;
-  }
-  
-  console.log('🗑️ Deleting template:', currentId);
-  
-  // Set deleting flag
-  this.isDeleting = true;
-  
-  // Optimistic UI update
-  this.safeSrcdoc = null;
-  this.templateMetadata = null;
-  this.runButtonItemId = undefined;
-  this.loading = false;
-  this.cdr.markForCheck();
-  
-  // Clear all caches
-  this.cache.clearTemplate(currentId);
-  
-  // Delete from backend
-  this.svc.deleteTemplate(currentId).subscribe({
-    next: (response) => {
-      console.log('✅ Template deleted successfully');
-      
-      this.isDeleting = false;
-      
-      this.snackBar.open(
-        `"${currentName}" deleted successfully`,
-        'Close',
-        {
-          duration: 4000,
-          panelClass: ['success-snackbar'],
-          horizontalPosition: 'center',
-          verticalPosition: 'bottom'
-        }
-      );
-    },
-    error: (error) => {
-      console.error('❌ Failed to delete template:', error);
-      
-      this.isDeleting = false;
-      
-      this.snackBar.open(
-        `Failed to delete template: ${error?.error?.message || error?.message || 'Unknown error'}`,
-        'Close',
-        {
-          duration: 6000,
-          panelClass: ['error-snackbar'],
-          horizontalPosition: 'center',
-          verticalPosition: 'bottom'
-        }
-      );
-      
-      // Reload to sync state
-      this.svc.search(this.searchQuery);
+    // Prevent concurrent deletions
+    if (this.isDeleting) {
+      console.log('⏳ Delete already in progress');
+      return;
     }
-  });
-}
+
+    const currentId = this.svc.snapshot.selectedId;
+    const currentName = this.svc.snapshot.selectedName;
+    
+    if (!currentId) {
+      console.warn('No template selected');
+      return;
+    }
+    
+    const confirmed = confirm(
+      `Are you sure you want to delete "${currentName}"?\n\nThis action cannot be undone and will permanently remove the template from Mailchimp.`
+    );
+    
+    if (!confirmed) {
+      console.log('Delete cancelled by user');
+      return;
+    }
+    
+    console.log('🗑️ Deleting template:', currentId);
+    
+    // Set deleting flag
+    this.isDeleting = true;
+    
+    // Optimistic UI update
+    this.safeSrcdoc = null;
+    this.templateMetadata = null;
+    this.runButtonItemId = undefined;
+    this.loading = false;
+    this.cdr.markForCheck();
+    
+    // Clear all caches
+    this.cache.clearTemplate(currentId);
+    
+    // Delete from backend
+    this.svc.deleteTemplate(currentId).subscribe({
+      next: (response) => {
+        console.log('✅ Template deleted successfully');
+        
+        this.isDeleting = false;
+        
+        this.snackBar.open(
+          `"${currentName}" deleted successfully`,
+          'Close',
+          {
+            duration: 4000,
+            panelClass: ['success-snackbar'],
+            horizontalPosition: 'center',
+            verticalPosition: 'bottom'
+          }
+        );
+      },
+      error: (error) => {
+        console.error('❌ Failed to delete template:', error);
+        
+        this.isDeleting = false;
+        
+        this.snackBar.open(
+          `Failed to delete template: ${error?.error?.message || error?.message || 'Unknown error'}`,
+          'Close',
+          {
+            duration: 6000,
+            panelClass: ['error-snackbar'],
+            horizontalPosition: 'center',
+            verticalPosition: 'bottom'
+          }
+        );
+        
+        // Reload to sync state
+        this.svc.search(this.searchQuery);
+      }
+    });
+  }
 
   // Utility methods for scrolling
   scrollToItem(itemId: string): void {
@@ -390,7 +404,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     if (this.scrollContainer) {
       this.scrollContainer.nativeElement.scrollTo({
         top: 0,
-        behavior: 'smooth'
+        behavior: 'instant' // ✅ Changed to 'instant' for immediate scroll
       });
     }
   }
@@ -406,208 +420,184 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   }
 
   // Optimized template loading with metadata caching
-private loadTemplateContent(id: string): void {
-  console.log('🔄 START loadTemplateContent, id:', id);
-  
-  // Clear previous state
-  this.previewError = undefined;
-  this.runButtonItemId = undefined;
-  this.templateMetadata = null;
-  
-  // Clear any pending loading timer
-  if (this.loadingTimer) {
-    clearTimeout(this.loadingTimer);
-    this.loadingTimer = undefined;
-  }
-
-  if (!id) {
-    this.loading = false;
-    this.safeSrcdoc = null;
-    console.log('❌ No ID - loading set to FALSE');
-    this.cdr.markForCheck();
-    return;
-  }
-
-  // Check cache first
-  const cached = this.cache.get(id) || this.cache.getPersisted(id);
-  console.log('💾 Cache check:', cached ? 'HIT' : 'MISS');
-  
-  if (cached) {
-    console.log('✅ Using cached content - loading instantly');
+  private loadTemplateContent(id: string): void {
+    console.log('📄 START loadTemplateContent, id:', id);
     
-    // Check if metadata is already cached
-    const cachedMetadata = sessionStorage.getItem(`metadata-${id}`);
-    if (cachedMetadata) {
-      this.templateMetadata = JSON.parse(cachedMetadata);
-      console.log('✅ Using cached metadata');
-      console.log('📊 Cached metadata fields:', {
-        type: this.templateMetadata.type,
-        templateType: this.templateMetadata.templateType,
-        createdBy: this.templateMetadata.createdBy,
-        source: this.templateMetadata.source
-      });
-      this.cdr.markForCheck();
-    } else {
-      // Fetch metadata from API and cache it
-      console.log('📡 Fetching metadata from API for cached content...');
-      this.http.get(`/api/templates/${id}`, { responseType: 'json' })
-        .subscribe({
-          next: (response: any) => {
-            console.log('✅ API response received for metadata');
-            console.log('📊 Response fields:', {
-              type: response.type,
-              templateType: response.templateType,
-              createdBy: response.createdBy,
-              source: response.source
-            });
-            
-            this.templateMetadata = {
-              type: response.type,
-              templateType: response.templateType, // ✅ NEW FIELD
-              category: response.category || 'N/A',
-              thumbnail: response.thumbnail,
-              dateCreated: response.dateCreated,
-              dateEdited: response.dateEdited,
-              createdBy: response.createdBy, // ✅ NEW FIELD
-              active: response.active,
-              dragAndDrop: response.dragAndDrop,
-              responsive: response.responsive,
-              folderId: response.folderId || 'N/A',
-              screenshotUrl: response.screenshotUrl,
-              source: response.source
-            };
-            
-            // Cache the metadata
-            sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
-            console.log('✅ Fetched and cached metadata');
-            console.log('📦 Metadata cached to sessionStorage:', `metadata-${id}`);
-            
-            this.cdr.markForCheck();
-          },
-          error: (e) => {
-            console.warn('⚠️ Failed to load metadata:', e);
-            console.error('❌ Error details:', e.error);
-          }
-        });
+    // Clear previous state
+    this.previewError = undefined;
+    this.runButtonItemId = undefined;
+    this.templateMetadata = null;
+    
+    // Clear any pending loading timer
+    if (this.loadingTimer) {
+      clearTimeout(this.loadingTimer);
+      this.loadingTimer = undefined;
     }
+
+    if (!id) {
+      this.loading = false;
+      this.safeSrcdoc = null;
+      console.log('❌ No ID - loading set to FALSE');
+      this.cdr.markForCheck();
+      return;
+    }
+
+    // Check cache first
+    const cached = this.cache.get(id) || this.cache.getPersisted(id);
+    console.log('💾 Cache check:', cached ? 'HIT' : 'MISS');
     
-    // Process content immediately
-    const wrapped = this.ensureDoc(cached);
-    const cleaned = this.stripDangerousBits(wrapped);
-    this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
-    
-    // Show loading very briefly for smooth UX
-    this.loading = true;
-    this.cdr.markForCheck();
-    
-    // Hide loading after iframe renders
-    this.loadingTimer = setTimeout(() => {
-      if (this.svc.snapshot.selectedId === id) {
-        this.loading = false;
-        this.showRunButton(id);
-        console.log('✅ Cached template loaded successfully');
+    if (cached) {
+      console.log('✅ Using cached content - loading instantly');
+      
+      // Check if metadata is already cached
+      const cachedMetadata = sessionStorage.getItem(`metadata-${id}`);
+      if (cachedMetadata) {
+        this.templateMetadata = JSON.parse(cachedMetadata);
+        console.log('✅ Using cached metadata');
         this.cdr.markForCheck();
+      } else {
+        // Fetch metadata from API and cache it
+        console.log('📡 Fetching metadata from API for cached content...');
+        this.http.get(`/api/templates/${id}`, { responseType: 'json' })
+          .subscribe({
+            next: (response: any) => {
+              console.log('✅ API response received for metadata');
+              
+              this.templateMetadata = {
+                type: response.type,
+                templateType: response.templateType,
+                category: response.category || 'N/A',
+                thumbnail: response.thumbnail,
+                dateCreated: response.dateCreated,
+                dateEdited: response.dateEdited,
+                createdBy: response.createdBy,
+                active: response.active,
+                dragAndDrop: response.dragAndDrop,
+                responsive: response.responsive,
+                folderId: response.folderId || 'N/A',
+                screenshotUrl: response.screenshotUrl,
+                source: response.source
+              };
+              
+              // Cache the metadata
+              sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
+              console.log('✅ Fetched and cached metadata');
+              
+              this.cdr.markForCheck();
+            },
+            error: (e) => {
+              console.warn('⚠️ Failed to load metadata:', e);
+            }
+          });
       }
-    }, 0);
-    
-    return;
-  }
-
-  // Check if we already have an in-flight request for this template
-  if (this.inflightRequests.has(id)) {
-    console.log('⏳ Request already in-flight for template:', id, '- reusing existing request');
-    this.loading = true;
-    this.cdr.markForCheck();
-    return;
-  }
-
-  // Fresh content path - fetch from API
-  console.log('📡 Fetching fresh content from API...');
-  this.loading = true;
-  this.safeSrcdoc = null;
-  this.cdr.markForCheck();
-
-  const subscription = this.http
-    .get(`/api/templates/${id}`, { responseType: 'json' })
-    .subscribe({
-      next: (response: any) => {
-        console.log('✅ Fresh API response received');
-        console.log('📊 Response fields:', {
-          type: response.type,
-          templateType: response.templateType,
-          createdBy: response.createdBy,
-          source: response.source,
-          htmlLength: response.html?.length
-        });
-        
-        // Store metadata
-        this.templateMetadata = {
-          type: response.type,
-          templateType: response.templateType, // ✅ NEW FIELD
-          category: response.category || 'N/A',
-          thumbnail: response.thumbnail,
-          dateCreated: response.dateCreated,
-          dateEdited: response.dateEdited,
-          createdBy: response.createdBy, // ✅ NEW FIELD
-          active: response.active,
-          dragAndDrop: response.dragAndDrop,
-          responsive: response.responsive,
-          folderId: response.folderId || 'N/A',
-          screenshotUrl: response.screenshotUrl,
-          source: response.source
-        };
-        
-        // Cache the metadata
-        sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
-        console.log('✅ Fetched and cached metadata');
-        console.log('📦 Metadata cached to sessionStorage:', `metadata-${id}`);
-        
-        // Remove from in-flight requests
-        this.inflightRequests.delete(id);
-        
-        const currentId = this.svc.snapshot.selectedId;
-        
-        // Check if user switched templates during fetch
-        if (currentId !== id) {
-          console.log('⚠️ User switched during fetch, aborting');
-          return;
+      
+      // Process content immediately
+      const wrapped = this.ensureDoc(cached);
+      const cleaned = this.stripDangerousBits(wrapped);
+      this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
+      
+      // Show loading very briefly for smooth UX
+      this.loading = true;
+      this.cdr.markForCheck();
+      
+      // Hide loading after iframe renders
+      this.loadingTimer = setTimeout(() => {
+        if (this.svc.snapshot.selectedId === id) {
+          this.loading = false;
+          this.showRunButton(id);
+          console.log('✅ Cached template loaded successfully');
+          this.cdr.markForCheck();
         }
-        
-        const html = response.html || '';
-        console.log('📄 HTML content length:', html.length);
-        
-        this.cache.set(id, html);
-        console.log('💾 HTML cached in memory');
-        
-        const wrapped = this.ensureDoc(html);
-        const cleaned = this.stripDangerousBits(wrapped);
-        this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
-        console.log('✅ Fresh HTML set, waiting for iframe load event');
-        this.cdr.markForCheck();
-      },
-      error: (e) => {
-        console.error('❌ API error for:', id, e);
-        console.error('❌ Error details:', e.error);
-        console.error('❌ Error status:', e.status);
-        
-        // Remove from in-flight requests
-        this.inflightRequests.delete(id);
-        
-        this.loading = false;
-        this.previewError = e?.message || 'Failed to load preview.';
-        this.cdr.markForCheck();
-      },
-      complete: () => {
-        console.log('✅ HTTP request completed');
-        // Ensure cleanup on completion
-        this.inflightRequests.delete(id);
-      }
-    });
-  
-  // Store the subscription to prevent duplicate requests
-  this.inflightRequests.set(id, subscription);
-  console.log('📡 HTTP request initiated and stored');
-}
+      }, 0);
+      
+      return;
+    }
+
+    // Check if we already have an in-flight request for this template
+    if (this.inflightRequests.has(id)) {
+      console.log('⏳ Request already in-flight for template:', id, '- reusing existing request');
+      this.loading = true;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    // Fresh content path - fetch from API
+    console.log('📡 Fetching fresh content from API...');
+    this.loading = true;
+    this.safeSrcdoc = null;
+    this.cdr.markForCheck();
+
+    const subscription = this.http
+      .get(`/api/templates/${id}`, { responseType: 'json' })
+      .subscribe({
+        next: (response: any) => {
+          console.log('✅ Fresh API response received');
+          
+          // Store metadata
+          this.templateMetadata = {
+            type: response.type,
+            templateType: response.templateType,
+            category: response.category || 'N/A',
+            thumbnail: response.thumbnail,
+            dateCreated: response.dateCreated,
+            dateEdited: response.dateEdited,
+            createdBy: response.createdBy,
+            active: response.active,
+            dragAndDrop: response.dragAndDrop,
+            responsive: response.responsive,
+            folderId: response.folderId || 'N/A',
+            screenshotUrl: response.screenshotUrl,
+            source: response.source
+          };
+          
+          // Cache the metadata
+          sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
+          console.log('✅ Fetched and cached metadata');
+          
+          // Remove from in-flight requests
+          this.inflightRequests.delete(id);
+          
+          const currentId = this.svc.snapshot.selectedId;
+          
+          // Check if user switched templates during fetch
+          if (currentId !== id) {
+            console.log('⚠️ User switched during fetch, aborting');
+            return;
+          }
+          
+          const html = response.html || '';
+          console.log('📄 HTML content length:', html.length);
+          
+          this.cache.set(id, html);
+          console.log('💾 HTML cached in memory');
+          
+          const wrapped = this.ensureDoc(html);
+          const cleaned = this.stripDangerousBits(wrapped);
+          this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
+          console.log('✅ Fresh HTML set, waiting for iframe load event');
+          this.cdr.markForCheck();
+        },
+        error: (e) => {
+          console.error('❌ API error for:', id, e);
+          
+          // Remove from in-flight requests
+          this.inflightRequests.delete(id);
+          
+          this.loading = false;
+          this.previewError = e?.message || 'Failed to load preview.';
+          this.cdr.markForCheck();
+        },
+        complete: () => {
+          console.log('✅ HTTP request completed');
+          // Ensure cleanup on completion
+          this.inflightRequests.delete(id);
+        }
+      });
+    
+    // Store the subscription to prevent duplicate requests
+    this.inflightRequests.set(id, subscription);
+    console.log('📡 HTTP request initiated and stored');
+  }
 
   onIframeLoad(): void {
     console.log('🖼️ onIframeLoad called');

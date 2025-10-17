@@ -19,6 +19,7 @@ export interface TemplatesState {
   error: string | null;
   selectedId: string | null;
   selectedName: string | null;
+  searchQuery: string; // ✅ NEW: Store search query in state
 }
 
 const INITIAL_STATE: TemplatesState = {
@@ -27,6 +28,7 @@ const INITIAL_STATE: TemplatesState = {
   error: null,
   selectedId: null,
   selectedName: null,
+  searchQuery: '', // ✅ NEW
 };
 
 // Cache configuration
@@ -34,12 +36,15 @@ const CACHE_KEYS = {
   TEMPLATES_LIST: 'templates-list',
   SEARCH_PREFIX: 'templates-search-',
   SELECTED: 'templates-selected',
+  SEARCH_QUERY: 'templates-search-query', // ✅ NEW: Cache key for search query
+  LAST_SELECTED: 'templates-last-selected-id', // ✅ NEW: For reordering
 };
 
 const CACHE_TTL = {
   LIST: 2 * 60 * 60 * 1000,      // 2 hours
   SEARCH: 2 * 60 * 60 * 1000,    // 2 hours for search results
   SELECTED: 2 * 60 * 60 * 1000, // 2 hours for selected template
+  SEARCH_QUERY: 24 * 60 * 60 * 1000, // ✅ 24 hours for search query
 };
 
 @Injectable({
@@ -56,6 +61,7 @@ export class TemplatesService {
 
   constructor() {
     this.restoreSelection();
+    this.restoreSearchQuery(); // ✅ NEW: Restore search query on init
   }
 
   get snapshot(): TemplatesState {
@@ -70,6 +76,8 @@ export class TemplatesService {
 
     if (id && name) {
       this.cache.set(CACHE_KEYS.SELECTED, { id, name }, CACHE_TTL.SELECTED, 'session');
+      // ✅ NEW: Store last selected ID for reordering
+      this.cache.set(CACHE_KEYS.LAST_SELECTED, id, CACHE_TTL.SELECTED, 'local');
     } else {
       this.cache.invalidate(CACHE_KEYS.SELECTED);
     }
@@ -87,6 +95,10 @@ export class TemplatesService {
     const queryChanged = this.currentSearchQuery !== trimmedQuery;
     this.currentSearchQuery = trimmedQuery;
     
+    // ✅ NEW: Persist search query
+    this.updateState({ searchQuery: trimmedQuery });
+    this.cache.set(CACHE_KEYS.SEARCH_QUERY, trimmedQuery, CACHE_TTL.SEARCH_QUERY, 'local');
+    
     const cacheKey = trimmedQuery 
       ? `${CACHE_KEYS.SEARCH_PREFIX}${trimmedQuery}`
       : CACHE_KEYS.TEMPLATES_LIST;
@@ -96,8 +108,9 @@ export class TemplatesService {
     
     if (cached && cached.length > 0) {
       console.log('✅ Instant cache hit:', cached.length, 'templates');
-      // ✅ Set status to 'success' immediately - no loading state!
-      this.updateState({ items: cached, status: 'success', error: null });
+      // ✅ Reorder to show last selected first
+      const reordered = this.reorderByLastSelected(cached);
+      this.updateState({ items: reordered, status: 'success', error: null });
       return;
     }
 
@@ -119,8 +132,9 @@ export class TemplatesService {
         // Cache the filtered results
         this.cache.set(cacheKey, filtered, CACHE_TTL.SEARCH, 'session');
         
-        // ✅ Update state immediately - no loading!
-        this.updateState({ items: filtered, status: 'success', error: null });
+        // ✅ Reorder to show last selected first
+        const reordered = this.reorderByLastSelected(filtered);
+        this.updateState({ items: reordered, status: 'success', error: null });
         return;
       }
     }
@@ -139,62 +153,59 @@ export class TemplatesService {
     this.fetchTemplates(this.currentSearchQuery, cacheKey);
   }
 
-  // Add this to your TemplatesService class:
-
-/**
- * Smart refresh: Fetch new template list but skip cached content
- */
-// Replace the smartRefresh method in your TemplatesService with this:
-
-smartRefresh(): void {
-  console.log('🔄 Smart refresh started...');
-  
-  // Set loading state
-  this.updateState({ status: 'loading', error: null });
-  
-  // Fetch fresh template list from server
-  this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates')
-    .pipe(
-      tap(response => {
-        const freshItems = response.items || [];
-        
-        console.log(`✅ Smart refresh: ${freshItems.length} templates from server`);
-        
-        // Cache the fresh list
-        this.cache.set(CACHE_KEYS.TEMPLATES_LIST, freshItems, CACHE_TTL.LIST, 'session');
-        
-        // Update state with fresh list
-        this.updateState({ 
-          items: freshItems, 
-          status: 'success', 
-          error: null 
-        });
-      }),
-      catchError(error => {
-        console.error('❌ Smart refresh failed:', error);
-        
-        // Try to use stale cache
-        const stale = this.cache.getStale<TemplateItem[]>(CACHE_KEYS.TEMPLATES_LIST);
-        
-        if (stale && stale.length > 0) {
-          console.warn('⚠️ Using stale cache due to network error');
+  smartRefresh(): void {
+    console.log('🔄 Smart refresh started...');
+    
+    // Set loading state
+    this.updateState({ status: 'loading', error: null });
+    
+    // Fetch fresh template list from server
+    this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates')
+      .pipe(
+        tap(response => {
+          const freshItems = response.items || [];
+          
+          console.log(`✅ Smart refresh: ${freshItems.length} templates from server`);
+          
+          // Cache the fresh list
+          this.cache.set(CACHE_KEYS.TEMPLATES_LIST, freshItems, CACHE_TTL.LIST, 'session');
+          
+          // ✅ Reorder to show last selected first
+          const reordered = this.reorderByLastSelected(freshItems);
+          
+          // Update state with fresh list
           this.updateState({ 
-            items: stale, 
+            items: reordered, 
             status: 'success', 
-            error: 'Showing cached data (offline)' 
+            error: null 
           });
-        } else {
-          this.updateState({ 
-            status: 'error', 
-            error: error.message || 'Failed to refresh templates' 
-          });
-        }
-        
-        return throwError(() => error);
-      })
-    )
-    .subscribe();
-}
+        }),
+        catchError(error => {
+          console.error('❌ Smart refresh failed:', error);
+          
+          // Try to use stale cache
+          const stale = this.cache.getStale<TemplateItem[]>(CACHE_KEYS.TEMPLATES_LIST);
+          
+          if (stale && stale.length > 0) {
+            console.warn('⚠️ Using stale cache due to network error');
+            const reordered = this.reorderByLastSelected(stale);
+            this.updateState({ 
+              items: reordered, 
+              status: 'success', 
+              error: 'Showing cached data (offline)' 
+            });
+          } else {
+            this.updateState({ 
+              status: 'error', 
+              error: error.message || 'Failed to refresh templates' 
+            });
+          }
+          
+          return throwError(() => error);
+        })
+      )
+      .subscribe();
+  }
 
   hasFreshCache(): boolean {
     const cacheKey = this.currentSearchQuery 
@@ -209,30 +220,67 @@ smartRefresh(): void {
   }
 
   deleteTemplate(id: string): Observable<any> {
-  return this.http.delete(`/api/templates/${id}`).pipe(
-    tap(() => {
-      // Remove from current state
-      const currentItems = this.snapshot.items;
-      const updatedItems = currentItems.filter(item => item.id !== id);
-      
-      this.updateState({ 
-        items: updatedItems,
-        selectedId: null,
-        selectedName: null
-      });
-      
-      // Clear all caches for this template
-      const cacheKeys = [
-        `${CACHE_KEYS.TEMPLATES_LIST}`,
-        `${CACHE_KEYS.SEARCH_PREFIX}${this.currentSearchQuery}`
-      ];
-      
-      cacheKeys.forEach(key => this.cache.invalidate(key));
-      
-      console.log('✅ Template removed from state and cache');
-    })
-  );
-}
+    return this.http.delete(`/api/templates/${id}`).pipe(
+      tap(() => {
+        // Remove from current state
+        const currentItems = this.snapshot.items;
+        const updatedItems = currentItems.filter(item => item.id !== id);
+        
+        this.updateState({ 
+          items: updatedItems,
+          selectedId: null,
+          selectedName: null
+        });
+        
+        // Clear all caches for this template
+        const cacheKeys = [
+          `${CACHE_KEYS.TEMPLATES_LIST}`,
+          `${CACHE_KEYS.SEARCH_PREFIX}${this.currentSearchQuery}`
+        ];
+        
+        cacheKeys.forEach(key => this.cache.invalidate(key));
+        
+        // ✅ If we deleted the last selected, clear that too
+        const lastSelectedId = this.cache.get<string>(CACHE_KEYS.LAST_SELECTED);
+        if (lastSelectedId === id) {
+          this.cache.invalidate(CACHE_KEYS.LAST_SELECTED);
+        }
+        
+        console.log('✅ Template removed from state and cache');
+      })
+    );
+  }
+
+  // ✅ NEW: Restore search query from cache
+  private restoreSearchQuery(): void {
+    const savedQuery = this.cache.get<string>(CACHE_KEYS.SEARCH_QUERY);
+    
+    if (savedQuery) {
+      console.log('✅ Restored search query:', savedQuery);
+      this.currentSearchQuery = savedQuery;
+      this.updateState({ searchQuery: savedQuery });
+    }
+  }
+
+  // ✅ NEW: Reorder templates to show last selected first
+  private reorderByLastSelected(items: TemplateItem[]): TemplateItem[] {
+    const lastSelectedId = this.cache.get<string>(CACHE_KEYS.LAST_SELECTED);
+    
+    if (!lastSelectedId || items.length === 0) {
+      return items;
+    }
+    
+    const selectedIndex = items.findIndex(item => item.id === lastSelectedId);
+    
+    if (selectedIndex > 0) {
+      console.log('🔄 Moving last selected template to top:', lastSelectedId);
+      const selected = items[selectedIndex];
+      const reordered = [selected, ...items.slice(0, selectedIndex), ...items.slice(selectedIndex + 1)];
+      return reordered;
+    }
+    
+    return items;
+  }
 
   private fetchTemplates(query: string, cacheKey: string): void {
     // ✅ Only set loading state when actually fetching
@@ -260,7 +308,9 @@ smartRefresh(): void {
             console.warn('⚠️ No templates to cache');
           }
           
-          this.updateState({ items, status: 'success', error: null });
+          // ✅ Reorder to show last selected first
+          const reordered = this.reorderByLastSelected(items);
+          this.updateState({ items: reordered, status: 'success', error: null });
         }),
         catchError(error => {
           console.error('❌ Failed to fetch templates:', error);
@@ -269,7 +319,8 @@ smartRefresh(): void {
           
           if (stale && stale.length > 0) {
             console.warn('⚠️ Using stale cache due to network error');
-            this.updateState({ items: stale, status: 'success', error: 'Showing cached data (offline)' });
+            const reordered = this.reorderByLastSelected(stale);
+            this.updateState({ items: reordered, status: 'success', error: 'Showing cached data (offline)' });
           } else {
             this.updateState({ status: 'error', error: error.message || 'Failed to load templates' });
           }
