@@ -146,16 +146,27 @@
           <!-- Text Content -->
           <div class="suggestion-content">
             <!-- Find Text -->
-            <div class="text-block find-text">
-              <span class="label">Find:</span>
-              <code (dblclick)="selectText($event)">{{ edit.find }}</code>
-            </div>
-            
-            <!-- Replace Text -->
-            <div class="text-block replace-text">
-              <span class="label">Replace:</span>
-              <code (dblclick)="selectText($event)">{{ edit.replace }}</code>
-            </div>
+<!-- Find Text -->
+<div class="text-block find-text">
+  <span class="label">Find:</span>
+  <code 
+    class="copyable"
+    (click)="copyTextToClipboard(edit.find || '', $event)"
+    title="Click to copy">
+    {{ edit.find }}
+  </code>
+</div>
+
+<!-- Replace Text -->
+<div class="text-block replace-text">
+  <span class="label">Replace:</span>
+  <code 
+    class="copyable"
+    (click)="copyTextToClipboard(edit.replace || '', $event)"
+    title="Click to copy">
+    {{ edit.replace }}
+  </code>
+</div>
             
             <!-- Reason -->
             <div class="reason" *ngIf="edit.reason">

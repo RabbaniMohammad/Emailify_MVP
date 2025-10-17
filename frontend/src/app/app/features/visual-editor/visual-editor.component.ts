@@ -877,6 +877,36 @@ onCheckPreview(): void {
   }
 }
 
+/**
+ * Copy text as plain text (no formatting)
+ */
+copyTextToClipboard(text: string, event?: MouseEvent): void {
+  if (event) {
+    event.stopPropagation();
+  }
+  
+  // ✅ Copy as plain text only
+  navigator.clipboard.writeText(text).then(() => {
+    this.showToast(`Copied: "${this.truncateText(text, 30)}"`, 'success');
+  }).catch(err => {
+    console.error('Copy failed:', err);
+    this.showToast('Copy failed. Please try again.', 'error');
+  });
+}
+
+/**
+ * Make text selectable and copyable
+ */
+makeTextCopyable(element: HTMLElement, text: string): void {
+  element.style.cursor = 'pointer';
+  element.title = 'Click to copy';
+  
+  element.addEventListener('click', (e) => {
+    e.stopPropagation();
+    this.copyTextToClipboard(text);
+  });
+}
+
   /**
    * Simple toast (NO animations)
    */
