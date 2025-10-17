@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authenticate } from '@src/middleware/auth';
 import TemplateConversation from '@src/models/TemplateConversation';
 import GeneratedTemplate from '@src/models/GeneratedTemplate';
-import User from '@src/models/User'; // ✅ ADD THIS LINE
+import User from '@src/models/User';
 import { generateTemplate, refineTemplate } from '@src/services/templateGenerationService';
 import { convertMjmlToHtml, validateMjml, getMjmlStarter } from '@src/services/mjmlConversionService';
 import logger from 'jet-logger';
@@ -28,14 +28,12 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
 
     logger.info(`🎨 Quick generation for user ${userId}`);
 
-    // Generate template using Claude (with 5 retries)
     const result = await generateTemplate({
       prompt: prompt.trim(),
       conversationHistory: [],
       userId,
     });
 
-    // Convert MJML to HTML
     const conversion = convertMjmlToHtml(result.mjmlCode);
 
     if (conversion.errors.length > 0 && !conversion.html) {
@@ -92,6 +90,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
 /**
  * POST /api/generate/start
  * Start a new template generation conversation
+ * ✅ Returns MJML on first generation (frontend needs it for editor)
  */
 router.post('/start', authenticate, async (req: Request, res: Response) => {
   try {
@@ -130,7 +129,7 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
     logger.info(`📄 MJML length: ${result.mjmlCode?.length}`);
     logger.info(`🔄 Attempts used: ${result.attemptsUsed}`);
 
-    logger.info(`🔄 Converting MJML to HTML...`);
+    logger.info(`📄 Converting MJML to HTML...`);
     const conversion = convertMjmlToHtml(result.mjmlCode);
 
     if (conversion.errors.length > 0 && !conversion.html) {
@@ -171,8 +170,8 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
     });
 
     logger.info(`✅ Conversation created: ${conversationId}`);
-    logger.info(`📊 User message has images: ${!!images}`);
 
+    // ✅ First generation: Return MJML (frontend needs it for editor)
     res.json({
       conversationId,
       html: conversion.html,
@@ -205,6 +204,9 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
 /**
  * POST /api/generate/continue/:conversationId
  * Continue an existing conversation
+ * ✅ STATELESS: Only current MJML + new request (no conversation history)
+ * ✅ Returns MJML + HTML in response
+ * ✅ NO image deduplication (handled by frontend)
  */
 router.post('/continue/:conversationId', authenticate, async (req: Request, res: Response) => {
   try {
@@ -249,26 +251,28 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
     logger.info(`✅ Conversation found`);
     logger.info(`📊 Current messages count: ${conversation.messages.length}`);
 
-    const conversationHistory = conversation.messages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-      images: msg.images || undefined,
-    }));
+    // ✅ STATELESS APPROACH: No conversation history sent to AI
+    // Send: Current MJML state + New user request only
+    // Image deduplication: Handled by frontend warnings
+    logger.info(`💰 Cost optimization: Stateless mode activated`);
+    logger.info(`   - Conversation history: ${conversation.messages.length} messages stored in DB (NOT sent to AI)`);
+    logger.info(`   - Sending to AI: Current MJML + new request only`);
+    logger.info(`   - Image deduplication: Handled by frontend`);
 
     logger.info(`📡 Calling refineTemplate service...`);
     const result = await refineTemplate(
-      conversation.currentMjml,
-      message.trim(),
-      conversationHistory,
+      conversation.currentMjml,  // ✅ Current template state (contains all previous changes)
+      message.trim(),             // ✅ New user request
+      [],                         // ✅ Empty history (stateless - huge cost savings!)
       userId,
-      images || undefined
+      images || undefined         // ✅ Images as-is (no backend deduplication)
     );
 
     logger.info(`✅ Template refined successfully`);
-    logger.info(`📄 MJML length: ${result.mjmlCode?.length}`);
+    logger.info(`📄 New MJML length: ${result.mjmlCode?.length}`);
     logger.info(`🔄 Attempts used: ${result.attemptsUsed}`);
 
-    logger.info(`🔄 Converting MJML to HTML...`);
+    logger.info(`📄 Converting MJML to HTML...`);
     const conversion = convertMjmlToHtml(result.mjmlCode);
 
     if (conversion.errors.length > 0 && !conversion.html) {
@@ -283,7 +287,8 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
 
     logger.info(`✅ MJML converted, HTML length: ${conversion.html?.length}`);
 
-    logger.info(`💾 Adding messages to conversation...`);
+    // ✅ Store messages in DB for audit/history (not sent to AI)
+    logger.info(`💾 Adding messages to conversation history (DB only)...`);
     conversation.messages.push(
       { 
         role: 'user', 
@@ -305,13 +310,13 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
 
     logger.info(`✅ Conversation updated: ${conversationId}`);
     logger.info(`📊 Total messages now: ${conversation.messages.length}`);
-    logger.info(`📊 User message has images: ${!!images}`);
 
+    // ✅ Return both HTML and MJML
     res.json({
       conversationId,
-      html: conversion.html,
-      mjml: result.mjmlCode,
-      message: result.assistantMessage,
+      html: conversion.html,           // ✅ HTML for preview
+      mjml: result.mjmlCode,           // ✅ MJML for editor (YOU NEED THIS!)
+      message: result.assistantMessage, // ✅ AI's response message
       hasErrors: conversion.errors.length > 0,
       errors: conversion.errors,
       attemptsUsed: result.attemptsUsed,
@@ -459,7 +464,6 @@ router.post('/save/:conversationId', authenticate, async (req: Request, res: Res
       });
     }
 
-    // ✅ Fetch user details to get the name
     console.log('👤 [SAVE] Fetching user details for createdBy field...');
     const user = await User.findById(userId);
     
@@ -477,7 +481,6 @@ router.post('/save/:conversationId', authenticate, async (req: Request, res: Res
     const templateId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     console.log('🆔 [SAVE] Generated template ID:', templateId);
 
-    // ✅ Create template with all metadata
     console.log('💾 [SAVE] Creating GeneratedTemplate document...');
     const generatedTemplate = await GeneratedTemplate.create({
       templateId,
@@ -486,8 +489,6 @@ router.post('/save/:conversationId', authenticate, async (req: Request, res: Res
       userId,
       conversationId,
       type: 'generated',
-      
-      // ✅ New metadata fields
       templateType: 'AI Generated',
       createdBy: user.name,
       source: 'AI Generated',
@@ -510,7 +511,6 @@ router.post('/save/:conversationId', authenticate, async (req: Request, res: Res
       updatedAt: generatedTemplate.updatedAt,
     });
 
-    // Update conversation
     console.log('💾 [SAVE] Updating conversation status...');
     conversation.templateName = templateName.trim();
     conversation.status = 'saved';

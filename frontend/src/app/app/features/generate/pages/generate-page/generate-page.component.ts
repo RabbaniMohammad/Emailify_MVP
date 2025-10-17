@@ -56,6 +56,8 @@ export class GeneratePageComponent implements OnInit, OnDestroy, AfterViewInit, 
   private destroy$ = new Subject<void>();
   private previewCache = inject(PreviewCacheService);
   private scrollAnimation: number | null = null;
+  // Add this property at the top of your component class
+private sentImages: Array<{name: string, size: number}> = [];
 
   private cdr = inject(ChangeDetectorRef);
 
@@ -192,7 +194,7 @@ canDeactivate(): boolean {
     const welcomeMessage: GenerationMessage = {
       role: 'assistant',
       content:
-        "👋 Hi! I'm your email template generator. Describe the email template you'd like to create, and I'll generate it for you using MJML.\n\nFor example:\n• \"Create a welcome email for new subscribers\"\n• \"Design a product launch announcement\"\n• \"Make a monthly newsletter template\"",
+        "👋 Hi! I'm your email template generator. Describe the email template you'd like to create, and I'll generate it for you.\n\nFor example:\n• \"Create a welcome email for new subscribers\"\n• \"Design a product launch announcement\"\n• \"Make a monthly newsletter template\"",
       timestamp: new Date(),
     };
     this.messages$.next([welcomeMessage]);
@@ -275,6 +277,19 @@ onSend(): void {
   console.log('✅ Chat limit check passed');
   console.log('🖼️ Selected images count:', this.selectedImages.length);
   
+  // ✅ CHANGED: Store ORIGINAL file metadata (before compression stored the compressed size)
+  // We need to get the original metadata from the file input
+  this.selectedImages.forEach(file => {
+    // Check if this is a compressed file (has our naming pattern)
+    // If it's compressed, we need to find the original metadata
+    // For now, just store what we have - but we'll fix this in processImage
+    const originalSize = (file as any).originalSize || file.size;
+    const originalName = (file as any).originalName || file.name;
+    
+    this.sentImages.push({ name: originalName, size: originalSize });
+  });
+  console.log('💾 Stored sent images metadata BEFORE clearing:', this.sentImages);
+  
   this.isGenerating$.next(true);
   this.shouldAutoScroll = true;
 
@@ -286,7 +301,7 @@ onSend(): void {
     this.continueConversation(message);
   }
 
-  // Clear input and images
+  // Clear input and images AFTER storing metadata
   console.log('🧹 Clearing input and images');
   this.userInput = '';
   this.selectedImages = [];
@@ -302,7 +317,7 @@ private async startNewConversation(message: string): Promise<void> {
   // Convert selected images to base64
   const imageAttachments: ImageAttachment[] = await Promise.all(
     this.selectedImages.map(async (file, index) => {
-      console.log(`🔄 Converting image ${index + 1}:`, file.name, file.type, `${(file.size / 1024).toFixed(2)}KB`);
+      console.log(`📄 Converting image ${index + 1}:`, file.name, file.type, `${(file.size / 1024).toFixed(2)}KB`);
       const base64 = await this.fileToBase64(file);
       console.log(`✅ Image ${index + 1} converted to base64, length:`, base64.length);
       return {
@@ -314,6 +329,12 @@ private async startNewConversation(message: string): Promise<void> {
   );
   
   console.log('✅ All images converted, total attachments:', imageAttachments.length);
+  
+  // ❌ REMOVED: Don't store here, already stored in onSend()
+  // this.selectedImages.forEach(file => {
+  //   this.sentImages.push({ name: file.name, size: file.size });
+  // });
+  
   console.log('📡 Calling generationService.startGeneration()...');
 
   this.generationService
@@ -328,7 +349,6 @@ private async startNewConversation(message: string): Promise<void> {
         this.conversationId = response.conversationId;
         this.currentHtml$.next(response.html);
 
-        // Add messages with images
         const newMessages: GenerationMessage[] = [
           { 
             role: 'user', 
@@ -338,7 +358,7 @@ private async startNewConversation(message: string): Promise<void> {
           },
           {
             role: 'assistant',
-            content: response.message,
+            content: '✅ Template generated successfully',
             timestamp: new Date(),
           },
         ];
@@ -351,13 +371,10 @@ private async startNewConversation(message: string): Promise<void> {
         console.log('⬇️ Scrolling to bottom...');
         this.scrollToBottom();
 
-        // Update URL without page reload
-        console.log('🔗 Updating URL to:', `/generate/${response.conversationId}`);
         this.router.navigate(['/generate', response.conversationId], {
           replaceUrl: true,
         });
 
-        // Show success message
         if (response.hasErrors) {
           console.warn('⚠️ Template has errors:', response.errors);
           this.snackBar.open(
@@ -398,10 +415,9 @@ private async continueConversation(message: string): Promise<void> {
     return;
   }
 
-  // Convert selected images to base64
   const imageAttachments: ImageAttachment[] = await Promise.all(
     this.selectedImages.map(async (file, index) => {
-      console.log(`🔄 Converting image ${index + 1}:`, file.name, file.type, `${(file.size / 1024).toFixed(2)}KB`);
+      console.log(`📄 Converting image ${index + 1}:`, file.name, file.type, `${(file.size / 1024).toFixed(2)}KB`);
       const base64 = await this.fileToBase64(file);
       console.log(`✅ Image ${index + 1} converted to base64, length:`, base64.length);
       return {
@@ -414,7 +430,11 @@ private async continueConversation(message: string): Promise<void> {
   
   console.log('✅ All images converted, total attachments:', imageAttachments.length);
 
-  // Add user message immediately
+  // ❌ REMOVED: Don't store here, already stored in onSend()
+  // this.selectedImages.forEach(file => {
+  //   this.sentImages.push({ name: file.name, size: file.size });
+  // });
+
   const currentMessages = this.messages$.value;
   console.log('📊 Current messages count before adding:', currentMessages.length);
   
@@ -441,13 +461,12 @@ private async continueConversation(message: string): Promise<void> {
         
         this.currentHtml$.next(response.html);
 
-        // Add assistant message
         const updatedMessages = this.messages$.value;
         console.log('📊 Messages count before adding assistant:', updatedMessages.length);
         
         updatedMessages.push({
           role: 'assistant',
-          content: response.message,
+          content: '✅ Template updated successfully',
           timestamp: new Date(),
         });
         
@@ -649,19 +668,23 @@ onSaveTemplate(): void {
     });
 }
 
-  onNewConversation(): void {
-    // Clear current conversation
-    this.conversationId = null;
-    this.generationService.clearCurrentConversationId();
-    this.messages$.next([]);
-    this.currentHtml$.next('');
-    this.templateName = '';
-    this.userInput = '';
+onNewConversation(): void {
+  // Clear current conversation
+  this.conversationId = null;
+  this.generationService.clearCurrentConversationId();
+  this.messages$.next([]);
+  this.currentHtml$.next('');
+  this.templateName = '';
+  this.userInput = '';
+  
+  // ✅ NEW: Clear sent images history
+  this.sentImages = [];
+  console.log('🧹 Cleared sent images history');
 
-    // Navigate to new conversation
-    this.router.navigate(['/generate'], { replaceUrl: true });
-    this.initializeWelcome();
-  }
+  // Navigate to new conversation
+  this.router.navigate(['/generate'], { replaceUrl: true });
+  this.initializeWelcome();
+}
 
   // ⭐ NEW METHOD: Handle preview refresh
   onRefreshPreview(): void {
@@ -727,12 +750,12 @@ private smoothScrollTo(targetPosition: number): void {
   }
 
 
-  onImageSelect(event: Event): void {
+async onImageSelect(event: Event): Promise<void> {
   console.log('📸 onImageSelect() triggered');
   
   const input = event.target as HTMLInputElement;
-  console.log('📁 Input element:', input);
-  console.log('📁 Files selected:', input.files?.length || 0);
+  console.log('📂 Input element:', input);
+  console.log('📂 Files selected:', input.files?.length || 0);
   
   if (!input.files || input.files.length === 0) {
     console.warn('⚠️ No files selected, aborting');
@@ -740,11 +763,11 @@ private smoothScrollTo(targetPosition: number): void {
   }
 
   const files = Array.from(input.files);
-  console.log('📋 Files array:', files.map(f => `${f.name} (${f.type}, ${(f.size/1024).toFixed(2)}KB)`));
-  console.log('🖼️ Current selected images:', this.selectedImages.length);
+  console.log('📋 New files to upload:', files.map(f => `${f.name} (${(f.size/1024).toFixed(2)}KB)`));
+  console.log('🖼️ Currently selected images:', this.selectedImages.map(f => `${f.name} (${(f.size/1024).toFixed(2)}KB)`));
   console.log('📊 Max images allowed:', this.maxImages);
   
-  // Validate count
+  // Validate count BEFORE duplicate check
   if (this.selectedImages.length + files.length > this.maxImages) {
     console.error(`❌ Too many images! Current: ${this.selectedImages.length}, Trying to add: ${files.length}, Max: ${this.maxImages}`);
     this.snackBar.open(
@@ -758,14 +781,103 @@ private smoothScrollTo(targetPosition: number): void {
 
   console.log('✅ Image count validation passed');
   
-  // Process each file
-  files.forEach((file, index) => {
-    console.log(`🔄 Processing file ${index + 1}/${files.length}:`, file.name);
-    this.processImage(file);
+  // ✅ Check for duplicates
+  const { duplicates, newFiles } = this.checkDuplicateImages(files);
+  
+  console.log('🔍 Duplicate check complete:', {
+    totalFiles: files.length,
+    duplicatesFound: duplicates.length,
+    newFilesFound: newFiles.length
   });
+  
+  if (duplicates.length > 0) {
+    console.warn('⚠️ Duplicates detected:', duplicates.map(f => `${f.name} (${(f.size/1024).toFixed(2)}KB)`));
+    
+    // Show confirmation dialog
+    const duplicateNames = duplicates.map(f => `• ${f.name} (${(f.size/1024).toFixed(2)}KB)`).join('\n');
+    const message = duplicates.length === 1
+      ? `⚠️ This image is already uploaded:\n\n${duplicateNames}\n\nWould you like to upload it again?`
+      : `⚠️ These images are already uploaded:\n\n${duplicateNames}\n\nWould you like to upload them again?`;
+    
+    const confirmed = confirm(message);
+    
+    if (!confirmed) {
+      console.log('❌ User cancelled duplicate upload');
+      
+      // Process only NEW files (non-duplicates)
+      if (newFiles.length > 0) {
+        console.log('✅ Processing only new files:', newFiles.map(f => f.name));
+        for (const file of newFiles) {
+          await this.processImage(file);
+        }
+      } else {
+        console.log('ℹ️ No new files to add, all were duplicates');
+      }
+      
+      input.value = '';
+      return;
+    }
+    
+    console.log('✅ User confirmed, uploading all files including duplicates');
+  } else {
+    console.log('✅ No duplicates found, processing all files');
+  }
+  
+  // Process all files (either no duplicates, or user confirmed)
+  for (const file of files) {
+    console.log(`📄 Processing file: ${file.name}`);
+    await this.processImage(file);
+  }
   
   input.value = ''; // Reset input
   console.log('🧹 Input value reset');
+}
+
+// ✅ NEW: Check for duplicate images
+private checkDuplicateImages(newFiles: File[]): { duplicates: File[], newFiles: File[] } {
+  console.log('🔍 Starting duplicate check...');
+  console.log('🔍 Previously sent images:', this.sentImages);
+  console.log('🔍 New files to check:', newFiles.map(f => ({
+    name: f.name,
+    size: f.size,
+    sizeKB: (f.size / 1024).toFixed(2)
+  })));
+  
+  const duplicates: File[] = [];
+  const newFilesOnly: File[] = [];
+  
+  newFiles.forEach(newFile => {
+    console.log(`🔍 Checking: ${newFile.name} (${newFile.size} bytes)`);
+    
+    // ✅ CHANGED: Check against sentImages instead of selectedImages
+    const isDuplicate = this.sentImages.some(sentImage => {
+      const nameMatch = sentImage.name === newFile.name;
+      const sizeMatch = sentImage.size === newFile.size;
+      
+      console.log(`  Comparing with: ${sentImage.name} (${sentImage.size} bytes)`);
+      console.log(`    Name match: ${nameMatch}, Size match: ${sizeMatch}`);
+      
+      return nameMatch && sizeMatch;
+    });
+    
+    if (isDuplicate) {
+      console.log(`  ❌ DUPLICATE: ${newFile.name}`);
+      duplicates.push(newFile);
+    } else {
+      console.log(`  ✅ NEW FILE: ${newFile.name}`);
+      newFilesOnly.push(newFile);
+    }
+  });
+  
+  console.log('🔍 Duplicate check results:', {
+    total: newFiles.length,
+    duplicates: duplicates.length,
+    duplicateNames: duplicates.map(f => f.name),
+    newFiles: newFilesOnly.length,
+    newFileNames: newFilesOnly.map(f => f.name)
+  });
+  
+  return { duplicates, newFiles: newFilesOnly };
 }
 
 // Add this method to your GeneratePageComponent class
@@ -827,6 +939,11 @@ async processImage(file: File): Promise<void> {
   console.log('✅ File type validation passed');
   console.log('🗜️ Converting image to JPEG...');
   
+  // ✅ NEW: Store original file metadata BEFORE compression
+  const originalName = file.name;
+  const originalSize = file.size;
+  console.log('💾 Storing original metadata:', { name: originalName, size: originalSize });
+  
   try {
     const processedFile = await this.compressImage(file);
     console.log('✅ Image converted to JPEG successfully!');
@@ -841,6 +958,11 @@ async processImage(file: File): Promise<void> {
       );
       return;
     }
+    
+    // ✅ NEW: Attach original metadata to the compressed file
+    (processedFile as any).originalName = originalName;
+    (processedFile as any).originalSize = originalSize;
+    console.log('✅ Attached original metadata to compressed file');
     
     // Create preview URL
     console.log('🖼️ Creating preview URL...');
