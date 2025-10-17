@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, inject, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, ViewChild, ElementRef, AfterViewInit, HostListener, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
@@ -19,6 +19,8 @@ import { TemplateGenerationService, GenerationMessage } from '../../../../core/s
 import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
+
+import { CanComponentDeactivate } from '../../../../core/guards/can-deactivate.guard';
 
 // Image upload interfaces
 interface ImageAttachment {
@@ -46,13 +48,16 @@ interface ImageAttachment {
   templateUrl: './generate-page.component.html',
   styleUrls: ['./generate-page.component.scss'],
 })
-export class GeneratePageComponent implements OnInit, OnDestroy {
+export class GeneratePageComponent implements OnInit, OnDestroy, AfterViewInit, CanComponentDeactivate {
   private generationService = inject(TemplateGenerationService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private snackBar = inject(MatSnackBar);
   private destroy$ = new Subject<void>();
   private previewCache = inject(PreviewCacheService);
+  private scrollAnimation: number | null = null;
+
+  private cdr = inject(ChangeDetectorRef);
 
   viewMode: 'desktop' | 'tablet' | 'mobile' = 'desktop';
 
@@ -79,6 +84,7 @@ export class GeneratePageComponent implements OnInit, OnDestroy {
   // Scroll state
   private shouldAutoScroll = true;
 
+
     ngOnInit(): void {
     this.templateName = 'Generated Template';
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
@@ -95,6 +101,47 @@ export class GeneratePageComponent implements OnInit, OnDestroy {
   changeViewMode(mode: 'desktop' | 'tablet' | 'mobile'): void {
     this.viewMode = mode;
   }
+  ngAfterViewInit() {
+  setTimeout(() => {
+    try {
+      const chatElement = this.messagesContainer?.nativeElement;
+      if (chatElement) {
+        chatElement.addEventListener('wheel', () => {
+          if (this.scrollAnimation) {
+            cancelAnimationFrame(this.scrollAnimation);
+            this.scrollAnimation = null;
+          }
+        });
+        
+        chatElement.addEventListener('touchmove', () => {
+          if (this.scrollAnimation) {
+            cancelAnimationFrame(this.scrollAnimation);
+            this.scrollAnimation = null;
+          }
+        });
+      }
+
+      window.scrollTo(0, 0);
+      this.positionChatAtBottom();
+    } catch (error) {
+      console.error('Error in ngAfterViewInit:', error);
+    }
+  }, 0);
+}
+
+private positionChatAtBottom(): void {
+  setTimeout(() => {
+    const element = this.messagesContainer?.nativeElement;
+    if (element && element.scrollHeight > 0) {
+      element.style.scrollBehavior = 'auto'; // No animation on initial load
+      element.scrollTop = element.scrollHeight;
+      
+      setTimeout(() => {
+        element.style.scrollBehavior = 'smooth'; // Enable smooth scroll after
+      }, 50);
+    }
+  }, 50);
+}
 
   ngOnDestroy(): void {
     this.destroy$.next();
@@ -103,6 +150,42 @@ export class GeneratePageComponent implements OnInit, OnDestroy {
     this.currentHtml$.complete();
     this.isGenerating$.complete();
   }
+
+  /**
+ * Handle page refresh (F5) - Show browser confirmation dialog
+ */
+@HostListener('window:beforeunload', ['$event'])
+handleBeforeUnload(event: BeforeUnloadEvent): void {
+  if (this.isGenerating$.value) {
+    const message = '⚠️ Your template is still being generated and will be lost if you leave.';
+    event.preventDefault();
+    event.returnValue = message;
+    return;
+  }
+}
+/**
+ * Handle navigation away - Show custom confirmation
+ */
+canDeactivate(): boolean {
+  // Allow navigation if not generating
+  if (!this.isGenerating$.value) {
+    return true;
+  }
+
+  // Show confirmation dialog
+  const confirmed = confirm(
+    '⚠️ Your template is still being generated and will be lost if you leave.\n\n' +
+    'Are you sure you want to leave? All progress will be lost.'
+  );
+
+  if (confirmed) {
+    // Clean up if user confirms
+    this.isGenerating$.next(false);
+    console.log('🧹 Template generation cancelled by user navigation');
+  }
+
+  return confirmed;
+}
 
   private initializeWelcome(): void {
     // Show welcome message
@@ -586,16 +669,55 @@ onSaveTemplate(): void {
     console.log('Preview refreshed');
   }
 
-  private scrollToBottom(): void {
-    if (!this.shouldAutoScroll) return;
+private scrollToBottom(): void {
+  // Multiple attempts to ensure we catch the final height
+  setTimeout(() => {
+    const element = this.messagesContainer?.nativeElement;
+    if (element) {
+      this.smoothScrollTo(element.scrollHeight);
+      
+      // Second attempt after render is definitely complete
+      setTimeout(() => {
+        if (element) {
+          this.smoothScrollTo(element.scrollHeight);
+        }
+      }, 50);
+    }
+  }, 100);
+}
 
-    setTimeout(() => {
-      if (this.messagesContainer) {
-        const container = this.messagesContainer.nativeElement;
-        container.scrollTop = container.scrollHeight;
-      }
-    }, 100);
+private smoothScrollTo(targetPosition: number): void {
+  const element = this.messagesContainer?.nativeElement;
+  if (!element) return;
+
+  if (this.scrollAnimation) {
+    cancelAnimationFrame(this.scrollAnimation);
   }
+
+  const startPosition = element.scrollTop;
+  const distance = targetPosition - startPosition;
+  const duration = 400; // ← Reduced from 800ms to 400ms
+  let startTime: number | null = null;
+
+  const animateScroll = (currentTime: number) => {
+    if (startTime === null) startTime = currentTime;
+    const timeElapsed = currentTime - startTime;
+    const progress = Math.min(timeElapsed / duration, 1);
+
+    // ✅ Better easing: ease-out (fast start, slow end)
+    const ease = 1 - Math.pow(1 - progress, 3);
+
+    element.scrollTop = startPosition + distance * ease;
+
+    if (progress < 1) {
+      this.scrollAnimation = requestAnimationFrame(animateScroll);
+    } else {
+      this.scrollAnimation = null;
+    }
+  };
+
+  this.scrollAnimation = requestAnimationFrame(animateScroll);
+}
 
   onScroll(event: Event): void {
     const element = event.target as HTMLElement;

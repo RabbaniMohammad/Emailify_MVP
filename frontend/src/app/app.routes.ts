@@ -10,6 +10,8 @@ import { adminGuard } from './app/core/guards/admin.guard';
 import { qaDeactivateGuard } from './app/core/guards/qa-deactivate.guard';
 import { VisualEditorComponent } from '../app/app/features/visual-editor/visual-editor.component';
 
+import { CanDeactivateGuard } from './app/core/guards/can-deactivate.guard';
+
 export const routes: Routes = [
   // Public routes
   { path: 'auth', component: AuthPageComponent },
@@ -17,16 +19,18 @@ export const routes: Routes = [
   { path: 'auth/pending', component: PendingApprovalComponent },
 
   // Generate Template routes (add after auth routes, before admin routes)
-  { 
-    path: 'generate', 
-    component: GeneratePageComponent,
-    canActivate: [authGuard]
-  },
-  { 
-    path: 'generate/:conversationId', 
-    component: GeneratePageComponent,
-    canActivate: [authGuard]
-  },
+{ 
+  path: 'generate', 
+  component: GeneratePageComponent,
+  canActivate: [authGuard],
+  canDeactivate: [CanDeactivateGuard]  // ← ADD this line
+},
+{ 
+  path: 'generate/:conversationId', 
+  component: GeneratePageComponent,
+  canActivate: [authGuard],
+  canDeactivate: [CanDeactivateGuard]  // ← ADD this line
+},
   
   // Admin routes (super_admin and admin only)
   {
