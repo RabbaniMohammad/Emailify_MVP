@@ -197,62 +197,84 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private loadGoldenHtml(templateId: string): void {
-    const goldenKey = `visual_editor_${templateId}_golden_html`;
-    const goldenHtml = sessionStorage.getItem(goldenKey);
-    
-    if (!goldenHtml) {
-      alert('No template data found. Please generate golden template first.');
-      this.router.navigate(['/qa', templateId]);
-      return;
-    }
-    
+private loadGoldenHtml(templateId: string): void {
+  // Try to get golden HTML from sessionStorage (set by QA page)
+  const goldenKey = `visual_editor_${templateId}_golden_html`;
+  const goldenHtml = sessionStorage.getItem(goldenKey);
+  
+  if (goldenHtml) {
+    // ✅ SCENARIO 1: Coming from QA page
+    // - Golden HTML exists in sessionStorage
+    // - Load it into editor
+    // - Failed edits widget will show (if failed edits exist)
+    console.log('✅ Loaded golden HTML from sessionStorage (QA page flow)');
     this.originalGoldenHtml = goldenHtml;
+  } else {
+    // ✅ SCENARIO 2: Direct access from navbar
+    // - No golden HTML in sessionStorage
+    // - Start with fresh/empty editor
+    // - No failed edits widget (no data to show)
+    console.log('🆕 Starting fresh editor (direct access from navbar)');
+    this.originalGoldenHtml = '';
   }
+  
+  // NO alert, NO redirect - just continue loading!
+  // The editor will handle both cases in initGrapesJS()
+}
 
-  private initGrapesJS(): void {
-    try {
-      this.editor = grapesjs.init({
-        container: '#gjs',
-        fromElement: false,
-        height: 'calc(100vh - 80px)',
-        width: '100%',
-        storageManager: false,
-        plugins: [grapesjsPresetNewsletter],
-        pluginsOpts: {
-          'grapesjs-preset-newsletter': {
-            modalLabelImport: 'Paste HTML',
-            modalLabelExport: 'Copy HTML',
-            codeViewerTheme: 'material',
-            importPlaceholder: '<table>...</table>'
-          }
+private initGrapesJS(): void {
+  try {
+    this.editor = grapesjs.init({
+      container: '#gjs',
+      fromElement: false,
+      height: 'calc(100vh - 80px)',
+      width: '100%',
+      storageManager: false,
+      plugins: [grapesjsPresetNewsletter],
+      pluginsOpts: {
+        'grapesjs-preset-newsletter': {
+          modalLabelImport: 'Paste HTML',
+          modalLabelExport: 'Copy HTML',
+          codeViewerTheme: 'material',
+          importPlaceholder: '<table>...</table>'
         }
-      });
+      }
+    });
 
-      this.editor.on('load', () => {
-        this.setupCodeEditor();
-        
-        if (this.originalGoldenHtml) {
-          try {
-            this.editor.setComponents(this.originalGoldenHtml);
-          } catch (error) {
-            this.restoreProgress();
-          }
-        } else {
-          this.restoreProgress();
+    this.editor.on('load', () => {
+      this.setupCodeEditor();
+      
+      // ✅ CASE 1: From QA page with golden HTML
+      if (this.originalGoldenHtml) {
+        try {
+          console.log('✅ Loading golden HTML from QA page');
+          this.editor.setComponents(this.originalGoldenHtml);
+        } catch (error) {
+          console.error('Failed to load golden HTML:', error);
         }
-        
-        this.loading = false;
-      });
+      } 
+      // ✅ CASE 2: Has template ID but no golden HTML - restore progress
+      else if (this.templateId) {
+        console.log('🔄 Restoring progress for template:', this.templateId);
+        this.restoreProgress();
+      }
+      // ✅ CASE 3: No template ID - FRESH EDITOR (do nothing)
+      else {
+        console.log('🆕 Starting fresh editor - no content loaded');
+      }
       
-      this.editor.on('update', () => {
-        this.autoSave();
-      });
-      
-    } catch (error) {
       this.loading = false;
-    }
+    });
+    
+    this.editor.on('update', () => {
+      this.autoSave();
+    });
+    
+  } catch (error) {
+    console.error('Failed to initialize GrapesJS:', error);
+    this.loading = false;
   }
+}
 
   private setupCodeEditor(): void {
     try {

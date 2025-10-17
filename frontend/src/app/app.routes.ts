@@ -59,12 +59,17 @@ export const routes: Routes = [
     canDeactivate: [qaDeactivateGuard]
   },
   
-  // 🆕 FIXED: Visual Editor route with :id parameter
-  {
-    path: 'visual-editor/:id',
-    component: VisualEditorComponent,
-    canActivate: [authGuard]
-  },
+// ✅ Visual Editor routes - ADD BOTH
+{
+  path: 'visual-editor',
+  component: VisualEditorComponent,
+  canActivate: [authGuard]
+},
+{
+  path: 'visual-editor/:id',
+  component: VisualEditorComponent,
+  canActivate: [authGuard]
+},
   
   // Wildcard
   { path: '**', redirectTo: '' },

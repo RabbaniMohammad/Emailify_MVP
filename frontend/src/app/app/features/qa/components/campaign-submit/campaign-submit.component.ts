@@ -46,6 +46,7 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private qa = inject(QaService);
   private ar = inject(ActivatedRoute);
+  private currentSelectedSubject: string | null = null;
 
   // Form Controls
   subjectControl = new FormControl<string>('', {
@@ -165,8 +166,27 @@ ngOnInit(): void {
       this.cdr.markForCheck();
     });
 
-  // ✅ REMOVE: Don't load cached subjects on init
-  // Let user explicitly trigger generation
+  // ✅ NEW: Watch for manual input clearing
+  this.subjectControl.valueChanges
+    .pipe(takeUntil(this.destroy$))
+    .subscribe(value => {
+      const trimmedValue = value.trim();
+      
+      // If input is now empty AND we had a selected subject
+      if (!trimmedValue && this.currentSelectedSubject) {
+        console.log('🔙 Input cleared, restoring subject to list:', this.currentSelectedSubject);
+        
+        const subjects = this.subjectsSubject.value || [];
+        
+        // Add the previous subject back to the list
+        this.subjectsSubject.next([...subjects, this.currentSelectedSubject]);
+        
+        // Clear tracking
+        this.currentSelectedSubject = null;
+        
+        this.cdr.markForCheck();
+      }
+    });
 }
 
   ngOnDestroy(): void {
@@ -341,6 +361,9 @@ onSelectSubject(selectedSubject: string): void {
     console.log('  Removing from list (first selection)');
     newSubjects.splice(clickedIndex, 1);
   }
+  
+  // ✅ Track the newly selected subject
+  this.currentSelectedSubject = selectedSubject;
   
   // Update form control with selected subject
   this.subjectControl.setValue(selectedSubject);
