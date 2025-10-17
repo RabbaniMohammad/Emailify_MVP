@@ -291,8 +291,53 @@ constructor() {
 
   // Subscribe to runId changes
   this.runId$.subscribe(async (runId) => {
-    // ... rest of existing runId subscription code stays the same
     const no = Number(this.ar.snapshot.paramMap.get('no')!);
+
+    // ✅ PRIORITY 0: Check for return from visual editor FIRST (before anything else!)
+    const returnKey = `visual_editor_return_use_variant`;
+    const returnFlag = sessionStorage.getItem(returnKey);
+
+    if (returnFlag === 'true') {
+      const editedKey = `visual_editor_edited_html`;
+      const editedHtml = sessionStorage.getItem(editedKey);
+      
+      if (editedHtml) {
+        console.log('🔙 Returned from visual editor with updated HTML');
+        
+        // Update HTML
+        this.htmlSubject.next(editedHtml);
+        
+        // Update chat thread
+        const messages = this.messagesSubject.value;
+        const thread: ChatThread = { html: editedHtml, messages };
+        this.qa.saveChat(runId, no, thread);
+        
+        // Clear grammar check (force re-check)
+        this.grammarCheckResultSubject.next(null);
+        this.qa.clearGrammarCheck(runId, no);
+        
+        // ✅ CLOSE template modal
+        this.templateModalOpenSubject.next(false);
+        this.saveTemplateModalState(false);
+        document.body.style.overflow = 'auto';
+        
+        // Cleanup
+        sessionStorage.removeItem(returnKey);
+        sessionStorage.removeItem(editedKey);
+        
+        // Stop loading
+        this.loadingVariant = false;
+        if (this.loadingTimeout) {
+          clearTimeout(this.loadingTimeout);
+          this.loadingTimeout = undefined;
+        }
+        
+        this.cdr.markForCheck();
+        
+        // ✅ CRITICAL: Return early - don't run priority checks
+        return;
+      }
+    }
 
     try {
       console.log('📄 Loading variant data for runId:', runId, 'no:', no);
@@ -345,83 +390,81 @@ constructor() {
       }
 
       // ✅ PRIORITY 2: Check localStorage cache (persists across refresh)
-// ✅ PRIORITY 2: Check localStorage cache (persists across refresh)
-// ✅ PRIORITY 2: Check localStorage cache (persists across refresh)
-const cachedThread = this.qa.getChatCached(runId, no);
-if (cachedThread?.html) {
-  console.log('✅ Restored from localStorage cache');
-  this.htmlSubject.next(cachedThread.html);
-  this.messagesSubject.next(cachedThread.messages || []);
-  this.snapsSubject.next(this.qa.getSnapsCached(runId));
-  
-  // ✅ RESTORE GRAMMAR CHECK RESULTS
-  const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
-  if (cachedGrammar) {
-    console.log('✅ Restored grammar check from localStorage');
-    this.grammarCheckResultSubject.next(cachedGrammar);
-  }
-  
-  // ✅ RESTORE SUBJECT GENERATION RESULTS
-const cachedSubjects = this.qa.getSubjectsCached(runId);
-if (cachedSubjects?.length) {
-  console.log('✅ Restored subjects from localStorage');
-  this.subjectsSubject.next(cachedSubjects);
-  this.subjectsLoading = false;
-}
+      const cachedThread = this.qa.getChatCached(runId, no);
+      if (cachedThread?.html) {
+        console.log('✅ Restored from localStorage cache');
+        this.htmlSubject.next(cachedThread.html);
+        this.messagesSubject.next(cachedThread.messages || []);
+        this.snapsSubject.next(this.qa.getSnapsCached(runId));
+        
+        // ✅ RESTORE GRAMMAR CHECK RESULTS
+        const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
+        if (cachedGrammar) {
+          console.log('✅ Restored grammar check from localStorage');
+          this.grammarCheckResultSubject.next(cachedGrammar);
+        }
+        
+        // ✅ RESTORE SUBJECT GENERATION RESULTS
+        const cachedSubjects = this.qa.getSubjectsCached(runId);
+        if (cachedSubjects?.length) {
+          console.log('✅ Restored subjects from localStorage');
+          this.subjectsSubject.next(cachedSubjects);
+          this.subjectsLoading = false;
+        }
 
-  this.loadingVariant = false;
-  if (this.loadingTimeout) {
-    clearTimeout(this.loadingTimeout);
-    this.loadingTimeout = undefined;
-  }
-  this.cdr.markForCheck();
-  this.positionChatAtBottom();
-  return;
-}
+        this.loadingVariant = false;
+        if (this.loadingTimeout) {
+          clearTimeout(this.loadingTimeout);
+          this.loadingTimeout = undefined;
+        }
+        this.cdr.markForCheck();
+        this.positionChatAtBottom();
+        return;
+      }
 
       // ✅ PRIORITY 3: Check memory cache (variants run)
-const run = this.qa.getVariantsRunById(runId);
-const item = run?.items?.find(it => it.no === no) || null;
-if (item?.html) {
-  console.log('✅ Using variants run from cache');
-  this.htmlSubject.next(item.html);
+      const run = this.qa.getVariantsRunById(runId);
+      const item = run?.items?.find(it => it.no === no) || null;
+      if (item?.html) {
+        console.log('✅ Using variants run from cache');
+        this.htmlSubject.next(item.html);
 
-  const intro: ChatTurn = {
-    role: 'assistant',
-    text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n•Please use editor is replacement won't happen\n\nWhat would you like to improve?",
-    json: null,
-    ts: Date.now(),
-  };
-  const thread: ChatThread = { html: item.html, messages: [intro] };
-  this.messagesSubject.next(thread.messages);
-  
-  // ✅ SAVE TO localStorage
-  this.qa.saveChat(runId, no, thread);
-  
-  this.snapsSubject.next(this.qa.getSnapsCached(runId));
+        const intro: ChatTurn = {
+          role: 'assistant',
+          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n•Please use editor is replacement won't happen\n\nWhat would you like to improve?",
+          json: null,
+          ts: Date.now(),
+        };
+        const thread: ChatThread = { html: item.html, messages: [intro] };
+        this.messagesSubject.next(thread.messages);
+        
+        // ✅ SAVE TO localStorage
+        this.qa.saveChat(runId, no, thread);
+        
+        this.snapsSubject.next(this.qa.getSnapsCached(runId));
 
-    // 👉 ADD SUBJECT CODE HERE TOO 👈
-  const cachedSubjects = this.qa.getSubjectsCached(runId);
-  if (cachedSubjects?.length) {
-    this.subjectsSubject.next(cachedSubjects);
-    this.subjectsLoading = false;
-  }
-  
-  // ✅ ADD THESE 4 LINES HERE (BEFORE loadingVariant = false)
-  const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
-  if (cachedGrammar) {
-    this.grammarCheckResultSubject.next(cachedGrammar);
-  }
-  
-  this.loadingVariant = false;
-  if (this.loadingTimeout) {
-    clearTimeout(this.loadingTimeout);
-    this.loadingTimeout = undefined;
-  }
-  this.cdr.markForCheck();
-  this.positionChatAtBottom();
-  return;
-}
+        // ✅ RESTORE SUBJECT GENERATION RESULTS
+        const cachedSubjects = this.qa.getSubjectsCached(runId);
+        if (cachedSubjects?.length) {
+          this.subjectsSubject.next(cachedSubjects);
+          this.subjectsLoading = false;
+        }
+        
+        // ✅ RESTORE GRAMMAR CHECK RESULTS
+        const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
+        if (cachedGrammar) {
+          this.grammarCheckResultSubject.next(cachedGrammar);
+        }
+        
+        this.loadingVariant = false;
+        if (this.loadingTimeout) {
+          clearTimeout(this.loadingTimeout);
+          this.loadingTimeout = undefined;
+        }
+        this.cdr.markForCheck();
+        this.positionChatAtBottom();
+        return;
+      }
 
       // ✅ PRIORITY 4: Fallback to API
       try {
@@ -475,16 +518,15 @@ if (item?.html) {
       this.cdr.markForCheck();
       this.positionChatAtBottom();
     }
+    
+    // ✅ Handle modal overflow states
+    if (this.templateModalOpenSubject.value) {
+      document.body.style.overflow = 'hidden';
+    }
+    if (this.campaignModalOpenSubject.value) {
+      document.body.style.overflow = 'hidden';
+    }
   });
-  
-  // ✅ Handle modal overflow states
-  if (this.templateModalOpenSubject.value) {
-    document.body.style.overflow = 'hidden';
-  }
-  if (this.campaignModalOpenSubject.value) {
-    document.body.style.overflow = 'hidden';
-  }
-  
 }
 
 
@@ -1294,6 +1336,68 @@ private getSnapKey(snap: SnapResult): string {
       this.onSend();
     }
   }
+
+  /**
+ * Navigate to Visual Editor with grammar mistakes
+ */
+navigateToVisualEditorWithGrammar(): void {
+  const templateId = this.ar.snapshot.paramMap.get('id');
+  const runId = this.ar.snapshot.paramMap.get('runId');
+  const no = this.ar.snapshot.paramMap.get('no');
+  
+  if (!templateId || !runId || !no) {
+    alert('Missing required parameters');
+    return;
+  }
+  
+  const html = this.htmlSubject.value;
+  if (!html) {
+    alert('No template HTML found');
+    return;
+  }
+  
+  const grammarResult = this.grammarCheckResultSubject.value;
+  if (!grammarResult || !grammarResult.hasErrors) {
+    alert('No grammar errors to fix');
+    return;
+  }
+  
+  // ✅ Save template HTML for editing
+  const htmlKey = `visual_editor_${templateId}_golden_html`;
+  sessionStorage.setItem(htmlKey, html);
+  
+  // ✅ Save snapshot for comparison
+  const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
+  sessionStorage.setItem(snapshotKey, html);
+  
+  // ✅ Set editing mode to "use-variant"
+  const modeKey = `visual_editor_${templateId}_editing_mode`;
+  sessionStorage.setItem(modeKey, 'use-variant');
+  
+  // ✅ Save use-variant metadata for return
+  const metaKey = `visual_editor_${templateId}_use_variant_meta`;
+  sessionStorage.setItem(metaKey, JSON.stringify({ runId, no }));
+  
+  // ✅ Convert grammar mistakes to failed edits format
+  const failedEdits = grammarResult.mistakes.map(mistake => ({
+    find: mistake.word,
+    replace: mistake.suggestion,
+    before_context: '',
+    after_context: '',
+    reason: `Context: ${mistake.context}`,
+    status: 'not_found',
+    diagnostics: {}
+  }));
+  
+  // ✅ Save as failed edits for widget
+  const failedKey = `visual_editor_${templateId}_failed_edits`;
+  sessionStorage.setItem(failedKey, JSON.stringify(failedEdits));
+  
+  console.log('📝 Navigating to visual editor with grammar errors');
+  
+  // Navigate
+  this.router.navigate(['/visual-editor', templateId]);
+}
 
 async onValidLinksUpload(e: Event) {
   const input = e.target as HTMLInputElement;

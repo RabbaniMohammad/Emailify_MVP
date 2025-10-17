@@ -813,21 +813,59 @@ private initGrapesJS(): void {
   /**
    * Check preview and go back to QA page
    */
-  onCheckPreview(): void {
-    if (!this.editor) {
-      alert('Editor not initialized');
+onCheckPreview(): void {
+  if (!this.editor) {
+    alert('Editor not initialized');
+    return;
+  }
+  
+  if (!this.templateId) {
+    alert('Template ID not found');
+    return;
+  }
+  
+  const html = this.editor.getHtml();
+  const css = this.editor.getCss();
+  const fullHtml = `<style>${css}</style>${html}`;
+  
+  // ✅ Check editing mode
+  const modeKey = `visual_editor_${this.templateId}_editing_mode`;
+  const editingMode = sessionStorage.getItem(modeKey);
+  
+  console.log('🎯 Check Preview - Mode:', editingMode);
+  
+  if (editingMode === 'use-variant') {
+    // ✅ RETURNING TO USE-VARIANT PAGE
+    const metaKey = `visual_editor_${this.templateId}_use_variant_meta`;
+    const metaJson = sessionStorage.getItem(metaKey);
+    
+    if (!metaJson) {
+      alert('Use-variant metadata not found');
       return;
     }
     
-    if (!this.templateId) {
-      alert('Template ID not found');
-      return;
-    }
+    const meta = JSON.parse(metaJson);
+    const { runId, no } = meta;
     
-    const html = this.editor.getHtml();
-    const css = this.editor.getCss();
-    const fullHtml = `<style>${css}</style>${html}`;
+    // Save edited HTML
+    const editedKey = `visual_editor_edited_html`;
+    sessionStorage.setItem(editedKey, fullHtml);
     
+    // Set return flag
+    const returnKey = `visual_editor_return_use_variant`;
+    sessionStorage.setItem(returnKey, 'true');
+    
+    // Cleanup
+    sessionStorage.removeItem(modeKey);
+    sessionStorage.removeItem(metaKey);
+    
+    this.autoSave();
+    
+    // Navigate back
+    this.router.navigate(['/qa', this.templateId, 'use', runId, no]);
+    
+  } else {
+    // ✅ EXISTING LOGIC: Golden template flow
     const editedKey = `visual_editor_${this.templateId}_edited_html`;
     sessionStorage.setItem(editedKey, fullHtml);
     
@@ -837,6 +875,7 @@ private initGrapesJS(): void {
     this.autoSave();
     this.router.navigate(['/qa', this.templateId]);
   }
+}
 
   /**
    * Simple toast (NO animations)
