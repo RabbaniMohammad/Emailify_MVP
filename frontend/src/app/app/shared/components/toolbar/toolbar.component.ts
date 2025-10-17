@@ -57,6 +57,8 @@ export class ToolbarComponent implements OnInit, OnDestroy {
 
 
 ngOnInit(): void {
+  console.log('🚀 [ngOnInit] ========== COMPONENT INITIALIZATION ==========');
+  console.log('🚀 [ngOnInit] Current URL:', this.router.url);
   
   // ✅ RESTORE navigation history from sessionStorage
   this.restoreNavigationHistory();
@@ -72,18 +74,37 @@ ngOnInit(): void {
     // Check if current URL matches the stored index
     if (this.navigationHistory[this.currentIndex] !== currentUrl) {
       console.warn('⚠️ [ngOnInit] URL mismatch detected!');
+      console.warn('   Expected:', this.navigationHistory[this.currentIndex]);
+      console.warn('   Actual:', currentUrl);
       
-      // Check if currentUrl exists elsewhere in history
-      const existingIndex = this.navigationHistory.indexOf(currentUrl);
-      if (existingIndex !== -1) {
-        this.currentIndex = existingIndex;
+      // ✅ FIX: Check if this is a temporary redirect during page load
+      const isCommonRoute = currentUrl === '/' || currentUrl === '/auth' || currentUrl === '';
+      const savedRoute = this.navigationHistory[this.currentIndex];
+      const isComplexRoute = savedRoute && savedRoute.length > 5; // Complex routes are longer
+      
+      if (isCommonRoute && isComplexRoute) {
+        // This is likely a temporary redirect during refresh - TRUST the saved index
+        console.log('🔄 [ngOnInit] Temporary redirect detected - keeping saved index');
+        console.log('   Saved route:', savedRoute);
+        console.log('   Current route:', currentUrl);
+        console.log('   ✅ Trusting saved history, waiting for final navigation...');
+        // Don't change currentIndex - keep it as restored from sessionStorage
       } else {
-        // Add current page to history
-        this.currentIndex++;
-        this.navigationHistory = this.navigationHistory.slice(0, this.currentIndex);
-        this.navigationHistory.push(currentUrl);
+        // Normal navigation - search for the URL
+        const existingIndex = this.navigationHistory.lastIndexOf(currentUrl);
+        if (existingIndex !== -1) {
+          console.log('✅ [ngOnInit] Found URL at index', existingIndex, '- restoring position');
+          this.currentIndex = existingIndex;
+        } else {
+          console.log('🆕 [ngOnInit] URL not in history - adding new entry');
+          // Add current page to history
+          this.currentIndex++;
+          this.navigationHistory = this.navigationHistory.slice(0, this.currentIndex);
+          this.navigationHistory.push(currentUrl);
+        }
       }
     } else {
+      console.log('✅ [ngOnInit] URL matches stored index - no adjustment needed');
     }
   }
   
@@ -91,99 +112,110 @@ ngOnInit(): void {
   this.updateNavigationState();
   this.saveNavigationHistory();
 
+  console.log('🚀 [ngOnInit] Final State After Initialization:');
+  console.log('   📚 History:', JSON.stringify(this.navigationHistory));
+  console.log('   📌 Index:', this.currentIndex);
+  console.log('   📍 Current URL:', currentUrl);
+  console.log('   ⬅️  Can Go Back:', this.canGoBack$.value);
+  console.log('   ➡️  Can Go Forward:', this.canGoForward$.value);
+  console.log('🚀 [ngOnInit] ========== INITIALIZATION COMPLETE ==========\n');
+  
   // ========================================
   // 🔥 CRITICAL: Listen to browser back/forward buttons
   // ========================================
-this.location.subscribe((event) => {
-  
-  // Only handle if not triggered by our custom navigation
-  if (!this.isNavigating) {
-    const newUrl = this.router.url;
+  this.location.subscribe((event) => {
+    console.log('🔙 [PopState] Browser back/forward detected');
     
-    // Try to find the URL in history
-    const foundIndex = this.navigationHistory.indexOf(newUrl);
-    
-    if (foundIndex !== -1) {
-
-      this.currentIndex = foundIndex;
-    } else {
-      console.warn('⚠️ [PopState] NOT FOUND - Adding:', newUrl, '| This might indicate the issue!');
-      this.navigationHistory.push(newUrl);
-      this.currentIndex = this.navigationHistory.length - 1;
+    // Only handle if not triggered by our custom navigation
+    if (!this.isNavigating) {
+      const newUrl = this.router.url;
+      console.log('📍 [PopState] New URL:', newUrl);
       
-      // Enforce max history
-      if (this.navigationHistory.length > this.MAX_HISTORY) {
-        this.navigationHistory.shift();
-        this.currentIndex--;
+      // ✅ FIX: Find the LAST occurrence (most recent visit)
+      const foundIndex = this.navigationHistory.lastIndexOf(newUrl);
+      
+      if (foundIndex !== -1) {
+        console.log('✅ [PopState] Found URL at index', foundIndex, '- updating position');
+        this.currentIndex = foundIndex;
+      } else {
+        console.warn('⚠️ [PopState] URL not found in history - adding:', newUrl);
+        this.navigationHistory.push(newUrl);
+        this.currentIndex = this.navigationHistory.length - 1;
+        
+        // Enforce max history
+        if (this.navigationHistory.length > this.MAX_HISTORY) {
+          this.navigationHistory.shift();
+          this.currentIndex--;
+        }
       }
+      
+      this.activeRoute$.next(newUrl);
+      this.updateNavigationState();
+      this.saveNavigationHistory();
+      
+      console.log('📊 [PopState] Updated - Index:', this.currentIndex, '| History length:', this.navigationHistory.length);
+    } else {
+      console.log('⏭️ [PopState] Skipped - triggered by custom navigation');
     }
-    
-    this.activeRoute$.next(newUrl);
-    this.updateNavigationState();
-    this.saveNavigationHistory();
-
-  }
-});
+  });
 
   // ========================================
   // Track Angular Router Navigation Events
   // ========================================
-
-this.router.events.pipe(
-  filter(event => 
-    event instanceof NavigationEnd || 
-    event instanceof NavigationCancel || 
-    event instanceof NavigationError
-  ),
-  takeUntil(this.destroy$)
-).subscribe((event: any) => {
-  
-  if (event instanceof NavigationEnd) {
-    const url = event.urlAfterRedirects;
+  this.router.events.pipe(
+    filter(event => 
+      event instanceof NavigationEnd || 
+      event instanceof NavigationCancel || 
+      event instanceof NavigationError
+    ),
+    takeUntil(this.destroy$)
+  ).subscribe((event: any) => {
     
-    // Only track if not from our custom navigation
-    if (!this.isNavigating) {
-
+    if (event instanceof NavigationEnd) {
+      const url = event.urlAfterRedirects;
       
-      this.activeRoute$.next(url);
-      
-      // Remove forward history when user navigates normally
-      if (this.currentIndex < this.navigationHistory.length - 1) {
-        const removed = this.navigationHistory.slice(this.currentIndex + 1);
-        this.navigationHistory = this.navigationHistory.slice(0, this.currentIndex + 1);
-      }
-      
-      // Don't add duplicate consecutive entries
-      const lastUrl = this.navigationHistory[this.currentIndex];
-      
-      if (lastUrl !== url) {
-        this.navigationHistory.push(url);
-        this.currentIndex = this.navigationHistory.length - 1;
+      // Only track if not from our custom navigation
+      if (!this.isNavigating) {
         
-        // Limit history size
-        if (this.navigationHistory.length > this.MAX_HISTORY) {
-          const removed = this.navigationHistory.shift();
-          this.currentIndex--;
+        this.activeRoute$.next(url);
+        
+        // Remove forward history when user navigates normally
+        if (this.currentIndex < this.navigationHistory.length - 1) {
+          const removed = this.navigationHistory.slice(this.currentIndex + 1);
+          this.navigationHistory = this.navigationHistory.slice(0, this.currentIndex + 1);
         }
+        
+        // Don't add duplicate consecutive entries
+        const lastUrl = this.navigationHistory[this.currentIndex];
+        
+        if (lastUrl !== url) {
+          this.navigationHistory.push(url);
+          this.currentIndex = this.navigationHistory.length - 1;
+          
+          // Limit history size
+          if (this.navigationHistory.length > this.MAX_HISTORY) {
+            const removed = this.navigationHistory.shift();
+            this.currentIndex--;
+          }
+        } 
+        
+        this.updateNavigationState();
+        this.saveNavigationHistory();
+        
       } 
-      
-      this.updateNavigationState();
-      this.saveNavigationHistory();
-      
     } 
-  } 
-  else if (event instanceof NavigationCancel) {
-    console.warn('🚫 [NavigationCancel] URL:', event.url, '| Reason:', event.reason);
-    if (this.isNavigating) {
-      this.isNavigating = false;
+    else if (event instanceof NavigationCancel) {
+      console.warn('🚫 [NavigationCancel] URL:', event.url, '| Reason:', event.reason);
+      if (this.isNavigating) {
+        this.isNavigating = false;
+      }
+    } 
+    else if (event instanceof NavigationError) {
+      if (this.isNavigating) {
+        this.isNavigating = false;
+      }
     }
-  } 
-  else if (event instanceof NavigationError) {
-    if (this.isNavigating) {
-      this.isNavigating = false;
-    }
-  }
-});
+  });
 
   // ========================================
   // Admin pending count polling
@@ -192,7 +224,6 @@ this.router.events.pipe(
     return;
   }
 
-  
   timer(0, 30000).pipe(
     startWith(0),
     switchMap(() => {
@@ -211,7 +242,6 @@ this.router.events.pipe(
     }
   });
 
-  
   this.adminEventService.refreshPendingCount
     .pipe(takeUntil(this.destroy$))
     .subscribe(() => {
@@ -223,7 +253,6 @@ this.router.events.pipe(
     .subscribe(() => {
       this.fetchPendingCount();
     });
-  
 }
 
   ngOnDestroy(): void {
@@ -234,66 +263,93 @@ this.router.events.pipe(
     this.canGoForward$.complete();
   }
 private restoreNavigationHistory(): void {
+  console.log('📂 [RESTORE] ========== RESTORING NAVIGATION HISTORY ==========');
   
   try {
     const savedHistory = sessionStorage.getItem(this.HISTORY_KEY);
     const savedIndex = sessionStorage.getItem(this.INDEX_KEY);
     
+    console.log('📂 [RESTORE] Raw data from sessionStorage:');
+    console.log('   📦 History exists:', !!savedHistory);
+    console.log('   📦 Index exists:', !!savedIndex);
     
     if (!savedHistory || !savedIndex) {
+      console.log('⚠️ [RESTORE] No saved data found - starting fresh');
+      console.log('📂 [RESTORE] ========== RESTORE COMPLETE (EMPTY) ==========\n');
       this.navigationHistory = [];
       this.currentIndex = -1;
       return;
     }
     
+    console.log('📂 [RESTORE] Found saved data:');
+    console.log('   📚 History JSON:', savedHistory);
+    console.log('   📌 Index string:', savedIndex);
     
     // Parse history array
     let parsedHistory: string[];
     try {
       parsedHistory = JSON.parse(savedHistory);
+      console.log('✅ [RESTORE] Successfully parsed history JSON');
     } catch (parseError) {
+      console.error('❌ [RESTORE] Invalid history JSON format:', parseError);
       throw new Error('Invalid history JSON format');
     }
     
     // Validate parsed history is an array
     if (!Array.isArray(parsedHistory)) {
+      console.error('❌ [RESTORE] History is not an array:', typeof parsedHistory);
       throw new Error('History is not an array');
     }
     
     // Validate array contains only strings
     const invalidEntries = parsedHistory.filter(entry => typeof entry !== 'string');
     if (invalidEntries.length > 0) {
+      console.error('❌ [RESTORE] History contains invalid entries:', invalidEntries);
       throw new Error('History contains invalid entries');
     }
     
     // Validate array is not empty
     if (parsedHistory.length === 0) {
+      console.log('⚠️ [RESTORE] History is empty - starting fresh');
+      console.log('📂 [RESTORE] ========== RESTORE COMPLETE (EMPTY) ==========\n');
       this.navigationHistory = [];
       this.currentIndex = -1;
       return;
     }
     
+    console.log('✅ [RESTORE] History validation passed');
+    console.log('   📊 History length:', parsedHistory.length);
+    console.log('   📚 History entries:', parsedHistory);
     
     // Parse index
     const parsedIndex = parseInt(savedIndex, 10);
     
     // Validate index is a valid number
     if (isNaN(parsedIndex)) {
+      console.error('❌ [RESTORE] Invalid index value:', savedIndex);
       throw new Error('Invalid index value');
     }
     
     // Validate index is within bounds
     if (parsedIndex < 0) {
+      console.error('❌ [RESTORE] Index is negative:', parsedIndex);
       throw new Error('Index is negative');
     }
     
     if (parsedIndex >= parsedHistory.length) {
+      console.error('❌ [RESTORE] Index out of bounds:', parsedIndex, '>=', parsedHistory.length);
       throw new Error('Index out of bounds');
     }
     
+    console.log('✅ [RESTORE] Index validation passed:', parsedIndex);
     
     // Check if MAX_HISTORY limit is exceeded
     if (parsedHistory.length > this.MAX_HISTORY) {
+      console.warn('⚠️ [RESTORE] History exceeds MAX_HISTORY limit');
+      console.warn('   - Current length:', parsedHistory.length);
+      console.warn('   - Max allowed:', this.MAX_HISTORY);
+      console.warn('   - Trimming...');
+      
       const startIndex = parsedHistory.length - this.MAX_HISTORY;
       parsedHistory = parsedHistory.slice(startIndex);
       
@@ -301,8 +357,10 @@ private restoreNavigationHistory(): void {
       const adjustedIndex = parsedIndex - startIndex;
       if (adjustedIndex >= 0 && adjustedIndex < parsedHistory.length) {
         this.currentIndex = adjustedIndex;
+        console.log('✅ [RESTORE] Adjusted index:', adjustedIndex);
       } else {
         this.currentIndex = parsedHistory.length - 1;
+        console.log('⚠️ [RESTORE] Index adjustment out of bounds - using last entry');
       }
     } else {
       this.currentIndex = parsedIndex;
@@ -311,33 +369,54 @@ private restoreNavigationHistory(): void {
     // All validations passed - restore the state
     this.navigationHistory = parsedHistory;
     
+    console.log('✅ [RESTORE] Successfully restored navigation history');
+    console.log('📂 [RESTORE] Restored State:');
+    console.log('   📚 History:', JSON.stringify(this.navigationHistory));
+    console.log('   📌 Index:', this.currentIndex);
+    console.log('   📍 URL at index:', this.navigationHistory[this.currentIndex]);
+    console.log('📂 [RESTORE] ========== RESTORE COMPLETE ==========\n');
     
   } catch (error) {
+    console.error('❌ [RESTORE] Restore failed:', error);
+    console.log('📂 [RESTORE] Falling back to empty history');
+    
     this.navigationHistory = [];
     this.currentIndex = -1;
     
     try {
       sessionStorage.removeItem(this.HISTORY_KEY);
       sessionStorage.removeItem(this.INDEX_KEY);
+      console.log('🧹 [RESTORE] Cleaned up corrupted sessionStorage');
     } catch (clearError) {
+      console.error('❌ [RESTORE] Failed to clean sessionStorage:', clearError);
     }
     
+    console.log('📂 [RESTORE] ========== RESTORE COMPLETE (FAILED) ==========\n');
   }
-  
 }
 
 private saveNavigationHistory(): void {
+  console.log('💾 [SAVE] ========== SAVING NAVIGATION HISTORY ==========');
+  console.log('💾 [SAVE] Current State BEFORE Save:');
+  console.log('   📚 History:', JSON.stringify(this.navigationHistory));
+  console.log('   📌 Index:', this.currentIndex);
+  console.log('   📍 Current URL:', this.router.url);
+  console.log('   ⬅️  Can Go Back:', this.canGoBack$.value);
+  console.log('   ➡️  Can Go Forward:', this.canGoForward$.value);
   
   // Validate state before saving
   if (this.currentIndex < -1) {
+    console.error('❌ [SAVE] Invalid index (< -1):', this.currentIndex);
     return;
   }
   
   if (this.currentIndex >= this.navigationHistory.length && this.navigationHistory.length > 0) {
+    console.error('❌ [SAVE] Index out of bounds:', this.currentIndex, '>=', this.navigationHistory.length);
     return;
   }
   
   if (!Array.isArray(this.navigationHistory)) {
+    console.error('❌ [SAVE] History is not an array!');
     return;
   }
   
@@ -346,17 +425,19 @@ private saveNavigationHistory(): void {
     const historyJson = JSON.stringify(this.navigationHistory);
     const indexString = String(this.currentIndex);
     
+    console.log('💾 [SAVE] Data to be saved:');
+    console.log('   📦 History JSON length:', historyJson.length, 'characters');
+    console.log('   📦 Index string:', indexString);
     
     // Estimate storage size
     const estimatedSize = historyJson.length + indexString.length;
     
     // Check if data seems too large (sessionStorage typical limit is 5-10MB)
     if (estimatedSize > 1024 * 1024) { // 1MB warning threshold
-      console.warn('⚠️ [saveNavigationHistory] Large data size detected!');
+      console.warn('⚠️ [SAVE] Large data size detected!');
       console.warn('   - Size:', (estimatedSize / 1024 / 1024).toFixed(2), 'MB');
       console.warn('   - This may cause issues with sessionStorage limits');
     }
-    
     
     // Save history
     sessionStorage.setItem(this.HISTORY_KEY, historyJson);
@@ -369,14 +450,18 @@ private saveNavigationHistory(): void {
     const verifyIndex = sessionStorage.getItem(this.INDEX_KEY);
     
     if (verifyHistory === historyJson && verifyIndex === indexString) {
+      console.log('✅ [SAVE] Successfully saved to sessionStorage');
+      console.log('✅ [SAVE] Verification passed');
     } else {
-      console.warn('⚠️ [saveNavigationHistory] Verification mismatch!');
+      console.warn('⚠️ [SAVE] Verification mismatch!');
       console.warn('   - History match:', verifyHistory === historyJson);
       console.warn('   - Index match:', verifyIndex === indexString);
     }
     
+    console.log('💾 [SAVE] ========== SAVE COMPLETE ==========\n');
     
   } catch (error) {
+    console.error('❌ [SAVE] Failed to save:', error);
     
     // Check for specific error types
     if (error instanceof Error) {
@@ -384,7 +469,7 @@ private saveNavigationHistory(): void {
       if (error.name === 'QuotaExceededError' || 
           error.message.includes('quota') || 
           error.message.includes('storage')) {
-        console.warn('💾 [saveNavigationHistory] SessionStorage QUOTA EXCEEDED!');
+        console.warn('💾 [SAVE] SessionStorage QUOTA EXCEEDED!');
         console.warn('   - History length:', this.navigationHistory.length);
         console.warn('   - Attempting to reduce history size...');
         
@@ -398,38 +483,24 @@ private saveNavigationHistory(): void {
           try {
             sessionStorage.setItem(this.HISTORY_KEY, JSON.stringify(this.navigationHistory));
             sessionStorage.setItem(this.INDEX_KEY, String(this.currentIndex));
+            console.log('✅ [SAVE] Successfully saved trimmed history');
           } catch (retryError) {
-            console.warn('❌ [saveNavigationHistory] Failed to save even trimmed history');
+            console.warn('❌ [SAVE] Failed to save even trimmed history');
           }
-        } else {
-          console.warn('   - History already minimal (≤10 entries), cannot trim further');
-          console.warn('   - SessionStorage may be full from other data');
         }
       }
       // Security/Permission error
       else if (error.name === 'SecurityError' || error.name === 'InvalidAccessError') {
-        console.warn('🔒 [saveNavigationHistory] SessionStorage ACCESS DENIED!');
+        console.warn('🔒 [SAVE] SessionStorage ACCESS DENIED!');
         console.warn('   - Possible reasons:');
         console.warn('     • Browser in private/incognito mode with strict settings');
         console.warn('     • SessionStorage disabled by browser settings');
-        console.warn('     • Third-party cookies/storage blocked');
-        console.warn('     • Browser security policy preventing access');
-        console.warn('   - Navigation will work but won\'t persist across refreshes');
-      }
-      // Other errors
-      else {
-        console.warn('❓ [saveNavigationHistory] Unknown error type');
-        console.warn('   - Consider implementing fallback storage mechanism');
       }
     }
     
-    console.warn('⚠️ [saveNavigationHistory] Navigation will continue to work in-memory');
-    console.warn('   - History will be lost on page refresh');
-    console.warn('   - Consider alternative storage if this persists');
+    console.log('💾 [SAVE] ========== SAVE FAILED ==========\n');
   }
-  
 }
-
 private clearNavigationHistory(): void {
   console.log('🧹 [clearNavigationHistory] Clearing | Had', this.navigationHistory.length, 'entries at index', this.currentIndex);
   
