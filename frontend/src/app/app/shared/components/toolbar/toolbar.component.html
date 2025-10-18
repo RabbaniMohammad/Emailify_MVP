@@ -29,7 +29,13 @@
       <div class="user-section" *ngIf="currentUser$ | async as user">
         <button class="user-menu-btn" [matMenuTriggerFor]="userMenu" #menuTrigger="matMenuTrigger">
           <div class="user-avatar">
-            <img *ngIf="user.picture" [src]="user.picture" [alt]="user.name" (error)="handleImageError($event, user.name)">
+            <img *ngIf="user.picture" 
+                 [src]="user.picture" 
+                 [alt]="user.name" 
+                 (error)="handleImageError($event, user.name)"
+                 loading="lazy"
+                 referrerpolicy="no-referrer"
+                 crossorigin="anonymous">
             <div *ngIf="!user.picture" class="avatar-initials">
               {{ getInitials(user.name) }}
             </div>

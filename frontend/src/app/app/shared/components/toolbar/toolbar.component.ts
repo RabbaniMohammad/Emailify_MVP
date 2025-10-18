@@ -785,9 +785,36 @@ goForward(): void {
     return this.getInitialsAvatar(user.name);
   }
 
+  private imageRetryCount = new Map<string, number>();
+  private readonly MAX_RETRIES = 2;
+
   handleImageError(event: Event, userName: string): void {
     const img = event.target as HTMLImageElement;
-    img.src = this.getInitialsAvatar(userName);
+    const originalSrc = img.src;
+    
+    // Get or initialize retry count for this image
+    const retryCount = this.imageRetryCount.get(originalSrc) || 0;
+    
+    console.log(`📸 Image load failed for ${userName}:`, originalSrc, `(attempt ${retryCount + 1}/${this.MAX_RETRIES + 1})`);
+    
+    // Try to reload the image up to MAX_RETRIES times
+    if (retryCount < this.MAX_RETRIES) {
+      this.imageRetryCount.set(originalSrc, retryCount + 1);
+      
+      // Add a cache-busting parameter and retry after a short delay
+      setTimeout(() => {
+        const timestamp = new Date().getTime();
+        const separator = originalSrc.includes('?') ? '&' : '?';
+        img.src = `${originalSrc}${separator}_retry=${timestamp}`;
+        console.log(`🔄 Retrying image load... (attempt ${retryCount + 2})`);
+      }, 500 * (retryCount + 1)); // Exponential backoff: 500ms, 1000ms
+      
+    } else {
+      // After max retries, fall back to initials avatar
+      console.log(`❌ Max retries reached. Falling back to initials for ${userName}`);
+      this.imageRetryCount.delete(originalSrc);
+      img.src = this.getInitialsAvatar(userName);
+    }
   }
 
   private getInitialsAvatar(name: string): string {
