@@ -644,125 +644,13 @@ private updateNavigationState(): void {
   }
 
 goBack(): void {
-  console.log('🔙 [goBack] Index:', this.currentIndex, '| History:', this.navigationHistory, '| canGoBack:', this.canGoBack$.value);
-  
-  if (!this.canGoBack()) {
-    console.warn('⚠️ [goBack] Cannot go back - at first entry');
-    return;
-  }
-  
-  const originalIndex = this.currentIndex;
-  const originalUrl = this.router.url;
-  
-  console.log('🔒 [goBack] Setting isNavigating=TRUE | Original:', originalIndex);
-  this.isNavigating = true;
-  
-  this.currentIndex--;
-  const previousUrl = this.navigationHistory[this.currentIndex];
-  
-  console.log('🎯 [goBack] Target:', previousUrl, '| New index:', this.currentIndex);
-  
-  // Safety checks
-  if (this.currentIndex < 0 || !previousUrl) {
-    console.error('❌ [goBack] Invalid state! Reverting');
-    this.currentIndex = originalIndex;
-    this.isNavigating = false;
-    return;
-  }
-  
-  const safetyTimeout = setTimeout(() => {
-    if (this.isNavigating) {
-      console.error('⏱️ [goBack] TIMEOUT - force reset');
-      this.currentIndex = originalIndex;
-      this.isNavigating = false;
-      this.updateNavigationState();
-    }
-  }, 5000);
-  
-  this.router.navigateByUrl(previousUrl)
-    .then((success) => {
-      clearTimeout(safetyTimeout);
-      console.log(success ? '✅' : '⚠️', '[goBack] Result:', success, '| Index:', this.currentIndex);
-      
-      if (success) {
-        this.activeRoute$.next(previousUrl);
-        this.updateNavigationState();
-        this.saveNavigationHistory();
-      } else {
-        console.warn('⚠️ [goBack] Navigation blocked - reverting');
-        this.currentIndex = originalIndex;
-        this.updateNavigationState();
-      }
-    })
-    .catch((error) => {
-      clearTimeout(safetyTimeout);
-      console.error('❌ [goBack] FAILED:', error?.message);
-      this.currentIndex = originalIndex;
-      this.updateNavigationState();
-    })
-    .finally(() => {
-      clearTimeout(safetyTimeout);
-      console.log('🔓 [goBack] isNavigating=FALSE | Final index:', this.currentIndex);
-      this.isNavigating = false;
-    });
+  // Use browser's native back - this always works correctly!
+  this.location.back();
 }
 
 goForward(): void {
-  console.log('➡️ [goForward] Index:', this.currentIndex, '→', this.currentIndex + 1, '| History length:', this.navigationHistory.length);
-  
-  if (!this.canGoForward()) {
-    console.warn('⚠️ [goForward] Cannot go forward - already at last entry');
-    return;
-  }
-  
-  const originalIndex = this.currentIndex;
-  const originalUrl = this.router.url;
-
-  this.isNavigating = true;
-  this.currentIndex++;
-  const nextUrl = this.navigationHistory[this.currentIndex];
-  
-  // Safety checks
-  if (this.currentIndex >= this.navigationHistory.length || !nextUrl) {
-    console.error('❌ [goForward] Invalid state - reverting');
-    this.currentIndex = originalIndex;
-    this.isNavigating = false;
-    return;
-  }
-  
-  const safetyTimeout = setTimeout(() => {
-    if (this.isNavigating) {
-      console.error('⏱️ [goForward] TIMEOUT');
-      this.currentIndex = originalIndex;
-      this.isNavigating = false;
-      this.updateNavigationState();
-    }
-  }, 5000);
-  
-  this.router.navigateByUrl(nextUrl)
-    .then((success) => {
-      clearTimeout(safetyTimeout);
-      
-      if (success) {
-        this.activeRoute$.next(nextUrl);
-        this.updateNavigationState();
-        this.saveNavigationHistory();
-      } else {
-        console.warn('⚠️ [goForward] Navigation blocked - reverting');
-        this.currentIndex = originalIndex;
-        this.updateNavigationState();
-      }
-    })
-    .catch((error) => {
-      clearTimeout(safetyTimeout);
-      console.error('❌ [goForward] Failed:', error?.message);
-      this.currentIndex = originalIndex;
-      this.updateNavigationState();
-    })
-    .finally(() => {
-      clearTimeout(safetyTimeout);
-      this.isNavigating = false;
-    });
+  // Use browser's native forward
+  this.location.forward();
 }
 
   isAdmin(): boolean {

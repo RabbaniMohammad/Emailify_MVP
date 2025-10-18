@@ -57,6 +57,10 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   loading = false;
   displayedColumns = ['picture', 'name', 'email', 'role', 'status', 'createdAt', 'actions'];
   
+  // Image retry logic
+  private imageRetryCount = new Map<string, number>();
+  private readonly MAX_RETRIES = 2;
+  
   private routerSub?: Subscription;
   private refreshSub?: Subscription;
   private navigationRefreshSub?: Subscription;
@@ -266,7 +270,25 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
 
   handleImageError(event: Event, userName: string): void {
     const img = event.target as HTMLImageElement;
-    img.src = this.getInitialsAvatar(userName);
+    const originalSrc = img.src.split('?')[0]; // Remove any query params for retry tracking
+    
+    // Get current retry count for this URL
+    const retryCount = this.imageRetryCount.get(originalSrc) || 0;
+    
+    if (retryCount < this.MAX_RETRIES) {
+      // Increment retry count
+      this.imageRetryCount.set(originalSrc, retryCount + 1);
+      
+      // Wait a bit before retrying (exponential backoff)
+      const delay = 500 * (retryCount + 1);
+      setTimeout(() => {
+        // Add cache-busting parameter to force reload
+        img.src = `${originalSrc}?_retry=${Date.now()}`;
+      }, delay);
+    } else {
+      // Max retries reached, fall back to initials avatar
+      img.src = this.getInitialsAvatar(userName);
+    }
   }
 
   private getInitialsAvatar(name: string): string {

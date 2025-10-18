@@ -12,7 +12,14 @@
       </div>
       <div class="header-actions" *ngIf="currentUser$ | async as currentUser">
         <div class="current-user">
-          <img [src]="getAvatarSrc(currentUser)" [alt]="currentUser.name" (error)="handleImageError($event, currentUser.name)" class="user-avatar">
+          <img 
+            [src]="getAvatarSrc(currentUser)" 
+            [alt]="currentUser.name" 
+            (error)="handleImageError($event, currentUser.name)" 
+            loading="lazy"
+            referrerpolicy="no-referrer"
+            crossorigin="anonymous"
+            class="user-avatar">
           <div class="user-info">
             <span class="user-name">{{ currentUser.name }}</span>
             <span class="user-role" [ngClass]="getRoleBadgeClass(currentUser.role)">
@@ -52,7 +59,14 @@
             <ng-container matColumnDef="picture">
               <th mat-header-cell *matHeaderCellDef></th>
               <td mat-cell *matCellDef="let user">
-                <img [src]="getAvatarSrc(user)" [alt]="user.name" (error)="handleImageError($event, user.name)" class="table-avatar">
+                <img 
+                  [src]="getAvatarSrc(user)" 
+                  [alt]="user.name" 
+                  (error)="handleImageError($event, user.name)" 
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                  crossorigin="anonymous"
+                  class="table-avatar">
               </td>
             </ng-container>
 
@@ -153,7 +167,14 @@
             <ng-container matColumnDef="picture">
               <th mat-header-cell *matHeaderCellDef></th>
               <td mat-cell *matCellDef="let user">
-                <img [src]="getAvatarSrc(user)" [alt]="user.name" (error)="handleImageError($event, user.name)" class="table-avatar">
+                <img 
+                  [src]="getAvatarSrc(user)" 
+                  [alt]="user.name" 
+                  (error)="handleImageError($event, user.name)" 
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                  crossorigin="anonymous"
+                  class="table-avatar">
               </td>
             </ng-container>
 
