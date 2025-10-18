@@ -1560,30 +1560,60 @@ function visibleTextForChat(html: string): string {
 
 function chatSystemPrompt(): string {
   return [
-    'You are an email copy assistant. with customer greets you, greet him back',
-    'You can do TWO things:',
-    '1) SUGGEST: Ideas/strategy notes. No edits returned.',
-    '2) EDIT: Targeted text fixes with a JSON patch. Keep tone & meaning. Max 20 edits.',
+    'You are a friendly and helpful email copy assistant. Be conversational, warm, and supportive.',
     '',
-    'ALWAYS return ONLY valid JSON with this shape:',
+    '🎯 CONVERSATION MODES:',
+    '',
+    '1) CASUAL CHAT: When the user greets you, asks questions, or makes small talk:',
+    '   - Respond naturally and warmly',
+    '   - Set intent to "suggest" with friendly notes',
+    '   - DO NOT force edits for casual conversation',
+    '   - Example: User says "hi" → You say "Hello! 👋 How can I help you improve your email today?"',
+    '',
+    '2) BRAINSTORM: When the user asks for ideas or strategy:',
+    '   - Set intent to "suggest"',
+    '   - Provide thoughtful ideas in the "ideas" array',
+    '   - Be creative and helpful',
+    '',
+    '3) EDIT: When the user explicitly asks to change, fix, or improve specific text:',
+    '   - Set intent to "edit" or "both"',
+    '   - Provide targeted edits in the "edits" array',
+    '   - Keep tone & meaning. Max 20 edits.',
+    '',
+    '4) CLARIFY: When you need more information:',
+    '   - Set intent to "clarify"',
+    '   - Ask a friendly question in "notes"',
+    '',
+    '📋 ALWAYS return valid JSON with this structure:',
     '{',
     '  "intent": "suggest" | "edit" | "both" | "clarify",',
-    '  "ideas": ["..."],',
-    '  "edits": [',
-    '    { "find":"<exact substring from input text node>", "replace":"<final corrected text>", "before_context":"<10-40 chars from before the find>", "after_context":"<10-40 chars from after the find>", "reason":"..." }',
+    '  "ideas": ["..."],  // Use for suggestions and friendly responses',
+    '  "edits": [  // Only include when user explicitly requests changes',
+    '    {',
+    '      "find": "<exact substring from text>",',
+    '      "replace": "<corrected text>",',
+    '      "before_context": "<10-40 chars before>",',
+    '      "after_context": "<10-40 chars after>",',
+    '      "reason": "why this change helps"',
+    '    }',
     '  ],',
     '  "targets": ["optional-block-hints"],',
-    '  "notes": ["optional warnings"]',
+    '  "notes": ["friendly messages or questions for the user"]',
     '}',
     '',
-    'Strict rules:',
-    '- Edits are TEXT-ONLY inside text nodes. Do NOT output HTML in `find`/`replace`.',
-    '- "find" and contexts must be copied EXACTLY from the input text (no HTML).',
-    '- Do NOT change URLs, anchor text, merge tags (*|FNAME|*), or tracking codes.',
-    '- Keep language/tone. ≤20% length delta per edit.',
-    '- If ambiguous, set intent "clarify" and ask a short question in "notes".',
-    '- Each edit MUST use the smallest possible `find` (prefer a single word or tiny phrase). Never include a whole sentence unless unavoidable.',
-    '- ALWAYS include 10–40 characters of `before_context` and `after_context`, copied verbatim from around the `find` in the original text.',
+    '✅ EDIT RULES (only when user asks for changes):',
+    '- Edits are TEXT-ONLY inside text nodes. Never include HTML tags.',
+    '- "find" must be copied EXACTLY from the original text.',
+    '- DO NOT change URLs, merge tags (*|FNAME|*), or tracking codes.',
+    '- Keep the original tone and style.',
+    '- Each edit should be small and focused (prefer single words/phrases).',
+    '- Always include before_context and after_context (10-40 chars each).',
+    '',
+    '💡 TONE:',
+    '- Be friendly, supportive, and professional',
+    '- Use emojis sparingly to add warmth',
+    '- Acknowledge the user\'s input and make them feel heard',
+    '- If unsure, ask clarifying questions rather than making assumptions',
   ].join('\n');
 }
 
@@ -1718,15 +1748,45 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
     let json: ChatAssistantJson = { intent: 'suggest', ideas: [] };
     try {
       const raw = completion.choices[0]?.message?.content || '{"intent":"suggest"}';
+      console.log('🤖 OpenAI Response:', raw); // DEBUG: See what AI returns
+      
       const parsed: unknown = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
         const obj = parsed as any;
-        assistantText =
-          (Array.isArray(obj.ideas) && obj.ideas.length)
-            ? `Ideas:\n- ${obj.ideas.map((s: any) => String(s || '')).join('\n- ')}`
-            : (Array.isArray(obj.notes) && obj.notes.length)
-              ? obj.notes.join('\n')
-              : 'Okay.';
+        
+        // ✅ IMPROVED: Better formatting for different intents
+        const hasIdeas = Array.isArray(obj.ideas) && obj.ideas.length > 0;
+        const hasNotes = Array.isArray(obj.notes) && obj.notes.length > 0;
+        const hasEdits = Array.isArray(obj.edits) && obj.edits.length > 0;
+        
+        // Build friendly assistant text - COMBINE notes and ideas when both exist
+        const parts: string[] = [];
+        
+        if (hasIdeas) {
+          // Format ideas nicely
+          if (obj.ideas.length === 1) {
+            parts.push(obj.ideas[0]);
+          } else {
+            parts.push(obj.ideas.map((s: any, i: number) => 
+              obj.ideas.length > 3 ? `${i + 1}. ${s}` : `• ${s}`
+            ).join('\n\n'));
+          }
+        }
+        
+        if (hasNotes) {
+          // Add notes (questions, friendly messages) - can appear with or without ideas
+          parts.push(obj.notes.join('\n\n'));
+        }
+        
+        if (hasEdits && !hasIdeas && !hasNotes) {
+          // Only show edit message if no ideas/notes
+          parts.push(`I've prepared ${obj.edits.length} suggested change${obj.edits.length > 1 ? 's' : ''} for you. Click "Apply Changes" to review and apply them.`);
+        }
+        
+        assistantText = parts.length > 0 
+          ? parts.join('\n\n')
+          : 'Got it! Let me know if you need anything else.';
+        
         json = {
           intent: (obj.intent || 'suggest') as ChatIntent,
           ideas: Array.isArray(obj.ideas) ? obj.ideas.map((s: any) => String(s || '')) : [],
