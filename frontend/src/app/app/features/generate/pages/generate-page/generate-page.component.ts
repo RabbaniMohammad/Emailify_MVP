@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, inject, ViewChild, ElementRef, AfterViewInit, HostListener, ChangeDetectorRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -52,6 +52,7 @@ export class GeneratePageComponent implements OnInit, OnDestroy, AfterViewInit, 
   private generationService = inject(TemplateGenerationService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
+  private location = inject(Location);
   private snackBar = inject(MatSnackBar);
   private destroy$ = new Subject<void>();
   private previewCache = inject(PreviewCacheService);
@@ -371,9 +372,8 @@ private async startNewConversation(message: string): Promise<void> {
         console.log('⬇️ Scrolling to bottom...');
         this.scrollToBottom();
 
-        this.router.navigate(['/generate', response.conversationId], {
-          replaceUrl: true,
-        });
+        // Update URL without navigation to preserve conversation ID
+        this.location.replaceState(`/generate/${response.conversationId}`);
 
         if (response.hasErrors) {
           console.warn('⚠️ Template has errors:', response.errors);

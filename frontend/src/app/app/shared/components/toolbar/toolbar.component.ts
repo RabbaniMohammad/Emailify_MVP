@@ -220,40 +220,53 @@ ngOnInit(): void {
   // ========================================
   // Admin pending count polling
   // ========================================
-  if (!this.isAdmin()) {
-    return;
-  }
-
-  timer(0, 30000).pipe(
-    startWith(0),
-    switchMap(() => {
-      return this.adminService.getPendingUsers();
-    }),
-    map(response => {
-      const count = response.users.length;
-      return count;
-    }),
+  // Load pending count immediately if user is available
+  this.currentUser$.pipe(
+    filter(user => !!user && (user.role === 'admin' || user.role === 'super_admin')),
     takeUntil(this.destroy$)
-  ).subscribe({
-    next: (count) => {
-      this.pendingCount$.next(count);
-    },
-    error: (err) => {
-    }
+  ).subscribe(() => {
+    // Initial load
+    this.loadPendingCount();
+    
+    // Poll every 30 seconds
+    timer(30000, 30000).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.loadPendingCount();
+    });
   });
 
+  // Listen to refresh events
   this.adminEventService.refreshPendingCount
     .pipe(takeUntil(this.destroy$))
     .subscribe(() => {
-      this.fetchPendingCount();
+      if (this.isAdmin()) {
+        this.loadPendingCount();
+      }
     });
   
   this.adminEventService.refresh$
     .pipe(takeUntil(this.destroy$))
     .subscribe(() => {
-      this.fetchPendingCount();
+      if (this.isAdmin()) {
+        this.loadPendingCount();
+      }
     });
 }
+
+  private loadPendingCount(): void {
+    this.adminService.getPendingUsers()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          this.pendingCount$.next(response.users.length);
+          console.log('📊 Toolbar: Pending count updated:', response.users.length);
+        },
+        error: (err) => {
+          console.error('❌ Toolbar: Failed to load pending count:', err);
+        }
+      });
+  }
 
   ngOnDestroy(): void {
     this.destroy$.next();
@@ -609,15 +622,6 @@ private updateNavigationState(): void {
   
 }
 
-  private fetchPendingCount(): void {
-    this.adminService.getPendingUsers()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (response) => this.pendingCount$.next(response.users.length),
-        error: (err) => {}
-      });
-  }
-
   canGoBack(): boolean {
     return this.canGoBack$.value;
   }
@@ -834,7 +838,7 @@ navigateToHome(): void {
 }
 
   navigateToAdmin(): void {
-    this.fetchPendingCount();
+    this.loadPendingCount();
     this.adminEventService.triggerNavigationRefresh();
     this.router.navigate(['/admin']);
   }
