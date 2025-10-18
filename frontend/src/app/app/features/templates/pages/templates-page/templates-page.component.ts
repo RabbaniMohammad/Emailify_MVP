@@ -6,6 +6,7 @@ import {
   ElementRef,
   ChangeDetectorRef,
   ChangeDetectionStrategy,
+  HostListener,
   inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -25,7 +26,7 @@ import {
   animate 
 } from '@angular/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject, Subscription } from 'rxjs';
+import { BehaviorSubject, Subject, Subscription, combineLatest } from 'rxjs';
 import { takeUntil, map, distinctUntilChanged } from 'rxjs/operators';
 import { TemplatesService, TemplatesState } from '../../../../core/services/templates.service';
 import { PreviewCacheService } from '../../components/template-preview/preview-cache.service';
@@ -97,9 +98,82 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   // ViewChild references
   @ViewChild('scrollContainer', { static: false }) scrollContainer!: ElementRef<HTMLElement>;
 
+  // Category filter subject for reactive filtering (must be declared before items$)
+  private categorySubject = new BehaviorSubject<'all' | 'ai-generated' | 'visual-editor' | 'esp'>('all');
+
   // Template service observables
   readonly state$ = this.svc.state$;
-  readonly items$ = this.state$.pipe(map((s: TemplatesState) => s.items));
+  readonly items$ = combineLatest([this.state$, this.categorySubject]).pipe(
+    map(([state, category]) => {
+      console.log('🔍 Filtering templates:', { 
+        totalItems: state.items.length, 
+        category,
+        sampleItem: state.items[0]
+      });
+      
+      // Apply category filter
+      let filtered = state.items;
+      
+      if (category !== 'all') {
+        filtered = state.items.filter(item => {
+          const itemData = item as any; // Access extended fields
+          const source = (itemData.source || '').toLowerCase();
+          const templateType = (itemData.templateType || '').toLowerCase();
+          const type = (itemData.type || '').toLowerCase();
+          
+          console.log('📊 Item data:', {
+            id: itemData.id,
+            name: itemData.name,
+            source: itemData.source,
+            templateType: itemData.templateType,
+            type: itemData.type
+          });
+          
+          switch (category) {
+            case 'ai-generated':
+              // Match: Must have "AI" explicitly (not just "generated")
+              // This avoids matching "Visual Editor" which might contain other words
+              const isAI = source.includes('ai generated') || 
+                           source.includes('ai-generated') ||
+                           templateType.includes('ai generated') ||
+                           templateType.includes('ai-generated') ||
+                           (source.includes('ai') && source.includes('generated')) ||
+                           (templateType.includes('ai') && templateType.includes('generated')) ||
+                           (type === 'generated' && !source.includes('visual'));
+              
+              console.log('🤖 AI check:', { isAI, source, templateType, type });
+              return isAI;
+                     
+            case 'visual-editor':
+              // Match: "Visual Editor", "visual-editor", "Visual editor", etc.
+              const isVisual = source.includes('visual') || 
+                               templateType.includes('visual') ||
+                               type.includes('visual');
+              
+              console.log('🎨 Visual check:', { isVisual, source, templateType, type });
+              return isVisual;
+                     
+            case 'esp':
+              // Match: "mailchimp", or items without AI/Visual indicators
+              const isESP = source.includes('mailchimp') || 
+                            (!source.includes('visual') && 
+                             !source.includes('ai') && 
+                             source !== '' &&
+                             !source.includes('generated'));
+              
+              console.log('📧 ESP check:', { isESP, source, templateType });
+              return isESP;
+                     
+            default:
+              return true;
+          }
+        });
+      }
+      
+      console.log('✅ Filtered results:', filtered.length);
+      return filtered;
+    })
+  );
   readonly status$ = this.state$.pipe(map((s: TemplatesState) => s.status));
   readonly error$ = this.state$.pipe(map((s: TemplatesState) => s.error));
   readonly selectedId$ = this.state$.pipe(map((s: TemplatesState) => s.selectedId));
@@ -108,6 +182,8 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   // Component state
   searchQuery = '';
   runButtonItemId?: string;
+  selectedCategory: 'all' | 'ai-generated' | 'visual-editor' | 'esp' = 'all';
+  categoryDropdownOpen = false;
   
   // Double-click prevention
   private lastClickTime = 0;
@@ -190,6 +266,51 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     // Clean up all in-flight requests
     this.inflightRequests.forEach(sub => sub.unsubscribe());
     this.inflightRequests.clear();
+  }
+
+  // Category filter methods
+  toggleCategoryDropdown(): void {
+    this.categoryDropdownOpen = !this.categoryDropdownOpen;
+  }
+
+  selectCategory(category: 'all' | 'ai-generated' | 'visual-editor' | 'esp'): void {
+    console.log('🎯 Category selected:', category);
+    this.selectedCategory = category;
+    this.categorySubject.next(category); // Emit new category for reactive filtering
+    this.categoryDropdownOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  getCategoryLabel(): string {
+    switch (this.selectedCategory) {
+      case 'all': return 'All';
+      case 'ai-generated': return 'AI Generated';
+      case 'visual-editor': return 'Visual Editor';
+      case 'esp': return 'ESP';
+      default: return 'All';
+    }
+  }
+
+  getCategoryIcon(): string {
+    switch (this.selectedCategory) {
+      case 'all': return 'apps';
+      case 'ai-generated': return 'auto_awesome';
+      case 'visual-editor': return 'design_services';
+      case 'esp': return 'email';
+      default: return 'apps';
+    }
+  }
+
+  // Close dropdown when clicking outside
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    const clickedInside = target.closest('.category-filter-wrapper');
+    
+    if (!clickedInside && this.categoryDropdownOpen) {
+      this.categoryDropdownOpen = false;
+      this.cdr.markForCheck();
+    }
   }
 
   // Search functionality

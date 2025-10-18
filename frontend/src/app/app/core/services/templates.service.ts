@@ -9,6 +9,8 @@ export interface TemplateItem {
   id: string;
   name: string;
   content?: string;
+  source?: string; // 'mailchimp', 'ai-generated', 'visual-editor'
+  templateType?: string; // 'AI Generated', 'Visual Editor', etc.
 }
 
 export type LoadingStatus = 'idle' | 'loading' | 'success' | 'error';

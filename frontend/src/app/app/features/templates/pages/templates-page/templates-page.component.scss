@@ -196,6 +196,17 @@
 }
 
 // Count Badge - Separate Card
+// List Header Container
+.list-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+  margin-bottom: 0.2rem;
+  animation: slideInDown 0.4s ease;
+}
+
 .count-badge {
   display: flex;
   align-items: center;
@@ -205,11 +216,8 @@
   border: 2px solid #e2e8f0;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  margin-top: 2px;
-  margin-bottom: 0.2rem;
-  // margin-top:-0.7rem;
   flex-shrink: 0;
-  animation: slideInDown 0.4s ease;
+  flex: 1; // Take remaining space
 
   svg {
     width: 20px;
@@ -228,6 +236,145 @@
     font-size: 0.875rem;
     font-weight: 600;
     color: #64748b;
+  }
+}
+
+// Category Filter Dropdown
+.category-filter-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.category-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.125rem;
+  background: linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.25);
+  white-space: nowrap;
+
+  .category-icon {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.5;
+    flex-shrink: 0;
+  }
+
+  .category-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .dropdown-arrow {
+    width: 14px;
+    height: 14px;
+    stroke-width: 3;
+    transition: transform 0.3s ease;
+    margin-left: 0.125rem;
+  }
+
+  &:hover {
+    background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 100%);
+    box-shadow: 0 6px 20px rgba(109, 40, 217, 0.35);
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &.open .dropdown-arrow {
+    transform: rotate(180deg);
+  }
+}
+
+.category-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 200px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  z-index: 1000;
+  overflow: hidden;
+  animation: dropdownFadeIn 0.2s ease;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.category-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  background: white;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+
+  svg {
+    width: 18px;
+    height: 18px;
+    color: #94a3b8;
+    transition: color 0.2s ease;
+  }
+
+  span {
+    flex: 1;
+    text-align: left;
+  }
+
+  .check-mark {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #6d28d9;
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: linear-gradient(90deg, #faf5ff 0%, #f3e8ff 100%);
+    color: #6d28d9;
+
+    svg {
+      color: #6d28d9;
+    }
+  }
+
+  &.active {
+    background: linear-gradient(90deg, #faf5ff 0%, #f3e8ff 100%);
+    color: #6d28d9;
+    font-weight: 600;
+
+    svg {
+      color: #6d28d9;
+    }
   }
 }
 
@@ -1653,6 +1800,32 @@
     height: 100%;
   }
 
+  // Category filter responsive
+  .list-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .count-badge {
+    width: 100%;
+  }
+
+  .category-filter-wrapper {
+    width: 100%;
+  }
+
+  .category-filter-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .category-dropdown {
+    left: 0;
+    right: 0;
+    min-width: unset;
+  }
+
   .scroll-container {
     min-height: 750px;
   }
@@ -1889,6 +2062,36 @@
 
     .count-label {
       font-size: 0.75rem;
+    }
+  }
+
+  // Category filter mobile
+  .category-filter-btn {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.8125rem;
+
+    .category-icon {
+      width: 16px;
+      height: 16px;
+    }
+
+    .category-label {
+      font-size: 0.8125rem;
+    }
+
+    .dropdown-arrow {
+      width: 12px;
+      height: 12px;
+    }
+  }
+
+  .category-option {
+    padding: 0.75rem 0.875rem;
+    font-size: 0.8125rem;
+
+    svg {
+      width: 16px;
+      height: 16px;
     }
   }
 
