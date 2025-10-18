@@ -1481,7 +1481,9 @@ router.post('/variants/:runId/next', async (req: Request, res: Response) => {
       return res.status(200).json({ done: true, message: 'All variants generated', no: run.variants.length });
     }
 
-    const sourceHtml = run.currentHtml;
+    // ✅ FIXED: Always generate variants from the golden template, not from previous variants
+    // This prevents drift and ensures each variant is independent
+    const sourceHtml = run.goldenHtml;
     const { edits, why } = await getVariantEditsAndWhy(sourceHtml, run.usedIdeas);
 
     const atomicResult = applyContextEdits(sourceHtml, edits);
@@ -1511,7 +1513,8 @@ router.post('/variants/:runId/next', async (req: Request, res: Response) => {
         stats: atomicResult.stats,
       };
 
-    run.currentHtml = item.html;
+    // ✅ FIXED: Do NOT update currentHtml to chain variants
+    // Each variant is independent from the golden template
     run.variants.push(item);
 
     res.json(item);

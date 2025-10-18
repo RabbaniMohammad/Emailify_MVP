@@ -954,18 +954,40 @@ async onCheckPreview(): Promise<void> {
   const fullHtml = `<style>${css}</style>${html}`;
   
   // ============================================
+  // ✅ CHECK IF EDITOR IS EMPTY (ALWAYS)
+  // ============================================
+  console.log('🔍 [CHECK PREVIEW] Raw HTML from editor:', html);
+  console.log('🔍 [CHECK PREVIEW] HTML length:', html?.length);
+  
+  // Remove all whitespace, newlines, and common empty tags
+  const cleanedHtml = html
+    .replace(/\s+/g, '')
+    .replace(/<div><\/div>/gi, '')
+    .replace(/<p><\/p>/gi, '')
+    .replace(/<span><\/span>/gi, '')
+    .replace(/<br\s*\/?>/gi, '')
+    .replace(/<!--.*?-->/g, '')
+    .replace(/<body[^>]*><\/body>/gi, '')
+    .replace(/<section[^>]*><\/section>/gi, '')
+    .replace(/<article[^>]*><\/article>/gi, '');
+  
+  console.log('🔍 [CHECK PREVIEW] Cleaned HTML:', cleanedHtml);
+  console.log('🔍 [CHECK PREVIEW] Cleaned length:', cleanedHtml?.length);
+  
+  const hasContent = cleanedHtml && cleanedHtml.trim().length > 0;
+  
+  console.log('🔍 [CHECK PREVIEW] Has content?', hasContent);
+  
+  if (!hasContent) {
+    this.showToast('⚠️ Visual editor is empty. Please add some content to your template first.', 'warning');
+    return;
+  }
+  
+  // ============================================
   // 🆕 SCENARIO 1: DIRECT ACCESS (No templateId)
   // ============================================
   if (!this.templateId) {
     console.log('🆕 Direct access detected');
-    
-    // ✅ CHECK IF EDITOR HAS CONTENT
-    const hasContent = html && html.trim().length > 0;
-    
-    if (!hasContent) {
-      this.showToast('⚠ Please add some content to your template first', 'warning');
-      return;
-    }
     
     console.log('✅ Content detected - prompting for template name');
     

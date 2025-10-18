@@ -6,19 +6,20 @@ export interface IGeneratedTemplate extends Document {
   html: string;
   userId: Types.ObjectId;
   conversationId?: string;
-  type: 'Generated';
+  type: string; // e.g. 'Visual editor' or 'generated'
   createdAt: Date;
   updatedAt: Date;
   
-  // ✅ New metadata fields
-  templateType: 'AI Generated';
+  // Metadata fields
+  templateType?: string;
   createdBy: string; // User's name from Google sign-in
-  source: 'AI Generated';
-  active: 'N/A';
-  category: 'N/A';
-  responsive: 'Yes';
-  folderId: 'N/A';
-  thumbnail: string; // Empty string ""
+  source?: string;
+  active?: string;
+  category?: string;
+  responsive?: string;
+  folderId?: string;
+  thumbnail?: string; // Empty string ""
+  dragDrop?: boolean;
 }
 
 const GeneratedTemplateSchema = new Schema<IGeneratedTemplate>(
@@ -51,14 +52,12 @@ const GeneratedTemplateSchema = new Schema<IGeneratedTemplate>(
     type: {
       type: String,
       default: 'generated',
-      enum: ['generated'],
     },
     
-    // ✅ NEW METADATA FIELDS
+    // Metadata fields (relaxed to accept Visual Editor values)
     templateType: {
       type: String,
       default: 'AI Generated',
-      enum: ['AI Generated'],
     },
     createdBy: {
       type: String,
@@ -68,31 +67,30 @@ const GeneratedTemplateSchema = new Schema<IGeneratedTemplate>(
     source: {
       type: String,
       default: 'AI Generated',
-      enum: ['AI Generated'],
     },
     active: {
       type: String,
       default: 'N/A',
-      enum: ['N/A'],
     },
     category: {
       type: String,
       default: 'N/A',
-      enum: ['N/A'],
     },
     responsive: {
       type: String,
       default: 'Yes',
-      enum: ['Yes'],
     },
     folderId: {
       type: String,
       default: 'N/A',
-      enum: ['N/A'],
     },
     thumbnail: {
       type: String,
       default: '', // Empty string
+    },
+    dragDrop: {
+      type: Boolean,
+      default: true,
     },
   },
   {

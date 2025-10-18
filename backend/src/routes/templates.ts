@@ -1,6 +1,8 @@
 import { Router, type Request, type Response } from 'express';
 import mailchimp from '@mailchimp/mailchimp_marketing';
 import GeneratedTemplate from '@src/models/GeneratedTemplate';
+import { authenticate } from '@src/middleware/auth';
+import User from '@src/models/User';
 
 // ---------- Minimal types ----------
 type McTemplate = { 
@@ -266,6 +268,89 @@ router.get('/', async (req: Request, res: Response) => {
     console.error('❌ [LIST_TEMPLATES] Error:', { status, message });
     console.error('❌ [LIST_TEMPLATES] Stack:', e?.stack);
     res.status(status).json({ code: 'FETCH_ERROR', message });
+  }
+});
+
+/** POST /api/templates - Create a GeneratedTemplate from Visual Editor */
+router.post('/', authenticate, async (req: Request, res: Response) => {
+  try {
+    const {
+      name,
+      content,
+      // allow legacy payload keys
+      html: contentHtml,
+      templateName,
+      // metadata fields from frontend
+      type: payloadType,
+      category,
+      createdBy: payloadCreatedBy,
+      createdDate,
+      lastEdited,
+      active,
+      dragDrop,
+      responsive,
+      folderId,
+      source,
+    } = req.body as any;
+
+    const finalName = (name || templateName || '').toString().trim();
+    const finalContent = (content || contentHtml || '').toString();
+
+    if (!finalName || !finalContent) {
+      return res.status(400).json({ code: 'INVALID_PAYLOAD', message: 'Template name and content are required' });
+    }
+
+    const userId = (req as any).tokenPayload?.userId;
+
+    // Find user for createdBy (frontend requested using Google sign-in name)
+    const user = userId ? await User.findById(userId) : null;
+    const createdBy = user ? (user.name || user.email || payloadCreatedBy || 'Unknown User') : (payloadCreatedBy || 'Unknown User');
+
+    // Check if the same template already exists (by exact html OR by name + user)
+    const existing = await GeneratedTemplate.findOne({ $or: [ { html: finalContent }, { name: finalName, userId } ] });
+    if (existing) {
+      console.log('ℹ️ [POST /api/templates] Template already exists, returning existing id:', existing.templateId);
+      return res.json({ id: existing.templateId });
+    }
+
+    const templateId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+    const doc: any = {
+      templateId,
+      name: finalName,
+      html: finalContent,
+      userId: userId,
+      conversationId: undefined,
+      type: payloadType || 'Visual editor',
+      templateType: 'AI Generated',
+      createdBy: createdBy,
+      source: source || 'Visual Editor',
+      active: active || 'Yes',
+      category: category || 'N/A',
+      responsive: responsive || 'N/A',
+      folderId: folderId || 'N/A',
+      thumbnail: '',
+      dragDrop: typeof dragDrop === 'boolean' ? dragDrop : true,
+    };
+
+    // If frontend provided createdDate/lastEdited, try to set createdAt/updatedAt
+    if (createdDate) {
+      const d = new Date(createdDate);
+      if (!isNaN(d.getTime())) doc.createdAt = d;
+    }
+    if (lastEdited) {
+      const d2 = new Date(lastEdited);
+      if (!isNaN(d2.getTime())) doc.updatedAt = d2;
+    }
+
+    const generatedTemplate = await GeneratedTemplate.create(doc);
+
+    console.log('✅ [POST /api/templates] Created GeneratedTemplate:', generatedTemplate.templateId);
+
+    res.json({ id: generatedTemplate.templateId || generatedTemplate._id });
+  } catch (err: any) {
+    console.error('❌ [POST /api/templates] Error creating template:', err);
+    res.status(err?.status || 500).json({ code: 'SAVE_ERROR', message: err?.message || 'Failed to save template' });
   }
 });
 
