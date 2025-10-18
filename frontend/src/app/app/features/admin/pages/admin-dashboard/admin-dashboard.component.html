@@ -3,7 +3,11 @@
   <div class="dashboard-header">
     <div class="header-content">
       <div class="header-text">
-        <h1>Admin Dashboard</h1>
+        <h1>
+          Admin Dashboard
+          <!-- Red Dot Notification for Pending Approvals -->
+          <span class="notification-dot-header" *ngIf="(pendingCount$ | async) as count" [attr.data-count]="count"></span>
+        </h1>
         <p>Manage users, approvals, and permissions</p>
       </div>
       <div class="header-actions" *ngIf="currentUser$ | async as currentUser">

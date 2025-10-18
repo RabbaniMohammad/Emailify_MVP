@@ -48,6 +48,9 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
 
   private pendingUsersSubject = new BehaviorSubject<AdminUser[]>([]);
   readonly pendingUsers$ = this.pendingUsersSubject.asObservable();
+  
+  // Expose pending count for template
+  readonly pendingCount$ = new BehaviorSubject<number>(0);
 
   readonly currentUser$ = this.authService.currentUser$;
 
@@ -103,6 +106,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     this.adminService.getPendingUsers().subscribe({
       next: (response) => {
         this.pendingUsersSubject.next(response.users);
+        this.pendingCount$.next(response.users.length); // Update count for notification dot
       },
       error: (error) => {
         this.showError('Failed to load pending users');

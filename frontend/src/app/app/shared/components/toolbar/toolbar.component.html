@@ -33,6 +33,8 @@
             <div *ngIf="!user.picture" class="avatar-initials">
               {{ getInitials(user.name) }}
             </div>
+            <!-- Red Dot Notification for Pending Approvals -->
+            <span class="notification-dot" *ngIf="isAdmin() && (pendingCount$ | async) as count" [attr.data-count]="count"></span>
           </div>
           <span class="user-name">{{ user.name }}</span>
           <mat-icon class="dropdown-icon" [class.open]="menuTrigger.menuOpen">expand_more</mat-icon>

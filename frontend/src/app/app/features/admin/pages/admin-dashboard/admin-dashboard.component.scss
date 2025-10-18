@@ -26,6 +26,10 @@
       font-weight: 800;
       margin: 0 0 0.5rem 0;
       letter-spacing: -0.02em;
+      position: relative; // For notification dot positioning
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
     }
 
     p {
@@ -39,10 +43,6 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    background: rgba(255, 255, 255, 0.15);
-    padding: 0.75rem 1.25rem;
-    border-radius: 12px;
-    backdrop-filter: blur(10px);
 
     .user-avatar {
       width: 40px;
@@ -73,6 +73,30 @@
         width: fit-content;
       }
     }
+  }
+}
+
+// Red Notification Dot for Admin Dashboard Header
+.notification-dot-header {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: #ef4444;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+  flex-shrink: 0;
+  
+  // Show count inside dot
+  &::after {
+    content: attr(data-count);
+    font-size: 12px;
+    font-weight: 700;
+    color: white;
+    line-height: 1;
   }
 }
 
