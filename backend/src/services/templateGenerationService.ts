@@ -595,9 +595,14 @@ export async function generateTemplate(
           logger.info(`✅ Template generated and validated successfully on attempt ${attempt}`);
           logger.info(`📊 Final stats - Attempts: ${attempt}, Had errors: ${attempt > 1}`);
           
+          // Create user-friendly message without MJML code
+          const userMessage = attempt > 1 
+            ? `✅ Template generated successfully after ${attempt} attempts. I've refined it based on validation feedback.`
+            : `✅ Template generated successfully! I've created a responsive email template based on your requirements.`;
+          
           return {
             mjmlCode,
-            assistantMessage,
+            assistantMessage: userMessage,
             conversationId: response.id,
             attemptsUsed: attempt,
             hadErrors: attempt > 1,

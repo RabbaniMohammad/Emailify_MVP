@@ -11,6 +11,7 @@ import { TemplatesService } from '../../../core/services/templates.service';
 import { AuthService } from '../../../../app/core/services/auth.service';
 import { AdminService } from '../../../core/services/admin.service';
 import { AdminEventService } from '../../../core/services/admin-event.service';
+import { TemplateGenerationService } from '../../../core/services/template-generation.service';
 import { map, takeUntil, startWith, tap, switchMap, filter } from 'rxjs/operators';
 import { BehaviorSubject, Subject, timer } from 'rxjs';
 
@@ -37,6 +38,7 @@ export class ToolbarComponent implements OnInit, OnDestroy {
   private adminEventService = inject(AdminEventService);
   private router = inject(Router);
   private location = inject(Location);
+  private generationService = inject(TemplateGenerationService);
 
   private destroy$ = new Subject<void>();
   
@@ -189,13 +191,24 @@ ngOnInit(): void {
         const lastUrl = this.navigationHistory[this.currentIndex];
         
         if (lastUrl !== url) {
-          this.navigationHistory.push(url);
-          this.currentIndex = this.navigationHistory.length - 1;
+          // Check if this is a child route of the last URL (e.g., /generate -> /generate/:id)
+          // If so, replace the last entry instead of adding a new one
+          const isChildRoute = lastUrl && url.startsWith(lastUrl + '/');
           
-          // Limit history size
-          if (this.navigationHistory.length > this.MAX_HISTORY) {
-            const removed = this.navigationHistory.shift();
-            this.currentIndex--;
+          if (isChildRoute) {
+            // Replace the last entry (mimics replaceUrl behavior)
+            this.navigationHistory[this.currentIndex] = url;
+            console.log('🔄 Replaced history entry:', lastUrl, '→', url);
+          } else {
+            // Add new entry as normal
+            this.navigationHistory.push(url);
+            this.currentIndex = this.navigationHistory.length - 1;
+            
+            // Limit history size
+            if (this.navigationHistory.length > this.MAX_HISTORY) {
+              const removed = this.navigationHistory.shift();
+              this.currentIndex--;
+            }
           }
         } 
         
@@ -841,6 +854,19 @@ navigateToHome(): void {
     this.loadPendingCount();
     this.adminEventService.triggerNavigationRefresh();
     this.router.navigate(['/admin']);
+  }
+
+  navigateToGenerate(): void {
+    // Smart navigation: check if user has an active conversation
+    const activeConversationId = this.generationService.getCurrentConversationId();
+    
+    if (activeConversationId) {
+      console.log('📍 Navigating to active conversation:', activeConversationId);
+      this.router.navigate(['/generate', activeConversationId]);
+    } else {
+      console.log('📍 Navigating to fresh generate page');
+      this.router.navigate(['/generate']);
+    }
   }
 
 navigateTo(route: string): void {

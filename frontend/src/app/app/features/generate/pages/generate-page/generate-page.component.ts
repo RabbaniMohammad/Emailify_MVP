@@ -19,6 +19,7 @@ import { TemplateGenerationService, GenerationMessage } from '../../../../core/s
 import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
 
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 
 import { CanComponentDeactivate } from '../../../../core/guards/can-deactivate.guard';
 
@@ -43,6 +44,7 @@ interface ImageAttachment {
     MatFormFieldModule,
     MatTooltipModule, 
     MatMenuModule,
+    MatDialogModule,
     TemplatePreviewPanelComponent,
   ],
   templateUrl: './generate-page.component.html',
@@ -54,6 +56,7 @@ export class GeneratePageComponent implements OnInit, OnDestroy, AfterViewInit, 
   private route = inject(ActivatedRoute);
   private location = inject(Location);
   private snackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
   private destroy$ = new Subject<void>();
   private previewCache = inject(PreviewCacheService);
   private scrollAnimation: number | null = null;
@@ -86,6 +89,7 @@ private sentImages: Array<{name: string, size: number}> = [];
 
   // Scroll state
   private shouldAutoScroll = true;
+  private isProgrammaticScroll = false; // Flag to ignore scroll events during auto-scroll
 
 
     ngOnInit(): void {
@@ -93,7 +97,11 @@ private sentImages: Array<{name: string, size: number}> = [];
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
         const conversationId = params.get('conversationId');
         if (conversationId) {
-        this.loadConversation(conversationId);
+        // Only load conversation if it's different from current one
+        // (Avoid reloading when we just navigated after creating it)
+        if (this.conversationId !== conversationId) {
+          this.loadConversation(conversationId);
+        }
         } else {
         // ✅ FIX: Don't auto-redirect, just show welcome
         this.initializeWelcome();
@@ -278,6 +286,16 @@ onSend(): void {
   console.log('✅ Chat limit check passed');
   console.log('🖼️ Selected images count:', this.selectedImages.length);
   
+  // ✅ Add user message to UI immediately (before API call)
+  const existingMessages = this.messages$.value;
+  const userMessage: GenerationMessage = {
+    role: 'user',
+    content: message,
+    timestamp: new Date(),
+  };
+  this.messages$.next([...existingMessages, userMessage]);
+  console.log('💬 User message added to UI immediately');
+  
   // ✅ CHANGED: Store ORIGINAL file metadata (before compression stored the compressed size)
   // We need to get the original metadata from the file input
   this.selectedImages.forEach(file => {
@@ -293,6 +311,9 @@ onSend(): void {
   
   this.isGenerating$.next(true);
   this.shouldAutoScroll = true;
+  
+  // Scroll to show the new user message
+  setTimeout(() => this.scrollToBottom(), 50);
 
   if (!this.conversationId) {
     console.log('🆕 Starting new conversation');
@@ -348,32 +369,34 @@ private async startNewConversation(message: string): Promise<void> {
         console.log('📄 HTML length:', response.html?.length);
         
         this.conversationId = response.conversationId;
+        this.generationService.setCurrentConversationId(response.conversationId);
         this.currentHtml$.next(response.html);
 
-        const newMessages: GenerationMessage[] = [
-          { 
-            role: 'user', 
-            content: message, 
-            timestamp: new Date(),
-            images: imageAttachments.length > 0 ? imageAttachments : undefined
-          },
-          {
-            role: 'assistant',
-            content: '✅ Template generated successfully',
-            timestamp: new Date(),
-          },
-        ];
+        // Add assistant response to existing messages
+        const assistantMessage: GenerationMessage = {
+          role: 'assistant',
+          content: response.message || '✅ Template generated successfully',
+          timestamp: new Date(),
+        };
         
-        console.log('💬 Adding messages to conversation:', newMessages.length);
-        console.log('🖼️ User message has images:', !!newMessages[0].images);
-        this.messages$.next(newMessages);
+        const updatedMessages = [...this.messages$.value, assistantMessage];
+        console.log('� Adding assistant message to conversation');
+        this.messages$.next(updatedMessages);
 
         this.isGenerating$.next(false);
-        console.log('⬇️ Scrolling to bottom...');
-        this.scrollToBottom();
-
-        // Update URL without navigation to preserve conversation ID
-        this.location.replaceState(`/generate/${response.conversationId}`);
+        
+        // Navigate to conversation URL to preserve state
+        // Use replaceUrl so back button skips /generate and goes to previous page
+        this.router.navigate(['/generate', response.conversationId], {
+          replaceUrl: true
+        }).then(() => {
+          // Scroll after navigation completes
+          console.log('⬇️ Scrolling to bottom after navigation...');
+          this.shouldAutoScroll = true; // Ensure auto-scroll is enabled
+          setTimeout(() => {
+            this.scrollToBottom();
+          }, 100);
+        });
 
         if (response.hasErrors) {
           console.warn('⚠️ Template has errors:', response.errors);
@@ -669,6 +692,34 @@ onSaveTemplate(): void {
 }
 
 onNewConversation(): void {
+  // Check if there's an active conversation with unsaved content
+  const hasActiveConversation = this.conversationId && this.currentHtml$.value;
+  
+  if (hasActiveConversation) {
+    // Show confirmation dialog
+    const dialogRef = this.dialog.open(ConfirmNewConversationDialog, {
+      width: '500px',
+      disableClose: false,
+      data: { hasTemplate: true }
+    });
+
+    dialogRef.afterClosed().subscribe((result: 'save' | 'discard' | 'cancel') => {
+      if (result === 'save') {
+        // Open save dialog
+        this.onSaveTemplate();
+      } else if (result === 'discard') {
+        // Proceed with clearing conversation
+        this.clearAndStartNew();
+      }
+      // If 'cancel', do nothing - user stays on current conversation
+    });
+  } else {
+    // No active conversation, just start new
+    this.clearAndStartNew();
+  }
+}
+
+private clearAndStartNew(): void {
   // Clear current conversation
   this.conversationId = null;
   this.generationService.clearCurrentConversationId();
@@ -677,7 +728,7 @@ onNewConversation(): void {
   this.templateName = '';
   this.userInput = '';
   
-  // ✅ NEW: Clear sent images history
+  // Clear sent images history
   this.sentImages = [];
   console.log('🧹 Cleared sent images history');
 
@@ -693,6 +744,15 @@ onNewConversation(): void {
   }
 
 private scrollToBottom(): void {
+  // Only auto-scroll if user hasn't manually scrolled up
+  if (!this.shouldAutoScroll) {
+    console.log('⏸️ Auto-scroll disabled (user scrolled up)');
+    return;
+  }
+
+  // Set flag to ignore scroll events during programmatic scrolling
+  this.isProgrammaticScroll = true;
+
   // Multiple attempts to ensure we catch the final height
   setTimeout(() => {
     const element = this.messagesContainer?.nativeElement;
@@ -704,6 +764,11 @@ private scrollToBottom(): void {
         if (element) {
           this.smoothScrollTo(element.scrollHeight);
         }
+        
+        // Re-enable scroll event handling after programmatic scroll completes
+        setTimeout(() => {
+          this.isProgrammaticScroll = false;
+        }, 100);
       }, 50);
     }
   }, 100);
@@ -743,6 +808,11 @@ private smoothScrollTo(targetPosition: number): void {
 }
 
   onScroll(event: Event): void {
+    // Ignore scroll events triggered by programmatic scrolling
+    if (this.isProgrammaticScroll) {
+      return;
+    }
+    
     const element = event.target as HTMLElement;
     const atBottom =
       element.scrollHeight - element.scrollTop <= element.clientHeight + 50;
@@ -1133,5 +1203,118 @@ private fileToBase64(file: File): Promise<string> {
 }
   trackByIndex(index: number): number {
     return index;
+  }
+}
+
+// ========================================
+// Confirmation Dialog Component
+// ========================================
+@Component({
+  selector: 'confirm-new-conversation-dialog',
+  standalone: true,
+  imports: [CommonModule, MatDialogModule, MatButtonModule, MatIconModule],
+  template: `
+    <div class="confirm-dialog">
+      <div class="dialog-header">
+        <mat-icon class="warning-icon">warning</mat-icon>
+        <h2>Start New Conversation?</h2>
+      </div>
+      
+      <div class="dialog-content">
+        <p>You have an unsaved template in the current conversation.</p>
+        <p><strong>Would you like to save it before starting a new conversation?</strong></p>
+      </div>
+      
+      <div class="dialog-actions">
+        <button mat-button (click)="onCancel()" class="cancel-btn">
+          Cancel
+        </button>
+        <button mat-stroked-button (click)="onDiscard()" class="discard-btn">
+          Discard
+        </button>
+        <button mat-raised-button (click)="onSave()" class="save-btn">
+          Save Template
+        </button>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .confirm-dialog {
+      padding: 1.5rem;
+    }
+
+    .dialog-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .warning-icon {
+      font-size: 2.5rem;
+      width: 2.5rem;
+      height: 2.5rem;
+      color: #f59e0b;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .dialog-content {
+      margin-bottom: 2rem;
+      line-height: 1.6;
+      color: #475569;
+    }
+
+    .dialog-content p {
+      margin: 0.5rem 0;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+
+    .cancel-btn {
+      color: #64748b;
+    }
+
+    .discard-btn {
+      color: #ef4444;
+      border-color: #ef4444;
+    }
+
+    .discard-btn:hover {
+      background-color: #fef2f2;
+    }
+
+    .save-btn {
+      background: linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%);
+      color: white;
+    }
+
+    .save-btn:hover {
+      background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 100%);
+    }
+  `]
+})
+export class ConfirmNewConversationDialog {
+  private dialogRef = inject(MatDialogRef<ConfirmNewConversationDialog>);
+
+  onSave(): void {
+    this.dialogRef.close('save');
+  }
+
+  onDiscard(): void {
+    this.dialogRef.close('discard');
+  }
+
+  onCancel(): void {
+    this.dialogRef.close('cancel');
   }
 }
