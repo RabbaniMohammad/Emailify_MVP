@@ -2764,6 +2764,9 @@
   justify-content: center;
   min-height: 300px;
   
+  // ✅ Prevent interaction with content behind overlay
+  pointer-events: all;
+  
   &::before {
     content: '';
     position: absolute;
@@ -2778,14 +2781,51 @@
   }
 }
 
+// ✅ Wrapper styles - prevent scrolling when loading
+.snaps-list-wrapper {
+  position: relative;
+  min-height: 300px;
+  
+  &.loading {
+    overflow: hidden; // Prevent scrolling
+    max-height: 500px; // Fixed height when loading
+  }
+}
+
 .loading-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.25rem;
+  gap: 0.75rem; // ✅ Reduced from 1.25rem to 0.75rem
   position: relative;
   z-index: 2;
   animation: fade-in-up 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  // ✅ Loading icon (camera SVG)
+  .loading-icon {
+    width: 80px;
+    height: 80px;
+    margin-bottom: -0.25rem; // ✅ Negative margin to bring content closer
+    animation: float-icon 3s ease-in-out infinite;
+    filter: drop-shadow(0 8px 16px rgba(109, 40, 217, 0.2));
+    
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    
+    // Responsive sizing
+    @media (max-width: 768px) {
+      width: 64px;
+      height: 64px;
+    }
+    
+    @media (max-width: 480px) {
+      width: 56px;
+      height: 56px;
+    }
+  }
   
   .main-spinner {
     ::ng-deep circle {
@@ -2805,12 +2845,34 @@
     background-clip: text;
     letter-spacing: -0.01em;
     animation: pulse-text 2s ease-in-out infinite;
+    
+    @media (max-width: 768px) {
+      font-size: 1rem;
+    }
+    
+    @media (max-width: 480px) {
+      font-size: 0.9375rem;
+    }
   }
   
   .loading-subtext {
     font-size: 0.875rem;
     color: #64748b;
     animation: fade-in-out 2s ease-in-out infinite;
+    
+    @media (max-width: 480px) {
+      font-size: 0.8125rem;
+    }
+  }
+}
+
+// ✅ Floating animation for icon
+@keyframes float-icon {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.05);
   }
 }
 

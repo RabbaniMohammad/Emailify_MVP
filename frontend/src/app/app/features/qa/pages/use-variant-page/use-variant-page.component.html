@@ -208,6 +208,60 @@
           <!-- Loading overlay -->
           <div class="loading-overlay" *ngIf="finalizing$ | async" @fadeInOut>
             <div class="loading-content">
+              <!-- Animated Camera Icon -->
+              <div class="loading-icon">
+                <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <!-- Camera body -->
+                  <rect x="8" y="18" width="48" height="36" rx="6" 
+                    stroke="url(#gradient-camera)" stroke-width="2.5" fill="rgba(139, 92, 246, 0.1)"/>
+                  
+                  <!-- Lens outer circle -->
+                  <circle cx="32" cy="36" r="12" 
+                    stroke="url(#gradient-camera)" stroke-width="2.5" fill="rgba(236, 72, 153, 0.1)"/>
+                  
+                  <!-- Lens inner circle -->
+                  <circle cx="32" cy="36" r="7" 
+                    fill="url(#gradient-camera)" opacity="0.8"/>
+                  
+                  <!-- Flash indicator -->
+                  <circle cx="48" cy="24" r="2.5" 
+                    fill="url(#gradient-camera)">
+                    <animate attributeName="opacity" 
+                      values="0.3;1;0.3" 
+                      dur="2s" 
+                      repeatCount="indefinite"/>
+                  </circle>
+                  
+                  <!-- Viewfinder top -->
+                  <rect x="24" y="12" width="16" height="4" rx="2" 
+                    fill="url(#gradient-camera)"/>
+                  
+                  <!-- Capture effect (expanding circle) -->
+                  <circle cx="32" cy="36" r="6" 
+                    stroke="url(#gradient-camera)" 
+                    stroke-width="1.5" 
+                    fill="none" 
+                    opacity="0">
+                    <animate attributeName="r" 
+                      values="6;18;6" 
+                      dur="2s" 
+                      repeatCount="indefinite"/>
+                    <animate attributeName="opacity" 
+                      values="0.8;0;0.8" 
+                      dur="2s" 
+                      repeatCount="indefinite"/>
+                  </circle>
+                  
+                  <!-- Gradient definitions -->
+                  <defs>
+                    <linearGradient id="gradient-camera" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" style="stop-color:#6d28d9;stop-opacity:1" />
+                      <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+              
               <mat-progress-spinner
                 diameter="48"
                 mode="indeterminate"
@@ -218,8 +272,8 @@
             </div>
           </div>
 
-          <!-- Existing snaps list -->
-          <div class="snaps-list" *ngIf="(snaps$ | async) as snaps">
+          <!-- Existing snaps list - HIDE while finalizing -->
+          <div class="snaps-list" *ngIf="(snaps$ | async) as snaps" [style.display]="(finalizing$ | async) ? 'none' : 'block'">
             <div *ngIf="!snaps.length && !(finalizing$ | async)" class="empty-state">
   <ng-container *ngIf="hasValidLinks(); else noLinksTemplate">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -17,6 +17,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
     "@mailchimp/mailchimp_marketing": "^3.0.80",
+    "@types/jsdom": "^27.0.0",
     "cheerio": "^1.1.2",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
@@ -33,6 +34,7 @@
     "jet-logger": "^2.0.1",
     "jet-paths": "^1.1.0",
     "jet-validators": "^1.4.3",
+    "jsdom": "^27.0.0",
     "jsonfile": "^6.2.0",
     "jsonwebtoken": "^9.0.2",
     "mjml": "^4.16.1",
