@@ -636,11 +636,13 @@ private updateNavigationState(): void {
 }
 
   canGoBack(): boolean {
-    return this.canGoBack$.value;
+    // Always allow back button - browser will handle if there's no history
+    return true;
   }
 
   canGoForward(): boolean {
-    return this.canGoForward$.value;
+    // Always allow forward button - browser will handle if there's no history
+    return true;
   }
 
 goBack(): void {

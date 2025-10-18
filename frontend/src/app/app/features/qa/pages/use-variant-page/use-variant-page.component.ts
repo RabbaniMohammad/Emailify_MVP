@@ -396,6 +396,7 @@ constructor() {
         this.htmlSubject.next(cachedThread.html);
         this.messagesSubject.next(cachedThread.messages || []);
         this.snapsSubject.next(this.qa.getSnapsCached(runId));
+        this.validLinksSubject.next(this.qa.getValidLinks(runId)); // ✅ RESTORE VALID LINKS
         
         // ✅ RESTORE GRAMMAR CHECK RESULTS
         const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
@@ -442,6 +443,7 @@ constructor() {
         this.qa.saveChat(runId, no, thread);
         
         this.snapsSubject.next(this.qa.getSnapsCached(runId));
+        this.validLinksSubject.next(this.qa.getValidLinks(runId)); // ✅ RESTORE VALID LINKS
 
         // ✅ RESTORE SUBJECT GENERATION RESULTS
         const cachedSubjects = this.qa.getSubjectsCached(runId);
@@ -487,6 +489,7 @@ constructor() {
         this.qa.saveChat(runId, no, thread);
         
         this.snapsSubject.next(this.qa.getSnapsCached(runId));
+        this.validLinksSubject.next(this.qa.getValidLinks(runId)); // ✅ RESTORE VALID LINKS
       } catch (apiError) {
         console.error('❌ Failed to load from API:', apiError);
         const intro: ChatTurn = {
@@ -497,6 +500,7 @@ constructor() {
         };
         this.messagesSubject.next([intro]);
         this.snapsSubject.next([]);
+        this.validLinksSubject.next([]); // ✅ CLEAR VALID LINKS ON ERROR
       }
 
     } catch (error) {

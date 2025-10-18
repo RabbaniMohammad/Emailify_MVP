@@ -335,8 +335,10 @@ export class QaPageComponent implements OnDestroy {
       }]
     };
 
+    // Clear data for this run (force re-finalization)
     this.qa.clearChatForRun(syntheticRun.runId, 1);
     this.qa.clearSnapsForRun(syntheticRun.runId);
+    this.qa.clearValidLinks(syntheticRun.runId); // ✅ Clear link matrix data
     
     try {
       sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
@@ -371,8 +373,10 @@ export class QaPageComponent implements OnDestroy {
       }]
     };
 
+    // Clear data for this run (force re-finalization)
     this.qa.clearChatForRun(syntheticRun.runId, 1);
     this.qa.clearSnapsForRun(syntheticRun.runId);
+    this.qa.clearValidLinks(syntheticRun.runId); // ✅ Clear link matrix data
     
     try {
       sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
@@ -951,6 +955,11 @@ export class QaPageComponent implements OnDestroy {
   }
 
   onUseVariant(templateId: string, runId: string, no: number) {
+    // Clear data for this run (force re-finalization on navigation)
+    this.qa.clearChatForRun(runId, no);
+    this.qa.clearSnapsForRun(runId);
+    this.qa.clearValidLinks(runId); // ✅ Clear link matrix data
+    
     this.router.navigate(['/qa', templateId, 'use', runId, no]);
   }
 

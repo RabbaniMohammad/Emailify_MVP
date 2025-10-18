@@ -728,4 +728,18 @@ export class QaService {
       localStorage.setItem(this.kValidLinks(runId), JSON.stringify(clean));
     } catch {}
   }
+
+  /**
+   * Clear valid links for a specific run
+   * Called when navigating to a template from QA page to force re-finalization
+   */
+  clearValidLinks(runId: string): void {
+    try {
+      const key = this.kValidLinks(runId);
+      localStorage.removeItem(key);
+      console.log(`🧹 Cleared valid links for ${runId}`);
+    } catch (e) {
+      console.error('Failed to clear valid links:', e);
+    }
+  }
 }
