@@ -22,14 +22,14 @@
       </button>
       
       <!-- Check Preview Button -->
-      <button 
-        mat-raised-button 
-        class="action-btn check-preview-btn"
-        (click)="onCheckPreview()"
-        [disabled]="!templateId || loading">
-        <mat-icon>visibility</mat-icon>
-        Check Preview
-      </button>
+     <button 
+  mat-raised-button 
+  color="primary"
+  [disabled]="loading"
+  (click)="onCheckPreview()">
+  <mat-icon>preview</mat-icon>
+  Check Preview
+</button>
       
       <button mat-raised-button class="action-btn primary" (click)="exportHTML()">
         <mat-icon>file_download</mat-icon>
@@ -203,4 +203,65 @@
       </div>
     </div>
   </div>
+  <!-- 🆕 TEMPLATE NAME DIALOG -->
+<!-- 🆕 TEMPLATE NAME DIALOG -->
+<div *ngIf="showNameDialog" class="name-dialog-overlay" @slideIn>
+  <div class="name-dialog-container">
+    <div class="name-dialog-content">
+      <div class="dialog-header">
+        <h2>📝 Name Your Template</h2>
+        <p>Give your template a memorable name before saving</p>
+      </div>
+      
+      <div class="dialog-body">
+        <div class="template-name-field">
+          <label class="field-label">Template Name</label>
+          <input 
+            type="text"
+            class="template-input"
+            [(ngModel)]="newTemplateName"
+            placeholder="e.g., Welcome Email, Newsletter Template"
+            maxlength="100"
+            (keyup.enter)="isValidName() && confirmTemplateName()"
+            autofocus>
+          <div class="field-hint">
+            <span *ngIf="newTemplateName.length > 0" class="char-count">
+              {{ newTemplateName.length }} / 100 characters
+            </span>
+            <span *ngIf="newTemplateName.length === 0" class="hint-text">
+              Minimum 3 characters required
+            </span>
+          </div>
+          <div *ngIf="newTemplateName.length > 0 && newTemplateName.trim().length < 3" class="field-error">
+            ⚠ Name must be at least 3 characters
+          </div>
+        </div>
+      </div>
+      
+      <div class="dialog-actions">
+        <button 
+          mat-button 
+          class="cancel-btn"
+          (click)="cancelNameDialog()"
+          [disabled]="isSavingTemplate">
+          Cancel
+        </button>
+        <button 
+          mat-raised-button 
+          color="primary" 
+          class="save-btn"
+          (click)="confirmTemplateName()"
+          [disabled]="!isValidName() || isSavingTemplate">
+          <mat-icon *ngIf="!isSavingTemplate">save</mat-icon>
+          <mat-spinner 
+            *ngIf="isSavingTemplate" 
+            diameter="20" 
+            class="spinner-inline">
+          </mat-spinner>
+          {{ isSavingTemplate ? 'Saving...' : 'Save & Continue' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 </div>

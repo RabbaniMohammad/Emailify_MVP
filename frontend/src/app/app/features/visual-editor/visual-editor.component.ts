@@ -1,17 +1,19 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, inject, AfterViewInit, ViewEncapsulation, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, inject, AfterViewInit, ViewEncapsulation, HostListener, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import grapesjs from 'grapesjs';
 import grapesjsPresetNewsletter from 'grapesjs-preset-newsletter';
 import { CacheService } from '../../core/services/cache.service';
 import { AuthService } from '../../core/services/auth.service';
 import { trigger, state, style, transition, animate } from '@angular/animations';
-
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, firstValueFrom } from 'rxjs';
 
 interface MatchOverlay {
   id: string;
@@ -32,7 +34,9 @@ interface MatchOverlay {
     FormsModule,
     MatButtonModule,
     MatIconModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatFormFieldModule,
+    MatInputModule
   ],
   templateUrl: './visual-editor.component.html',
   styleUrls: ['./visual-editor.component.scss'],
@@ -60,7 +64,6 @@ interface MatchOverlay {
     ])
   ]
 })
-
 export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('editorContainer', { static: false }) editorContainer!: ElementRef;
   
@@ -68,11 +71,20 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private cacheService = inject(CacheService);
   private authService = inject(AuthService);
   private route = inject(ActivatedRoute);
+  private http = inject(HttpClient);
+  private cdr = inject(ChangeDetectorRef);
   private longPressTimer: any;
 
   // Simple overlay tracking
   private overlays: MatchOverlay[] = [];
   private overlayContainer: HTMLElement | null = null;
+
+  // ============================================
+  // 🆕 TEMPLATE NAME DIALOG STATE
+  // ============================================
+  showNameDialog = false;
+  newTemplateName = '';
+  isSavingTemplate = false;
 
   // Failed Edits Data
   failedEdits: Array<{
@@ -197,84 +209,200 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-private loadGoldenHtml(templateId: string): void {
-  // Try to get golden HTML from sessionStorage (set by QA page)
-  const goldenKey = `visual_editor_${templateId}_golden_html`;
-  const goldenHtml = sessionStorage.getItem(goldenKey);
-  
-  if (goldenHtml) {
-    // ✅ SCENARIO 1: Coming from QA page
-    // - Golden HTML exists in sessionStorage
-    // - Load it into editor
-    // - Failed edits widget will show (if failed edits exist)
-    console.log('✅ Loaded golden HTML from sessionStorage (QA page flow)');
-    this.originalGoldenHtml = goldenHtml;
-  } else {
-    // ✅ SCENARIO 2: Direct access from navbar
-    // - No golden HTML in sessionStorage
-    // - Start with fresh/empty editor
-    // - No failed edits widget (no data to show)
-    console.log('🆕 Starting fresh editor (direct access from navbar)');
-    this.originalGoldenHtml = '';
+  // ============================================
+  // 🆕 PROMPT FOR TEMPLATE NAME
+  // ============================================
+  private promptTemplateName(): Promise<string | null> {
+    return new Promise((resolve) => {
+      this.newTemplateName = '';
+      this.showNameDialog = true;
+      this.cdr.markForCheck();
+      
+      // Store resolve function for later use
+      (window as any).__templateNameResolve = resolve;
+    });
   }
-  
-  // NO alert, NO redirect - just continue loading!
-  // The editor will handle both cases in initGrapesJS()
-}
 
-private initGrapesJS(): void {
-  try {
-    this.editor = grapesjs.init({
-      container: '#gjs',
-      fromElement: false,
-      height: 'calc(100vh - 80px)',
-      width: '100%',
-      storageManager: false,
-      plugins: [grapesjsPresetNewsletter],
-      pluginsOpts: {
-        'grapesjs-preset-newsletter': {
-          modalLabelImport: 'Paste HTML',
-          modalLabelExport: 'Copy HTML',
-          codeViewerTheme: 'material',
-          importPlaceholder: '<table>...</table>'
-        }
-      }
-    });
-
-    this.editor.on('load', () => {
-      this.setupCodeEditor();
-      
-      // ✅ CASE 1: From QA page with golden HTML
-      if (this.originalGoldenHtml) {
-        try {
-          console.log('✅ Loading golden HTML from QA page');
-          this.editor.setComponents(this.originalGoldenHtml);
-        } catch (error) {
-          console.error('Failed to load golden HTML:', error);
-        }
-      } 
-      // ✅ CASE 2: Has template ID but no golden HTML - restore progress
-      else if (this.templateId) {
-        console.log('🔄 Restoring progress for template:', this.templateId);
-        this.restoreProgress();
-      }
-      // ✅ CASE 3: No template ID - FRESH EDITOR (do nothing)
-      else {
-        console.log('🆕 Starting fresh editor - no content loaded');
-      }
-      
-      this.loading = false;
-    });
+  // ============================================
+  // 🆕 CANCEL NAME DIALOG
+  // ============================================
+  cancelNameDialog(): void {
+    this.showNameDialog = false;
+    this.newTemplateName = '';
     
-    this.editor.on('update', () => {
-      this.autoSave();
-    });
+    if ((window as any).__templateNameResolve) {
+      (window as any).__templateNameResolve(null);
+      delete (window as any).__templateNameResolve;
+    }
+  }
+
+  // ============================================
+  // 🆕 CONFIRM TEMPLATE NAME
+  // ============================================
+  confirmTemplateName(): void {
+    const name = this.newTemplateName.trim();
+    
+    if (!this.isValidName()) {
+      this.showToast('Please enter a valid template name (3-100 characters)', 'error');
+      return;
+    }
+    
+    this.showNameDialog = false;
+    
+    if ((window as any).__templateNameResolve) {
+      (window as any).__templateNameResolve(name);
+      delete (window as any).__templateNameResolve;
+    }
+  }
+
+  // ============================================
+  // 🆕 VALIDATE TEMPLATE NAME
+  // ============================================
+  isValidName(): boolean {
+    const name = this.newTemplateName?.trim();
+    return !!(name && name.length >= 3 && name.length <= 100);
+  }
+
+
+// ============================================
+// 🆕 SAVE NEW TEMPLATE TO MONGODB
+// ============================================
+private async saveNewTemplate(templateName: string, html: string): Promise<string | null> {
+  this.isSavingTemplate = true;
+  
+  try {
+    // Get current user info from AuthService
+    let userName = 'Unknown User';
+    
+    // Try multiple ways to get user info
+    try {
+      // Method 1: Try user$ observable if it exists
+      if ('user$' in this.authService) {
+        const user: any = await firstValueFrom((this.authService as any).user$);
+        userName = user?.displayName || user?.name || user?.email || 'Unknown User';
+      }
+      // Method 2: Try currentUser property if it exists
+      else if ('currentUser' in this.authService) {
+        const user: any = (this.authService as any).currentUser;
+        userName = user?.displayName || user?.name || user?.email || 'Unknown User';
+      }
+      // Method 3: Try getting from localStorage
+      else {
+        const storedUser = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          userName = user?.displayName || user?.name || user?.email || 'Unknown User';
+        }
+      }
+    } catch (error) {
+      console.warn('Could not get user info, using default:', error);
+    }
+    
+    const payload = {
+      name: templateName,
+      content: html,
+      type: 'Visual editor',
+      category: 'N/A',
+      createdBy: userName,
+      createdDate: new Date().toISOString(),
+      lastEdited: new Date().toISOString(),
+      active: true,
+      dragDrop: true,
+      responsive: 'N/A',
+      folderId: 'N/A',
+      source: 'Visual Editor'
+    };
+    
+    console.log('💾 Saving new template to MongoDB:', payload);
+    
+    const response: any = await firstValueFrom(
+      this.http.post('/api/templates', payload)
+    );
+    
+    console.log('✅ Template saved successfully:', response);
+    
+    this.showToast('✅ Template saved successfully!', 'success');
+    
+    return response.id || response.templateId || response._id;
     
   } catch (error) {
-    console.error('Failed to initialize GrapesJS:', error);
-    this.loading = false;
+    console.error('❌ Failed to save template:', error);
+    this.showToast('Failed to save template. Please try again.', 'error');
+    return null;
+  } finally {
+    this.isSavingTemplate = false;
   }
 }
+
+  private loadGoldenHtml(templateId: string): void {
+    // Try to get golden HTML from sessionStorage (set by QA page)
+    const goldenKey = `visual_editor_${templateId}_golden_html`;
+    const goldenHtml = sessionStorage.getItem(goldenKey);
+    
+    if (goldenHtml) {
+      // ✅ SCENARIO 1: Coming from QA page
+      console.log('✅ Loaded golden HTML from sessionStorage (QA page flow)');
+      this.originalGoldenHtml = goldenHtml;
+    } else {
+      // ✅ SCENARIO 2: Direct access from navbar
+      console.log('🆕 Starting fresh editor (direct access from navbar)');
+      this.originalGoldenHtml = '';
+    }
+  }
+
+  private initGrapesJS(): void {
+    try {
+      this.editor = grapesjs.init({
+        container: '#gjs',
+        fromElement: false,
+        height: 'calc(100vh - 80px)',
+        width: '100%',
+        storageManager: false,
+        plugins: [grapesjsPresetNewsletter],
+        pluginsOpts: {
+          'grapesjs-preset-newsletter': {
+            modalLabelImport: 'Paste HTML',
+            modalLabelExport: 'Copy HTML',
+            codeViewerTheme: 'material',
+            importPlaceholder: '<table>...</table>'
+          }
+        }
+      });
+
+      this.editor.on('load', () => {
+        this.setupCodeEditor();
+        
+        // ✅ CASE 1: From QA page with golden HTML
+        if (this.originalGoldenHtml) {
+          try {
+            console.log('✅ Loading golden HTML from QA page');
+            this.editor.setComponents(this.originalGoldenHtml);
+          } catch (error) {
+            console.error('Failed to load golden HTML:', error);
+          }
+        } 
+        // ✅ CASE 2: Has template ID but no golden HTML - restore progress
+        else if (this.templateId) {
+          console.log('🔄 Restoring progress for template:', this.templateId);
+          this.restoreProgress();
+        }
+        // ✅ CASE 3: No template ID - FRESH EDITOR (do nothing)
+        else {
+          console.log('🆕 Starting fresh editor - no content loaded');
+        }
+        
+        this.loading = false;
+      });
+      
+      this.editor.on('update', () => {
+        this.autoSave();
+      });
+      
+    } catch (error) {
+      console.error('Failed to initialize GrapesJS:', error);
+      this.loading = false;
+    }
+  }
 
   private setupCodeEditor(): void {
     try {
@@ -794,8 +922,7 @@ private initGrapesJS(): void {
       }
     }
     
-    return ranges;
-  }
+    return ranges;}
 
   /**
    * Clear all highlights
@@ -810,17 +937,15 @@ private initGrapesJS(): void {
     this.overlayContainer = null;
   }
 
-  /**
-   * Check preview and go back to QA page
-   */
-onCheckPreview(): void {
+  // ============================================
+  // ✅ UPDATED: CHECK PREVIEW WITH AUTO-SAVE
+  // ============================================
+// ============================================
+// ✅ UPDATED: CHECK PREVIEW WITH CONTENT VALIDATION
+// ============================================
+async onCheckPreview(): Promise<void> {
   if (!this.editor) {
     alert('Editor not initialized');
-    return;
-  }
-  
-  if (!this.templateId) {
-    alert('Template ID not found');
     return;
   }
   
@@ -828,14 +953,65 @@ onCheckPreview(): void {
   const css = this.editor.getCss();
   const fullHtml = `<style>${css}</style>${html}`;
   
-  // ✅ Check editing mode
+  // ============================================
+  // 🆕 SCENARIO 1: DIRECT ACCESS (No templateId)
+  // ============================================
+  if (!this.templateId) {
+    console.log('🆕 Direct access detected');
+    
+    // ✅ CHECK IF EDITOR HAS CONTENT
+    const hasContent = html && html.trim().length > 0;
+    
+    if (!hasContent) {
+      this.showToast('⚠ Please add some content to your template first', 'warning');
+      return;
+    }
+    
+    console.log('✅ Content detected - prompting for template name');
+    
+    // Prompt for template name
+    const templateName = await this.promptTemplateName();
+    
+    if (!templateName) {
+      console.log('❌ User cancelled template naming');
+      return;
+    }
+    
+    console.log('✅ Template name provided:', templateName);
+    
+    // Save to MongoDB
+    const savedTemplateId = await this.saveNewTemplate(templateName, fullHtml);
+    
+    if (!savedTemplateId) {
+      console.error('❌ Failed to save template');
+      return;
+    }
+    
+    console.log('✅ Template saved with ID:', savedTemplateId);
+    
+    // Set templateId for navigation
+    this.templateId = savedTemplateId;
+    
+    // Save to session for QA page
+    const goldenKey = `visual_editor_${savedTemplateId}_golden_html`;
+    sessionStorage.setItem(goldenKey, fullHtml);
+    
+    // Navigate to QA page
+    console.log('🎯 Navigating to QA page:', `/qa/${savedTemplateId}`);
+    this.router.navigate(['/qa', savedTemplateId]);
+    
+    return;
+  }
+  
+  // ============================================
+  // ✅ SCENARIO 2: USE-VARIANT MODE
+  // ============================================
   const modeKey = `visual_editor_${this.templateId}_editing_mode`;
   const editingMode = sessionStorage.getItem(modeKey);
   
   console.log('🎯 Check Preview - Mode:', editingMode);
   
   if (editingMode === 'use-variant') {
-    // ✅ RETURNING TO USE-VARIANT PAGE
     const metaKey = `visual_editor_${this.templateId}_use_variant_meta`;
     const metaJson = sessionStorage.getItem(metaKey);
     
@@ -847,25 +1023,22 @@ onCheckPreview(): void {
     const meta = JSON.parse(metaJson);
     const { runId, no } = meta;
     
-    // Save edited HTML
     const editedKey = `visual_editor_edited_html`;
     sessionStorage.setItem(editedKey, fullHtml);
     
-    // Set return flag
     const returnKey = `visual_editor_return_use_variant`;
     sessionStorage.setItem(returnKey, 'true');
     
-    // Cleanup
     sessionStorage.removeItem(modeKey);
     sessionStorage.removeItem(metaKey);
     
     this.autoSave();
-    
-    // Navigate back
     this.router.navigate(['/qa', this.templateId, 'use', runId, no]);
     
   } else {
-    // ✅ EXISTING LOGIC: Golden template flow
+    // ============================================
+    // ✅ SCENARIO 3: GOLDEN TEMPLATE FLOW
+    // ============================================
     const editedKey = `visual_editor_${this.templateId}_edited_html`;
     sessionStorage.setItem(editedKey, fullHtml);
     
@@ -877,35 +1050,35 @@ onCheckPreview(): void {
   }
 }
 
-/**
- * Copy text as plain text (no formatting)
- */
-copyTextToClipboard(text: string, event?: MouseEvent): void {
-  if (event) {
-    event.stopPropagation();
+  /**
+   * Copy text as plain text (no formatting)
+   */
+  copyTextToClipboard(text: string, event?: MouseEvent): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    
+    // ✅ Copy as plain text only
+    navigator.clipboard.writeText(text).then(() => {
+      this.showToast(`Copied: "${this.truncateText(text, 30)}"`, 'success');
+    }).catch(err => {
+      console.error('Copy failed:', err);
+      this.showToast('Copy failed. Please try again.', 'error');
+    });
   }
-  
-  // ✅ Copy as plain text only
-  navigator.clipboard.writeText(text).then(() => {
-    this.showToast(`Copied: "${this.truncateText(text, 30)}"`, 'success');
-  }).catch(err => {
-    console.error('Copy failed:', err);
-    this.showToast('Copy failed. Please try again.', 'error');
-  });
-}
 
-/**
- * Make text selectable and copyable
- */
-makeTextCopyable(element: HTMLElement, text: string): void {
-  element.style.cursor = 'pointer';
-  element.title = 'Click to copy';
-  
-  element.addEventListener('click', (e) => {
-    e.stopPropagation();
-    this.copyTextToClipboard(text);
-  });
-}
+  /**
+   * Make text selectable and copyable
+   */
+  makeTextCopyable(element: HTMLElement, text: string): void {
+    element.style.cursor = 'pointer';
+    element.title = 'Click to copy';
+    
+    element.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.copyTextToClipboard(text);
+    });
+  }
 
   /**
    * Simple toast (NO animations)
