@@ -117,6 +117,7 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   loading = true;
   showImportModal = false;
   importHtmlCode = '';
+  importMethod: 'paste' | 'file' = 'paste'; // Track which import method is selected
   
   private readonly EDITOR_CACHE_KEY = 'visual-editor-content';
 
@@ -501,6 +502,41 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     if (!this.editor || !this.importHtmlCode.trim()) return;
     this.editor.setComponents(this.importHtmlCode);
     this.closeImportModal();
+  }
+
+  // Handle file selection
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const file = input.files[0];
+    
+    // Validate file type
+    if (!file.name.endsWith('.html') && !file.name.endsWith('.htm')) {
+      this.showToast('⚠️ Please select a valid HTML file (.html or .htm)');
+      return;
+    }
+
+    // Read file content
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      if (content && this.editor) {
+        this.editor.setComponents(content);
+        this.closeImportModal();
+        this.showToast('✅ HTML file imported successfully!');
+      }
+    };
+    reader.onerror = () => {
+      this.showToast('❌ Failed to read file. Please try again.');
+    };
+    reader.readAsText(file);
+  }
+
+  // Switch between import methods
+  setImportMethod(method: 'paste' | 'file'): void {
+    this.importMethod = method;
+    this.importHtmlCode = '';
   }
 
   goBack(): void {

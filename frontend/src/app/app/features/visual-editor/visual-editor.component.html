@@ -54,25 +54,77 @@
     <div class="modal-backdrop" (click)="closeImportModal()"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Import HTML Code</h2>
+        <h2>
+          <mat-icon>file_upload</mat-icon>
+          Import HTML
+        </h2>
         <button mat-icon-button (click)="closeImportModal()">
           <mat-icon>close</mat-icon>
         </button>
       </div>
-      <div class="modal-body">
-        <textarea 
-          [(ngModel)]="importHtmlCode"
-          placeholder="Paste your HTML code here..."
-          rows="15"></textarea>
+
+      <!-- Import Method Tabs -->
+      <div class="import-tabs">
+        <button 
+          class="tab-btn" 
+          [class.active]="importMethod === 'file'"
+          (click)="setImportMethod('file')">
+          <mat-icon>upload_file</mat-icon>
+          <span>Upload File</span>
+        </button>
+        <button 
+          class="tab-btn" 
+          [class.active]="importMethod === 'paste'"
+          (click)="setImportMethod('paste')">
+          <mat-icon>content_paste</mat-icon>
+          <span>Paste Code</span>
+        </button>
       </div>
+
+      <div class="modal-body">
+        <!-- File Upload View -->
+        <div class="file-upload-container" *ngIf="importMethod === 'file'">
+          <div class="upload-area">
+            <input 
+              type="file" 
+              #fileInput
+              accept=".html,.htm"
+              (change)="onFileSelected($event)"
+              style="display: none">
+            
+            <div class="upload-content" (click)="fileInput.click()">
+              <div class="upload-icon">
+                <mat-icon>cloud_upload</mat-icon>
+              </div>
+              <h3>Drop your HTML file here</h3>
+              <p>or click to browse</p>
+              <div class="file-types">
+                <span class="file-badge">.html</span>
+                <span class="file-badge">.htm</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paste Code View -->
+        <div class="paste-code-container" *ngIf="importMethod === 'paste'">
+          <textarea 
+            [(ngModel)]="importHtmlCode"
+            placeholder="Paste your HTML code here..."
+            rows="15"></textarea>
+        </div>
+      </div>
+
       <div class="modal-footer">
         <button mat-button (click)="closeImportModal()">Cancel</button>
         <button 
           mat-raised-button 
-          class="primary" 
+          color="primary"
           (click)="importHTML()"
-          [disabled]="!importHtmlCode.trim()">
-          Import
+          [disabled]="importMethod === 'paste' && !importHtmlCode.trim()"
+          *ngIf="importMethod === 'paste'">
+          <mat-icon>check</mat-icon>
+          Import Code
         </button>
       </div>
     </div>

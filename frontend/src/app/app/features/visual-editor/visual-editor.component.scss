@@ -149,6 +149,63 @@
     font-size: 1.25rem;
     font-weight: 600;
     color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    
+    mat-icon {
+      color: #6d28d9;
+    }
+  }
+}
+
+// Import Method Tabs
+.import-tabs {
+  display: flex;
+  border-bottom: 2px solid #e2e8f0;
+  background: #f8fafc;
+  
+  .tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+    
+    &:hover {
+      background: rgba(109, 40, 217, 0.05);
+      color: #6d28d9;
+    }
+    
+    &.active {
+      color: #6d28d9;
+      background: white;
+      
+      &::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, #8b5cf6 0%, #6d28d9 100%);
+      }
+    }
   }
 }
 
@@ -156,6 +213,7 @@
   flex: 1;
   padding: 1.5rem;
   overflow-y: auto;
+  min-height: 350px;
   
   textarea {
     width: 100%;
@@ -176,6 +234,98 @@
       color: #94a3b8;
     }
   }
+}
+
+// File Upload Container
+.file-upload-container {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-area {
+  width: 100%;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-content {
+  width: 100%;
+  max-width: 400px;
+  padding: 3rem 2rem;
+  border: 3px dashed #cbd5e1;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    border-color: #6d28d9;
+    background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(109, 40, 217, 0.15);
+    
+    .upload-icon mat-icon {
+      transform: scale(1.1);
+      color: #6d28d9;
+    }
+  }
+  
+  &:active {
+    transform: translateY(-2px);
+  }
+}
+
+.upload-icon {
+  margin-bottom: 1rem;
+  
+  mat-icon {
+    font-size: 64px;
+    width: 64px;
+    height: 64px;
+    color: #94a3b8;
+    transition: all 0.3s ease;
+  }
+}
+
+.upload-content h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.upload-content p {
+  margin: 0 0 1.5rem 0;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.file-types {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.file-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6d28d9;
+  font-family: 'Courier New', monospace;
+}
+
+.paste-code-container {
+  height: 100%;
 }
 
 .modal-footer {
@@ -766,6 +916,74 @@
     width: calc(100vw - 32px);
     max-width: 280px;
     max-height: 300px;
+  }
+
+  // Import modal responsive
+  .modal-content {
+    width: 95%;
+    max-height: 90vh;
+  }
+  
+  .modal-header {
+    padding: 1rem;
+    
+    h2 {
+      font-size: 1rem;
+      
+      mat-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+      }
+    }
+  }
+  
+  .import-tabs .tab-btn {
+    padding: 0.75rem;
+    font-size: 0.8125rem;
+    flex-direction: column;
+    gap: 0.25rem;
+    
+    span {
+      font-size: 0.75rem;
+    }
+  }
+  
+  .modal-body {
+    padding: 1rem;
+    
+    textarea {
+      min-height: 200px;
+      font-size: 0.8125rem;
+    }
+  }
+  
+  .upload-content {
+    padding: 2rem 1rem;
+    
+    h3 {
+      font-size: 1rem;
+    }
+    
+    p {
+      font-size: 0.8125rem;
+    }
+  }
+  
+  .upload-icon mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+  }
+  
+  .modal-footer {
+    padding: 1rem;
+    flex-wrap: wrap;
+    
+    button {
+      flex: 1;
+      min-width: 100px;
+    }
   }
 }
 
