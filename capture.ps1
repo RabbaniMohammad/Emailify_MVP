@@ -3,7 +3,7 @@ Write-Host ""
 Write-Host "=== Automated Screenshot Capture ===" -ForegroundColor Cyan
 Write-Host ""
 
-$APP_URL = "http://localhost:4200/auth"
+$APP_URL = "http://localhost:4200"
 $CURRENT_DIR = Get-Location
 $OUTPUT_DIR = Join-Path $CURRENT_DIR "screenshots"
 $TIMESTAMP = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
@@ -67,7 +67,7 @@ Write-Host ""
 
 $captured = 0
 foreach ($vp in $viewports) {
-    $filename = "login-$($vp.Name).png"
+    $filename = "home-$($vp.Name).png"
     $filepath = Join-Path $SESSION_DIR $filename
     
     Write-Host "  $($vp.Label) ($($vp.Width)x$($vp.Height))..." -NoNewline
