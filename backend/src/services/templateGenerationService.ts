@@ -544,12 +544,18 @@ export async function generateTemplate(
         
         const startTime = Date.now();
 
-        // ⭐ CALL CLAUDE API
-        logger.info(`📡 Calling Anthropic API...`);
+        // ⭐ CALL CLAUDE API WITH PROMPT CACHING
+        logger.info(`📡 Calling Anthropic API with prompt caching...`);
         const response = await anthropic.messages.create({
           model: CLAUDE_MODEL,
           max_tokens: MAX_TOKENS,
-          system: getSystemPrompt(),
+          system: [
+            {
+              type: "text",
+              text: getSystemPrompt(),
+              cache_control: { type: "ephemeral" } // 🔥 Cache system prompt for 5 min (90% discount on reuse)
+            }
+          ],
           messages: messages,
         });
 

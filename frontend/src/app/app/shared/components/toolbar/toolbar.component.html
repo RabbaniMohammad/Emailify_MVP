@@ -101,6 +101,22 @@
 
         <mat-divider></mat-divider>
 
+          <!-- App Performance Button ✨ NEW -->
+          <button 
+            mat-menu-item 
+            class="menu-item performance-item"
+            (click)="openPerformanceDashboard()">
+            <div class="menu-item-icon performance-icon">
+              <mat-icon>speed</mat-icon>
+            </div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">App Performance</span>
+              <span class="menu-item-subtitle">Cache & storage stats</span>
+            </div>
+          </button>
+
+          <mat-divider></mat-divider>
+
           <!-- Logout Button -->
           <button mat-menu-item class="menu-item logout-item" (click)="logout()">
             <div class="menu-item-icon logout-icon">

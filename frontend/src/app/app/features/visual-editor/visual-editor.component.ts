@@ -296,7 +296,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         }
       }
     } catch (error) {
-      console.warn('Could not get user info, using default:', error);
     }
     
     const payload = {
@@ -314,13 +313,9 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       source: 'Visual Editor'
     };
     
-    console.log('💾 Saving new template to MongoDB:', payload);
-    
     const response: any = await firstValueFrom(
       this.http.post('/api/templates', payload)
     );
-    
-    console.log('✅ Template saved successfully:', response);
     
     this.showToast('✅ Template saved successfully!', 'success');
     
@@ -342,11 +337,9 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     
     if (goldenHtml) {
       // ✅ SCENARIO 1: Coming from QA page
-      console.log('✅ Loaded golden HTML from sessionStorage (QA page flow)');
       this.originalGoldenHtml = goldenHtml;
     } else {
       // ✅ SCENARIO 2: Direct access from navbar
-      console.log('🆕 Starting fresh editor (direct access from navbar)');
       this.originalGoldenHtml = '';
     }
   }
@@ -376,7 +369,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         // ✅ CASE 1: From QA page with golden HTML
         if (this.originalGoldenHtml) {
           try {
-            console.log('✅ Loading golden HTML from QA page');
             this.editor.setComponents(this.originalGoldenHtml);
           } catch (error) {
             console.error('Failed to load golden HTML:', error);
@@ -384,12 +376,10 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         } 
         // ✅ CASE 2: Has template ID but no golden HTML - restore progress
         else if (this.templateId) {
-          console.log('🔄 Restoring progress for template:', this.templateId);
           this.restoreProgress();
         }
         // ✅ CASE 3: No template ID - FRESH EDITOR (do nothing)
         else {
-          console.log('🆕 Starting fresh editor - no content loaded');
         }
         
         this.loading = false;
@@ -992,9 +982,6 @@ async onCheckPreview(): Promise<void> {
   // ============================================
   // ✅ CHECK IF EDITOR IS EMPTY (ALWAYS)
   // ============================================
-  console.log('🔍 [CHECK PREVIEW] Raw HTML from editor:', html);
-  console.log('🔍 [CHECK PREVIEW] HTML length:', html?.length);
-  
   // Remove all whitespace, newlines, and common empty tags
   const cleanedHtml = html
     .replace(/\s+/g, '')
@@ -1007,12 +994,7 @@ async onCheckPreview(): Promise<void> {
     .replace(/<section[^>]*><\/section>/gi, '')
     .replace(/<article[^>]*><\/article>/gi, '');
   
-  console.log('🔍 [CHECK PREVIEW] Cleaned HTML:', cleanedHtml);
-  console.log('🔍 [CHECK PREVIEW] Cleaned length:', cleanedHtml?.length);
-  
   const hasContent = cleanedHtml && cleanedHtml.trim().length > 0;
-  
-  console.log('🔍 [CHECK PREVIEW] Has content?', hasContent);
   
   if (!hasContent) {
     this.showToast('⚠️ Visual editor is empty. Please add some content to your template first.', 'warning');
@@ -1023,19 +1005,12 @@ async onCheckPreview(): Promise<void> {
   // 🆕 SCENARIO 1: DIRECT ACCESS (No templateId)
   // ============================================
   if (!this.templateId) {
-    console.log('🆕 Direct access detected');
-    
-    console.log('✅ Content detected - prompting for template name');
-    
     // Prompt for template name
     const templateName = await this.promptTemplateName();
     
     if (!templateName) {
-      console.log('❌ User cancelled template naming');
       return;
     }
-    
-    console.log('✅ Template name provided:', templateName);
     
     // Save to MongoDB
     const savedTemplateId = await this.saveNewTemplate(templateName, fullHtml);
@@ -1045,8 +1020,6 @@ async onCheckPreview(): Promise<void> {
       return;
     }
     
-    console.log('✅ Template saved with ID:', savedTemplateId);
-    
     // Set templateId for navigation
     this.templateId = savedTemplateId;
     
@@ -1055,7 +1028,6 @@ async onCheckPreview(): Promise<void> {
     sessionStorage.setItem(goldenKey, fullHtml);
     
     // Navigate to QA page
-    console.log('🎯 Navigating to QA page:', `/qa/${savedTemplateId}`);
     this.router.navigate(['/qa', savedTemplateId]);
     
     return;
@@ -1066,8 +1038,6 @@ async onCheckPreview(): Promise<void> {
   // ============================================
   const modeKey = `visual_editor_${this.templateId}_editing_mode`;
   const editingMode = sessionStorage.getItem(modeKey);
-  
-  console.log('🎯 Check Preview - Mode:', editingMode);
   
   if (editingMode === 'use-variant') {
     const metaKey = `visual_editor_${this.templateId}_use_variant_meta`;

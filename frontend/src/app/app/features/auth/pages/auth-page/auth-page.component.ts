@@ -49,9 +49,6 @@ export class AuthPageComponent implements OnInit, OnDestroy {
   }
 
     private handleAuthMessage(event: MessageEvent): void {
-    console.log('📨 Received message:', event.data);
-    console.log('Origin check:', event.origin, 'vs', window.location.origin);
-    
     // Accept messages from backend (localhost:3000) or same origin (localhost:4200)
     const allowedOrigins = [
         window.location.origin,  // http://localhost:4200
@@ -59,22 +56,16 @@ export class AuthPageComponent implements OnInit, OnDestroy {
     ];
     
     if (!allowedOrigins.includes(event.origin)) {
-        console.log('❌ Origin mismatch - message rejected');
         return;
     }
 
     const { type, user } = event.data;
-    console.log('Message type:', type);
-
     if (type === 'AUTH_SUCCESS') {
-        console.log('✅ AUTH_SUCCESS - redirecting to home');
         this.authService.handleAuthSuccess(user);
         window.location.href = '/';
     } else if (type === 'AUTH_PENDING') {
-        console.log('⏳ AUTH_PENDING - navigating to pending page');
         this.router.navigate(['/auth/pending']);
     } else if (type === 'AUTH_DEACTIVATED') {
-        console.log('🚫 AUTH_DEACTIVATED - showing error');
         this.errorMessage = 'Your account has been deactivated. Please contact your administrator.';
     }
     }

@@ -257,7 +257,6 @@ export class CampaignSubmitService {
         groups.get(groupKey)!.emails.push(email);
 
       } catch (error) {
-        console.warn(`Invalid date format for ${email}: ${timeStr}`, error);
         immediateEmails.push(email);
       }
     });

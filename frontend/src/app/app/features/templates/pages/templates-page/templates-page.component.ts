@@ -105,72 +105,34 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   readonly state$ = this.svc.state$;
   readonly items$ = combineLatest([this.state$, this.categorySubject]).pipe(
     map(([state, category]) => {
-      console.log('🔍 Filtering templates:', { 
-        totalItems: state.items.length, 
-        category,
-        sampleItem: state.items[0]
-      });
-      
       // Apply category filter
       let filtered = state.items;
       
       if (category !== 'all') {
         filtered = state.items.filter(item => {
-          const itemData = item as any; // Access extended fields
-          const source = (itemData.source || '').toLowerCase();
-          const templateType = (itemData.templateType || '').toLowerCase();
-          const type = (itemData.type || '').toLowerCase();
-          
-          console.log('📊 Item data:', {
-            id: itemData.id,
-            name: itemData.name,
-            source: itemData.source,
-            templateType: itemData.templateType,
-            type: itemData.type
-          });
+          const itemData = item as any;
+          const itemSource = (itemData.source || '').toLowerCase().trim();
           
           switch (category) {
             case 'ai-generated':
-              // Match: Must have "AI" explicitly (not just "generated")
-              // This avoids matching "Visual Editor" which might contain other words
-              const isAI = source.includes('ai generated') || 
-                           source.includes('ai-generated') ||
-                           templateType.includes('ai generated') ||
-                           templateType.includes('ai-generated') ||
-                           (source.includes('ai') && source.includes('generated')) ||
-                           (templateType.includes('ai') && templateType.includes('generated')) ||
-                           (type === 'generated' && !source.includes('visual'));
+              return itemSource === 'ai generated' || itemSource === 'ai-generated';
               
-              console.log('🤖 AI check:', { isAI, source, templateType, type });
-              return isAI;
-                     
             case 'visual-editor':
-              // Match: "Visual Editor", "visual-editor", "Visual editor", etc.
-              const isVisual = source.includes('visual') || 
-                               templateType.includes('visual') ||
-                               type.includes('visual');
+              return itemSource === 'visual editor' || itemSource === 'visual-editor';
               
-              console.log('🎨 Visual check:', { isVisual, source, templateType, type });
-              return isVisual;
-                     
             case 'esp':
-              // Match: "mailchimp", or items without AI/Visual indicators
-              const isESP = source.includes('mailchimp') || 
-                            (!source.includes('visual') && 
-                             !source.includes('ai') && 
-                             source !== '' &&
-                             !source.includes('generated'));
+              // ESP is anything that's NOT AI Generated or Visual Editor
+              return itemSource !== 'ai generated' && 
+                     itemSource !== 'ai-generated' && 
+                     itemSource !== 'visual editor' && 
+                     itemSource !== 'visual-editor';
               
-              console.log('📧 ESP check:', { isESP, source, templateType });
-              return isESP;
-                     
             default:
               return true;
           }
         });
       }
       
-      console.log('✅ Filtered results:', filtered.length);
       return filtered;
     })
   );
@@ -237,16 +199,12 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     // ✅ RESTORE SEARCH QUERY FROM SERVICE STATE
     const currentState = this.svc.snapshot;
     if (currentState.searchQuery) {
-      console.log('✅ Restoring search query:', currentState.searchQuery);
       this.searchQuery = currentState.searchQuery;
     }
 
     // Always load templates on init
-    console.log('Component init - loading templates with query:', this.searchQuery);
-    
     // ✅ ALWAYS call search to trigger reordering, even if items exist
     // This ensures the last-selected template appears first on navigation back
-    console.log('Calling search to ensure proper ordering');
     this.svc.search(this.searchQuery);
     
     // ✅ Scroll to top when component loads (shows selected template first)
@@ -274,7 +232,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   }
 
   selectCategory(category: 'all' | 'ai-generated' | 'visual-editor' | 'esp'): void {
-    console.log('🎯 Category selected:', category);
     this.selectedCategory = category;
     this.categorySubject.next(category); // Emit new category for reactive filtering
     this.categoryDropdownOpen = false;
@@ -356,13 +313,11 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     
     // Prevent rapid double-clicks on the same item
     if (this.lastClickedId === item.id && (now - this.lastClickTime) < 500) {
-      console.log('Double-click prevented for:', item.id);
       return;
     }
     
     // Prevent any clicks that are too rapid (global debounce)
     if ((now - this.lastClickTime) < 200) {
-      console.log('Rapid click prevented');
       return;
     }
     
@@ -430,7 +385,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   deleteTemplate(): void {
     // Prevent concurrent deletions
     if (this.isDeleting) {
-      console.log('⏳ Delete already in progress');
       return;
     }
 
@@ -438,7 +392,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     const currentName = this.svc.snapshot.selectedName;
     
     if (!currentId) {
-      console.warn('No template selected');
       return;
     }
     
@@ -447,11 +400,8 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     );
     
     if (!confirmed) {
-      console.log('Delete cancelled by user');
       return;
     }
-    
-    console.log('🗑️ Deleting template:', currentId);
     
     // Set deleting flag
     this.isDeleting = true;
@@ -469,8 +419,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     // Delete from backend
     this.svc.deleteTemplate(currentId).subscribe({
       next: (response) => {
-        console.log('✅ Template deleted successfully');
-        
         this.isDeleting = false;
         
         this.snackBar.open(
@@ -542,8 +490,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
   // Optimized template loading with metadata caching
   private loadTemplateContent(id: string): void {
-    console.log('📄 START loadTemplateContent, id:', id);
-    
     // Clear previous state
     this.previewError = undefined;
     this.runButtonItemId = undefined;
@@ -558,32 +504,23 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     if (!id) {
       this.loading = false;
       this.safeSrcdoc = null;
-      console.log('❌ No ID - loading set to FALSE');
       this.cdr.markForCheck();
       return;
     }
 
     // Check cache first
     const cached = this.cache.get(id) || this.cache.getPersisted(id);
-    console.log('💾 Cache check:', cached ? 'HIT' : 'MISS');
-    
     if (cached) {
-      console.log('✅ Using cached content - loading instantly');
-      
       // Check if metadata is already cached
       const cachedMetadata = sessionStorage.getItem(`metadata-${id}`);
       if (cachedMetadata) {
         this.templateMetadata = JSON.parse(cachedMetadata);
-        console.log('✅ Using cached metadata');
         this.cdr.markForCheck();
       } else {
         // Fetch metadata from API and cache it
-        console.log('📡 Fetching metadata from API for cached content...');
         this.http.get(`/api/templates/${id}`, { responseType: 'json' })
           .subscribe({
             next: (response: any) => {
-              console.log('✅ API response received for metadata');
-              
               this.templateMetadata = {
                 type: response.type,
                 templateType: response.templateType,
@@ -602,12 +539,9 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
               
               // Cache the metadata
               sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
-              console.log('✅ Fetched and cached metadata');
-              
               this.cdr.markForCheck();
             },
             error: (e) => {
-              console.warn('⚠️ Failed to load metadata:', e);
             }
           });
       }
@@ -626,7 +560,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
         if (this.svc.snapshot.selectedId === id) {
           this.loading = false;
           this.showRunButton(id);
-          console.log('✅ Cached template loaded successfully');
           this.cdr.markForCheck();
         }
       }, 0);
@@ -636,14 +569,12 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
     // Check if we already have an in-flight request for this template
     if (this.inflightRequests.has(id)) {
-      console.log('⏳ Request already in-flight for template:', id, '- reusing existing request');
       this.loading = true;
       this.cdr.markForCheck();
       return;
     }
 
     // Fresh content path - fetch from API
-    console.log('📡 Fetching fresh content from API...');
     this.loading = true;
     this.safeSrcdoc = null;
     this.cdr.markForCheck();
@@ -652,8 +583,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
       .get(`/api/templates/${id}`, { responseType: 'json' })
       .subscribe({
         next: (response: any) => {
-          console.log('✅ Fresh API response received');
-          
           // Store metadata
           this.templateMetadata = {
             type: response.type,
@@ -673,8 +602,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           
           // Cache the metadata
           sessionStorage.setItem(`metadata-${id}`, JSON.stringify(this.templateMetadata));
-          console.log('✅ Fetched and cached metadata');
-          
           // Remove from in-flight requests
           this.inflightRequests.delete(id);
           
@@ -682,20 +609,14 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           
           // Check if user switched templates during fetch
           if (currentId !== id) {
-            console.log('⚠️ User switched during fetch, aborting');
             return;
           }
           
           const html = response.html || '';
-          console.log('📄 HTML content length:', html.length);
-          
           this.cache.set(id, html);
-          console.log('💾 HTML cached in memory');
-          
           const wrapped = this.ensureDoc(html);
           const cleaned = this.stripDangerousBits(wrapped);
           this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
-          console.log('✅ Fresh HTML set, waiting for iframe load event');
           this.cdr.markForCheck();
         },
         error: (e) => {
@@ -709,7 +630,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           this.cdr.markForCheck();
         },
         complete: () => {
-          console.log('✅ HTTP request completed');
           // Ensure cleanup on completion
           this.inflightRequests.delete(id);
         }
@@ -717,19 +637,14 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     
     // Store the subscription to prevent duplicate requests
     this.inflightRequests.set(id, subscription);
-    console.log('📡 HTTP request initiated and stored');
   }
 
   onIframeLoad(): void {
-    console.log('🖼️ onIframeLoad called');
-    
     // Only clear loading if we actually have content to show
     if (!this.safeSrcdoc) {
-      console.log('⚠️ Iframe loaded but no content yet - ignoring');
       return;
     }
     
-    console.log('✅ Iframe loaded with content - setting loading to FALSE');
     this.loading = false;
     const currentId = this.svc.snapshot.selectedId;
     if (currentId) {

@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, tap } from 'rxjs';
+import { DatabaseService } from '../../../core/services/db.service';
 
 /* ----------------------------- Types ----------------------------- */
 
@@ -72,6 +73,12 @@ export interface ConversationHistoryItem {
 @Injectable({ providedIn: 'root' })
 export class TemplateGenerationService {
   private http = inject(HttpClient);
+  private db!: DatabaseService; // 🔥 ADD IndexedDB
+
+  constructor() {
+    // Manual injection to avoid circular dependency
+    this.db = inject(DatabaseService);
+  }
 
   /* ---------- localStorage keys ---------- */
   private kConversation(conversationId: string) {
@@ -88,33 +95,16 @@ startGeneration(
   prompt: string,
   images?: Array<{ data: string; mediaType: string; fileName: string }>
 ): Observable<StartGenerationResponse> {
-  console.log('🚀 TemplateGenerationService.startGeneration() called');
-  console.log('📝 Prompt:', prompt);
-  console.log('🖼️ Images count:', images?.length || 0);
-  
   if (images && images.length > 0) {
-    console.log('📊 Image details:', images.map(img => ({
-      fileName: img.fileName,
-      mediaType: img.mediaType,
-      dataLength: img.data.length
-    })));
   }
 
   const payload = { prompt, images };
-  console.log('📦 Request payload:', { prompt, imagesCount: images?.length || 0 });
-
   return this.http.post<StartGenerationResponse>(
     '/api/generate/start',
     payload,
     { withCredentials: true }
   ).pipe(
     tap((response) => {
-      console.log('✅ startGeneration response received:', {
-        conversationId: response.conversationId,
-        htmlLength: response.html?.length,
-        hasErrors: response.hasErrors
-      });
-
       // Cache the conversation
       const conversationState = {
         conversationId: response.conversationId,
@@ -138,12 +128,9 @@ startGeneration(
         updatedAt: new Date(),
       };
 
-      console.log('💾 Caching conversation:', response.conversationId);
-      console.log('📊 User message has images:', !!images);
       this.cacheConversation(response.conversationId, conversationState);
 
       // Set as current conversation
-      console.log('🔖 Setting current conversation ID:', response.conversationId);
       this.setCurrentConversationId(response.conversationId);
     })
   );
@@ -156,41 +143,19 @@ continueConversation(
   message: string,
   images?: Array<{ data: string; mediaType: string; fileName: string }>
 ): Observable<ContinueGenerationResponse> {
-  console.log('💬 TemplateGenerationService.continueConversation() called');
-  console.log('🆔 Conversation ID:', conversationId);
-  console.log('📝 Message:', message);
-  console.log('🖼️ Images count:', images?.length || 0);
-  
   if (images && images.length > 0) {
-    console.log('📊 Image details:', images.map(img => ({
-      fileName: img.fileName,
-      mediaType: img.mediaType,
-      dataLength: img.data.length
-    })));
   }
 
   const payload = { message, images };
-  console.log('📦 Request payload:', { message, imagesCount: images?.length || 0 });
-
   return this.http.post<ContinueGenerationResponse>(
     `/api/generate/continue/${conversationId}`,
     payload,
     { withCredentials: true }
   ).pipe(
     tap((response) => {
-      console.log('✅ continueConversation response received:', {
-        conversationId: response.conversationId,
-        htmlLength: response.html?.length,
-        hasErrors: response.hasErrors
-      });
-
       // Update cached conversation
       const cached = this.getConversationCached(conversationId);
-      console.log('💾 Cached conversation found:', !!cached);
-      
       if (cached) {
-        console.log('📊 Current messages count:', cached.messages.length);
-        
         cached.messages.push(
           { 
             role: 'user', 
@@ -205,14 +170,10 @@ continueConversation(
           }
         );
         
-        console.log('📊 Messages count after adding:', cached.messages.length);
-        console.log('🖼️ User message has images:', !!images);
-        
         cached.currentHtml = response.html;
         cached.currentMjml = response.mjml;
         cached.updatedAt = new Date();
         
-        console.log('💾 Updating cached conversation...');
         this.cacheConversation(conversationId, cached);
       }
     })
@@ -262,42 +223,22 @@ saveTemplate(
   conversationId: string,
   templateName: string
 ): Observable<SaveTemplateResponse> {
-  console.log('💾 [SERVICE] saveTemplate() called');
-  console.log('💾 [SERVICE] Conversation ID:', conversationId);
-  console.log('💾 [SERVICE] Template name:', templateName);
-  
   return this.http.post<SaveTemplateResponse>(
     `/api/generate/save/${conversationId}`,
     { templateName },
     { withCredentials: true }
   ).pipe(
     tap((response) => {
-      console.log('✅ [SERVICE] Save response received:', response);
-      console.log('📊 [SERVICE] Response details:', {
-        templateId: response.templateId,
-        templateName: response.templateName,
-        message: response.message
-      });
-      
       // Update cached conversation
-      console.log('💾 [SERVICE] Updating cached conversation...');
       const cached = this.getConversationCached(conversationId);
       
       if (cached) {
-        console.log('✅ [SERVICE] Cached conversation found, updating status...');
-        console.log('📊 [SERVICE] Old status:', cached.status);
-        
         cached.templateName = templateName;
         cached.status = 'saved';
         
-        console.log('📊 [SERVICE] New status:', cached.status);
-        console.log('💾 [SERVICE] Saving updated conversation to cache...');
-        
         this.cacheConversation(conversationId, cached);
         
-        console.log('✅ [SERVICE] Conversation cache updated successfully');
       } else {
-        console.warn('⚠️ [SERVICE] No cached conversation found to update');
       }
     })
   );
@@ -337,22 +278,13 @@ saveTemplate(
   /* --------------------------- localStorage Helpers -------------------------- */
 
 getConversationCached(conversationId: string): ConversationState | null {
-  console.log('💾 getConversationCached() called for:', conversationId);
-  
   try {
     const raw = localStorage.getItem(this.kConversation(conversationId));
-    console.log('📦 Raw data from localStorage:', raw ? 'Found' : 'Not found');
-    
     if (!raw) {
-      console.log('❌ No cached conversation found');
       return null;
     }
     
-    console.log('🔄 Parsing cached data...');
     const parsed = JSON.parse(raw);
-    console.log('✅ Data parsed successfully');
-    console.log('📊 Cached messages count:', parsed.messages?.length);
-    
     // Convert date strings back to Date objects
     parsed.createdAt = new Date(parsed.createdAt);
     parsed.updatedAt = new Date(parsed.updatedAt);
@@ -362,10 +294,6 @@ getConversationCached(conversationId: string): ConversationState | null {
       images: m.images || undefined, // Preserve images if they exist
     }));
     
-    console.log('✅ Dates converted successfully');
-    console.log('🖼️ Messages with images:', parsed.messages.filter((m: any) => m.images).length);
-    console.log('✅ Returning cached conversation');
-    
     return parsed as ConversationState;
   } catch (error) {
     console.error('❌ Error getting cached conversation:', error);
@@ -374,30 +302,16 @@ getConversationCached(conversationId: string): ConversationState | null {
 }
 
 cacheConversation(conversationId: string, state: ConversationState): void {
-  console.log('💾 cacheConversation() called');
-  console.log('🆔 Conversation ID:', conversationId);
-  console.log('📊 State to cache:', {
-    messagesCount: state.messages.length,
-    status: state.status,
-    hasTemplateName: !!state.templateName,
-    htmlLength: state.currentHtml?.length,
-    mjmlLength: state.currentMjml?.length
+  // 🔥 Save to IndexedDB (async but don't await - fire and forget)
+  this.db.cacheConversation({
+    runId: conversationId,
+    html: state.currentHtml,
+    messages: state.messages,
+    timestamp: Date.now()
+  } as any).then(() => {
+  }).catch((err: any) => {
+    console.error('❌ Failed to cache conversation to IndexedDB:', err);
   });
-  console.log('🖼️ Messages with images:', state.messages.filter(m => m.images).length);
-  
-  try {
-    const jsonString = JSON.stringify(state);
-    console.log('📦 JSON size:', `${(jsonString.length / 1024).toFixed(2)}KB`);
-    
-    localStorage.setItem(
-      this.kConversation(conversationId),
-      jsonString
-    );
-    console.log('✅ Conversation cached successfully');
-  } catch (err) {
-    console.error('❌ Failed to cache conversation:', err);
-    console.error('Error details:', err);
-  }
 }
 
   getCurrentConversationId(): string | null {

@@ -102,7 +102,6 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
   private async initializeEditor(): Promise<void> {
     // UPDATED: Prevent multiple initializations
     if (this.editor || this.isLoading === false || this.isEditorReady) {
-      console.log('Editor already initialized, skipping...');
       return;
     }
 
@@ -263,7 +262,6 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
       localStorage.setItem('html_editor_autosave', html);
       localStorage.setItem('html_editor_autosave_time', Date.now().toString());
     } catch (error) {
-      console.warn('Auto-save failed:', error);
     }
   }
 

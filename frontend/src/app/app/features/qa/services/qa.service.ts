@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { catchError, map, of, tap, throwError, switchMap, Observable, shareReplay, finalize } from 'rxjs';
+import { catchError, map, of, tap, throwError, switchMap, mergeMap, from, Observable, shareReplay, finalize } from 'rxjs';
+import { DatabaseService } from '../../../../core/services/db.service';
 
 /* ----------------------------- Types (keep existing) ----------------------------- */
 export type GoldenEdit = {
@@ -146,6 +147,7 @@ export type SuggestionResult = {
 @Injectable({ providedIn: 'root' })
 export class QaService {
   private http = inject(HttpClient);
+  private db = inject(DatabaseService);
 
   /* ---------- localStorage keys ---------- */
   private kGolden(id: string)      { return `qa:golden:${id}`; }
@@ -199,7 +201,6 @@ export class QaService {
   generateGolden(id: string, force = false): Observable<GoldenResult> {
     // If not forcing and observable cache exists, return it
     if (!force && this.goldenCache$.has(id)) {
-      console.log('🔄 Returning cached golden observable');
       return this.goldenCache$.get(id)!;
     }
 
@@ -207,12 +208,9 @@ export class QaService {
     if (!force) {
       const cached = this.getGoldenCached(id);
       if (cached) {
-        console.log('✅ Returning golden from localStorage');
         return of(cached);
       }
     }
-    
-    console.log('🚀 Starting new golden generation');
     
     // Create new observable with shareReplay
     const golden$ = this.getTemplateHtml(id).pipe(
@@ -222,19 +220,21 @@ export class QaService {
           { html }
         );
       }),
-      tap(res => {
-        // Save to localStorage
+      tap(async res => {
+        // 🔥 Save to IndexedDB instead of localStorage
         try {
-          localStorage.setItem(this.kGolden(id), JSON.stringify(res));
-          console.log('💾 Saved golden to localStorage');
+          await this.db.cacheTemplate({
+            id: `golden-${id}`,
+            runId: `golden-${id}`,
+            html: res.html || '',
+            timestamp: Date.now()
+          });
         } catch (e) {
-          console.warn('Failed to save golden to localStorage:', e);
         }
       }),
       shareReplay(1), // ✅ Cache the result for late subscribers
       finalize(() => {
         // Clean up observable cache after completion
-        console.log('🧹 Cleaning up golden observable cache');
         this.goldenCache$.delete(id);
       })
     );
@@ -250,19 +250,15 @@ export class QaService {
    */
   generateSubjects(id: string, templateHtml: string, force = false): Observable<string[]> {
     if (!force && this.subjectsCache$.has(id)) {
-      console.log('🔄 Returning cached subjects observable');
       return this.subjectsCache$.get(id)!;
     }
 
     if (!force) {
       const cached = this.getSubjectsCached(id);
       if (cached) {
-        console.log('✅ Returning subjects from localStorage');
         return of(cached);
       }
     }
-    
-    console.log('🚀 Starting new subjects generation with template HTML');
     
     // ✅ Send template HTML in request body
     const subjects$ = this.http.post<{ subjects: string[] }>(
@@ -273,12 +269,10 @@ export class QaService {
       tap(list => {
         try {
           localStorage.setItem(this.kSubjects(id), JSON.stringify(list));
-          console.log('💾 Saved subjects to localStorage');
         } catch {}
       }),
       shareReplay(1),
       finalize(() => {
-        console.log('🧹 Cleaning up subjects observable cache');
         this.subjectsCache$.delete(id);
       })
     );
@@ -292,19 +286,15 @@ export class QaService {
    */
   generateSuggestions(id: string, force = false): Observable<SuggestionResult> {
     if (!force && this.suggestionsCache$.has(id)) {
-      console.log('🔄 Returning cached suggestions observable');
       return this.suggestionsCache$.get(id)!;
     }
 
     if (!force) {
       const cached = this.getSuggestionsCached(id);
       if (cached) {
-        console.log('✅ Returning suggestions from localStorage');
         return of(cached);
       }
     }
-    
-    console.log('🚀 Starting new suggestions generation');
     
     const suggestions$ = this.http.post<SuggestionResult>(
       `/api/qa/${id}/suggestions`,
@@ -313,12 +303,10 @@ export class QaService {
       tap(res => {
         try {
           localStorage.setItem(this.kSuggestions(id), JSON.stringify(res));
-          console.log('💾 Saved suggestions to localStorage');
         } catch {}
       }),
       shareReplay(1),
       finalize(() => {
-        console.log('🧹 Cleaning up suggestions observable cache');
         this.suggestionsCache$.delete(id);
       })
     );
@@ -347,9 +335,7 @@ export class QaService {
   saveSubjects(id: string, subjects: string[]): void {
     try {
       localStorage.setItem(this.kSubjects(id), JSON.stringify(subjects));
-      console.log('💾 Subjects saved to localStorage');
     } catch (e) {
-      console.warn('Failed to save subjects:', e);
     }
   }
 
@@ -360,9 +346,7 @@ export class QaService {
     try {
       localStorage.removeItem(this.kSubjects(id));
       this.subjectsCache$.delete(id);
-      console.log('🗑️ Cleared subjects for template:', id);
     } catch (e) {
-      console.warn('Failed to clear subjects:', e);
     }
   }
 
@@ -389,7 +373,6 @@ export class QaService {
       this.subjectsCache$.clear();
       this.suggestionsCache$.clear();
       
-      console.log(`🧹 Cleared ${keysToRemove.length} QA data entries`);
     } catch (e) {
       console.error('Failed to clear QA data:', e);
     }
@@ -402,7 +385,6 @@ export class QaService {
     try {
       const key = this.kChat(runId, no);
       localStorage.removeItem(key);
-      console.log(`🧹 Cleared chat for ${runId} variant #${no}`);
     } catch (e) {
       console.error('Failed to clear chat:', e);
     }
@@ -435,9 +417,7 @@ export class QaService {
     try {
       const key = `grammar_${runId}_${no}`;
       localStorage.setItem(key, JSON.stringify(result));
-      console.log('✅ Grammar check saved to localStorage');
     } catch (error) {
-      console.warn('Failed to save grammar check:', error);
     }
   }
 
@@ -453,10 +433,8 @@ export class QaService {
       if (!stored) return null;
       
       const result = JSON.parse(stored);
-      console.log('✅ Grammar check restored from localStorage');
       return result;
     } catch (error) {
-      console.warn('Failed to restore grammar check:', error);
       return null;
     }
   }
@@ -465,9 +443,7 @@ export class QaService {
     try {
       const key = `grammar_${runId}_${no}`;
       localStorage.removeItem(key);
-      console.log('🗑️ Grammar check cleared from localStorage');
     } catch (error) {
-      console.warn('Failed to clear grammar check:', error);
     }
   }
 
@@ -478,7 +454,6 @@ export class QaService {
     try {
       const key = this.kSnaps(runId);
       localStorage.removeItem(key);
-      console.log(`🧹 Cleared snaps for ${runId}`);
     } catch (e) {
       console.error('Failed to clear snaps:', e);
     }
@@ -536,7 +511,9 @@ export class QaService {
   saveVariantsRun(templateId: string, run: VariantsRun) {
     try {
       this.setRunIdForTemplate(templateId, run.runId);
-      localStorage.setItem(this.kRunData(run.runId), JSON.stringify(run));
+      
+      // 🔥 Save variants to IndexedDB ONLY
+      this.saveVariantsRunToCache(templateId, run).catch(err => {})
     } catch {}
   }
 
@@ -545,9 +522,17 @@ export class QaService {
       `/api/qa/${templateId}/variants/start`,
       { html: goldenHtml, target }
     ).pipe(
-      tap(({ runId, target }) => {
+      tap(async ({ runId, target }) => {
         const run: VariantsRun = { runId, target, items: [] };
         this.saveVariantsRun(templateId, run);
+        
+        // 🔥 Also cache the golden template HTML as a variant
+        await this.db.cacheTemplate({
+          id: `variant-golden-${runId}`,
+          runId: runId,
+          html: goldenHtml,
+          timestamp: Date.now()
+        });
       })
     );
   }
@@ -557,15 +542,23 @@ export class QaService {
       `/api/qa/variants/${runId}/next`,
       {}
     ).pipe(
-      tap((item) => {
+      tap(async (item) => {
         const cached = this.getVariantsRunById(runId);
         if (cached) {
           const idx = cached.items.findIndex(i => i.no === item.no);
           if (idx >= 0) cached.items[idx] = item;
           else cached.items.push(item);
-          try {
-            localStorage.setItem(this.kRunData(runId), JSON.stringify(cached));
-          } catch {}
+          
+          // 🔥 Cache individual variant HTML to IndexedDB
+          await this.db.cacheTemplate({
+            id: `variant-${runId}-${item.no}`,
+            runId: runId,
+            html: item.html,
+            timestamp: Date.now()
+          });
+          
+          // 🔥 Save updated variants run to IndexedDB
+          await this.saveVariantsRunToCache(runId, cached);
         }
       })
     );
@@ -602,9 +595,8 @@ export class QaService {
   }
 
   saveChat(runId: string, no: number, thread: ChatThread) {
-    try {
-      localStorage.setItem(this.kChat(runId, no), JSON.stringify(thread));
-    } catch {}
+    // 🔥 REMOVED localStorage - now using IndexedDB only
+    // Chat threads are saved via saveChatThreadToCache() which uses IndexedDB
   }
 
   sendChatMessage(
@@ -642,24 +634,50 @@ export class QaService {
 
   /* ------------------------------ Snapshots ------------------------------- */
   
-  getSnapsCached(runId: string): SnapResult[] {
+  async getSnapsCached(runId: string): Promise<SnapResult[]> {
     try {
+      // Get metadata from localStorage
       const raw = localStorage.getItem(this.kSnaps(runId));
-      const list = raw ? (JSON.parse(raw) as SnapResult[]) : [];
-      return Array.isArray(list) ? list : [];
+      const metadata = raw ? (JSON.parse(raw) as SnapResult[]) : [];
+      
+      if (!Array.isArray(metadata) || metadata.length === 0) {
+        return [];
+      }
+      
+      // Get screenshots from IndexedDB
+      const screenshots = await this.db.getScreenshotsByRun(runId);
+      
+      // Merge screenshots with metadata
+      const snaps = metadata.map(snap => ({
+        ...snap,
+        dataUrl: screenshots.get(snap.url) || snap.dataUrl
+      }));
+      
+      return snaps;
     } catch {
       return [];
     }
   }
 
   saveSnaps(runId: string, snaps: SnapResult[]) {
+    // 🔥 Save screenshots to IndexedDB, metadata to localStorage
+    snaps.forEach(snap => {
+      if (snap.dataUrl) {
+        // Cache screenshot to IndexedDB
+        this.db.cacheScreenshot(snap.url, runId, snap.dataUrl).catch(err => {})
+      }
+    });
+    
+    // Save metadata (without dataUrl) to localStorage
     try {
-      localStorage.setItem(this.kSnaps(runId), JSON.stringify(snaps));
-    } catch {}
+      const metadata = snaps.map(({ dataUrl, ...rest }) => rest);
+      localStorage.setItem(this.kSnaps(runId), JSON.stringify(metadata));
+    } catch (err) {
+    }
   }
 
-  addOrReplaceSnap(runId: string, snap: SnapResult): SnapResult[] {
-    const list = this.getSnapsCached(runId);
+  async addOrReplaceSnap(runId: string, snap: SnapResult): Promise<SnapResult[]> {
+    const list = await this.getSnapsCached(runId);
     const key = (snap.finalUrl || snap.url).toLowerCase();
     const idx = list.findIndex(s => (
       (s.finalUrl || s.url).toLowerCase() === key
@@ -674,12 +692,12 @@ export class QaService {
 
   snapUrl(runId: string, url: string) {
     return this.http.post<SnapApiResponse>(`/api/qa/snap`, { url }).pipe(
-      map((resp) => {
+      mergeMap(async (resp: SnapApiResponse) => {
         const snap: SnapResult = { ...resp, ts: Date.now() };
-        const snaps = this.addOrReplaceSnap(runId, snap);
+        const snaps = await this.addOrReplaceSnap(runId, snap);
         return { snap, snaps };
       }),
-      catchError((e) => {
+      catchError(async (e: any) => {
         const snap: SnapResult = {
           url,
           ok: false,
@@ -689,8 +707,8 @@ export class QaService {
           error: e?.message || 'Snap failed',
           ts: Date.now(),
         };
-        const snaps = this.addOrReplaceSnap(runId, snap);
-        return of({ snap, snaps });
+        const snaps = await this.addOrReplaceSnap(runId, snap);
+        return { snap, snaps };
       })
     );
   }
@@ -708,12 +726,8 @@ export class QaService {
   }
 
   saveGoldenToCache(templateId: string, golden: GoldenResult): void {
-    const key = `qa:golden:${templateId}`;
-    try {
-      localStorage.setItem(key, JSON.stringify(golden));
-    } catch (e) {
-      console.warn('Failed to save golden to cache:', e);
-    }
+    // 🔥 REMOVED localStorage - golden templates are now cached to IndexedDB
+    // See the tap() in getGolden() which calls db.cacheTemplate()
   }
 
   saveValidLinks(runId: string, links: string[]) {
@@ -725,6 +739,10 @@ export class QaService {
             .filter((s) => !!s)
         )
       );
+      
+      // ✅ Save to IndexedDB for persistent caching
+      this.db.cacheValidLinks(runId, clean).catch(err => {})
+      // Keep localStorage for fast synchronous access
       localStorage.setItem(this.kValidLinks(runId), JSON.stringify(clean));
     } catch {}
   }
@@ -735,11 +753,73 @@ export class QaService {
    */
   clearValidLinks(runId: string): void {
     try {
+      // ✅ Clear from IndexedDB
+      this.db.validLinks?.delete(runId).catch(err => {})
+      // Clear from localStorage
       const key = this.kValidLinks(runId);
       localStorage.removeItem(key);
-      console.log(`🧹 Cleared valid links for ${runId}`);
     } catch (e) {
       console.error('Failed to clear valid links:', e);
     }
+  }
+
+  /* ==================== IndexedDB Cache Methods ==================== */
+
+  /**
+   * Get variants run from IndexedDB cache
+   */
+  async getVariantsRunFromCache(runId: string): Promise<VariantsRun | null> {
+    const cached = await this.db.getConversation(runId);
+    if (cached && (cached as any).variants) {
+      return (cached as any).variants as VariantsRun;
+    }
+    return null;
+  }
+
+  /**
+   * Save variants run to IndexedDB cache
+   */
+  async saveVariantsRunToCache(templateId: string, run: VariantsRun): Promise<void> {
+    await this.db.cacheConversation({
+      runId: run.runId,
+      templateId,
+      messages: [],
+      variants: run as any,
+      timestamp: Date.now()
+    });
+  }
+
+  /**
+   * Get chat thread from IndexedDB cache
+   */
+  async getChatThreadFromCache(runId: string, variantNo: number): Promise<ChatThread | null> {
+    const cached = await this.db.getConversation(`${runId}:${variantNo}`);
+    if (cached && cached.messages) {
+      return {
+        html: (cached as any).html || '',
+        messages: cached.messages
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Save chat thread to IndexedDB cache
+   */
+  async saveChatThreadToCache(runId: string, variantNo: number, thread: ChatThread): Promise<void> {
+    await this.db.cacheConversation({
+      runId: `${runId}:${variantNo}`,
+      messages: thread.messages,
+      html: thread.html, // 🔥 SAVE THE FULL HTML!
+      timestamp: Date.now(),
+      ...(thread.html && { templateId: thread.html.substring(0, 50) }) // Store snippet for reference
+    } as any);
+  }
+
+  /**
+   * Invalidate conversation cache when user creates new variants
+   */
+  async invalidateConversationCache(runId: string): Promise<void> {
+    await this.db.invalidateConversation(runId);
   }
 }

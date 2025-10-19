@@ -70,15 +70,12 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     
     // Subscribe to admin events to refresh data when other admins make changes
     this.refreshSub = this.adminEventService.refresh$.subscribe(() => {
-      console.log('Admin event triggered - refreshing data');
       this.loadData();
     });
 
-    // Subscribe to navigation refresh events (when clicking admin button)
-    this.navigationRefreshSub = this.adminEventService.navigationRefresh$.subscribe(() => {
-      console.log('Navigation refresh triggered - loading fresh data');
-      this.loadData();
-    });
+    // NOTE: Removed navigationRefresh subscription - it was causing 368ms delay on menu clicks
+    // Data loads automatically on ngOnInit when navigating to admin page
+    // Only refresh$ is needed for real-time updates when data changes
   }
 
   ngOnDestroy(): void {

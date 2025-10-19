@@ -3,11 +3,11 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
+    "start": "ng serve --proxy-config proxy.conf.json",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "serve:ssr:frontend": "node dist/frontend/server/server.mjs"
+    "serve:ssr:mailchimp-figma": "node dist/mailchimp-figma/server/server.mjs"
   },
   "private": true,
   "dependencies": {
@@ -28,6 +28,7 @@
     "@ngrx/effects": "^17.2.0",
     "@ngrx/store": "^17.2.0",
     "@ngrx/store-devtools": "^17.2.0",
+    "dexie": "^4.2.1",
     "diff-match-patch": "^1.0.5",
     "express": "^4.18.2",
     "grapesjs": "^0.22.13",

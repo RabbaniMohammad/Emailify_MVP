@@ -283,7 +283,6 @@ constructor() {
   // Timeout safety
   this.loadingTimeout = window.setTimeout(() => {
     if (this.loadingVariant) {
-      console.warn('⏰ Loading timeout reached, forcing completion');
       this.loadingVariant = false;
       this.cdr.markForCheck();
     }
@@ -302,8 +301,6 @@ constructor() {
       const editedHtml = sessionStorage.getItem(editedKey);
       
       if (editedHtml) {
-        console.log('🔙 Returned from visual editor with updated HTML');
-        
         // Update HTML
         this.htmlSubject.next(editedHtml);
         
@@ -340,15 +337,12 @@ constructor() {
     }
 
     try {
-      console.log('📄 Loading variant data for runId:', runId, 'no:', no);
-
       // ✅ PRIORITY 1: Check for SYNTHETIC run in sessionStorage FIRST
       let syntheticRun = null;
       try {
         const stored = sessionStorage.getItem(`synthetic_run_${runId}`);
         if (stored) {
           syntheticRun = JSON.parse(stored);
-          console.log('📦 Found synthetic run in sessionStorage');
         }
       } catch (e) {
         console.error('Failed to load synthetic run:', e);
@@ -357,12 +351,8 @@ constructor() {
       if (syntheticRun && syntheticRun.runId === runId) {
         const item = syntheticRun.items?.find((it: any) => it.no === no);
         if (item?.html) {
-          console.log('✅ Using FRESH synthetic run data');
-          
           // ✅ CONSUME IT - Remove from sessionStorage so it's only used ONCE
           sessionStorage.removeItem(`synthetic_run_${runId}`);
-          console.log('🗑️ Consumed synthetic run - removed from sessionStorage');
-          
           this.htmlSubject.next(item.html);
           const intro: ChatTurn = {
             role: 'assistant',
@@ -375,6 +365,11 @@ constructor() {
           
           // ✅ SAVE TO localStorage so it persists on refresh
           this.qa.saveChat(runId, no, thread);
+          
+          // ✅ SAVE TO IndexedDB for next time (non-blocking)
+          this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
+            console.error('Failed to cache to IndexedDB:', err)
+          );
           
           this.snapsSubject.next([]);
           this.validLinksSubject.next(this.qa.getValidLinks(runId));
@@ -389,26 +384,57 @@ constructor() {
         }
       }
 
-      // ✅ PRIORITY 2: Check localStorage cache (persists across refresh)
-      const cachedThread = this.qa.getChatCached(runId, no);
-      if (cachedThread?.html) {
-        console.log('✅ Restored from localStorage cache');
-        this.htmlSubject.next(cachedThread.html);
-        this.messagesSubject.next(cachedThread.messages || []);
-        this.snapsSubject.next(this.qa.getSnapsCached(runId));
-        this.validLinksSubject.next(this.qa.getValidLinks(runId)); // ✅ RESTORE VALID LINKS
+      // ✅ PRIORITY 2A: Check IndexedDB cache (fastest, persists across sessions)
+      const cachedThreadDB = await this.qa.getChatThreadFromCache(runId, no);
+      if (cachedThreadDB?.html) {
+        this.htmlSubject.next(cachedThreadDB.html);
+        this.messagesSubject.next(cachedThreadDB.messages || []);
+        this.snapsSubject.next(await this.qa.getSnapsCached(runId));
+        this.validLinksSubject.next(this.qa.getValidLinks(runId));
         
         // ✅ RESTORE GRAMMAR CHECK RESULTS
         const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
         if (cachedGrammar) {
-          console.log('✅ Restored grammar check from localStorage');
           this.grammarCheckResultSubject.next(cachedGrammar);
         }
         
         // ✅ RESTORE SUBJECT GENERATION RESULTS
         const cachedSubjects = this.qa.getSubjectsCached(runId);
         if (cachedSubjects?.length) {
-          console.log('✅ Restored subjects from localStorage');
+          this.subjectsSubject.next(cachedSubjects);
+          this.subjectsLoading = false;
+        }
+
+        this.loadingVariant = false;
+        if (this.loadingTimeout) {
+          clearTimeout(this.loadingTimeout);
+          this.loadingTimeout = undefined;
+        }
+        this.cdr.markForCheck();
+        this.positionChatAtBottom();
+        return;
+      }
+
+      // ✅ PRIORITY 2B: Check localStorage cache (fallback)
+      const cachedThread = this.qa.getChatCached(runId, no);
+      if (cachedThread?.html) {
+        this.htmlSubject.next(cachedThread.html);
+        this.messagesSubject.next(cachedThread.messages || []);
+        this.snapsSubject.next(await this.qa.getSnapsCached(runId));
+        this.validLinksSubject.next(this.qa.getValidLinks(runId));
+        
+        // ✅ SAVE TO IndexedDB for next time
+        await this.qa.saveChatThreadToCache(runId, no, cachedThread);
+        
+        // ✅ RESTORE GRAMMAR CHECK RESULTS
+        const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
+        if (cachedGrammar) {
+          this.grammarCheckResultSubject.next(cachedGrammar);
+        }
+        
+        // ✅ RESTORE SUBJECT GENERATION RESULTS
+        const cachedSubjects = this.qa.getSubjectsCached(runId);
+        if (cachedSubjects?.length) {
           this.subjectsSubject.next(cachedSubjects);
           this.subjectsLoading = false;
         }
@@ -427,7 +453,6 @@ constructor() {
       const run = this.qa.getVariantsRunById(runId);
       const item = run?.items?.find(it => it.no === no) || null;
       if (item?.html) {
-        console.log('✅ Using variants run from cache');
         this.htmlSubject.next(item.html);
 
         const intro: ChatTurn = {
@@ -442,8 +467,13 @@ constructor() {
         // ✅ SAVE TO localStorage
         this.qa.saveChat(runId, no, thread);
         
-        this.snapsSubject.next(this.qa.getSnapsCached(runId));
-        this.validLinksSubject.next(this.qa.getValidLinks(runId)); // ✅ RESTORE VALID LINKS
+        // ✅ SAVE TO IndexedDB for next time (non-blocking)
+        this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
+          console.error('Failed to cache to IndexedDB:', err)
+        );
+        
+        this.snapsSubject.next(await this.qa.getSnapsCached(runId));
+        this.validLinksSubject.next(this.qa.getValidLinks(runId));
 
         // ✅ RESTORE SUBJECT GENERATION RESULTS
         const cachedSubjects = this.qa.getSubjectsCached(runId);
@@ -470,7 +500,6 @@ constructor() {
 
       // ✅ PRIORITY 4: Fallback to API
       try {
-        console.log('🌐 Fetching from API...');
         const status = await firstValueFrom(this.qa.getVariantsStatus(runId));
         const fromApi = status.items.find(it => it.no === no) || null;
         const html = fromApi?.html || '';
@@ -488,8 +517,13 @@ constructor() {
         // ✅ SAVE TO localStorage
         this.qa.saveChat(runId, no, thread);
         
-        this.snapsSubject.next(this.qa.getSnapsCached(runId));
-        this.validLinksSubject.next(this.qa.getValidLinks(runId)); // ✅ RESTORE VALID LINKS
+        // ✅ SAVE TO IndexedDB for next time (non-blocking)
+        this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
+          console.error('Failed to cache to IndexedDB:', err)
+        );
+        
+        this.snapsSubject.next(await this.qa.getSnapsCached(runId));
+        this.validLinksSubject.next(this.qa.getValidLinks(runId));
       } catch (apiError) {
         console.error('❌ Failed to load from API:', apiError);
         const intro: ChatTurn = {
@@ -500,7 +534,7 @@ constructor() {
         };
         this.messagesSubject.next([intro]);
         this.snapsSubject.next([]);
-        this.validLinksSubject.next([]); // ✅ CLEAR VALID LINKS ON ERROR
+        this.validLinksSubject.next([]);
       }
 
     } catch (error) {
@@ -566,7 +600,6 @@ canDeactivate(): boolean {
   if (confirmed) {
     // Clean up if user confirms
     this.finalizingSubject.next(false);
-    console.log('🧹 Finalize process cancelled by user navigation');
   }
 
   return confirmed;
@@ -757,7 +790,6 @@ private saveCampaignModalState(isOpen: boolean): void {
       sessionStorage.setItem(this.campaignModalKey, isOpen.toString());
     }
   } catch (error) {
-    console.warn('Failed to save campaign modal state:', error);
   }
 }
 
@@ -768,7 +800,6 @@ private restoreCampaignModalState(): boolean {
       return saved === 'true';
     }
   } catch (error) {
-    console.warn('Failed to restore campaign modal state:', error);
   }
   return false;
 }
@@ -779,12 +810,9 @@ private restoreCampaignModalState(): boolean {
 // ============================================
 
 async checkTemplateGrammar(): Promise<void> {
-  console.log('=== 🚀 Starting Grammar Check ===');
-  
   const html = this.htmlSubject.value;
   
   if (!html || !html.trim()) {
-    console.warn('No HTML to check');
     this.grammarCheckResultSubject.next({
       hasErrors: false,
       mistakes: [],
@@ -799,14 +827,9 @@ async checkTemplateGrammar(): Promise<void> {
   this.cdr.markForCheck();
 
   try {
-    console.log('📤 Sending HTML to backend...');
-    console.log('HTML length:', html.length);
-
     const response = await firstValueFrom(
       this.qa.checkTemplateGrammar(html)
     );
-
-    console.log('📥 Received response:', response);
 
     // ✅ CREATE RESULT OBJECT
     const result = {
@@ -823,10 +846,6 @@ async checkTemplateGrammar(): Promise<void> {
     const runId = this.ar.snapshot.paramMap.get('runId')!;
     const no = Number(this.ar.snapshot.paramMap.get('no')!);
     this.qa.saveGrammarCheck(runId, no, result);
-
-    console.log('✅ Grammar check complete and saved');
-    console.log('Errors found:', response.hasErrors);
-    console.log('Mistake count:', response.count);
 
   } catch (error) {
     console.error('❌ Grammar check failed:', error);
@@ -853,7 +872,6 @@ private saveTemplateModalState(isOpen: boolean): void {
       sessionStorage.setItem(this.templateModalKey, isOpen.toString());
     }
   } catch (error) {
-    console.warn('Failed to save template modal state:', error);
   }
 }
 
@@ -864,7 +882,6 @@ private restoreTemplateModalState(): boolean {
       return saved === 'true';
     }
   } catch (error) {
-    console.warn('Failed to restore template modal state:', error);
   }
   return false;
 }
@@ -884,6 +901,11 @@ private restoreTemplateModalState(): boolean {
       messages: this.messagesSubject.value
     };
     this.qa.saveChat(runId, no, thread);
+    
+    // ✅ SAVE TO IndexedDB (non-blocking)
+    this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
+      console.error('Failed to cache to IndexedDB:', err)
+    );
 
     this.showSuccess('Template updated successfully!');
     
@@ -896,7 +918,6 @@ private restoreTemplateModalState(): boolean {
         sessionStorage.setItem(this.editorStateKey, isOpen.toString());
       }
     } catch (error) {
-      console.warn('Failed to save editor state:', error);
     }
   }
 
@@ -907,7 +928,6 @@ private restoreTemplateModalState(): boolean {
         return saved === 'true';
       }
     } catch (error) {
-      console.warn('Failed to restore editor state:', error);
     }
     return false;
   }
@@ -922,7 +942,6 @@ private restoreTemplateModalState(): boolean {
         }
       }
     } catch (error) {
-      console.warn('Failed to save draft:', error);
     }
   }
 
@@ -932,7 +951,6 @@ private restoreTemplateModalState(): boolean {
         return sessionStorage.getItem(this.draftMessageKey) || '';
       }
     } catch (error) {
-      console.warn('Failed to restore draft:', error);
     }
     return '';
   }
@@ -1155,104 +1173,69 @@ private restoreTemplateModalState(): boolean {
   }
 
 async onFinalize() {
-  console.log('=== 🎬 onFinalize CALLED ===');
-  
   const el = document.getElementById('finalize');
   if (el) {
-    console.log('📜 Scrolling to finalize section');
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   const runId = this.ar.snapshot.paramMap.get('runId')!;
-  console.log('RunId:', runId);
-  
   if (!runId) {
-    console.log('❌ No runId found, exiting');
     return;
   }
 
   const isAlreadyFinalizing = this.finalizingSubject.value;
-  console.log('Is already finalizing?', isAlreadyFinalizing);
-  
   if (isAlreadyFinalizing) {
-    console.log('⏭️ Already finalizing, exiting');
     return;
   }
 
-  console.log('✅ Setting finalizing state to true');
   this.finalizingSubject.next(true);
   this.cdr.markForCheck();
 
   try {
     // ✅ ALWAYS clear existing snaps when finalizing (start from scratch)
-    console.log('\n🧹 CLEARING EXISTING SNAPS:');
     const existingSnaps = this.snapsSubject.value;
-    console.log('  - Existing snaps count:', existingSnaps.length);
-    console.log('  - Existing snap URLs:', existingSnaps.map(s => s.finalUrl || s.url));
-    
-    console.log('  - Clearing all snaps...');
     this.snapsSubject.next([]);
-    console.log('  ✅ Snaps cleared');
-    
     // Save empty snaps to storage
     this.qa.saveSnaps(runId, []);
-    console.log('  ✅ Empty snaps saved to storage');
-    
     this.cdr.markForCheck();
 
-    console.log('\n📄 EXTRACTING LINKS FROM HTML:');
     const html = this.htmlSubject.value || '';
-    console.log('  - HTML length:', html.length);
-    
     const urls = this.extractAllLinks(html);
-    console.log('  - Extracted URLs count:', urls.length);
-    console.log('  - Extracted URLs:', urls);
-    
     if (urls.length === 0) {
-      console.log('⚠️ No URLs found in HTML');
       this.finalizingSubject.next(false);
       this.cdr.markForCheck();
-      console.log('=== ⏭️ onFinalize EXITED (no URLs) ===\n');
       return;
     }
 
-    console.log('\n🌐 STARTING CAPTURE PROCESS:');
-    console.log('  - Creating', urls.length, 'capture promises...');
+    // ⚡ PERFORMANCE FIX: Process in batches of 2 to prevent CPU overload
+    const BATCH_SIZE = 2;
+    let fulfilled = 0;
+    let rejected = 0;
     
-    const capturePromises = urls.map((url, index) => {
-      console.log(`  - [${index + 1}/${urls.length}] Queuing capture for:`, url);
-      return this.captureOneWithPromise(runId, url);
-    });
-    
-    console.log('  ✅ All capture promises created');
-    console.log('  ⏳ Waiting for all captures to complete...');
-    
-    const results = await Promise.allSettled(capturePromises);
-    
-    console.log('\n📊 CAPTURE RESULTS:');
-    const fulfilled = results.filter(r => r.status === 'fulfilled').length;
-    const rejected = results.filter(r => r.status === 'rejected').length;
-    console.log('  - Fulfilled:', fulfilled);
-    console.log('  - Rejected:', rejected);
-    console.log('  - Total:', results.length);
-    
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        console.error(`  ❌ [${index + 1}] Failed:`, urls[index], result.reason);
-      } else {
-        console.log(`  ✅ [${index + 1}] Success:`, urls[index]);
+    for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+      const batch = urls.slice(i, i + BATCH_SIZE);
+      const batchPromises = batch.map((url) => this.captureOneWithPromise(runId, url));
+      const batchResults = await Promise.allSettled(batchPromises);
+      
+      batchResults.forEach((result, batchIndex) => {
+        const urlIndex = i + batchIndex;
+        if (result.status === 'fulfilled') {
+          fulfilled++;
+        } else {
+          rejected++;
+          console.error(`  ❌ [${urlIndex + 1}] Failed:`, urls[urlIndex], result.reason);
+        }
+      });
+      
+      // Small delay between batches to prevent browser freeze
+      if (i + BATCH_SIZE < urls.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
-    });
+    }
 
-    console.log('\n✅ Capture process complete');
-    console.log('  - Final snaps count:', this.snapsSubject.value.length);
-    console.log('  - Final snap URLs:', this.snapsSubject.value.map(s => s.finalUrl || s.url));
-    
     this.finalizingSubject.next(false);
     this.cdr.markForCheck();
     
-    console.log('=== ✅ onFinalize COMPLETE ===\n');
-
   } catch (error) {
     console.error('\n❌ FINALIZE ERROR:');
     console.error('  - Error:', error);
@@ -1262,13 +1245,10 @@ async onFinalize() {
     this.finalizingSubject.next(false);
     this.cdr.markForCheck();
     
-    console.log('=== ❌ onFinalize ERROR HANDLED ===\n');
   }
 }
 
 onRetestUrl(snap: SnapResult, newUrl?: string) {
-  console.log('=== 🔄 onRetestUrl CALLED ===');
-  
   const url = this.getValidSnapUrl(snap);
   const runId = this.ar.snapshot.paramMap.get('runId')!;
   if (!runId || !url) return;
@@ -1285,11 +1265,6 @@ onRetestUrl(snap: SnapResult, newUrl?: string) {
       // Get the TRUE original URL (from map if exists, or current if first time)
       const trueOriginalUrl = this.originalSnapUrls.get(snapKey) || url;  // ✅ Get by snap key!
       
-      console.log('📌 Preserving original URL before retest:');
-      console.log('  - Snap key:', snapKey);
-      console.log('  - True original:', trueOriginalUrl);
-      console.log('  - Will test:', targetUrl);
-      
       // ✅ Store mapping: snapKey → originalURL
       this.originalSnapUrls.set(snapKey, trueOriginalUrl);  // ✅ Store by snap key!
     }
@@ -1301,7 +1276,6 @@ onRetestUrl(snap: SnapResult, newUrl?: string) {
     targetUrl = url;
   }
   
-  console.log('✅ Calling captureAndReplace with specific snap');
   this.captureAndReplace(runId, targetUrl, snap);
 }
   // ✅ NEW: Handle Enter key in edit input field
@@ -1397,8 +1371,6 @@ navigateToVisualEditorWithGrammar(): void {
   const failedKey = `visual_editor_${templateId}_failed_edits`;
   sessionStorage.setItem(failedKey, JSON.stringify(failedEdits));
   
-  console.log('📝 Navigating to visual editor with grammar errors');
-  
   // Navigate
   this.router.navigate(['/visual-editor', templateId]);
 }
@@ -1428,7 +1400,6 @@ async onValidLinksUpload(e: Event) {
         return;
       }
     } catch (err) {
-      console.warn('xlsx parse failed, trying CSV fallback', err);
     }
   }
 
@@ -1449,7 +1420,6 @@ async onValidLinksUpload(e: Event) {
     const header = (rows[0] || []).map((c: any) => String(c ?? '').trim().toLowerCase());
     const idx = header.findIndex(h => h === 'valid links');
     if (idx < 0) {
-      console.warn('No "valid links" column found.');
       this.validLinksSubject.next([]);
       return;
     }
@@ -1517,6 +1487,11 @@ async onValidLinksUpload(e: Event) {
   private persistThread(runId: string, no: number, html: string, messages: ChatTurn[]) {
     const thread: ChatThread = { html, messages };
     this.qa.saveChat(runId, no, thread);
+    
+    // ✅ SAVE TO IndexedDB (non-blocking)
+    this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
+      console.error('Failed to cache to IndexedDB:', err)
+    );
   }
 
   private toAssistantJson(raw: any): ChatAssistantJson {
@@ -1645,8 +1620,6 @@ private extractAllLinks(html: string): string[] {
       }
       
     } catch (error) {
-      console.warn('Error parsing button URLs:', error);
-      
       // Fallback: regex-based extraction
       const patterns = [
         /data-href\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
@@ -1881,12 +1854,6 @@ onReplaceSnap(snap: SnapResult, inputElement: HTMLInputElement): void {
   const currentSnapUrl = this.getValidSnapUrl(snap);
   const originalUrl = this.originalSnapUrls.get(snapKey) || currentSnapUrl;  // ✅ Get by snap key!
   
-  console.log('📋 REPLACEMENT SUMMARY:');
-  console.log('  - Snap key:', snapKey);
-  console.log('  - Original URL (in HTML):', originalUrl);
-  console.log('  - Current snap URL:', currentSnapUrl);
-  console.log('  - New URL (replacement):', newUrl);
-  
   try {
     this.replaceUrlInHtml(originalUrl, newUrl, snap);
     this.showSuccess('✓ Replace successful! Link updated in HTML.');
@@ -1928,146 +1895,80 @@ hasBeenRetested(snap: SnapResult): boolean {
 }
   // ✅ NEW: Replace URL in HTML with 1-to-1 mapping for duplicates
 private replaceUrlInHtml(oldUrl: string, newUrl: string, snap: SnapResult): void {
-  console.log('=== 🔧 replaceUrlInHtml CALLED ===');
-  console.log('📥 INPUTS:');
-  console.log('  - oldUrl:', oldUrl);
-  console.log('  - newUrl:', newUrl);
-  console.log('  - snap:', snap);
-  
   const runId = this.ar.snapshot.paramMap.get('runId')!;
   const no = Number(this.ar.snapshot.paramMap.get('no')!);
-  console.log('  - runId:', runId);
-  console.log('  - no:', no);
-  
   let html = this.htmlSubject.value;
-  console.log('📄 HTML INFO:');
-  console.log('  - HTML length:', html.length);
-  console.log('  - HTML sample (first 200 chars):', html.substring(0, 200));
-  
   // Try to find the URL with different protocols
-  console.log('\n🔍 PROTOCOL DETECTION:');
-  console.log('  - oldUrl starts with http:// ?', oldUrl.startsWith('http://'));
-  console.log('  - oldUrl starts with https:// ?', oldUrl.startsWith('https://'));
-  
   let fullOldUrl = oldUrl;
   if (!oldUrl.startsWith('http://') && !oldUrl.startsWith('https://')) {
-    console.log('  ⚠️ No protocol in oldUrl, attempting to detect...');
-    
     const httpsCheck = html.includes('https://' + oldUrl);
     const httpCheck = html.includes('http://' + oldUrl);
-    console.log('  - HTML contains https://' + oldUrl + '?', httpsCheck);
-    console.log('  - HTML contains http://' + oldUrl + '?', httpCheck);
-    
     if (httpsCheck) {
       fullOldUrl = 'https://' + oldUrl;
-      console.log('  ✅ Using https:// protocol');
     } else if (httpCheck) {
       fullOldUrl = 'http://' + oldUrl;
-      console.log('  ✅ Using http:// protocol');
     } else {
-      console.log('  ❌ No protocol match found, using as-is');
     }
   } else {
-    console.log('  ✅ Protocol already present in oldUrl');
   }
-  
-  console.log('  - Full old URL:', fullOldUrl);
   
   // Check if URL exists in HTML
   const urlExistsInHtml = html.includes(fullOldUrl);
-  console.log('\n🔍 URL EXISTENCE CHECK:');
-  console.log('  - Does HTML contain fullOldUrl?', urlExistsInHtml);
-  
   if (!urlExistsInHtml) {
     // Additional debugging - try to find similar URLs
-    console.log('  ⚠️ Searching for similar URLs in HTML...');
     const urlParts = fullOldUrl.split('//')[1] || fullOldUrl;
     const similarMatches = html.match(new RegExp(urlParts.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'));
-    console.log('  - Similar URL matches:', similarMatches);
   }
   
   // Add protocol to new URL if needed
-  console.log('\n🔍 NEW URL PROTOCOL:');
-  console.log('  - newUrl starts with http:// ?', newUrl.startsWith('http://'));
-  console.log('  - newUrl starts with https:// ?', newUrl.startsWith('https://'));
-  
   let fullNewUrl = newUrl;
   if (!newUrl.startsWith('http://') && !newUrl.startsWith('https://')) {
-    console.log('  ⚠️ No protocol in newUrl, adding based on oldUrl...');
-    
     if (fullOldUrl.startsWith('https://')) {
       fullNewUrl = 'https://' + newUrl;
-      console.log('  ✅ Added https:// protocol');
     } else if (fullOldUrl.startsWith('http://')) {
       fullNewUrl = 'http://' + newUrl;
-      console.log('  ✅ Added http:// protocol');
     } else {
-      console.log('  ⚠️ No protocol to copy, using as-is');
     }
   } else {
-    console.log('  ✅ Protocol already present in newUrl');
   }
-  
-  console.log('  - Full new URL:', fullNewUrl);
   
   // Error if URL not found
   if (!html.includes(fullOldUrl)) {
     console.error('\n❌ CRITICAL ERROR: URL NOT FOUND IN HTML!');
     console.error('  - Searched for:', fullOldUrl);
     console.error('  - HTML length:', html.length);
-    console.error('  - First 500 chars of HTML:', html.substring(0, 500));
     alert('URL not found in HTML. The link might have already been changed.');
     throw new Error('URL not found in HTML');
   }
   
   // Find which occurrence this snap represents
-  console.log('\n📊 OCCURRENCE CALCULATION:');
   const allSnaps = this.snapsSubject.value;
-  console.log('  - Total snaps:', allSnaps.length);
-  console.log('  - All snap URLs:', allSnaps.map(s => s.finalUrl || s.url));
-  
   const snapIndex = allSnaps.indexOf(snap);
-  console.log('  - Current snap index:', snapIndex);
-  
   if (snapIndex === -1) {
-    console.error('  ❌ Snap not found in snaps array!');
   }
   
   // Count how many times this URL appears before this snap
   let occurrenceIndex = 0;
-  console.log('  - Counting occurrences before current snap...');
   for (let i = 0; i < snapIndex; i++) {
     const snapUrl = allSnaps[i].finalUrl || allSnaps[i].url;
     const matches = snapUrl.toLowerCase() === oldUrl.toLowerCase();
-    console.log(`    [${i}] ${snapUrl} === ${oldUrl}? ${matches}`);
     if (matches) {
       occurrenceIndex++;
     }
   }
   
-  console.log('  ✅ Occurrence index to replace:', occurrenceIndex);
-  
   // Count total occurrences in HTML
   const totalOccurrences = (html.match(new RegExp(fullOldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
-  console.log('  - Total occurrences in HTML:', totalOccurrences);
-  
   // Replace only the specific occurrence
-  console.log('\n🔄 REPLACEMENT PROCESS:');
   const escapedUrl = fullOldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  console.log('  - Escaped regex pattern:', escapedUrl);
-  
   const regex = new RegExp(escapedUrl, 'g');
   let count = 0;
   const replaced = html.replace(regex, (match) => {
     const isTarget = count === occurrenceIndex;
-    console.log(`  - Occurrence #${count}: "${match}" - Replace? ${isTarget}`);
-    
     if (isTarget) {
-      console.log(`    ✅ REPLACING: "${match}" → "${fullNewUrl}"`);
       count++;
       return fullNewUrl;
     }
-    console.log(`    ⏭️ SKIPPING (not target occurrence)`);
     count++;
     return match;
   });
@@ -2075,16 +1976,8 @@ private replaceUrlInHtml(oldUrl: string, newUrl: string, snap: SnapResult): void
   const htmlChanged = html !== replaced;
   const newUrlInHtml = replaced.includes(fullNewUrl);
   
-  console.log('\n📊 REPLACEMENT RESULT:');
-  console.log('  - HTML changed?', htmlChanged);
-  console.log('  - New URL exists in replaced HTML?', newUrlInHtml);
-  console.log('  - Original HTML length:', html.length);
-  console.log('  - Replaced HTML length:', replaced.length);
-  console.log('  - Length difference:', replaced.length - html.length);
-  
   if (html === replaced) {
     console.error('\n❌ CRITICAL ERROR: NO REPLACEMENT WAS MADE!');
-    console.error('  - Old URL:', fullOldUrl);
     console.error('  - New URL:', fullNewUrl);
     console.error('  - Total occurrences found:', totalOccurrences);
     console.error('  - Target occurrence index:', occurrenceIndex);
@@ -2093,17 +1986,10 @@ private replaceUrlInHtml(oldUrl: string, newUrl: string, snap: SnapResult): void
   }
   
   // Update HTML
-  console.log('\n💾 UPDATING STATE:');
-  console.log('  - Updating htmlSubject...');
   this.htmlSubject.next(replaced);
-  console.log('  ✅ htmlSubject updated');
-  
   // Update the snap in the array
-  console.log('  - Updating snap in array...');
-  console.log('  - Old snap URL:', snap.finalUrl || snap.url);
   const updatedSnaps = allSnaps.map(s => {
     if (s === snap) {
-      console.log('  - Found matching snap, updating...');
       return {
         ...s,
         url: fullNewUrl,
@@ -2113,28 +1999,20 @@ private replaceUrlInHtml(oldUrl: string, newUrl: string, snap: SnapResult): void
     return s;
   });
   
-  console.log('  - Updated snap URL:', fullNewUrl);
   this.snapsSubject.next(updatedSnaps);
-  console.log('  ✅ snapsSubject updated');
-  
   // Persist changes
-  console.log('\n💾 PERSISTING TO STORAGE:');
   const thread: ChatThread = {
     html: replaced,
     messages: this.messagesSubject.value
   };
-  console.log('  - Saving chat thread...');
   this.qa.saveChat(runId, no, thread);
-  console.log('  ✅ Chat saved');
+  // ✅ SAVE TO IndexedDB (non-blocking)
+  this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
+    console.error('Failed to cache to IndexedDB:', err)
+  );
   
-  console.log('  - Saving snaps...');
   this.qa.saveSnaps(runId, updatedSnaps);
-  console.log('  ✅ Snaps saved');
-  
   this.cdr.markForCheck();
-  console.log('  ✅ Change detection marked');
-  
-  console.log('\n=== ✅ replaceUrlInHtml COMPLETE ===\n');
 }
   // ✅ FIXED: Capture and replace with proper edit mode persistence
 // ✅ FIXED: Capture and replace with proper edit mode persistence
@@ -2189,16 +2067,9 @@ private captureAndReplace(runId: string, newUrl: string, oldSnap: SnapResult) {
       // ✅ CRITICAL: Transfer map entry from old snap key to new snap key
       const newSnapKey = this.getSnapKey(newSnap);  // ✅ Use snap key!
       
-      console.log('🗺️ MAP KEY TRANSFER:');
-      console.log('  - Old snap key:', snapKey);
-      console.log('  - New snap key:', newSnapKey);
-      
       // ✅ Transfer the mapping to new snap key
       if (this.originalSnapUrls.has(snapKey)) {  // ✅ Check by snap key!
         const originalUrl = this.originalSnapUrls.get(snapKey)!;  // ✅ Get by snap key!
-        console.log('  - Original URL:', originalUrl);
-        console.log('  - Transferring to new key');
-        
         this.originalSnapUrls.set(newSnapKey, originalUrl);  // ✅ Store by new snap key!
         
         // ✅ Only delete old key if different from new key
@@ -2206,9 +2077,6 @@ private captureAndReplace(runId: string, newUrl: string, oldSnap: SnapResult) {
           this.originalSnapUrls.delete(snapKey);  // ✅ Delete by snap key!
         }
       }
-      
-      console.log('  - Map size:', this.originalSnapUrls.size);
-      console.log('  - Map entries:', Array.from(this.originalSnapUrls.entries()));
       
       // ✅ Update editingSnapUrl using SNAP KEYS if in edit mode
       if (this.editingSnapUrl === snapKey) {  // ✅ Compare old snap key

@@ -341,6 +341,14 @@
   }
 }
 
+.performance-icon {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+
+  mat-icon {
+    color: white;
+  }
+}
 
 .logout-icon {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);

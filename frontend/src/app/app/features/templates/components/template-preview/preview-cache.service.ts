@@ -85,7 +85,6 @@ export class PreviewCacheService {
     try {
       sessionStorage.removeItem(`metadata-${templateId}`);
     } catch (e) {
-      console.warn('Failed to clear metadata cache:', e);
     }
   }
 

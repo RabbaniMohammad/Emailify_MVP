@@ -6,12 +6,14 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatDialog } from '@angular/material/dialog';
 import { RouterModule, Router, NavigationEnd, NavigationCancel, NavigationError } from '@angular/router';
 import { TemplatesService } from '../../../core/services/templates.service';
 import { AuthService } from '../../../../app/core/services/auth.service';
 import { AdminService } from '../../../core/services/admin.service';
 import { AdminEventService } from '../../../core/services/admin-event.service';
 import { TemplateGenerationService } from '../../../core/services/template-generation.service';
+import { PerformanceDashboardComponent } from '../performance-dashboard/performance-dashboard.component';
 import { map, takeUntil, startWith, tap, switchMap, filter } from 'rxjs/operators';
 import { BehaviorSubject, Subject, timer } from 'rxjs';
 
@@ -39,6 +41,7 @@ export class ToolbarComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private location = inject(Location);
   private generationService = inject(TemplateGenerationService);
+  private dialog = inject(MatDialog);
 
   private destroy$ = new Subject<void>();
   
@@ -50,8 +53,6 @@ export class ToolbarComponent implements OnInit, OnDestroy {
   canGoForward$ = new BehaviorSubject<boolean>(false);
 
 ngOnInit(): void {
-  console.log('🚀 [Toolbar] Initializing...');
-  
   // Track current route for highlighting active nav items
   this.activeRoute$.next(this.router.url);
   
@@ -106,7 +107,6 @@ ngOnInit(): void {
       .subscribe({
         next: (response) => {
           this.pendingCount$.next(response.users.length);
-          console.log('📊 Toolbar: Pending count updated:', response.users.length);
         },
         error: (err) => {
           console.error('❌ Toolbar: Failed to load pending count:', err);
@@ -172,8 +172,6 @@ goForward(): void {
     // Get or initialize retry count for this image
     const retryCount = this.imageRetryCount.get(originalSrc) || 0;
     
-    console.log(`📸 Image load failed for ${userName}:`, originalSrc, `(attempt ${retryCount + 1}/${this.MAX_RETRIES + 1})`);
-    
     // Try to reload the image up to MAX_RETRIES times
     if (retryCount < this.MAX_RETRIES) {
       this.imageRetryCount.set(originalSrc, retryCount + 1);
@@ -183,12 +181,10 @@ goForward(): void {
         const timestamp = new Date().getTime();
         const separator = originalSrc.includes('?') ? '&' : '?';
         img.src = `${originalSrc}${separator}_retry=${timestamp}`;
-        console.log(`🔄 Retrying image load... (attempt ${retryCount + 2})`);
       }, 500 * (retryCount + 1)); // Exponential backoff: 500ms, 1000ms
       
     } else {
       // After max retries, fall back to initials avatar
-      console.log(`❌ Max retries reached. Falling back to initials for ${userName}`);
       this.imageRetryCount.delete(originalSrc);
       img.src = this.getInitialsAvatar(userName);
     }
@@ -226,13 +222,9 @@ goForward(): void {
 
 navigateToHome(): void {
   const currentUrl = this.router.url;
-  console.log('🏠 [navigateToHome] Current:', currentUrl, '| isHome:', currentUrl === '/' || currentUrl === '');
-  
   const isOnHomePage = currentUrl === '/' || currentUrl === '';
   
   if (isOnHomePage) {
-    console.log('🔄 [navigateToHome] Already on home - refreshing WITHOUT clearing history');
-    
     // ✅ FIX: DON'T clear history, just refresh templates
     try {
       this.svc.smartRefresh();
@@ -240,12 +232,9 @@ navigateToHome(): void {
       console.error('❌ [navigateToHome] smartRefresh failed:', error);
     }
   } else {
-    console.log('➡️ [navigateToHome] Navigating to home from:', currentUrl);
-    
     this.router.navigate(['/'])
       .then((success) => {
         if (!success) {
-          console.warn('⚠️ [navigateToHome] Navigation blocked');
         }
       })
       .catch((error) => {
@@ -255,8 +244,8 @@ navigateToHome(): void {
 }
 
   navigateToAdmin(): void {
-    this.loadPendingCount();
-    this.adminEventService.triggerNavigationRefresh();
+    // Data loads automatically when admin page component initializes
+    // No need to trigger refresh here - was causing 368ms delay!
     this.router.navigate(['/admin']);
   }
 
@@ -265,10 +254,8 @@ navigateToHome(): void {
     const activeConversationId = this.generationService.getCurrentConversationId();
     
     if (activeConversationId) {
-      console.log('📍 Navigating to active conversation:', activeConversationId);
       this.router.navigate(['/generate', activeConversationId]);
     } else {
-      console.log('📍 Navigating to fresh generate page');
       this.router.navigate(['/generate']);
     }
   }
@@ -278,14 +265,23 @@ navigateTo(route: string): void {
   this.router.navigate([route])
     .then((success) => {
       if (!success) {
-        console.warn('⚠️ [navigateTo] Navigation returned FALSE - might be blocked or already there');
       }
     })
     .catch((error) => {
-      console.warn('❌ [navigateTo] Navigation FAILED!');
     });
   
 }
+
+  openPerformanceDashboard(): void {
+    this.dialog.open(PerformanceDashboardComponent, {
+      width: '95vw',
+      maxWidth: '1200px',
+      height: '90vh',
+      panelClass: 'performance-dashboard-dialog',
+      disableClose: false,
+      autoFocus: false
+    });
+  }
 
   getInitials(name: string): string {
     return name
@@ -315,14 +311,8 @@ logout(): void {
           // Check for specific navigation errors
           if (navError instanceof Error) {
             if (navError.message.includes('Cannot match any routes')) {
-              console.warn('   - /auth route not found!');
-              console.warn('   - Check routing configuration');
             }
           }
-          
-          console.warn('💡 [logout] Consider:');
-          console.warn('   - Showing error message to user');
-          console.warn('   - Providing manual login link');
           
           // Optional: Force redirect as fallback
           try {

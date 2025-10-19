@@ -66,3 +66,16 @@ body { margin: 0; font-family: Roboto, 'Helvetica Neue', sans-serif; }
   border: 1px solid #e2e8f0;
 }
 
+/* Performance Dashboard Dialog */
+.performance-dashboard-dialog {
+  .mat-mdc-dialog-container {
+    padding: 0;
+    overflow: hidden;
+    border-radius: 16px;
+    
+    .mat-mdc-dialog-surface {
+      border-radius: 16px;
+      overflow: hidden;
+    }
+  }
+}

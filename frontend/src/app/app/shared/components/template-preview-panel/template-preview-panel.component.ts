@@ -120,7 +120,6 @@ export class TemplatePreviewPanelComponent implements OnChanges {
   }
 
 toggleFullscreen(): void {
-  console.log('🖥️ [Preview Panel] Fullscreen toggle');
   const element = document.querySelector('.preview-root') as HTMLElement;
   
   if (!element) {
@@ -129,10 +128,8 @@ toggleFullscreen(): void {
   }
 
   if (!this.isFullscreen) {
-    console.log('➡️ [Preview Panel] Entering fullscreen...');
     if (element.requestFullscreen) {
       element.requestFullscreen().then(() => {
-        console.log('✅ [Preview Panel] Fullscreen entered');
         this.isFullscreen = true;
         this.cdr.markForCheck();
         
@@ -140,19 +137,15 @@ toggleFullscreen(): void {
         setTimeout(() => {
           const overlayContainer = document.querySelector('.cdk-overlay-container');
           if (overlayContainer && document.fullscreenElement) {
-            console.log('🔧 [Preview Panel] Moving overlay into fullscreen');
             document.fullscreenElement.appendChild(overlayContainer);
           }
         }, 100);
       });
     }
   } else {
-    console.log('⬅️ [Preview Panel] Exiting fullscreen...');
-    
     // 🔧 FIX: Restore overlay container to body before exiting
     const overlayContainer = document.querySelector('.cdk-overlay-container');
     if (overlayContainer && overlayContainer.parentElement !== document.body) {
-      console.log('🔧 [Preview Panel] Restoring overlay to body');
       document.body.appendChild(overlayContainer);
     }
     

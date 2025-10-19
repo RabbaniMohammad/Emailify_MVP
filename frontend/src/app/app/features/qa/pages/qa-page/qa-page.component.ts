@@ -73,9 +73,8 @@ type SuggestionResult = {
     ]),
     trigger('expandIn', [
       transition(':enter', [
-        style({ opacity: 0, height: 0, overflow: 'hidden' }),
-        animate('0.5s cubic-bezier(0.4, 0, 0.2, 1)', 
-          style({ opacity: 1, height: '*' }))
+        style({ opacity: 0 }),
+        animate('0.3s ease-out', style({ opacity: 1 }))
       ])
     ]),
     trigger('pulse', [
@@ -100,9 +99,11 @@ type SuggestionResult = {
     ]),
     trigger('variantAnimation', [
       transition(':enter', [
-        style({ opacity: 0, transform: 'translateY(30px) scale(0.95)' }),
-        animate('0.5s cubic-bezier(0.34, 1.56, 0.64, 1)', 
-          style({ opacity: 1, transform: 'translateY(0) scale(1)' }))
+        style({ opacity: 0 }),
+        animate('0.3s ease-out', style({ opacity: 1 }))
+      ]),
+      transition(':leave', [
+        animate('0.15s ease-in', style({ opacity: 0 }))
       ])
     ]),
     trigger('modalContentAnimation', [
@@ -777,7 +778,7 @@ export class QaPageComponent implements OnDestroy {
           run = { ...run, items: [...run.items, item] };
           this.variantsSubject.next(run);
           this.qa.saveVariantsRun(templateId, run);
-          this.cdr.markForCheck();
+          // Removed markForCheck() from loop - batch at end for better performance
 
         } catch (variantError) {
           this.showWarning(`Variant ${i + 1} failed, continuing with others...`);
@@ -789,6 +790,9 @@ export class QaPageComponent implements OnDestroy {
         clearTimeout(this.variantsTotalTimeoutId);
         this.variantsTotalTimeoutId = undefined;
       }
+
+      // Single change detection after all variants generated (performance optimization)
+      this.cdr.markForCheck();
 
       const finalCount = run.items.length;
       this.showSuccess(`Successfully generated ${finalCount} variant(s)!`);
@@ -1103,8 +1107,6 @@ navigateToVisualEditor(): void {
   const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
   sessionStorage.setItem(editingModeKey, 'golden');
   
-  console.log('📸 Snapshot created for comparison (MODE: golden)');
-  
   // Save failed edits
   if (golden.failedEdits && golden.failedEdits.length > 0) {
     const failedKey = `visual_editor_${this.templateId}_failed_edits`;
@@ -1148,14 +1150,10 @@ private async handleVisualEditorReturn(
   // ✅ Declare snapshotKey ONCE at the top
   const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
   
-  console.log(`🎯 Editing mode detected: ${editingMode}`);
-  
   // ========================================
   // ✅ ORIGINAL TEMPLATE EDITING
   // ========================================
   if (editingMode === 'original') {
-    console.log('📥 Processing ORIGINAL template return');
-    
     const snapshotHtml = sessionStorage.getItem(snapshotKey);
     
     if (snapshotHtml) {
@@ -1163,7 +1161,6 @@ private async handleVisualEditorReturn(
       const editedText = this.extractVisibleText(editedHtml);
       
       if (originalText === editedText) {
-        console.log('⚠️ No changes detected in original template');
         sessionStorage.removeItem(snapshotKey);
         sessionStorage.removeItem(editingModeKey);
         this.showInfo('No changes detected in the template.');
@@ -1193,8 +1190,6 @@ private async handleVisualEditorReturn(
   // ✅ VARIANT EDITING
   // ========================================
   if (editingMode === 'variant') {
-    console.log('📥 Processing VARIANT return');
-    
     const variantMetaKey = `visual_editor_${templateId}_variant_meta`;
     const variantMetaJson = sessionStorage.getItem(variantMetaKey);
     
@@ -1208,8 +1203,6 @@ private async handleVisualEditorReturn(
     const variantMeta = JSON.parse(variantMetaJson);
     const { runId, variantNo } = variantMeta;
     
-    console.log(`📦 Updating variant ${variantNo} in run ${runId}`);
-    
     const snapshotHtml = sessionStorage.getItem(snapshotKey);
     
     if (snapshotHtml) {
@@ -1217,7 +1210,6 @@ private async handleVisualEditorReturn(
       const editedText = this.extractVisibleText(editedHtml);
       
       if (originalText === editedText) {
-        console.log('⚠️ No changes detected in variant');
         sessionStorage.removeItem(snapshotKey);
         sessionStorage.removeItem(editingModeKey);
         sessionStorage.removeItem(variantMetaKey);
@@ -1245,9 +1237,7 @@ private async handleVisualEditorReturn(
         this.variantsSubject.next(updatedRun);
         this.qa.saveVariantsRun(templateId, updatedRun);
         
-        console.log(`✅ Variant ${variantNo} updated successfully`);
       } else {
-        console.error(`❌ Variant ${variantNo} not found in run`);
       }
     } else {
       console.error(`❌ Run ${runId} not found or doesn't match current run`);
@@ -1256,8 +1246,6 @@ private async handleVisualEditorReturn(
     sessionStorage.removeItem(snapshotKey);
     sessionStorage.removeItem(editingModeKey);
     sessionStorage.removeItem(variantMetaKey);
-    console.log('🧹 Cleanup complete');
-    
     this.showSuccess(`✅ Variant ${variantNo} updated successfully!`);
     
     this.cdr.detectChanges();
@@ -1276,8 +1264,6 @@ private async handleVisualEditorReturn(
   // ✅ GOLDEN TEMPLATE EDITING
   // ========================================
   
-  console.log('🎯 [WORD BOUNDARY] Processing GOLDEN template return');
-  
   const golden = this.goldenSubject.value;
   
   if (!golden) {
@@ -1288,23 +1274,14 @@ private async handleVisualEditorReturn(
   const snapshotHtml = sessionStorage.getItem(snapshotKey);
   
   if (!snapshotHtml) {
-    console.error('❌ No snapshot found!');
     this.showError('Snapshot not found. Cannot detect changes.');
     return;
   }
   
-  console.log('📸 Snapshot retrieved');
-  
   const originalText = this.extractVisibleText(snapshotHtml);
   const editedText = this.extractVisibleText(editedHtml);
   
-  console.log('📊 Snapshot length:', originalText.length);
-  console.log('📊 Edited length:', editedText.length);
-  console.log('📝 Snapshot preview:', originalText.substring(0, 150));
-  console.log('📝 Edited preview:', editedText.substring(0, 150));
-  
   if (originalText === editedText) {
-    console.log('⚠️ No changes detected');
     sessionStorage.removeItem(snapshotKey);
     sessionStorage.removeItem(editingModeKey);
     this.showInfo('No changes detected in the template.');
@@ -1314,8 +1291,6 @@ private async handleVisualEditorReturn(
   const failedEdits = golden.failedEdits || [];
   
   if (failedEdits.length === 0) {
-    console.log('ℹ️ No failed edits - updating HTML only');
-    
     const updatedGolden: GoldenResult = {
       ...golden,
       html: editedHtml
@@ -1331,11 +1306,7 @@ private async handleVisualEditorReturn(
     return;
   }
   
-  console.log(`🔍 Analyzing ${failedEdits.length} failed edits...`);
-  
   const uniqueFailedEdits = this.deduplicateFailedEdits(failedEdits);
-  console.log(`📋 Unique edits: ${uniqueFailedEdits.length}`);
-  
   let fixedCount = 0;
   const remainingFailedEdits: any[] = [];
   
@@ -1344,46 +1315,32 @@ private async handleVisualEditorReturn(
     const replaceText = (edit.replace || '').trim();
     
     if (!findText) {
-      console.log(`⚠️ [Edit ${index}] Empty find text`);
       remainingFailedEdits.push(edit);
       return;
     }
     
-    console.log(`\n🔍 [Edit ${index}] Checking: "${findText}" → "${replaceText}"`);
-    
     const inSnapshotCount = this.countWholeWordOccurrences(originalText, findText);
     const inEditedCount = this.countWholeWordOccurrences(editedText, findText);
     
-    console.log(`   📍 In snapshot: ${inSnapshotCount} whole word occurrence(s)`);
-    console.log(`   📍 In edited: ${inEditedCount} whole word occurrence(s)`);
-    
     if (replaceText) {
       const replaceCount = this.countWholeWordOccurrences(editedText, replaceText);
-      console.log(`   📍 Replacement found: ${replaceCount} occurrence(s)`);
     }
     
     if (inSnapshotCount > 0 && inEditedCount === 0) {
       fixedCount++;
-      console.log(`   ✅ FIXED - All ${inSnapshotCount} whole word instance(s) removed`);
     }
     else if (inSnapshotCount > inEditedCount && inEditedCount > 0) {
       const partialFixed = inSnapshotCount - inEditedCount;
       fixedCount += partialFixed;
-      console.log(`   ⚠️ PARTIAL - ${partialFixed}/${inSnapshotCount} fixed`);
       remainingFailedEdits.push(edit);
     }
     else {
       if (inSnapshotCount === 0) {
-        console.log(`   ❌ NOT FOUND - Never existed as whole word in snapshot`);
       } else {
-        console.log(`   ❌ NOT FIXED - Still ${inEditedCount} whole word instance(s)`);
       }
       remainingFailedEdits.push(edit);
     }
   });
-  
-  console.log(`\n📊 [FINAL] Fixed: ${fixedCount}/${uniqueFailedEdits.length}`);
-  console.log(`📊 [FINAL] Remaining: ${remainingFailedEdits.length}`);
   
   const currentStats = golden.stats || {
     total: 0,
@@ -1393,15 +1350,11 @@ private async handleVisualEditorReturn(
     skipped: 0
   };
   
-  console.log('📊 Current stats:', currentStats);
-  
   const updatedStats = {
     ...currentStats,
     applied: currentStats.applied + fixedCount,
     failed: Math.max(0, currentStats.failed - fixedCount)
   };
-  
-  console.log('📊 Updated stats:', updatedStats);
   
   const updatedGolden: GoldenResult = {
     ...golden,
@@ -1410,24 +1363,18 @@ private async handleVisualEditorReturn(
     failedEdits: remainingFailedEdits
   };
   
-  console.log('💾 Saving updated golden...');
-  
   this.goldenSubject.next(updatedGolden);
   this.qa.saveGoldenToCache(templateId, updatedGolden);
   this.updateVisualEditorButtonColor(remainingFailedEdits);
   
   sessionStorage.removeItem(snapshotKey);
   sessionStorage.removeItem(editingModeKey);
-  console.log('🧹 Cleanup complete');
-  
   this.cdr.detectChanges();
   setTimeout(() => {
     this.cdr.detectChanges();
-    console.log('🔄 Change detection complete');
   }, 100);
   
   if (fixedCount > 0) {
-    console.log(`✅ Success: ${fixedCount} fixed`);
     if (remainingFailedEdits.length > 0) {
       this.showSuccess(
         `✅ Fixed ${fixedCount} edit(s)! ${remainingFailedEdits.length} still need attention.`
@@ -1438,7 +1385,6 @@ private async handleVisualEditorReturn(
       );
     }
   } else {
-    console.log('ℹ️ No fixes detected');
     this.showInfo('📝 Template updated, but no failed edits were resolved. Please check the changes.');
   }
   
@@ -1465,8 +1411,6 @@ onEditVariant(runId: string, variantNo: number, variant: any): void {
     return;
   }
   
-  console.log(`🎯 Opening variant ${variantNo} in visual editor`);
-  
   // ✅ Save variant HTML for editing
   const variantKey = `visual_editor_${this.templateId}_golden_html`;
   sessionStorage.setItem(variantKey, variant.html);
@@ -1487,12 +1431,10 @@ onEditVariant(runId: string, variantNo: number, variant: any): void {
   if (variant.failedEdits && variant.failedEdits.length > 0) {
     const failedKey = `visual_editor_${this.templateId}_failed_edits`;
     sessionStorage.setItem(failedKey, JSON.stringify(variant.failedEdits));
-    console.log(`💾 Saved ${variant.failedEdits.length} failed edits`);
   } else {
     // Clear failed edits if none
     const failedKey = `visual_editor_${this.templateId}_failed_edits`;
     sessionStorage.removeItem(failedKey);
-    console.log('🧹 No failed edits to save');
   }
   
   // ✅ Navigate to visual editor
@@ -1522,7 +1464,6 @@ private countWholeWordOccurrences(text: string, searchWord: string): number {
   
   // Debug logging
   if (matches) {
-    console.log(`      🔎 Matches found:`, matches);
   }
   
   return count;
@@ -1551,8 +1492,6 @@ private computeWordDiff(oldText: string, newText: string): {
   // Split into words
   const oldWords = this.tokenizeText(oldText);
   const newWords = this.tokenizeText(newText);
-  
-  console.log(`📝 Old words: ${oldWords.length}, New words: ${newWords.length}`);
   
   // Find deletions (in old but not in new)
   const deletions: string[] = [];
@@ -1667,8 +1606,6 @@ onEditOriginalTemplate(): void {
   // ✅ CRITICAL: Set flag to indicate we're editing ORIGINAL template
   const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
   sessionStorage.setItem(editingModeKey, 'original');
-  
-  console.log('📸 Original template sent to visual editor (MODE: original)');
   
   // ✅ Clear any failed edits (since this is original template)
   const failedKey = `visual_editor_${this.templateId}_failed_edits`;

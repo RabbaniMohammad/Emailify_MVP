@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
 import { tap, catchError, finalize } from 'rxjs/operators';
 import { CacheService } from './cache.service';
+import { DatabaseService } from '../../../core/services/db.service';
 
 // Interfaces
 export interface TemplateItem {
@@ -55,6 +56,7 @@ const CACHE_TTL = {
 export class TemplatesService {
   private http = inject(HttpClient);
   private cache = inject(CacheService);
+  private db = inject(DatabaseService); // 🔥 ADD IndexedDB
 
   private state = new BehaviorSubject<TemplatesState>(INITIAL_STATE);
   public readonly state$ = this.state.asObservable();
@@ -90,7 +92,6 @@ export class TemplatesService {
     
     // ✅ Prevent duplicate searches while loading
     if (this.currentSearchQuery === trimmedQuery && this.snapshot.status === 'loading') {
-      console.log('⏭️ Search already in progress, skipping');
       return;
     }
 
@@ -109,7 +110,6 @@ export class TemplatesService {
     const cached = this.cache.get<TemplateItem[]>(cacheKey);
     
     if (cached && cached.length > 0) {
-      console.log('✅ Instant cache hit:', cached.length, 'templates');
       // ✅ Reorder to show last selected first
       const reordered = this.reorderByLastSelected(cached);
       this.updateState({ items: reordered, status: 'success', error: null });
@@ -121,15 +121,11 @@ export class TemplatesService {
       const allTemplates = this.cache.get<TemplateItem[]>(CACHE_KEYS.TEMPLATES_LIST);
       
       if (allTemplates && allTemplates.length > 0) {
-        console.log('🔍 Filtering from cache...');
-        
         // ✅ Filter instantly without loading state
         const filtered = allTemplates.filter(item => 
           item.name?.toLowerCase().includes(trimmedQuery) ||
           item.id?.toLowerCase().includes(trimmedQuery)
         );
-        
-        console.log('✅ Filtered instantly:', filtered.length, 'of', allTemplates.length);
         
         // Cache the filtered results
         this.cache.set(cacheKey, filtered, CACHE_TTL.SEARCH, 'session');
@@ -142,7 +138,6 @@ export class TemplatesService {
     }
 
     // ✅ Only show loading if we need to fetch from API
-    console.log('📡 No cache - fetching from backend...');
     this.fetchTemplates(trimmedQuery, cacheKey);
   }
 
@@ -156,22 +151,27 @@ export class TemplatesService {
   }
 
   smartRefresh(): void {
-    console.log('🔄 Smart refresh started...');
-    
     // Set loading state
     this.updateState({ status: 'loading', error: null });
     
     // Fetch fresh template list from server
     this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates')
       .pipe(
-        tap(response => {
+        tap(async response => {
           const freshItems = response.items || [];
           
-          console.log(`✅ Smart refresh: ${freshItems.length} templates from server`);
-          
-          // Cache the fresh list
+          // Cache the fresh list (localStorage)
           this.cache.set(CACHE_KEYS.TEMPLATES_LIST, freshItems, CACHE_TTL.LIST, 'session');
           
+          // 🔥 SAVE TO INDEXEDDB
+          for (const template of freshItems) {
+            await this.db.cacheTemplate({
+              id: template.id,
+              runId: 'template-' + template.id,
+              html: template.content || '',
+              timestamp: Date.now()
+            });
+          }
           // ✅ Reorder to show last selected first
           const reordered = this.reorderByLastSelected(freshItems);
           
@@ -189,7 +189,6 @@ export class TemplatesService {
           const stale = this.cache.getStale<TemplateItem[]>(CACHE_KEYS.TEMPLATES_LIST);
           
           if (stale && stale.length > 0) {
-            console.warn('⚠️ Using stale cache due to network error');
             const reordered = this.reorderByLastSelected(stale);
             this.updateState({ 
               items: reordered, 
@@ -248,7 +247,6 @@ export class TemplatesService {
           this.cache.invalidate(CACHE_KEYS.LAST_SELECTED);
         }
         
-        console.log('✅ Template removed from state and cache');
       })
     );
   }
@@ -258,7 +256,6 @@ export class TemplatesService {
     const savedQuery = this.cache.get<string>(CACHE_KEYS.SEARCH_QUERY);
     
     if (savedQuery) {
-      console.log('✅ Restored search query:', savedQuery);
       this.currentSearchQuery = savedQuery;
       this.updateState({ searchQuery: savedQuery });
     }
@@ -275,7 +272,6 @@ export class TemplatesService {
     const selectedIndex = items.findIndex(item => item.id === lastSelectedId);
     
     if (selectedIndex > 0) {
-      console.log('🔄 Moving last selected template to top:', lastSelectedId);
       const selected = items[selectedIndex];
       const reordered = [selected, ...items.slice(0, selectedIndex), ...items.slice(selectedIndex + 1)];
       return reordered;
@@ -290,7 +286,7 @@ export class TemplatesService {
 
     this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates')
       .pipe(
-        tap(response => {
+        tap(async response => {
           let items = response.items || [];
           
           // ✅ Filter efficiently
@@ -305,9 +301,16 @@ export class TemplatesService {
           if (items.length > 0) {
             const ttl = query ? CACHE_TTL.SEARCH : CACHE_TTL.LIST;
             this.cache.set(cacheKey, items, ttl, 'session');
-            console.log('💾 Cached', items.length, 'templates');
+            // 🔥 SAVE TO INDEXEDDB
+            for (const template of items) {
+              await this.db.cacheTemplate({
+                id: template.id,
+                runId: 'template-' + template.id,
+                html: template.content || '',
+                timestamp: Date.now()
+              });
+            }
           } else {
-            console.warn('⚠️ No templates to cache');
           }
           
           // ✅ Reorder to show last selected first
@@ -320,7 +323,6 @@ export class TemplatesService {
           const stale = this.cache.getStale<TemplateItem[]>(cacheKey);
           
           if (stale && stale.length > 0) {
-            console.warn('⚠️ Using stale cache due to network error');
             const reordered = this.reorderByLastSelected(stale);
             this.updateState({ items: reordered, status: 'success', error: 'Showing cached data (offline)' });
           } else {

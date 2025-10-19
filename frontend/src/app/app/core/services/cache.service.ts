@@ -58,7 +58,6 @@ export class CacheService {
         const storageObj = storage === 'session' ? sessionStorage : localStorage;
         storageObj.setItem(key, JSON.stringify(cached));
       } catch (error) {
-        console.warn(`Failed to store ${key} in ${storage}Storage:`, error);
       }
     }
   }
@@ -142,7 +141,6 @@ export class CacheService {
       sessionStorage.removeItem(key);
       localStorage.removeItem(key);
     } catch (error) {
-      console.warn(`Failed to remove ${key} from storage:`, error);
     }
   }
 
@@ -179,7 +177,6 @@ export class CacheService {
     try {
       sessionStorage.clear();
     } catch (error) {
-      console.warn('Failed to clear sessionStorage:', error);
     }
 
     // Clear localStorage if requested
@@ -187,7 +184,6 @@ export class CacheService {
       try {
         localStorage.clear();
       } catch (error) {
-        console.warn('Failed to clear localStorage:', error);
       }
     }
   }
@@ -204,7 +200,6 @@ export class CacheService {
     try {
       sessionStorage.clear();
     } catch (error) {
-      console.warn('Failed to clear sessionStorage:', error);
     }
 
     // Clear only user-specific items from localStorage
@@ -247,7 +242,6 @@ export class CacheService {
 
       return JSON.parse(item) as CachedData<T>;
     } catch (error) {
-      console.warn(`Failed to parse ${key} from storage:`, error);
       // Clean up corrupted data
       try {
         storage.removeItem(key);
@@ -272,7 +266,6 @@ export class CacheService {
       
       keysToRemove.forEach(key => storage.removeItem(key));
     } catch (error) {
-      console.warn(`Failed to clear storage by prefix ${prefix}:`, error);
     }
   }
 

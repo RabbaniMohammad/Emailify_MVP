@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { BehaviorSubject, Observable, tap, catchError, of, firstValueFrom, interval, Subscription, map, throwError } from 'rxjs';
 import { CacheService } from './cache.service';
 import { QaService } from '../../features/qa/services/qa.service';
+import { DatabaseService } from '../../../core/services/db.service';
 
 export interface User {
   _id: string;
@@ -26,6 +27,7 @@ export class AuthService implements OnDestroy {
   private router = inject(Router);
   private cache = inject(CacheService);
   private qa = inject(QaService);
+  private db = inject(DatabaseService);
 
   // ==================== State Management ====================
   private currentUserSubject = new BehaviorSubject<User | null>(null);
@@ -54,7 +56,6 @@ export class AuthService implements OnDestroy {
    * Call this after successful login
    */
   startStatusMonitoring(): void {
-    console.log('🔄 Starting status monitoring and proactive token refresh');
     this.stopStatusMonitoring();
 
     // ✅ Check user status every 30 seconds
@@ -67,11 +68,8 @@ export class AuthService implements OnDestroy {
     // ✅ Proactive token refresh every 50 minutes (before 60-minute expiry)
     this.tokenRefreshTimer = setInterval(() => {
       if (this.isAuthenticatedSubject.value) {
-        console.log('🔄 Proactively refreshing token (50-minute interval)...');
-        
         this.refreshToken().subscribe({
           next: () => {
-            console.log('✅ Token refreshed proactively');
           },
           error: (err) => {
             console.error('❌ Proactive refresh failed:', err);
@@ -86,8 +84,6 @@ export class AuthService implements OnDestroy {
    * Stop all monitoring timers
    */
   stopStatusMonitoring(): void {
-    console.log('🛑 Stopping status monitoring');
-    
     if (this.statusCheckSubscription) {
       this.statusCheckSubscription.unsubscribe();
       this.statusCheckSubscription = undefined;
@@ -111,7 +107,6 @@ export class AuthService implements OnDestroy {
           
           // ✅ Check if user account status changed
           if (!user.isActive || !user.isApproved) {
-            console.warn('⚠️ User account status changed - logging out');
             const reason = !user.isActive ? 'account_deactivated' : 'pending_approval';
             this.handleForceLogout(reason);
           } else {
@@ -122,11 +117,8 @@ export class AuthService implements OnDestroy {
         error: (error) => {
           // ✅ Try to refresh token if 401
           if (error.status === 401) {
-            console.log('🔄 Token expired during status check - attempting refresh...');
-            
             this.refreshToken().subscribe({
               next: () => {
-                console.log('✅ Token refreshed successfully during status check');
                 // Retry the status check after successful refresh
                 this.checkUserStatus();
               },
@@ -198,10 +190,16 @@ export class AuthService implements OnDestroy {
    * Handle successful authentication from OAuth callback
    */
   handleAuthSuccess(user: any): void {
-    console.log('✅ Authentication successful:', user.email);
-    
     this.currentUserSubject.next(user);
     this.isAuthenticatedSubject.next(true);
+    
+    // ✅ Clear old cache on fresh login to get fresh data
+    this.db.cleanExpiredData()
+      .then(() => {
+      })
+      .catch((err: any) => {
+        console.error('❌ Failed to clean cache:', err);
+      });
     
     // ✅ Start monitoring
     this.startStatusMonitoring();
@@ -226,7 +224,6 @@ export class AuthService implements OnDestroy {
     const pollTimer = setInterval(() => {
       if (popup?.closed) {
         clearInterval(pollTimer);
-        console.log('🔄 OAuth popup closed - checking auth status...');
         this.authCheckComplete = false;
         this.checkAuthStatus();
       }
@@ -249,7 +246,6 @@ export class AuthService implements OnDestroy {
   refreshToken(): Observable<any> {
     return this.http.post('/api/auth/refresh', {}, { withCredentials: true }).pipe(
       tap(() => {
-        console.log('✅ Access token refreshed');
       }),
       catchError((error) => {
         console.error('❌ Token refresh error:', error.status, error.error);
@@ -313,12 +309,10 @@ export class AuthService implements OnDestroy {
    * Force logout with specific error reason
    */
   private handleForceLogout(reason: string): void {
-    console.log('🚪 Force logout initiated:', reason);
     this.stopStatusMonitoring();
     
     this.logout().subscribe({
       next: () => {
-        console.log('✅ Logout successful, redirecting to auth page');
         this.router.navigate(['/auth'], {
           queryParams: { error: reason },
           replaceUrl: true
@@ -342,14 +336,12 @@ export class AuthService implements OnDestroy {
    * Logout user and clear all state
    */
   logout(): Observable<any> {
-    console.log('🚪 Logging out...');
     this.stopStatusMonitoring();
     this.qa.clearAllQaData(); 
     
     return this.http.post('/api/auth/logout', {}, { withCredentials: true }).pipe(
       tap({
         next: () => {
-          console.log('✅ Logout successful');
           this.clearAuthState();
         },
         error: (error) => {
@@ -365,8 +357,6 @@ export class AuthService implements OnDestroy {
    * Clear all authentication state and caches
    */
   private clearAuthState(): void {
-    console.log('🧹 Clearing authentication state and caches');
-    
     // Clear auth state
     this.currentUserSubject.next(null);
     this.isAuthenticatedSubject.next(false);
@@ -380,7 +370,14 @@ export class AuthService implements OnDestroy {
     // But keeps: General app preferences (theme, language, etc.)
     this.cache.clearUserData(['template-', 'user-', 'last-', 'selected-', 'generate:']);
 
-    console.log('✅ All user caches cleared on logout');
+    // ✅ Clear IndexedDB cache (non-blocking)
+    this.db.clearAllCache()
+      .then(() => {
+      })
+      .catch((err: any) => {
+        console.error('❌ Failed to clear IndexedDB cache:', err);
+      });
+
   }
 
   // ==================== Getters ====================

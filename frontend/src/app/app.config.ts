@@ -5,6 +5,8 @@ import { provideAnimations } from '@angular/platform-browser/animations';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './app/core/interceptors/auth.interceptor';
+import { DatabaseService } from './core/services/db.service';
+import { CacheMonitorService } from './core/services/cache-monitor.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -13,6 +15,9 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(
       withInterceptors([authInterceptor])
     ),
-    provideAnimations()
+    provideAnimations(),
+    // Database & Cache Services
+    { provide: DatabaseService, useValue: new DatabaseService() },
+    CacheMonitorService
   ]
 };

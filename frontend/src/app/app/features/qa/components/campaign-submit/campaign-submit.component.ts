@@ -174,8 +174,6 @@ ngOnInit(): void {
       
       // If input is now empty AND we had a selected subject
       if (!trimmedValue && this.currentSelectedSubject) {
-        console.log('🔙 Input cleared, restoring subject to list:', this.currentSelectedSubject);
-        
         const subjects = this.subjectsSubject.value || [];
         
         // Add the previous subject back to the list
@@ -214,8 +212,6 @@ async onGenerateSubjects(): Promise<void> {
   
   if (this.subjectsLoading) return;
   
-  console.log('🎯 Generating subject lines for template:', templateId);
-  
   // ✅ CLEAR existing subjects before starting new generation
   this.subjectsSubject.next(null);
   
@@ -248,8 +244,6 @@ async onGenerateSubjects(): Promise<void> {
         clearTimeout(this.subjectsTimeoutId);
         this.subjectsTimeoutId = undefined;
       }
-      
-      console.log('✅ Generated subjects:', subjects);
       
       // ✅ FIX: Set loading to false HERE, before updating subjects
       this.subjectsLoading = false;
@@ -334,12 +328,8 @@ onSelectSubject(selectedSubject: string): void {
   
   // If this subject is already selected (in input), do nothing
   if (currentFormValue === selectedSubject) {
-    console.log('ℹ️ Subject already selected');
     return;
   }
-  
-  console.log('🔄 Selecting subject:', selectedSubject);
-  console.log('  Current subject in form:', currentFormValue);
   
   // Get the index of the clicked subject
   const clickedIndex = subjects.indexOf(selectedSubject);
@@ -354,11 +344,9 @@ onSelectSubject(selectedSubject: string): void {
   
   // If there's a current subject in the form, swap it back into the list
   if (currentFormValue) {
-    console.log('  Swapping with:', currentFormValue);
     newSubjects[clickedIndex] = currentFormValue;
   } else {
     // Remove the selected subject from the list (first selection)
-    console.log('  Removing from list (first selection)');
     newSubjects.splice(clickedIndex, 1);
   }
   
@@ -377,8 +365,6 @@ onSelectSubject(selectedSubject: string): void {
   // Show success message
   this.showSuccess(`Subject line selected!`);
   
-  console.log('✅ New subjects list:', newSubjects);
-  console.log('✅ Selected subject:', selectedSubject);
 }
 
 
@@ -423,13 +409,11 @@ isSubjectSelected(subject: string): boolean {
   // ============================================
 
   async loadMailchimpAudiences(): Promise<void> {
-    console.log('📥 Loading Mailchimp audiences...');
     this.audiencesLoadingSubject.next('loading');
     
     try {
       await firstValueFrom(this.campaignService.fetchMailchimpAudiences());
       this.audiencesLoadingSubject.next('success');
-      console.log('✅ Audiences loaded');
     } catch (error) {
       console.error('❌ Failed to load audiences:', error);
       this.audiencesLoadingSubject.next('error');
@@ -438,7 +422,6 @@ isSubjectSelected(subject: string): boolean {
   }
 
   selectAudience(audience: MailchimpAudience): void {
-    console.log('🎯 Selected audience:', audience.name);
     this.campaignService.selectAudience(audience);
   }
 
@@ -452,7 +435,6 @@ isSubjectSelected(subject: string): boolean {
     
     if (!file) return;
 
-    console.log('📤 Uploading file:', file.name);
     this.uploadedFileName = file.name;
     this.uploadLoadingSubject.next('loading');
 
@@ -469,11 +451,6 @@ isSubjectSelected(subject: string): boolean {
       
       // Group by schedule
       this.scheduleGroups = this.campaignService.groupByScheduleTime(data);
-
-      console.log('✅ File uploaded successfully');
-      console.log('📊 Rows:', data.length);
-      console.log('📧 Test emails:', this.testEmails.length);
-      console.log('📅 Schedule groups:', this.scheduleGroups.length);
 
       this.showSuccess(`Uploaded ${data.length} rows successfully`);
 
@@ -501,7 +478,6 @@ isSubjectSelected(subject: string): boolean {
       return;
     }
 
-    console.log('🔄 Reconciling audiences...');
     this.reconcileLoadingSubject.next('loading');
 
     try {
@@ -512,8 +488,6 @@ isSubjectSelected(subject: string): boolean {
       );
 
       this.reconcileLoadingSubject.next('success');
-      console.log('✅ Reconciliation complete');
-      
     } catch (error) {
       console.error('❌ Reconciliation failed:', error);
       this.reconcileLoadingSubject.next('error');
@@ -537,7 +511,6 @@ isSubjectSelected(subject: string): boolean {
 
     if (!confirmed) return;
 
-    console.log('📧 Sending test emails...');
     this.testEmailLoadingSubject.next('loading');
 
     try {
@@ -557,8 +530,6 @@ isSubjectSelected(subject: string): boolean {
       this.testEmailSent = true;
       this.testEmailSentAt = new Date();
 
-      console.log('✅ Test emails sent:', result.sent);
-      
       if (result.failed.length > 0) {
         this.showError(`Sent ${result.sent}, failed ${result.failed.length}`);
       } else {
@@ -645,14 +616,11 @@ isSubjectSelected(subject: string): boolean {
       if (!confirm('🚀 FINAL CONFIRMATION\n\nThis cannot be undone.\n\nProceed?')) return;
     }
 
-    console.log('🚀 Submitting campaign...');
     this.submitLoadingSubject.next('loading');
 
     try {
       // ✅ STEP 1: ALWAYS add new members (required to send emails)
       if (hasNewMembers && this.selectedAudience) {
-        console.log(`➕ Adding ${this.reconciliation!.summary.newCount} new members...`);
-        
         const addResult = await firstValueFrom(
           this.campaignService.addNewMembersToAudience(
             this.selectedAudience.id,
@@ -660,7 +628,6 @@ isSubjectSelected(subject: string): boolean {
           )
         );
         
-        console.log(`✅ Added ${addResult.addedCount} members`);
       }
 
       // ✅ STEP 2: Submit campaign
@@ -684,8 +651,6 @@ isSubjectSelected(subject: string): boolean {
 
       // ✅ STEP 3: Archive new members if checkbox UNCHECKED
       if (hasNewMembers && !this.addNewMembersToAudience && this.selectedAudience) {
-        console.log('🗄️ Archiving temporary members...');
-        
         await firstValueFrom(
           this.campaignService.cleanupTempMembers(
             this.selectedAudience.id,
@@ -693,14 +658,10 @@ isSubjectSelected(subject: string): boolean {
           )
         );
         
-        console.log('✅ Temporary members archived');
       }
 
       this.submitLoadingSubject.next('success');
       
-      console.log('✅ Campaign submitted');
-      console.log('📋 Campaign IDs:', result.campaignIds);
-
       const successMsg = this.addNewMembersToAudience 
         ? `Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled.`
         : `Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled. New members will be archived.`;

@@ -27,11 +27,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         }
 
         // Try to refresh the token
-        console.log('🔄 401 error - attempting token refresh...');
-        
         return authService.refreshToken().pipe(
           switchMap(() => {
-            console.log('✅ Token refreshed successfully, retrying original request');
             // Retry the original request with new token
             return next(authReq);
           }),
