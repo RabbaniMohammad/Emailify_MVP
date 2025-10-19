@@ -133,8 +133,9 @@
   <!-- FLOATING SUGGESTIONS WIDGET -->
   <div class="floating-widget-container" 
     *ngIf="showFloatingWidget"
-    [style.left.%]="widgetPosition.x"
-    [style.top.%]="widgetPosition.y">
+    [class.modal-drag-enabled]="modalDragEnabled"
+    [style.left.px]="widgetPosition.x"
+    [style.top.px]="widgetPosition.y">
     
     <!-- Floating Button -->
     <div 
@@ -142,9 +143,8 @@
       [class.open]="isWidgetOpen"
       [class.pulse-animate]="!hasShownPulseAnimation"
       [class.drag-enabled]="dragEnabled"
+      (mousedown)="onButtonMouseDown($event)"
       (click)="onButtonClick($event)"
-      (dblclick)="onButtonDoubleClick($event)"
-      (mousedown)="onDragStart($event)"
       (touchstart)="onTouchStart($event)"
       (touchmove)="onTouchMove($event)"
       (touchend)="onTouchEnd($event)">
@@ -167,10 +167,17 @@
     <div 
       class="widget-dropdown" 
       *ngIf="isWidgetOpen"
+      [class.modal-dragging]="isModalDragging"
+      [class.modal-drag-enabled]="modalDragEnabled"
+      [style.left.px]="modalPosition.x"
+      [style.top.px]="modalPosition.y"
       [@slideIn]>
       
       <!-- Header -->
-      <div class="dropdown-header">
+      <div 
+        class="dropdown-header"
+        (mousedown)="onModalHeaderMouseDown($event)"
+        [class.draggable-header]="modalDragEnabled">
         <h3>
           <mat-icon>report_problem</mat-icon>
           Failed Edits
@@ -227,16 +234,6 @@
             </div>
             
           </div>
-          
-          <!-- Apply Button -->
-          <button 
-            mat-icon-button 
-            class="apply-btn"
-            *ngIf="!isEditApplied(i)"
-            (click)="applySuggestion(i)"
-            matTooltip="Apply this change">
-            <mat-icon>play_arrow</mat-icon>
-          </button>
         </div>
         
         <!-- Empty State -->

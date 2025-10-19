@@ -102,11 +102,22 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   isWidgetOpen = false;
   hasShownPulseAnimation = false;
 
-  // Widget Position (draggable)
-  widgetPosition = { x: 50, y: 50 };
+  // Widget Position (draggable) - now in pixels
+  widgetPosition = { x: 20, y: 100 };
   isDragging = false;
   dragEnabled = false;
   private dragOffset = { x: 0, y: 0 };
+
+  // Modal Dragging State - now in pixels
+  isModalDragging = false;
+  modalDragEnabled = false;
+  modalPosition = { x: 0, y: 0 }; // Will be calculated when modal opens
+  private modalDragOffset = { x: 0, y: 0 };
+  
+  // Double-click tracking for "click, then click-hold-drag"
+  private lastButtonClickTime = 0;
+  private lastModalClickTime = 0;
+  private readonly DOUBLE_CLICK_THRESHOLD = 500; // ms
 
   // Storage Keys
   private readonly WIDGET_POSITION_KEY = 'visual_editor_widget_position';
@@ -188,16 +199,16 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const viewportHeight = window.innerHeight;
     const buttonSize = 60;
     
+    // Calculate position in pixels
     let x = touch.clientX - this.dragOffset.x;
     let y = touch.clientY - this.dragOffset.y;
     
+    // Constrain to viewport
     x = Math.max(0, Math.min(x, viewportWidth - buttonSize));
     y = Math.max(0, Math.min(y, viewportHeight - buttonSize));
     
-    this.widgetPosition = {
-      x: (x / viewportWidth) * 100,
-      y: (y / viewportHeight) * 100
-    };
+    this.widgetPosition = { x, y };
+    this.cdr.markForCheck();
   }
 
   onTouchEnd(event: TouchEvent): void {
@@ -651,46 +662,105 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       try {
         const position = JSON.parse(savedPosition);
         this.widgetPosition = position;
+        console.log('🔄 [RESTORE] Restored widget position:', this.widgetPosition);
       } catch (error) {
-        console.error('Failed to restore widget position');
+        console.error('❌ [RESTORE] Failed to restore widget position');
+        this.widgetPosition = { x: 20, y: 100 }; // Default pixel position
       }
     } else {
-      this.widgetPosition = { x: 5, y: 50 };
+      this.widgetPosition = { x: 20, y: 100 }; // Default pixel position
+      console.log('🔄 [RESTORE] Using default widget position:', this.widgetPosition);
     }
   }
 
   private saveWidgetPosition(): void {
     localStorage.setItem(this.WIDGET_POSITION_KEY, JSON.stringify(this.widgetPosition));
+    console.log('💾 [SAVE] Saved widget position:', this.widgetPosition);
+  }
+
+  onButtonMouseDown(event: MouseEvent): void {
+    const currentTime = Date.now();
+    const timeSinceLastClick = currentTime - this.lastButtonClickTime;
+    
+    console.log('🔵 [MOUSEDOWN] Time since last click:', timeSinceLastClick, 'ms');
+    
+    // If this is the SECOND mousedown within threshold, START DRAGGING
+    if (timeSinceLastClick < this.DOUBLE_CLICK_THRESHOLD && timeSinceLastClick > 0) {
+      console.log('✅ [SECOND MOUSEDOWN - HOLD TO DRAG]');
+      event.stopPropagation();
+      event.preventDefault();
+      
+      this.dragEnabled = true;
+      this.isDragging = true;
+      
+      if (this.isWidgetOpen) {
+        this.isWidgetOpen = false;
+      }
+      
+      const button = event.currentTarget as HTMLElement;
+      const rect = button.getBoundingClientRect();
+      
+      this.dragOffset = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      };
+      
+      console.log('🔵 Drag offset:', this.dragOffset);
+      
+      // Reset timer so third click won't trigger
+      this.lastButtonClickTime = 0;
+    } else {
+      // This is the FIRST click, just record the time
+      console.log('1️⃣ [FIRST CLICK MOUSEDOWN]');
+      this.lastButtonClickTime = currentTime;
+    }
   }
 
   onButtonClick(event: MouseEvent): void {
     if (this.isDragging || this.dragEnabled) return;
     
-    this.isWidgetOpen = !this.isWidgetOpen;
+    const currentTime = Date.now();
+    const timeSinceMouseDown = currentTime - this.lastButtonClickTime;
     
-    if (this.isWidgetOpen && !this.hasShownPulseAnimation) {
-      this.hasShownPulseAnimation = true;
+    console.log('🔵 [CLICK/MOUSEUP] Time since mousedown:', timeSinceMouseDown, 'ms');
+    
+    // Only toggle if this is a complete first click (not the start of second click)
+    if (timeSinceMouseDown < this.DOUBLE_CLICK_THRESHOLD && this.lastButtonClickTime > 0) {
+      console.log('✅ [FIRST CLICK COMPLETE] Toggling widget');
+      this.isWidgetOpen = !this.isWidgetOpen;
+      
+      // Initialize modal position when opening
+      if (this.isWidgetOpen) {
+        this.modalPosition = {
+          x: this.widgetPosition.x,
+          y: this.widgetPosition.y + 70  // Position modal below button
+        };
+        console.log('📍 [MODAL INIT] Modal positioned at:', this.modalPosition);
+      }
+      
+      if (this.isWidgetOpen && !this.hasShownPulseAnimation) {
+        this.hasShownPulseAnimation = true;
+      }
+      
+      this.cdr.markForCheck();
+    } else {
+      // Old click (timeout expired), just toggle immediately
+      console.log('✅ [IMMEDIATE TOGGLE] Old click, toggle now');
+      this.isWidgetOpen = !this.isWidgetOpen;
+      
+      // Initialize modal position when opening
+      if (this.isWidgetOpen) {
+        this.modalPosition = {
+          x: this.widgetPosition.x,
+          y: this.widgetPosition.y + 70  // Position modal below button
+        };
+        console.log('📍 [MODAL INIT] Modal positioned at:', this.modalPosition);
+      }
+      
+      if (this.isWidgetOpen && !this.hasShownPulseAnimation) {
+        this.hasShownPulseAnimation = true;
+      }
     }
-  }
-
-  onButtonDoubleClick(event: MouseEvent): void {
-    event.stopPropagation();
-    event.preventDefault();
-    
-    this.dragEnabled = true;
-    this.isDragging = true;
-    
-    if (this.isWidgetOpen) {
-      this.isWidgetOpen = false;
-    }
-    
-    const button = event.currentTarget as HTMLElement;
-    const rect = button.getBoundingClientRect();
-    
-    this.dragOffset = {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top
-    };
   }
 
   closeWidget(): void {
@@ -705,7 +775,10 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
   }
 
   onDragMove(event: MouseEvent): void {
-    if (!this.isDragging || !this.dragEnabled) return;
+    if (!this.isDragging || !this.dragEnabled) {
+      console.log('🟡 [DRAG MOVE] Skipped - isDragging:', this.isDragging, 'dragEnabled:', this.dragEnabled);
+      return;
+    }
     
     event.preventDefault();
     
@@ -713,16 +786,30 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     const viewportHeight = window.innerHeight;
     const buttonSize = 60;
     
+    // Calculate new position in pixels
     let x = event.clientX - this.dragOffset.x;
     let y = event.clientY - this.dragOffset.y;
     
+    // Constrain to viewport
     x = Math.max(0, Math.min(x, viewportWidth - buttonSize));
     y = Math.max(0, Math.min(y, viewportHeight - buttonSize));
     
-    this.widgetPosition = {
-      x: (x / viewportWidth) * 100,
-      y: (y / viewportHeight) * 100
-    };
+    const newPosition = { x, y };
+    
+    console.log('🟡 [DRAG MOVE] New position (px):', newPosition);
+    
+    this.widgetPosition = newPosition;
+    
+    // 🆕 ALSO move the modal to follow the button
+    if (this.isWidgetOpen) {
+      this.modalPosition = {
+        x: x,
+        y: y + 70  // Offset so modal appears below button
+      };
+      console.log('🟡 [DRAG MOVE] Modal following button to:', this.modalPosition);
+    }
+    
+    this.cdr.markForCheck();
   }
 
   onDragEnd(event: MouseEvent): void {
@@ -739,15 +826,138 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 
   @HostListener('document:mousemove', ['$event'])
   onDocumentMouseMove(event: MouseEvent): void {
+    // Check button dragging
     if (this.isDragging && this.dragEnabled) {
+      console.log('📍 [DOCUMENT MOUSEMOVE] Calling onDragMove for button');
       this.onDragMove(event);
+    }
+    
+    // Check modal dragging
+    if (this.isModalDragging && this.modalDragEnabled) {
+      console.log('📍 [DOCUMENT MOUSEMOVE] Calling onModalDragMove for modal');
+      this.onModalDragMove(event);
     }
   }
 
   @HostListener('document:mouseup', ['$event'])
   onDocumentMouseUp(event: MouseEvent): void {
     if (this.isDragging) {
+      console.log('🛑 [DOCUMENT MOUSEUP] Ending button drag');
       this.onDragEnd(event);
+    }
+    if (this.isModalDragging) {
+      console.log('🛑 [DOCUMENT MOUSEUP] Ending modal drag');
+      this.onModalDragEnd(event);
+    }
+  }
+
+  // ============================================
+  // MODAL DRAGGING LOGIC
+  // ============================================
+
+  onModalHeaderMouseDown(event: MouseEvent): void {
+    const currentTime = Date.now();
+    const timeSinceLastClick = currentTime - this.lastModalClickTime;
+    
+    console.log('🟣 [MODAL MOUSEDOWN] Time since last click:', timeSinceLastClick, 'ms');
+    
+    // If this is the SECOND mousedown within threshold, START DRAGGING
+    if (timeSinceLastClick < this.DOUBLE_CLICK_THRESHOLD && timeSinceLastClick > 0) {
+      console.log('✅ [MODAL SECOND MOUSEDOWN - HOLD TO DRAG]');
+      event.stopPropagation();
+      event.preventDefault();
+      
+      this.modalDragEnabled = true;
+      this.isModalDragging = true;
+      
+      const modalElement = (event.target as HTMLElement).closest('.widget-dropdown') as HTMLElement;
+      
+      if (!modalElement) {
+        console.error('❌ Modal element not found!');
+        return;
+      }
+      
+      const rect = modalElement.getBoundingClientRect();
+      
+      this.modalDragOffset = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      };
+      
+      this.modalPosition = {
+        x: rect.left,
+        y: rect.top
+      };
+      
+      console.log('🟣 Modal drag offset:', this.modalDragOffset);
+      
+      // Reset timer so third click won't trigger
+      this.lastModalClickTime = 0;
+      
+      this.cdr.markForCheck();
+    } else {
+      // This is the FIRST click, just record the time
+      console.log('1️⃣ [MODAL FIRST MOUSEDOWN]');
+      this.lastModalClickTime = currentTime;
+    }
+  }
+
+  onModalDragStart(event: MouseEvent): void {
+    // This is just for single clicks - double-click handled by onModalHeaderDoubleClick
+  }
+
+  onModalDragMove(event: MouseEvent): void {
+    if (!this.isModalDragging || !this.modalDragEnabled) {
+      console.log('� [MODAL DRAG MOVE] Skipped - isModalDragging:', this.isModalDragging, 'modalDragEnabled:', this.modalDragEnabled);
+      return;
+    }
+    
+    console.log('🟠 [MODAL DRAG MOVE] Mouse position:', { x: event.clientX, y: event.clientY });
+    console.log('🟠 [MODAL DRAG MOVE] Modal drag offset:', this.modalDragOffset);
+    
+    event.stopPropagation();
+    event.preventDefault();
+    
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Calculate new position in pixels
+    let x = event.clientX - this.modalDragOffset.x;
+    let y = event.clientY - this.modalDragOffset.y;
+    
+    console.log('🟠 [MODAL DRAG MOVE] Calculated position before constraint:', { x, y });
+    
+    // Constrain to viewport (modal is approximately 400px wide and 500px tall)
+    x = Math.max(0, Math.min(x, viewportWidth - 400));
+    y = Math.max(0, Math.min(y, viewportHeight - 500));
+    
+    const newPosition = { x, y };
+    
+    console.log('🟠 [MODAL DRAG MOVE] New position (px):', newPosition);
+    
+    this.modalPosition = newPosition;
+    
+    // 🆕 ALSO move the container (blue circle) to follow the modal
+    this.widgetPosition = {
+      x: x,
+      y: y - 70  // Offset so button appears above modal
+    };
+    
+    this.cdr.markForCheck();
+  }
+
+  onModalDragEnd(event: MouseEvent): void {
+    if (this.isModalDragging) {
+      console.log('🔴 [MODAL DRAG END] Ending drag at position:', this.modalPosition);
+      event.stopPropagation();
+      event.preventDefault();
+      
+      this.isModalDragging = false;
+      // Keep modalDragEnabled true so modal stays draggable
+      console.log('🔴 [MODAL DRAG END] isModalDragging set to false, modalDragEnabled:', this.modalDragEnabled);
+      
+      // Save the button position too
+      this.saveWidgetPosition();
     }
   }
 

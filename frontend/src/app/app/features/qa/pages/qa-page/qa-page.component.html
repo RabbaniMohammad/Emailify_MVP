@@ -387,7 +387,7 @@
           *ngIf="(golden$ | async)?.html"
           mat-icon-button 
           class="skip-btn"
-          (click)="onBypassVariants()"
+          (click)="onBypassVariants(); $event.stopPropagation()"
           matTooltip="Bypass Variants - Use Golden Template">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M13 17l5-5m0 0l-5-5m5 5H6"/>

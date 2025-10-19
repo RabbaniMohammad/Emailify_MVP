@@ -396,6 +396,11 @@
   position: fixed;
   z-index: 9999;
   pointer-events: none; // Allow clicking through container
+  transition: left 0.1s ease-out, top 0.1s ease-out;
+  
+  &.modal-drag-enabled {
+    transition: none; // Smooth dragging without transition delay
+  }
   
   > * {
     pointer-events: auto; // Re-enable for child elements
@@ -509,9 +514,21 @@
     opacity: 1;
   }
 }
+
+// 🆕 Modal drag indicator animation
+@keyframes pulse-modal-drag {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
 // Dropdown Panel
 .widget-dropdown {
-  position: absolute;
+  position: fixed;  // Always use fixed positioning for pixel-based coordinates
   top: 70px;
   left: 0;
   width: 380px;
@@ -523,11 +540,34 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.3s ease;
+  
+  // Modal dragging state
+  &.modal-drag-enabled {
+    box-shadow: 0 16px 64px rgba(99, 102, 241, 0.3);
+    border: 2px solid rgba(99, 102, 241, 0.4);
+    cursor: move;
+  }
+  
+  &.modal-dragging {
+    cursor: grabbing !important;
+    box-shadow: 0 20px 80px rgba(99, 102, 241, 0.5);
+    transform: scale(1.02);
+    z-index: 10000;
+  }
   
   .dropdown-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    position: relative;
+    cursor: move; // Always show move cursor on header
+    
+    // Draggable header styles
+    &.draggable-header {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+      border-bottom: 2px solid rgba(99, 102, 241, 0.2);
+    }
     padding: 16px 20px;
     background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(37, 99, 235, 0.08) 100%);
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
