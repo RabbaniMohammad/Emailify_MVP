@@ -74,16 +74,8 @@ foreach ($vp in $viewports) {
     
     # Build Chrome arguments with delay for animations
     $arguments = @(
-        "--headless=new"
-        "--disable-gpu"
-        "--disable-software-rasterizer"
-        "--screenshot=`"$filepath`""
+        "--new-window"
         "--window-size=$($vp.Width),$($vp.Height)"
-        "--hide-scrollbars"
-        "--force-device-scale-factor=1"
-        "--disable-dev-shm-usage"
-        "--no-sandbox"
-        "--virtual-time-budget=3000"
         $APP_URL
     )
     
