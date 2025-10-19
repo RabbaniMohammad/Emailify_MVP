@@ -516,11 +516,8 @@
 
   .footer-actions {
     display: flex;
+    flex-direction: row;
     gap: 12px;
-
-    @media (max-width: 768px) {
-      flex-direction: column;
-    }
 
     button {
       mat-icon {
@@ -617,10 +614,7 @@
     display: flex;
     gap: 12px;
     justify-content: flex-end;
-
-    @media (max-width: 480px) {
-      flex-direction: column;
-    }
+    flex-direction: row;
 
     button {
       mat-icon {
@@ -652,5 +646,121 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+// Landscape orientation - compact mode
+@media (max-height: 500px) and (orientation: landscape) {
+  .dashboard-header {
+    padding: 12px 20px;
+
+    .header-icon mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .header-text h2 {
+      font-size: 20px;
+    }
+
+    .header-text .subtitle {
+      font-size: 12px;
+      margin: 2px 0 0 0;
+    }
+  }
+
+  .dashboard-content {
+    padding: 16px 20px;
+  }
+
+  .health-card {
+    padding: 16px 20px;
+    margin-bottom: 16px;
+
+    .card-header h3 {
+      font-size: 18px;
+    }
+
+    .status-badge {
+      font-size: 12px;
+      padding: 4px 12px;
+    }
+  }
+
+  .info-section {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+
+  .warning-note {
+    font-size: 13px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+  }
+
+  .warning-actions {
+    gap: 8px;
+    margin-top: 12px;
+    flex-direction: row !important;
+
+    button {
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+  }
+}
+
+// Very short landscape
+@media (max-height: 400px) and (orientation: landscape) {
+  .performance-dashboard {
+    max-height: 95vh;
+  }
+
+  .dashboard-header {
+    padding: 8px 16px;
+
+    .header-icon mat-icon {
+      font-size: 28px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .header-text h2 {
+      font-size: 18px;
+    }
+
+    .header-text .subtitle {
+      font-size: 11px;
+    }
+  }
+
+  .dashboard-content {
+    padding: 12px 16px;
+  }
+
+  .health-card {
+    padding: 12px 16px;
+    margin-bottom: 12px;
+
+    .card-header h3 {
+      font-size: 16px;
+    }
+  }
+
+  .warning-note {
+    font-size: 12px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+  }
+
+  .warning-actions {
+    gap: 6px;
+    flex-direction: row !important;
+
+    button {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
   }
 }

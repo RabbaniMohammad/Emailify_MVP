@@ -1985,8 +1985,8 @@
   .left {
     width: 100%;
     min-width: auto;
-    height: 70vh;
-    max-height: 70vh;
+    height: 100vh;
+    max-height: 100vh;
     border-right: none;
     border-bottom: 2px solid #e2e8f0;
     overflow: hidden;
@@ -1997,8 +1997,8 @@
 
   .right {
     width: 100%;
-    height: 80vh;
-    min-height: 80vh;
+    height: 100vh;
+    min-height: 100vh;
     overflow: hidden;
     flex-shrink: 0;
     position: relative;
@@ -2015,22 +2015,41 @@
 
 @media (max-width: 480px) {
   .layout {
-    height: 100vh;
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
   }
   
   .left {
-    height: 40vh;
-    max-height: 40vh;
+    width: 100%;
+    min-width: auto;
+    height: 100vh;
+    max-height: 100vh;
+    border-right: none;
+    border-bottom: 2px solid #e2e8f0;
+    overflow: hidden;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
   }
   
   .right {
-    height: 60vh;
+    width: 100%;
+    height: 100vh;
+    min-height: 100vh;
+    overflow: hidden;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 0;
   }
 
   .scroll-container {
-    min-height: 300px;
+    min-height: 0;
     max-height: 100%;
-    overflow-y: scroll !important;
+    overflow-y: auto !important;
     overflow-x: hidden !important;
 
     &::-webkit-scrollbar {
@@ -2216,36 +2235,81 @@
   }
 }
 
-// Landscape orientation adjustments for mobile
-@media (max-height: 500px) and (orientation: landscape) {
+// Landscape orientation - wide screens (side-by-side)
+@media (max-height: 500px) and (orientation: landscape) and (min-width: 900px) {
+  // Change layout to side-by-side in landscape for wider screens
+  .layout {
+    flex-direction: row !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+  }
+
+  .left {
+    width: 35% !important;
+    min-width: 280px !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border-right: 2px solid #e2e8f0 !important;
+    border-bottom: none !important;
+  }
+
+  .list-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+
+  .category-filter-wrapper {
+    width: 100% !important;
+  }
+
+  .category-filter-btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .right {
+    width: 65% !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
   .preview-header {
-    padding: 0.5rem 1rem;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
+    padding: 0.5rem 0.75rem;
 
     .header-content {
-      flex-direction: row;
-      justify-content: space-between;
-      align-items: center;
-      gap: 0.5rem;
+      flex-direction: column !important;
+      justify-content: center !important;
+      align-items: center !important;
+      gap: 0.5rem !important;
     }
 
     .header-left {
-      flex-direction: row;
-      align-items: center;
-      gap: 0.75rem;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 0.75rem !important;
+      width: 100% !important;
     }
 
     .template-meta {
       order: initial;
-      width: auto;
-      flex-wrap: nowrap;
+      width: auto !important;
+      flex-wrap: nowrap !important;
       gap: 0.5rem;
     }
 
     .header-actions {
       order: initial;
-      width: auto;
-      flex-wrap: nowrap;
+      width: 100% !important;
+      flex-wrap: wrap !important;
       gap: 0.5rem;
+      justify-content: center !important;
     }
   }
 
@@ -2275,6 +2339,82 @@
         font-size: 0.875rem;
         text-align: left;
       }
+    }
+  }
+}
+
+// Landscape orientation - narrow screens (stacked)
+@media (max-height: 500px) and (orientation: landscape) and (max-width: 899px) {
+  .layout {
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  .left {
+    width: 100% !important;
+    min-width: auto !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border-right: none !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+  }
+
+  .list-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+
+  .category-filter-wrapper {
+    width: 100% !important;
+  }
+
+  .category-filter-btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .right {
+    width: 100% !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    overflow: hidden !important;
+  }
+
+  .preview-header {
+    padding: 0.5rem 0.75rem;
+
+    .header-content {
+      flex-direction: column !important;
+      justify-content: center !important;
+      align-items: center !important;
+      gap: 0.5rem !important;
+    }
+
+    .header-left {
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 0.75rem !important;
+      width: 100% !important;
+    }
+
+    .template-meta {
+      order: initial;
+      width: auto !important;
+      flex-wrap: nowrap !important;
+      gap: 0.5rem;
+    }
+
+    .header-actions {
+      order: initial;
+      width: 100% !important;
+      flex-wrap: wrap !important;
+      gap: 0.5rem;
+      justify-content: center !important;
     }
 
     .feature-pills {
@@ -2852,18 +2992,18 @@
 
 // Modal Backdrop
 .info-modal-backdrop {
-  position: fixed;
-  // top: 150px; 
-  margin-top:4.3rem;
-  inset: 0;
-  z-index: 999999;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 9999999 !important;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  // margin-top: 10rem;
   animation: fadeIn 0.2s ease;
 }
 
@@ -3005,7 +3145,7 @@
   }
 }
 
-// Responsive
+// Responsive - Tablet and Mobile Portrait
 @media (max-width: 768px) {
   .info-modal-content {
     max-width: 95vw;
@@ -3030,5 +3170,71 @@
 @media (max-width: 480px) {
   .info-modal-content .info-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+// Landscape orientation - All devices
+@media (max-height: 600px) and (orientation: landscape) {
+  .info-modal-backdrop {
+    padding: 0.5rem;
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+
+  .info-modal-content {
+    max-width: 90vw;
+    max-height: 95vh;
+    margin: 0.5rem auto;
+  }
+
+  .info-modal-header {
+    padding: 0.75rem 1.25rem;
+
+    h3 {
+      font-size: 1.125rem;
+    }
+
+    .close-btn {
+      padding: 0.5rem;
+
+      svg {
+        width: 18px;
+        height: 18px;
+      }
+    }
+  }
+
+  .info-modal-content .info-grid {
+    padding: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .info-item {
+    padding: 0.75rem;
+  }
+}
+
+// Very short landscape (like 342px height)
+@media (max-height: 400px) and (orientation: landscape) {
+  .info-modal-content {
+    max-height: 98vh;
+  }
+
+  .info-modal-header {
+    padding: 0.5rem 1rem;
+
+    h3 {
+      font-size: 1rem;
+    }
+  }
+
+  .info-modal-content .info-grid {
+    padding: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .info-item {
+    padding: 0.5rem 0.75rem;
   }
 }
