@@ -20,6 +20,7 @@
   justify-content: center;
   background: var(--primary-gradient);
   overflow: hidden;
+  padding: 1vh 0;
 }
 
 // Background Effects
@@ -92,10 +93,10 @@
   z-index: 1;
   display: flex;
   width: 100%;
-  max-width: 1400px;
+  max-width: 95vw;
   height: 96vh;
-  max-height: 800px;
-  margin: 0 1rem;
+  max-height: none;
+  margin: 0 2.5vw;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   border-radius: 24px;
@@ -158,7 +159,7 @@
     margin-bottom: 3rem;
 
     h2 {
-      font-size: 2.5rem;
+      font-size: 3rem;
       font-weight: 900;
       color: white;
       margin: 0 0 1rem 0;
@@ -167,7 +168,7 @@
     }
 
     p {
-      font-size: 1.125rem;
+      font-size: 1.25rem;
       color: rgba(255, 255, 255, 0.9);
       line-height: 1.6;
       margin: 0;
@@ -178,13 +179,13 @@
   .feature-list {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 1.5rem;
 
     .feature-item {
       display: flex;
       align-items: center;
       gap: 1rem;
-      padding: 1rem;
+      padding: 1.25rem;
       background: rgba(255, 255, 255, 0.15);
       border: 1px solid rgba(255, 255, 255, 0.25);
       border-radius: 12px;
@@ -197,14 +198,14 @@
       &:nth-child(3) { animation-delay: 0.4s; }
 
       svg {
-        width: 24px;
-        height: 24px;
+        width: 28px;
+        height: 28px;
         color: white;
         flex-shrink: 0;
       }
 
       span {
-        font-size: 1rem;
+        font-size: 1.125rem;
         font-weight: 600;
         color: white;
       }
@@ -212,7 +213,6 @@
   }
 }
 
-// Right Side: Auth Form
 // Right Side: Auth Form
 .auth-form-section {
   flex: 1;
@@ -245,8 +245,8 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 440px;
-  padding: 2.5rem 3rem; 
+  max-width: 520px;
+  padding: 3rem 3.5rem; 
   // margin: 2rem 0;
   background: white;  
   border-radius: 16px;  
@@ -261,7 +261,7 @@
     margin-bottom: 2.5rem;
 
     h2 {
-      font-size: 2rem;
+      font-size: 2.25rem;
       font-weight: 800;
       color: #1e293b;
       margin: 0 0 0.75rem 0;
@@ -269,7 +269,7 @@
     }
 
     p {
-      font-size: 1rem;
+      font-size: 1.125rem;
       color: #64748b;
       margin: 0;
       font-weight: 500;
@@ -303,7 +303,7 @@
 
   .google-btn {
   width: 100%;
-  padding: 1rem 1.5rem;
+  padding: 1.125rem 1.75rem;
   margin-bottom: 4px;
   background: white;
   border: 2px solid #e2e8f0;
@@ -358,16 +358,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.875rem;
+    gap: 1rem;
 
     .google-icon {
-      width: 24px;
-      height: 24px;
+      width: 26px;
+      height: 26px;
       flex-shrink: 0;
     }
 
     span {
-      font-size: 1rem;
+      font-size: 1.0625rem;
       font-weight: 700;
       color: #1e293b;
     }
@@ -505,6 +505,28 @@
 }
 
 // Responsive Design
+@media (max-width: 1200px) {
+  .auth-content {
+    max-width: 1200px;
+  }
+
+  .auth-branding {
+    padding: 3rem;
+
+    .branding-text h2 {
+      font-size: 2.25rem;
+    }
+
+    .feature-list .feature-item {
+      padding: 0.875rem;
+    }
+  }
+
+  .auth-form-section {
+    padding: 3rem;
+  }
+}
+
 @media (max-width: 1024px) {
   .auth-content {
     flex-direction: column;
@@ -514,7 +536,7 @@
   }
 
   .auth-branding {
-    padding: 3rem 2rem;
+    padding: 2.5rem 2rem;
 
     .branding-text h2 {
       font-size: 2rem;
@@ -522,24 +544,32 @@
   }
 
   .auth-form-section {
-    padding: 3rem 2rem;
+    padding: 2.5rem 2rem;
+  }
+
+  .auth-card {
+    max-width: 500px;
   }
 }
 
-@media (max-width: 768px) {
+// Tablet range: 769px - 1024px - Single column, compact layout
+@media (max-width: 1024px) and (min-width: 769px) {
   .auth-content {
-    border-radius: 16px;
+    height: auto;
+    min-height: auto;
+    overflow-y: auto;
   }
 
   .auth-branding {
-    padding: 2rem 1.5rem;
+    padding: 2rem;
+    min-height: auto;
 
     .logo-container {
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
 
       .logo-icon {
-        width: 40px;
-        height: 40px;
+        width: 36px;
+        height: 36px;
       }
 
       .logo-text {
@@ -548,24 +578,132 @@
     }
 
     .branding-text {
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
 
       h2 {
         font-size: 1.75rem;
       }
 
       p {
-        font-size: 1rem;
+        font-size: 0.9375rem;
       }
     }
 
     .feature-list {
-      gap: 1rem;
+      gap: 0.875rem;
 
       .feature-item {
-        padding: 0.875rem;
+        padding: 0.75rem;
 
         svg {
+          width: 20px;
+          height: 20px;
+        }
+
+        span {
+          font-size: 0.875rem;
+        }
+      }
+    }
+  }
+
+  .auth-form-section {
+    padding: 2rem;
+  }
+
+  .auth-card {
+    padding: 1.75rem 1.5rem;
+    max-width: 500px;
+
+    .auth-header {
+      margin-bottom: 1.5rem;
+
+      h2 {
+        font-size: 1.5rem;
+      }
+
+      p {
+        font-size: 0.875rem;
+      }
+    }
+
+    .google-btn {
+      padding: 0.875rem 1.125rem;
+    }
+
+    // Hide trust indicators on tablets to save space
+    .trust-indicators {
+      display: none;
+    }
+
+    .divider {
+      margin: 1.25rem 0 0 0;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .auth-content {
+    border-radius: 0;
+    margin: 0;
+    flex-direction: column;
+    height: 100vh;
+    max-height: 100vh;
+  }
+
+  // Hide branding section completely on mobile
+  .auth-branding {
+    display: none;
+  }
+
+  .auth-form-section {
+    padding: 1.5rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  .auth-card {
+    max-width: 100%;
+    width: 100%;
+    padding: 1.5rem 1.25rem;
+    box-shadow: none;
+    border: none;
+
+    .auth-header {
+      margin-bottom: 1.5rem;
+      text-align: center;
+
+      // Add brand logo/name at top of card
+      &::before {
+        content: '📧 Email Tool';
+        display: block;
+        font-size: 1.25rem;
+        font-weight: 900;
+        color: #667eea;
+        margin-bottom: 1.5rem;
+        letter-spacing: -0.02em;
+      }
+
+      h2 {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+      }
+
+      p {
+        font-size: 0.875rem;
+      }
+    }
+
+    .google-btn {
+      padding: 0.875rem 1rem;
+
+      .google-btn-content {
+        gap: 0.75rem;
+
+        .google-icon {
           width: 20px;
           height: 20px;
         }
@@ -575,18 +713,29 @@
         }
       }
     }
-  }
 
-  .auth-form-section {
-    padding: 2rem 1.5rem;
-  }
+    .divider {
+      margin: 1.25rem 0;
 
-  .auth-card {
-    .auth-header {
-      margin-bottom: 2rem;
+      span {
+        font-size: 0.75rem;
+      }
+    }
 
-      h2 {
-        font-size: 1.75rem;
+    .trust-indicators {
+      gap: 0.5rem;
+
+      .trust-item {
+        padding: 0.5rem 0.75rem;
+
+        svg {
+          width: 16px;
+          height: 16px;
+        }
+
+        span {
+          font-size: 0.75rem;
+        }
       }
     }
   }
@@ -595,28 +744,105 @@
 @media (max-width: 480px) {
   .auth-container {
     padding: 0;
+    overflow: hidden;
   }
 
   .auth-content {
     margin: 0;
     border-radius: 0;
     height: 100vh;
-  }
-
-  .auth-branding {
-    padding: 1.5rem 1rem;
-
-    .branding-text h2 {
-      font-size: 1.5rem;
-    }
-
-    .feature-list .feature-item {
-      font-size: 0.875rem;
-    }
+    max-height: 100vh;
+    overflow: hidden;
   }
 
   .auth-form-section {
-    padding: 1.5rem 1rem;
+    padding: 1rem;
+    overflow: hidden;
+  }
+
+  .auth-card {
+    padding: 1.25rem 1rem;
+
+    .auth-header {
+      margin-bottom: 1.25rem;
+
+      &::before {
+        font-size: 1.125rem;
+        margin-bottom: 1.25rem;
+      }
+
+      h2 {
+        font-size: 1.375rem;
+      }
+
+      p {
+        font-size: 0.8125rem;
+      }
+    }
+
+    .error-alert {
+      padding: 0.75rem 0.875rem;
+      margin-bottom: 1rem;
+
+      svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      span {
+        font-size: 0.75rem;
+      }
+    }
+
+    .google-btn {
+      padding: 0.75rem 1rem;
+
+      .google-btn-content {
+        gap: 0.625rem;
+
+        .google-icon {
+          width: 18px;
+          height: 18px;
+        }
+
+        span {
+          font-size: 0.875rem;
+        }
+      }
+    }
+
+    .divider {
+      margin: 1rem 0;
+
+      &::before,
+      &::after {
+        display: none; // Hide lines on small mobile
+      }
+
+      span {
+        font-size: 0.625rem;
+        color: #94a3b8;
+        text-align: center;
+        width: 100%;
+      }
+    }
+
+    .trust-indicators {
+      gap: 0.4375rem;
+
+      .trust-item {
+        padding: 0.4375rem 0.625rem;
+
+        svg {
+          width: 14px;
+          height: 14px;
+        }
+
+        span {
+          font-size: 0.6875rem;
+        }
+      }
+    }
   }
 }
 

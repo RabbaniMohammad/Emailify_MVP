@@ -7,7 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "serve:ssr:mailchimp-figma": "node dist/mailchimp-figma/server/server.mjs"
+    "serve:ssr:mailchimp-figma": "node dist/mailchimp-figma/server/server.mjs",
+    "screenshots": "powershell -ExecutionPolicy Bypass -File ../capture-screenshots.ps1"
   },
   "private": true,
   "dependencies": {

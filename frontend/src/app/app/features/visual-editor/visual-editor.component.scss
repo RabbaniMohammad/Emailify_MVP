@@ -394,7 +394,7 @@
 
 .floating-widget-container {
   position: fixed;
-  z-index: 9999;
+  z-index: 999;  // Lower than performance modal (1000)
   pointer-events: none; // Allow clicking through container
   transition: left 0.1s ease-out, top 0.1s ease-out;
   
@@ -553,7 +553,7 @@
     cursor: grabbing !important;
     box-shadow: 0 20px 80px rgba(99, 102, 241, 0.5);
     transform: scale(1.02);
-    z-index: 10000;
+    z-index: 999;  // Lower than performance modal (1000)
   }
   
   .dropdown-header {

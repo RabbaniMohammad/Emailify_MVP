@@ -375,6 +375,17 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       });
 
       this.editor.on('load', () => {
+        // Remove the default GrapeJS "view code" button (first </> icon)
+        try {
+          const panels = this.editor.Panels;
+          // Try to remove common default code buttons
+          panels.removeButton('options', 'export-template');
+          panels.removeButton('options', 'gjs-open-import-webpage');
+          panels.removeButton('views', 'open-code');
+        } catch (e) {
+          console.log('Some default buttons not found (this is okay)');
+        }
+        
         this.setupCodeEditor();
         
         // ✅ CASE 1: From QA page with golden HTML
