@@ -17,8 +17,13 @@ export class AuthPageComponent implements OnInit, OnDestroy {
 
   isLoading = false;
   errorMessage = '';
+  isLandscape = false;
 
   ngOnInit(): void {
+    // Check for landscape mode
+    this.checkLandscape();
+    window.addEventListener('resize', this.checkLandscape.bind(this));
+
       // 🔓 TEMPORARY: Skip authentication
       // this.router.navigate(['/']);
       // return;
@@ -46,6 +51,11 @@ export class AuthPageComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     window.removeEventListener('message', this.handleAuthMessage.bind(this));
+    window.removeEventListener('resize', this.checkLandscape.bind(this));
+  }
+
+  private checkLandscape(): void {
+    this.isLandscape = window.innerHeight <= 600 && window.matchMedia('(orientation: landscape)').matches;
   }
 
     private handleAuthMessage(event: MessageEvent): void {
