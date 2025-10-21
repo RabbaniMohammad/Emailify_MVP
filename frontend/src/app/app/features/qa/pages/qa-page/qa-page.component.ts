@@ -18,6 +18,7 @@ import { TemplatesService } from '../../../../core/services/templates.service';
 import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDialog } from '@angular/material/dialog';
+import { TemplateStateService } from '../../../../core/services/template-state.service';
 
 type SuggestionResult = {
   gibberish: Array<{ text: string; reason: string }>;
@@ -127,6 +128,7 @@ export class QaPageComponent implements OnDestroy {
   private previewCache = inject(PreviewCacheService);
   private cdr = inject(ChangeDetectorRef);
   private snackBar = inject(MatSnackBar);
+  private templateState = inject(TemplateStateService);
 
   private readonly GOLDEN_TIMEOUT = 120000;
   private readonly SUBJECTS_TIMEOUT = 60000;
@@ -177,44 +179,88 @@ export class QaPageComponent implements OnDestroy {
   showDebugInfo = false;
 
   constructor() {
+    console.log('');
+    console.log('🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦');
+    console.log('🟦 [qa-page] ====== CONSTRUCTOR CALLED ======');
+    console.log('🟦 [qa-page] Timestamp:', new Date().toISOString());
+    console.log('🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦');
+    console.log('');
+    
     const idSub = this.id$.subscribe(async id => {
+      console.log('🟦 [qa-page] ID SUBSCRIPTION triggered, id:', id);
       this.templateId = id;
 
-      const cachedGolden = this.qa.getGoldenCached(id);
-      const cachedSuggestions = this.qa.getSuggestionsCached(id);
+      // Fetch from IndexedDB (async)
+      console.log('🟦 [qa-page] Fetching from IndexedDB...');
+      const cachedGolden = await this.qa.getGoldenCached(id);
+      const cachedSuggestions = await this.qa.getSuggestionsCached(id);
+      const prevRun = await this.qa.getVariantsRunCached(id);
+      console.log('🟦 [qa-page] IndexedDB results:', {
+        hasGolden: !!cachedGolden,
+        hasSuggestions: !!cachedSuggestions,
+        hasPrevRun: !!prevRun,
+        goldenHtml: cachedGolden?.html?.length || 0
+      });
       
       this.goldenSubject.next(cachedGolden);
       this.suggestionsSubject.next(cachedSuggestions);
-      
-      if (cachedGolden?.html) {
-        this.goldenLoading = false;
-        this.updateVisualEditorButtonColor(cachedGolden.failedEdits);
-      }
-      
-      if (cachedSuggestions) {
-        this.suggestionsLoading = false;
-      }
-
-      const prevRun = this.qa.getVariantsRunCached(id);
       if (prevRun) {
         this.variantsSubject.next(prevRun);
         this.variantsGenerating = false;
       }
       this.variantsRunId = prevRun?.runId || null;
+
+      if (cachedGolden?.html) {
+        this.goldenLoading = false;
+        this.updateVisualEditorButtonColor(cachedGolden.failedEdits);
+      }
+      if (cachedSuggestions) {
+        this.suggestionsLoading = false;
+      }
+
+      // ============================================
+      // ✅ TEMPLATE DISPLAY LOGIC
+      // ============================================
+      console.log('🔍 [qa-page] Checking template state...');
+      this.templateState.debugState(id);
       
-      this.loadOriginalTemplate(id);
-      
-      // Check for return from visual editor
       const returnKey = `visual_editor_${id}_return_flag`;
-      const editedKey = `visual_editor_${id}_edited_html`;
+      const returnFlag = localStorage.getItem(returnKey);
       
-      const returnFlag = sessionStorage.getItem(returnKey);
-      const editedHtml = sessionStorage.getItem(editedKey);
-      
-      if (returnFlag === 'true' && editedHtml) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        await this.handleVisualEditorReturn(id, editedHtml);
-        sessionStorage.removeItem(returnKey);
+      console.log('🔍 [qa-page] returnFlag from localStorage:', returnFlag);
+
+      // CRITICAL LOGIC: ONLY load the edited version if the return flag is explicitly set.
+      // This prevents navigation from accidentally showing the edited template.
+      if (returnFlag === 'true' && this.templateState.hasEdits(id)) {
+        console.log('✅ [qa-page] "Check Preview" detected! Loading EDITED template (temp_edit).');
+        
+        const editedTemplate = this.templateState.getCurrentTemplate(id);
+        if (editedTemplate) {
+          this.templateHtml = editedTemplate;
+          this.templateLoading = false;
+          
+          // Process visual feedback and then REMOVE the flag.
+          await this.handleVisualEditorReturn(id, editedTemplate);
+          localStorage.removeItem(returnKey);
+          console.log(`✅ [qa-page] Processed and removed return flag: ${returnKey}`);
+          
+          this.cdr.markForCheck();
+        } else {
+          console.log('⚠️ [qa-page] Return flag found, but no edited template in state. Loading original.');
+          this.loadOriginalTemplate(id);
+        }
+      } else {
+        // DEFAULT BEHAVIOR: Always load the original template unless "Check Preview" was clicked.
+        const originalTemplate = this.templateState.getOriginalTemplate(id);
+        if (originalTemplate) {
+          console.log('✅ [qa-page] Defaulting to ORIGINAL template from state (temp_1).');
+          this.templateHtml = originalTemplate;
+          this.templateLoading = false;
+          this.cdr.markForCheck();
+        } else {
+          console.log('✅ [qa-page] No state found. Loading original from database for the first time.');
+          this.loadOriginalTemplate(id);
+        }
       }
       
       this.cdr.markForCheck();
@@ -286,6 +332,37 @@ export class QaPageComponent implements OnDestroy {
     }
 
     this.clearAllTimeouts();
+    
+    // ✅ NEW: Clean up visual editor return flags when leaving QA page
+    if (this.templateId) {
+      this.cleanupVisualEditorFlags(this.templateId);
+    }
+  }
+  
+  /**
+   * ✅ Clean up visual editor localStorage flags
+   * Called when user leaves QA page (navigates away)
+   */
+  private cleanupVisualEditorFlags(templateId: string): void {
+    const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
+    const editingModeKey = `visual_editor_${templateId}_editing_mode`;
+    const variantMetaKey = `visual_editor_${templateId}_variant_meta`;
+    const editedHtmlKey = `visual_editor_${templateId}_edited_html`;
+    const returnFlagKey = `visual_editor_${templateId}_return_flag`;
+    
+    // ✅ Clean up ONLY temporary flags, NOT the actual edited HTML content
+    localStorage.removeItem(snapshotKey);
+    localStorage.removeItem(editingModeKey);
+    localStorage.removeItem(variantMetaKey);
+    // ❌ DO NOT DELETE edited_html - this is the actual template content!
+    // localStorage.removeItem(editedHtmlKey);
+    localStorage.removeItem(returnFlagKey);
+    
+    sessionStorage.removeItem(snapshotKey);
+    sessionStorage.removeItem(editingModeKey);
+    sessionStorage.removeItem(variantMetaKey);
+    
+    console.log('🧹 [qa-page] Cleaned up visual editor flags for template:', templateId);
   }
 
   ngOnDestroy(): void {
@@ -339,10 +416,21 @@ export class QaPageComponent implements OnDestroy {
     // Clear data for this run (force re-finalization)
     this.qa.clearChatForRun(syntheticRun.runId, 1);
     this.qa.clearSnapsForRun(syntheticRun.runId);
-    this.qa.clearValidLinks(syntheticRun.runId); // ✅ Clear link matrix data
+    this.qa.clearValidLinks(syntheticRun.runId);
     
     try {
+      // ✅ Save to sessionStorage for immediate navigation
       sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
+      
+      // ✅ PERSIST to localStorage so it survives refresh/navigation
+      const intro = {
+        role: 'assistant' as const,
+        text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor if replacement didn't happen\n\nWhat would you like to improve?",
+        json: null,
+        ts: Date.now(),
+      };
+      const thread = { html: golden.html, messages: [intro] };
+      this.qa.saveChat(syntheticRun.runId, 1, thread);
     } catch (e) {
       console.error('Failed to store synthetic run:', e);
     }
@@ -377,15 +465,26 @@ export class QaPageComponent implements OnDestroy {
     // Clear data for this run (force re-finalization)
     this.qa.clearChatForRun(syntheticRun.runId, 1);
     this.qa.clearSnapsForRun(syntheticRun.runId);
-    this.qa.clearValidLinks(syntheticRun.runId); // ✅ Clear link matrix data
+    this.qa.clearValidLinks(syntheticRun.runId);
     
     try {
+      // ✅ Save to sessionStorage for immediate navigation
       sessionStorage.setItem(`synthetic_run_${syntheticRun.runId}`, JSON.stringify(syntheticRun));
+      
+      // ✅ PERSIST to localStorage so it survives refresh/navigation
+      const intro = {
+        role: 'assistant' as const,
+        text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor if replacement didn't happen\n\nWhat would you like to improve?",
+        json: null,
+        ts: Date.now(),
+      };
+      const thread = { html: this.templateHtml, messages: [intro] };
+      this.qa.saveChat(syntheticRun.runId, 1, thread);
     } catch (e) {
       console.error('Failed to store synthetic run:', e);
     }
 
-    this.showSuccess('Skipping to chat interface with original template...');
+    this.showSuccess('Skipping to chat with original template...');
     this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
   }
 
@@ -921,33 +1020,53 @@ export class QaPageComponent implements OnDestroy {
   }
 
   private loadOriginalTemplate(templateId: string) {
+    console.log('🟦 [qa-page] loadOriginalTemplate() called, templateId:', templateId);
+    console.log('🟦 [qa-page] Loading ORIGINAL master template from database/cache');
     this.templateLoading = true;
     this.templateHtml = '';
     
+    // ✅ Check cache first (faster than API)
     const cachedHtml = this.previewCache.get(templateId) || this.previewCache.getPersisted(templateId);
     
     if (cachedHtml) {
+      console.log('✅ [qa-page] Found in cache! Length:', cachedHtml.length);
       this.templateHtml = cachedHtml;
       this.templateLoading = false;
+      
+      // ✅ Save to state service as original template
+      this.templateState.initializeOriginalTemplate(templateId, cachedHtml);
+      
       this.cdr.markForCheck();
       return;
     }
+    console.log('⚠️ [qa-page] NOT in cache, checking templatesService...');
     
     const currentState = this.templatesService.snapshot;
     const template = currentState.items.find(item => item.id === templateId);
     
     if (template?.content) {
+      console.log('✅ [qa-page] Found in templatesService! Length:', template.content.length);
       this.templateHtml = template.content;
       this.templateLoading = false;
+      
+      // ✅ Save to state service as original template
+      this.templateState.initializeOriginalTemplate(templateId, template.content);
+      
       this.cdr.markForCheck();
       return;
     }
     
+    console.log('⚠️ [qa-page] NOT in templatesService, fetching from API...');
     this.http.get(`/api/templates/${templateId}/raw`, { responseType: 'text' })
       .subscribe({
         next: (html) => {
+          console.log('✅ [qa-page] Loaded from API! Length:', html.length);
           this.templateHtml = html;
           this.templateLoading = false;
+          
+          // ✅ Save to state service as original template
+          this.templateState.initializeOriginalTemplate(templateId, html);
+          
           this.cdr.markForCheck();
         },
         error: (error) => {
@@ -959,11 +1078,8 @@ export class QaPageComponent implements OnDestroy {
   }
 
   onUseVariant(templateId: string, runId: string, no: number) {
-    // Clear data for this run (force re-finalization on navigation)
-    this.qa.clearChatForRun(runId, no);
-    this.qa.clearSnapsForRun(runId);
-    this.qa.clearValidLinks(runId); // ✅ Clear link matrix data
-    
+    // ✅ NO CLEARING - preserve all chat, snaps, and link matrix data
+    // Data is already saved to localStorage and will persist on navigation/refresh
     this.router.navigate(['/qa', templateId, 'use', runId, no]);
   }
 
@@ -1095,30 +1211,31 @@ navigateToVisualEditor(): void {
     return;
   }
   
-  // ✅ CRITICAL: Save current golden HTML as GOLDEN (will be edited)
+  // ✅ PERSIST: Save to localStorage (survives refresh)
   const goldenKey = `visual_editor_${this.templateId}_golden_html`;
-  sessionStorage.setItem(goldenKey, golden.html);
+  localStorage.setItem(goldenKey, golden.html);
   
   // ✅ NEW: Save a SNAPSHOT of golden HTML BEFORE editing (for comparison)
   const snapshotKey = `visual_editor_${this.templateId}_snapshot_html`;
-  sessionStorage.setItem(snapshotKey, golden.html);
+  localStorage.setItem(snapshotKey, golden.html);
   
   // ✅ CRITICAL: Set flag to indicate we're editing GOLDEN template
   const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
-  sessionStorage.setItem(editingModeKey, 'golden');
+  localStorage.setItem(editingModeKey, 'golden');
   
   // Save failed edits
   if (golden.failedEdits && golden.failedEdits.length > 0) {
     const failedKey = `visual_editor_${this.templateId}_failed_edits`;
-    sessionStorage.setItem(failedKey, JSON.stringify(golden.failedEdits));
+    localStorage.setItem(failedKey, JSON.stringify(golden.failedEdits));
   }
   
   // Save original stats
   if (golden.stats) {
     const statsKey = `visual_editor_${this.templateId}_original_stats`;
-    sessionStorage.setItem(statsKey, JSON.stringify(golden.stats));
+    localStorage.setItem(statsKey, JSON.stringify(golden.stats));
   }
   
+  console.log('✅ [qa-page] Saved golden template to localStorage for visual editor');
   this.closeVisualEditorModal();
   this.router.navigate(['/visual-editor', this.templateId]);
 }
@@ -1143,36 +1260,88 @@ private async handleVisualEditorReturn(
   editedHtml: string
 ): Promise<void> {
   
-  // ✅ CRITICAL: Check editing mode flag FIRST
-  const editingModeKey = `visual_editor_${templateId}_editing_mode`;
-  const editingMode = sessionStorage.getItem(editingModeKey);
+  console.log('🔍 [handleVisualEditorReturn] START');
+  console.log('🔍 [handleVisualEditorReturn] templateId:', templateId);
+  console.log('🔍 [handleVisualEditorReturn] editedHtml length:', editedHtml.length);
   
-  // ✅ Declare snapshotKey ONCE at the top
+  // ✅ CRITICAL: Check editing mode flag (localStorage first, then sessionStorage)
+  const editingModeKey = `visual_editor_${templateId}_editing_mode`;
+  let editingMode = localStorage.getItem(editingModeKey) || sessionStorage.getItem(editingModeKey);
+  
+  console.log('');
+  console.log('🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍');
+  console.log('🔍 [handleVisualEditorReturn] DEBUGGING START');
+  console.log('🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍');
+  console.log('🔍 [handleVisualEditorReturn] editingModeKey:', editingModeKey);
+  console.log('🔍 [handleVisualEditorReturn] editingMode:', editingMode);
+  console.log('🔍 [handleVisualEditorReturn] editedHtml length:', editedHtml.length);
+  
+  // Declare ALL keys at the top to avoid redeclaration
+  const goldenHtmlKey = `visual_editor_${templateId}_golden_html`;
+  const variantMetaKey = `visual_editor_${templateId}_variant_meta`;
   const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
+  
+  console.log('🔍 [handleVisualEditorReturn] Checking all localStorage keys:');
+  console.log('   - golden_html exists:', !!(localStorage.getItem(goldenHtmlKey) || sessionStorage.getItem(goldenHtmlKey)));
+  console.log('   - variant_meta exists:', !!(localStorage.getItem(variantMetaKey) || sessionStorage.getItem(variantMetaKey)));
+  console.log('   - snapshot exists:', !!(localStorage.getItem(snapshotKey) || sessionStorage.getItem(snapshotKey)));
+  
+  if (localStorage.getItem(variantMetaKey) || sessionStorage.getItem(variantMetaKey)) {
+    const metaJson = localStorage.getItem(variantMetaKey) || sessionStorage.getItem(variantMetaKey);
+    console.log('   - variant_meta value:', metaJson);
+    if (metaJson) {
+      try {
+        const meta = JSON.parse(metaJson);
+        console.log('   - variant_meta parsed:', meta);
+      } catch (e) {
+        console.log('   - variant_meta parse ERROR:', e);
+      }
+    }
+  }
+  console.log('🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍🔍');
+  console.log('');
   
   // ========================================
   // ✅ ORIGINAL TEMPLATE EDITING
   // ========================================
   if (editingMode === 'original') {
-    const snapshotHtml = sessionStorage.getItem(snapshotKey);
+    console.log('🔍 [handleVisualEditorReturn] MODE: ORIGINAL TEMPLATE');
+    const snapshotHtml = localStorage.getItem(snapshotKey) || sessionStorage.getItem(snapshotKey);
     
+    // ✅ Snapshot is optional - if not found, just update the template
     if (snapshotHtml) {
       const originalText = this.extractVisibleText(snapshotHtml);
       const editedText = this.extractVisibleText(editedHtml);
       
       if (originalText === editedText) {
+        console.log('⚠️ [handleVisualEditorReturn] No changes detected');
+        localStorage.removeItem(snapshotKey);
+        localStorage.removeItem(editingModeKey);
         sessionStorage.removeItem(snapshotKey);
         sessionStorage.removeItem(editingModeKey);
         this.showInfo('No changes detected in the template.');
         return;
       }
+    } else {
+      console.log('⚠️ [handleVisualEditorReturn] No snapshot found, but continuing anyway');
     }
     
+    console.log('✅ [handleVisualEditorReturn] Updating this.templateHtml');
+    console.log('✅ [handleVisualEditorReturn] Old templateHtml length:', this.templateHtml?.length || 0);
     this.templateHtml = editedHtml;
+    console.log('✅ [handleVisualEditorReturn] New templateHtml length:', this.templateHtml.length);
+    
+    // ✅ CRITICAL: Set loading to false so edit button appears!
+    this.templateLoading = false;
+    console.log('✅ [handleVisualEditorReturn] Set templateLoading = false');
+    
     this.cdr.detectChanges();
     
-    sessionStorage.removeItem(snapshotKey);
-    sessionStorage.removeItem(editingModeKey);
+    // ✅ DON'T delete immediately - keep for persistence on refresh
+    // localStorage.removeItem(snapshotKey);
+    // localStorage.removeItem(editingModeKey);
+    // sessionStorage.removeItem(snapshotKey);
+    // sessionStorage.removeItem(editingModeKey);
     
     this.showSuccess('✅ Original template updated successfully!');
     
@@ -1185,16 +1354,59 @@ private async handleVisualEditorReturn(
     
     return;
   }
+  
+  // ========================================
+  // ✅ FALLBACK: If editingMode is null but we have a golden_html key, treat as original
+  // BUT: Make sure it's NOT a variant edit (check for variant metadata)
+  // ========================================
+  const hasGoldenHtmlFlag = localStorage.getItem(goldenHtmlKey) || sessionStorage.getItem(goldenHtmlKey);
+  
+  // ✅ CRITICAL: Check if this is actually a variant edit (has variant metadata)
+  const hasVariantMeta = localStorage.getItem(variantMetaKey) || sessionStorage.getItem(variantMetaKey);
+  
+  if (!editingMode && hasGoldenHtmlFlag && !hasVariantMeta) {
+    console.log('🔍 [handleVisualEditorReturn] FALLBACK: No editingMode but found golden_html flag (and NO variant meta) - treating as ORIGINAL template');
+    
+    this.templateHtml = editedHtml;
+    
+    // ✅ CRITICAL: Set loading to false so edit button appears!
+    this.templateLoading = false;
+    console.log('✅ [handleVisualEditorReturn] FALLBACK - Set templateLoading = false');
+    
+    this.cdr.detectChanges();
+    
+    this.showSuccess('✅ Original template updated successfully!');
+    
+    setTimeout(() => {
+      const originalPreview = document.querySelector('.col-1');
+      if (originalPreview) {
+        originalPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+    
+    return;
+  }
+  
+  // ========================================
+  // ✅ FALLBACK 2: If editingMode is null but variant metadata exists, treat as variant
+  // ========================================
+  if (!editingMode && hasVariantMeta) {
+    console.log('🔍 [handleVisualEditorReturn] FALLBACK 2: No editingMode but found variant metadata - treating as VARIANT');
+    // Force it to go through the variant section by setting editingMode
+    editingMode = 'variant';
+  }
 
   // ========================================
   // ✅ VARIANT EDITING
   // ========================================
   if (editingMode === 'variant') {
     const variantMetaKey = `visual_editor_${templateId}_variant_meta`;
-    const variantMetaJson = sessionStorage.getItem(variantMetaKey);
+    const variantMetaJson = localStorage.getItem(variantMetaKey) || sessionStorage.getItem(variantMetaKey);
     
     if (!variantMetaJson) {
       this.showError('Variant metadata not found');
+      localStorage.removeItem(snapshotKey);
+      localStorage.removeItem(editingModeKey);
       sessionStorage.removeItem(snapshotKey);
       sessionStorage.removeItem(editingModeKey);
       return;
@@ -1203,13 +1415,16 @@ private async handleVisualEditorReturn(
     const variantMeta = JSON.parse(variantMetaJson);
     const { runId, variantNo } = variantMeta;
     
-    const snapshotHtml = sessionStorage.getItem(snapshotKey);
+    const snapshotHtml = localStorage.getItem(snapshotKey) || sessionStorage.getItem(snapshotKey);
     
     if (snapshotHtml) {
       const originalText = this.extractVisibleText(snapshotHtml);
       const editedText = this.extractVisibleText(editedHtml);
       
       if (originalText === editedText) {
+        localStorage.removeItem(snapshotKey);
+        localStorage.removeItem(editingModeKey);
+        localStorage.removeItem(variantMetaKey);
         sessionStorage.removeItem(snapshotKey);
         sessionStorage.removeItem(editingModeKey);
         sessionStorage.removeItem(variantMetaKey);
@@ -1243,9 +1458,17 @@ private async handleVisualEditorReturn(
       console.error(`❌ Run ${runId} not found or doesn't match current run`);
     }
     
-    sessionStorage.removeItem(snapshotKey);
-    sessionStorage.removeItem(editingModeKey);
-    sessionStorage.removeItem(variantMetaKey);
+    // ✅ DON'T delete immediately - keep for persistence on refresh
+    // localStorage.removeItem(snapshotKey);
+    // localStorage.removeItem(editingModeKey);
+    // localStorage.removeItem(variantMetaKey);
+    // sessionStorage.removeItem(snapshotKey);
+    // sessionStorage.removeItem(editingModeKey);
+    // sessionStorage.removeItem(variantMetaKey);
+    
+    // ✅ CRITICAL: Set loading to false (not needed for variants but good practice)
+    this.templateLoading = false;
+    
     this.showSuccess(`✅ Variant ${variantNo} updated successfully!`);
     
     this.cdr.detectChanges();
@@ -1271,10 +1494,35 @@ private async handleVisualEditorReturn(
     return;
   }
   
-  const snapshotHtml = sessionStorage.getItem(snapshotKey);
+  const snapshotHtml = localStorage.getItem(snapshotKey) || sessionStorage.getItem(snapshotKey);
   
+  // ✅ Make snapshot optional - if not found, just update without comparison
   if (!snapshotHtml) {
-    this.showError('Snapshot not found. Cannot detect changes.');
+    console.log('⚠️ [handleVisualEditorReturn] No snapshot found, updating golden template anyway');
+    
+    const updatedGolden: GoldenResult = {
+      ...golden,
+      html: editedHtml
+    };
+    
+    this.goldenSubject.next(updatedGolden);
+    this.qa.saveGoldenToCache(templateId, updatedGolden);
+    
+    // ✅ CRITICAL: Set loading to false so edit button appears!
+    this.templateLoading = false;
+    console.log('✅ [handleVisualEditorReturn] GOLDEN - Set templateLoading = false');
+    
+    this.cdr.detectChanges();
+    
+    this.showSuccess('✅ Template updated successfully!');
+    
+    setTimeout(() => {
+      const goldenPreview = document.querySelector('.col-3');
+      if (goldenPreview) {
+        goldenPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+    
     return;
   }
   
@@ -1282,6 +1530,8 @@ private async handleVisualEditorReturn(
   const editedText = this.extractVisibleText(editedHtml);
   
   if (originalText === editedText) {
+    localStorage.removeItem(snapshotKey);
+    localStorage.removeItem(editingModeKey);
     sessionStorage.removeItem(snapshotKey);
     sessionStorage.removeItem(editingModeKey);
     this.showInfo('No changes detected in the template.');
@@ -1298,10 +1548,18 @@ private async handleVisualEditorReturn(
     
     this.goldenSubject.next(updatedGolden);
     this.qa.saveGoldenToCache(templateId, updatedGolden);
+    
+    // ✅ CRITICAL: Set loading to false so edit button appears!
+    this.templateLoading = false;
+    console.log('✅ [handleVisualEditorReturn] GOLDEN (no failed edits) - Set templateLoading = false');
+    
     this.cdr.detectChanges();
     
-    sessionStorage.removeItem(snapshotKey);
-    sessionStorage.removeItem(editingModeKey);
+    // ✅ DON'T delete immediately - keep for persistence on refresh
+    // localStorage.removeItem(snapshotKey);
+    // localStorage.removeItem(editingModeKey);
+    // sessionStorage.removeItem(snapshotKey);
+    // sessionStorage.removeItem(editingModeKey);
     this.showSuccess('✅ Template updated successfully!');
     return;
   }
@@ -1367,8 +1625,15 @@ private async handleVisualEditorReturn(
   this.qa.saveGoldenToCache(templateId, updatedGolden);
   this.updateVisualEditorButtonColor(remainingFailedEdits);
   
-  sessionStorage.removeItem(snapshotKey);
-  sessionStorage.removeItem(editingModeKey);
+  // ✅ CRITICAL: Set loading to false so edit button appears!
+  this.templateLoading = false;
+  console.log('✅ [handleVisualEditorReturn] GOLDEN (with failed edits) - Set templateLoading = false');
+  
+  // ✅ DON'T delete immediately - keep for persistence on refresh
+  // localStorage.removeItem(snapshotKey);
+  // localStorage.removeItem(editingModeKey);
+  // sessionStorage.removeItem(snapshotKey);
+  // sessionStorage.removeItem(editingModeKey);
   this.cdr.detectChanges();
   setTimeout(() => {
     this.cdr.detectChanges();
@@ -1411,32 +1676,33 @@ onEditVariant(runId: string, variantNo: number, variant: any): void {
     return;
   }
   
-  // ✅ Save variant HTML for editing
+  // ✅ PERSIST: Save to localStorage (survives refresh)
   const variantKey = `visual_editor_${this.templateId}_golden_html`;
-  sessionStorage.setItem(variantKey, variant.html);
+  localStorage.setItem(variantKey, variant.html);
   
   // ✅ Save snapshot for comparison (before editing)
   const snapshotKey = `visual_editor_${this.templateId}_snapshot_html`;
-  sessionStorage.setItem(snapshotKey, variant.html);
+  localStorage.setItem(snapshotKey, variant.html);
   
   // ✅ CRITICAL: Set flag to indicate we're editing VARIANT
   const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
-  sessionStorage.setItem(editingModeKey, 'variant');
+  localStorage.setItem(editingModeKey, 'variant');
   
   // ✅ Save variant metadata for return
   const variantMetaKey = `visual_editor_${this.templateId}_variant_meta`;
-  sessionStorage.setItem(variantMetaKey, JSON.stringify({ runId, variantNo }));
+  localStorage.setItem(variantMetaKey, JSON.stringify({ runId, variantNo }));
   
   // ✅ Save failed edits if any exist
   if (variant.failedEdits && variant.failedEdits.length > 0) {
     const failedKey = `visual_editor_${this.templateId}_failed_edits`;
-    sessionStorage.setItem(failedKey, JSON.stringify(variant.failedEdits));
+    localStorage.setItem(failedKey, JSON.stringify(variant.failedEdits));
   } else {
     // Clear failed edits if none
     const failedKey = `visual_editor_${this.templateId}_failed_edits`;
-    sessionStorage.removeItem(failedKey);
+    localStorage.removeItem(failedKey);
   }
   
+  console.log('✅ [qa-page] Saved variant to localStorage for visual editor');
   // ✅ Navigate to visual editor
   this.router.navigate(['/visual-editor', this.templateId]);
 }
@@ -1585,33 +1851,27 @@ private extractVisibleText(html: string): string {
  * Opens visual editor for editing the original template (not golden)
  */
 onEditOriginalTemplate(): void {
-  if (!this.templateId) {
-    this.showError('Template ID not found');
+  console.log('🎯 [EDIT] Button clicked! Starting fresh editing session.');
+  if (!this.templateId || !this.templateHtml || this.templateLoading) {
+    console.error('❌ [EDIT] Cannot start editing, missing data.');
     return;
   }
+
+  // CRITICAL FIX: Clear all old localStorage flags before starting.
+  // This prevents the QA page from thinking we are "returning" from the editor.
+  const returnKey = `visual_editor_${this.templateId}_return_flag`;
+  const editedHtmlKey = `visual_editor_${this.templateId}_edited_html`;
+  const progressKey = `visual_editor_${this.templateId}_progress`;
+
+  console.log(`🧹 [EDIT] Clearing old flags: ${returnKey}, ${editedHtmlKey}, and ${progressKey}`);
+  localStorage.removeItem(returnKey);
+  localStorage.removeItem(editedHtmlKey);
+  localStorage.removeItem(progressKey); // Also clear any in-progress edits
+
+  // Initialize the state with the current template on the screen.
+  this.templateState.initializeOriginalTemplate(this.templateId, this.templateHtml);
   
-  if (!this.templateHtml || this.templateLoading) {
-    this.showWarning('Template is still loading. Please wait...');
-    return;
-  }
-  
-  // ✅ Save original template HTML for editing
-  const originalKey = `visual_editor_${this.templateId}_golden_html`;
-  sessionStorage.setItem(originalKey, this.templateHtml);
-  
-  // ✅ Save snapshot for comparison (before editing)
-  const snapshotKey = `visual_editor_${this.templateId}_snapshot_html`;
-  sessionStorage.setItem(snapshotKey, this.templateHtml);
-  
-  // ✅ CRITICAL: Set flag to indicate we're editing ORIGINAL template
-  const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
-  sessionStorage.setItem(editingModeKey, 'original');
-  
-  // ✅ Clear any failed edits (since this is original template)
-  const failedKey = `visual_editor_${this.templateId}_failed_edits`;
-  sessionStorage.removeItem(failedKey);
-  
-  // ✅ Navigate to visual editor
+  console.log('🚀 [EDIT] Navigating to visual editor for ID:', this.templateId);
   this.router.navigate(['/visual-editor', this.templateId]);
 }
 

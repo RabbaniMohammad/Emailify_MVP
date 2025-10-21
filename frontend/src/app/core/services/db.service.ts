@@ -38,6 +38,36 @@ export interface CachedScreenshot {
   timestamp: number;
 }
 
+// ✅ NEW: Golden template cache
+export interface CachedGolden {
+  templateId: string;   // Primary key
+  html: string;
+  changes: any[];       // Applied edits
+  failedEdits?: any[];  // Failed edits with diagnostics
+  timestamp: number;
+  userId?: string;
+}
+
+// ✅ NEW: Suggestions cache
+export interface CachedSuggestions {
+  templateId: string;   // Primary key
+  gibberish: Array<{ text: string; reason: string }>;
+  suggestions: string[];
+  timestamp: number;
+  userId?: string;
+}
+
+// ✅ NEW: Variants run cache
+export interface CachedVariantsRun {
+  templateId: string;   // Primary key
+  runId: string;
+  items: any[];         // Variant items
+  target: number;
+  status: string;
+  timestamp: number;
+  userId?: string;
+}
+
 // ============================================
 // DATABASE SERVICE
 // ============================================
@@ -48,22 +78,34 @@ export class DatabaseService extends Dexie {
   conversations!: Table<CachedConversation, string>;
   validLinks!: Table<CachedValidLinks, string>;
   screenshots!: Table<CachedScreenshot, string>;
+  
+  // ✅ NEW: QA-specific tables
+  goldenTemplates!: Table<CachedGolden, string>;
+  suggestions!: Table<CachedSuggestions, string>;
+  variantsRuns!: Table<CachedVariantsRun, string>;
 
   // Configuration
   private readonly MAX_TEMPLATES = 500;        // Increased from 50
   private readonly MAX_CONVERSATIONS = 1000;   // Increased from 100
   private readonly MAX_SCREENSHOTS = 200;      // New: Max screenshots to cache
+  private readonly MAX_GOLDEN = 100;           // ✅ NEW: Max golden templates
+  private readonly MAX_SUGGESTIONS = 100;      // ✅ NEW: Max suggestions
+  private readonly MAX_VARIANTS = 100;         // ✅ NEW: Max variant runs
   private readonly MAX_AGE_DAYS = 30;          // Increased from 7
 
   constructor() {
     super('emailify-cache');
 
-    // Define schema
-    this.version(1).stores({
+    // Define schema - Version 2 with new tables
+    this.version(2).stores({
       templates: 'id, runId, templateId, timestamp, userId',
       conversations: 'runId, templateId, timestamp, userId',
       validLinks: 'runId, timestamp',
-      screenshots: 'url, runId, timestamp'
+      screenshots: 'url, runId, timestamp',
+      // ✅ NEW: QA-specific stores
+      goldenTemplates: 'templateId, timestamp, userId',
+      suggestions: 'templateId, timestamp, userId',
+      variantsRuns: 'templateId, runId, timestamp, userId'
     });
 
   }
@@ -418,6 +460,210 @@ export class DatabaseService extends Dexie {
       }
     } catch (error) {
       console.error('❌ [DB] Failed to clean old screenshots:', error);
+    }
+  }
+
+  // ============================================
+  // GOLDEN TEMPLATE OPERATIONS
+  // ============================================
+
+  async cacheGolden(golden: CachedGolden): Promise<void> {
+    try {
+      const count = await this.goldenTemplates.count();
+      
+      if (count >= this.MAX_GOLDEN) {
+        await this.cleanOldestGolden(10);
+      }
+
+      golden.timestamp = Date.now();
+      await this.goldenTemplates.put(golden);
+      
+      console.log('✅ [DB] Cached golden template:', golden.templateId);
+    } catch (error) {
+      console.error('❌ [DB] Failed to cache golden template:', error);
+    }
+  }
+
+  async getGolden(templateId: string): Promise<CachedGolden | null> {
+    try {
+      const golden = await this.goldenTemplates.get(templateId);
+      
+      if (!golden) {
+        return null;
+      }
+
+      // Check if expired
+      const age = Date.now() - golden.timestamp;
+      const maxAge = this.MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+      
+      if (age > maxAge) {
+        await this.goldenTemplates.delete(templateId);
+        return null;
+      }
+
+      return golden;
+    } catch (error) {
+      console.error('❌ [DB] Failed to get golden template:', error);
+      return null;
+    }
+  }
+
+  async invalidateGolden(templateId: string): Promise<void> {
+    try {
+      await this.goldenTemplates.delete(templateId);
+      console.log('🗑️ [DB] Invalidated golden template:', templateId);
+    } catch (error) {
+      console.error('❌ [DB] Failed to invalidate golden template:', error);
+    }
+  }
+
+  private async cleanOldestGolden(count: number): Promise<void> {
+    try {
+      const oldest = await this.goldenTemplates
+        .orderBy('timestamp')
+        .limit(count)
+        .toArray();
+      
+      await this.goldenTemplates.bulkDelete(oldest.map(g => g.templateId));
+      console.log(`🧹 [DB] Cleaned ${oldest.length} old golden templates`);
+    } catch (error) {
+      console.error('❌ [DB] Failed to clean old golden templates:', error);
+    }
+  }
+
+  // ============================================
+  // SUGGESTIONS OPERATIONS
+  // ============================================
+
+  async cacheSuggestions(suggestions: CachedSuggestions): Promise<void> {
+    try {
+      const count = await this.suggestions.count();
+      
+      if (count >= this.MAX_SUGGESTIONS) {
+        await this.cleanOldestSuggestions(10);
+      }
+
+      suggestions.timestamp = Date.now();
+      await this.suggestions.put(suggestions);
+      
+      console.log('✅ [DB] Cached suggestions:', suggestions.templateId);
+    } catch (error) {
+      console.error('❌ [DB] Failed to cache suggestions:', error);
+    }
+  }
+
+  async getSuggestions(templateId: string): Promise<CachedSuggestions | null> {
+    try {
+      const suggestions = await this.suggestions.get(templateId);
+      
+      if (!suggestions) {
+        return null;
+      }
+
+      // Check if expired
+      const age = Date.now() - suggestions.timestamp;
+      const maxAge = this.MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+      
+      if (age > maxAge) {
+        await this.suggestions.delete(templateId);
+        return null;
+      }
+
+      return suggestions;
+    } catch (error) {
+      console.error('❌ [DB] Failed to get suggestions:', error);
+      return null;
+    }
+  }
+
+  async invalidateSuggestions(templateId: string): Promise<void> {
+    try {
+      await this.suggestions.delete(templateId);
+      console.log('🗑️ [DB] Invalidated suggestions:', templateId);
+    } catch (error) {
+      console.error('❌ [DB] Failed to invalidate suggestions:', error);
+    }
+  }
+
+  private async cleanOldestSuggestions(count: number): Promise<void> {
+    try {
+      const oldest = await this.suggestions
+        .orderBy('timestamp')
+        .limit(count)
+        .toArray();
+      
+      await this.suggestions.bulkDelete(oldest.map(s => s.templateId));
+      console.log(`🧹 [DB] Cleaned ${oldest.length} old suggestions`);
+    } catch (error) {
+      console.error('❌ [DB] Failed to clean old suggestions:', error);
+    }
+  }
+
+  // ============================================
+  // VARIANTS RUN OPERATIONS
+  // ============================================
+
+  async cacheVariantsRun(variantsRun: CachedVariantsRun): Promise<void> {
+    try {
+      const count = await this.variantsRuns.count();
+      
+      if (count >= this.MAX_VARIANTS) {
+        await this.cleanOldestVariants(10);
+      }
+
+      variantsRun.timestamp = Date.now();
+      await this.variantsRuns.put(variantsRun);
+      
+      console.log('✅ [DB] Cached variants run:', variantsRun.templateId);
+    } catch (error) {
+      console.error('❌ [DB] Failed to cache variants run:', error);
+    }
+  }
+
+  async getVariantsRun(templateId: string): Promise<CachedVariantsRun | null> {
+    try {
+      const variantsRun = await this.variantsRuns.get(templateId);
+      
+      if (!variantsRun) {
+        return null;
+      }
+
+      // Check if expired
+      const age = Date.now() - variantsRun.timestamp;
+      const maxAge = this.MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+      
+      if (age > maxAge) {
+        await this.variantsRuns.delete(templateId);
+        return null;
+      }
+
+      return variantsRun;
+    } catch (error) {
+      console.error('❌ [DB] Failed to get variants run:', error);
+      return null;
+    }
+  }
+
+  async invalidateVariantsRun(templateId: string): Promise<void> {
+    try {
+      await this.variantsRuns.delete(templateId);
+      console.log('🗑️ [DB] Invalidated variants run:', templateId);
+    } catch (error) {
+      console.error('❌ [DB] Failed to invalidate variants run:', error);
+    }
+  }
+
+  private async cleanOldestVariants(count: number): Promise<void> {
+    try {
+      const oldest = await this.variantsRuns
+        .orderBy('timestamp')
+        .limit(count)
+        .toArray();
+      
+      await this.variantsRuns.bulkDelete(oldest.map(v => v.templateId));
+      console.log(`🧹 [DB] Cleaned ${oldest.length} old variants runs`);
+    } catch (error) {
+      console.error('❌ [DB] Failed to clean old variants runs:', error);
     }
   }
 }

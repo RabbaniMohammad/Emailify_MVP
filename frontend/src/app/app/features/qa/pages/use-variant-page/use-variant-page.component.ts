@@ -176,6 +176,8 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   private refreshSub?: Subscription;
   private navigationRefreshSub?: Subscription;
   // private modalOverflowSub?: Subscription;
+  
+  // Removed constructor preloading - subscription handles all data loading
 
 
 readonly linkChecks$ = combineLatest([this.validLinks$, this.htmlLinks$]).pipe(
@@ -220,6 +222,14 @@ get isGrammarChecking(): boolean {
 }
 
 ngOnInit() {
+  console.log('');
+  console.log('🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣');
+  console.log('🟣 [use-variant] ====== ngOnInit CALLED ======');
+  console.log('🟣 [use-variant] Timestamp:', new Date().toISOString());
+  console.log('🟣 [use-variant] htmlSubject.value length:', this.htmlSubject.value.length);
+  console.log('🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣');
+  console.log('');
+  
   window.scrollTo(0, 0);
   
   combineLatest([this.runId$, this.no$]).subscribe(([runId, no]) => {
@@ -234,6 +244,14 @@ ngOnInit() {
 }
 
 ngOnDestroy(): void {
+  console.log('');
+  console.log('🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴');
+  console.log('🔴 [use-variant] ====== ngOnDestroy CALLED ======');
+  console.log('🔴 [use-variant] Timestamp:', new Date().toISOString());
+  console.log('🔴 [use-variant] htmlSubject.value length at destroy:', this.htmlSubject.value.length);
+  console.log('🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴');
+  console.log('');
+  
   this.routerSub?.unsubscribe();
   this.refreshSub?.unsubscribe();
   this.navigationRefreshSub?.unsubscribe();
@@ -247,6 +265,19 @@ constructor() {
   // RESTORE STATE FIRST - before any template rendering
   const runId = this.ar.snapshot.paramMap.get('runId');
   const no = this.ar.snapshot.paramMap.get('no');
+  
+  console.log('');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🔵 [use-variant] ====== CONSTRUCTOR CALLED ======');
+  console.log('🔵 [use-variant] Timestamp:', new Date().toISOString());
+  console.log('🔵 [use-variant] CONSTRUCTOR params:', { runId, no });
+  console.log('🔵 [use-variant] htmlSubject initial value length:', this.htmlSubject.value.length);
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('');
+
+  // ✅ DON'T PRELOAD IN CONSTRUCTOR - Let subscription handle it
+  console.log('🔵 [use-variant] CONSTRUCTOR: Skipping preload, letting subscription handle data loading');
+  console.log('🔵 [use-variant] CONSTRUCTOR: runId:', runId, 'no:', no);
 
   if (runId && no) {
     // ✅ INITIALIZE TEMPLATE MODAL STATE FIRST
@@ -290,7 +321,14 @@ constructor() {
 
   // Subscribe to runId changes
   this.runId$.subscribe(async (runId) => {
+    console.log('� [use-variant] ====== SUBSCRIPTION TRIGGERED ======');
+    console.log('🟢 [use-variant] SUBSCRIPTION runId:', runId);
+    console.log('🟢 [use-variant] SUBSCRIPTION htmlSubject.value length BEFORE:', this.htmlSubject.value.length);
     const no = Number(this.ar.snapshot.paramMap.get('no')!);
+    console.log('▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓');
+    console.log('🟢 [use-variant] variantNo:', no);
+    console.log('🟢 [use-variant] htmlSubject current length:', this.htmlSubject.value.length);
+    console.log('▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓');
 
     // ✅ PRIORITY 0: Check for return from visual editor FIRST (before anything else!)
     const returnKey = `visual_editor_return_use_variant`;
@@ -337,95 +375,16 @@ constructor() {
     }
 
     try {
-      // ✅ PRIORITY 1: Check for SYNTHETIC run in sessionStorage FIRST
-      let syntheticRun = null;
-      try {
-        const stored = sessionStorage.getItem(`synthetic_run_${runId}`);
-        if (stored) {
-          syntheticRun = JSON.parse(stored);
-        }
-      } catch (e) {
-        console.error('Failed to load synthetic run:', e);
-      }
-      
-      if (syntheticRun && syntheticRun.runId === runId) {
-        const item = syntheticRun.items?.find((it: any) => it.no === no);
-        if (item?.html) {
-          // ✅ CONSUME IT - Remove from sessionStorage so it's only used ONCE
-          sessionStorage.removeItem(`synthetic_run_${runId}`);
-          this.htmlSubject.next(item.html);
-          const intro: ChatTurn = {
-            role: 'assistant',
-            text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n•Please use editor is replacement won't happen\n\nWhat would you like to improve?",
-            json: null,
-            ts: Date.now(),
-          };
-          const thread: ChatThread = { html: item.html, messages: [intro] };
-          this.messagesSubject.next(thread.messages);
-          
-          // ✅ SAVE TO localStorage so it persists on refresh
-          this.qa.saveChat(runId, no, thread);
-          
-          // ✅ SAVE TO IndexedDB for next time (non-blocking)
-          this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
-            console.error('Failed to cache to IndexedDB:', err)
-          );
-          
-          this.snapsSubject.next([]);
-          this.validLinksSubject.next(this.qa.getValidLinks(runId));
-          this.loadingVariant = false;
-          if (this.loadingTimeout) {
-            clearTimeout(this.loadingTimeout);
-            this.loadingTimeout = undefined;
-          }
-          this.cdr.markForCheck();
-          this.positionChatAtBottom();
-          return;
-        }
-      }
-
-      // ✅ PRIORITY 2A: Check IndexedDB cache (fastest, persists across sessions)
-      const cachedThreadDB = await this.qa.getChatThreadFromCache(runId, no);
-      if (cachedThreadDB?.html) {
-        this.htmlSubject.next(cachedThreadDB.html);
-        this.messagesSubject.next(cachedThreadDB.messages || []);
-        this.snapsSubject.next(await this.qa.getSnapsCached(runId));
-        this.validLinksSubject.next(this.qa.getValidLinks(runId));
-        
-        // ✅ RESTORE GRAMMAR CHECK RESULTS
-        const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
-        if (cachedGrammar) {
-          this.grammarCheckResultSubject.next(cachedGrammar);
-        }
-        
-        // ✅ RESTORE SUBJECT GENERATION RESULTS
-        const cachedSubjects = this.qa.getSubjectsCached(runId);
-        if (cachedSubjects?.length) {
-          this.subjectsSubject.next(cachedSubjects);
-          this.subjectsLoading = false;
-        }
-
-        this.loadingVariant = false;
-        if (this.loadingTimeout) {
-          clearTimeout(this.loadingTimeout);
-          this.loadingTimeout = undefined;
-        }
-        this.cdr.markForCheck();
-        this.positionChatAtBottom();
-        return;
-      }
-
-      // ✅ PRIORITY 2B: Check localStorage cache (fallback)
+      // ✅ PRIORITY 1: Check localStorage cache (fastest)
+      console.log('⚡ [use-variant] PRIORITY 1: Checking localStorage for runId:', runId, 'no:', no);
       const cachedThread = this.qa.getChatCached(runId, no);
       if (cachedThread?.html) {
+        console.log('✅ [use-variant] PRIORITY 1: Found in localStorage, loading template');
         this.htmlSubject.next(cachedThread.html);
         this.messagesSubject.next(cachedThread.messages || []);
         this.snapsSubject.next(await this.qa.getSnapsCached(runId));
         this.validLinksSubject.next(this.qa.getValidLinks(runId));
         
-        // ✅ SAVE TO IndexedDB for next time
-        await this.qa.saveChatThreadToCache(runId, no, cachedThread);
-        
         // ✅ RESTORE GRAMMAR CHECK RESULTS
         const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
         if (cachedGrammar) {
@@ -444,13 +403,14 @@ constructor() {
           clearTimeout(this.loadingTimeout);
           this.loadingTimeout = undefined;
         }
+        console.log('🎯 [use-variant] localStorage restore complete. HTML in subject:', this.htmlSubject.value?.length || 0, 'chars');
         this.cdr.markForCheck();
         this.positionChatAtBottom();
         return;
       }
 
-      // ✅ PRIORITY 3: Check memory cache (variants run)
-      const run = this.qa.getVariantsRunById(runId);
+      // ✅ PRIORITY 2: Check memory cache (variants run)
+      const run = await this.qa.getVariantsRunById(runId);
       const item = run?.items?.find(it => it.no === no) || null;
       if (item?.html) {
         this.htmlSubject.next(item.html);
@@ -467,11 +427,6 @@ constructor() {
         // ✅ SAVE TO localStorage
         this.qa.saveChat(runId, no, thread);
         
-        // ✅ SAVE TO IndexedDB for next time (non-blocking)
-        this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
-          console.error('Failed to cache to IndexedDB:', err)
-        );
-        
         this.snapsSubject.next(await this.qa.getSnapsCached(runId));
         this.validLinksSubject.next(this.qa.getValidLinks(runId));
 
@@ -498,7 +453,7 @@ constructor() {
         return;
       }
 
-      // ✅ PRIORITY 4: Fallback to API
+      // ✅ PRIORITY 3: Fallback to API
       try {
         const status = await firstValueFrom(this.qa.getVariantsStatus(runId));
         const fromApi = status.items.find(it => it.no === no) || null;
@@ -516,11 +471,6 @@ constructor() {
         
         // ✅ SAVE TO localStorage
         this.qa.saveChat(runId, no, thread);
-        
-        // ✅ SAVE TO IndexedDB for next time (non-blocking)
-        this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
-          console.error('Failed to cache to IndexedDB:', err)
-        );
         
         this.snapsSubject.next(await this.qa.getSnapsCached(runId));
         this.validLinksSubject.next(this.qa.getValidLinks(runId));
@@ -901,11 +851,6 @@ private restoreTemplateModalState(): boolean {
       messages: this.messagesSubject.value
     };
     this.qa.saveChat(runId, no, thread);
-    
-    // ✅ SAVE TO IndexedDB (non-blocking)
-    this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
-      console.error('Failed to cache to IndexedDB:', err)
-    );
 
     this.showSuccess('Template updated successfully!');
     
@@ -1487,11 +1432,6 @@ async onValidLinksUpload(e: Event) {
   private persistThread(runId: string, no: number, html: string, messages: ChatTurn[]) {
     const thread: ChatThread = { html, messages };
     this.qa.saveChat(runId, no, thread);
-    
-    // ✅ SAVE TO IndexedDB (non-blocking)
-    this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
-      console.error('Failed to cache to IndexedDB:', err)
-    );
   }
 
   private toAssistantJson(raw: any): ChatAssistantJson {

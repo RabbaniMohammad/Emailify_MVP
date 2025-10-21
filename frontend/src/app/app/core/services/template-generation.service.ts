@@ -302,16 +302,12 @@ getConversationCached(conversationId: string): ConversationState | null {
 }
 
 cacheConversation(conversationId: string, state: ConversationState): void {
-  // 🔥 Save to IndexedDB (async but don't await - fire and forget)
-  this.db.cacheConversation({
-    runId: conversationId,
-    html: state.currentHtml,
-    messages: state.messages,
-    timestamp: Date.now()
-  } as any).then(() => {
-  }).catch((err: any) => {
-    console.error('❌ Failed to cache conversation to IndexedDB:', err);
-  });
+  try {
+    localStorage.setItem(this.kConversation(conversationId), JSON.stringify(state));
+    console.log('✅ [template-generation] Saved conversation to localStorage:', conversationId);
+  } catch (err) {
+    console.error('❌ Failed to cache conversation to localStorage:', err);
+  }
 }
 
   getCurrentConversationId(): string | null {

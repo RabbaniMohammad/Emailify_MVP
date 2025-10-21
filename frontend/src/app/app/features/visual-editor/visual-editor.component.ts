@@ -14,6 +14,7 @@ import { CacheService } from '../../core/services/cache.service';
 import { AuthService } from '../../core/services/auth.service';
 import { trigger, state, style, transition, animate } from '@angular/animations';
 import { BehaviorSubject, Observable, firstValueFrom } from 'rxjs';
+import { TemplateStateService } from '../../core/services/template-state.service';
 
 interface MatchOverlay {
   id: string;
@@ -73,7 +74,13 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private http = inject(HttpClient);
   private cdr = inject(ChangeDetectorRef);
+  private templateState = inject(TemplateStateService);
   private longPressTimer: any;
+
+  // Auto-save throttling
+  private autoSaveTimer: any;
+  private readonly AUTO_SAVE_DELAY = 300; // 300ms debounce - saves quickly but prevents spam
+  private periodicSaveInterval: any;
 
   // Simple overlay tracking
   private overlays: MatchOverlay[] = [];
@@ -136,8 +143,33 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   originalGoldenHtml: string = '';
 
   ngOnInit(): void {
+    console.log('🔵 [ngOnInit] START');
+    
     this.route.paramMap.subscribe(params => {
       this.templateId = params.get('id');
+      
+      console.log('🔍 [ngOnInit] Route param ID:', this.templateId);
+      console.log('🔍 [ngOnInit] Route params:', params);
+      
+      // ✅ NEW: If no templateId in URL, generate a temporary one for direct access
+      if (!this.templateId) {
+        // Check if we already have a temp ID in localStorage
+        const tempIdKey = 'visual_editor_temp_id';
+        let tempId = localStorage.getItem(tempIdKey);
+        
+        if (!tempId) {
+          // Generate new temporary ID
+          tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+          localStorage.setItem(tempIdKey, tempId);
+          console.log('✅ [ngOnInit] Generated temporary ID:', tempId);
+        } else {
+          console.log('✅ [ngOnInit] Using existing temporary ID:', tempId);
+        }
+        
+        this.templateId = tempId;
+      }
+      
+      console.log('✅ [ngOnInit] Final templateId:', this.templateId);
       
       if (this.templateId) {
         this.loadGoldenHtml(this.templateId);
@@ -153,13 +185,47 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     
     if (container) {
       this.initGrapesJS();
+      
+      // ✅ CRITICAL: Periodic auto-save every 10 seconds as backup
+      this.periodicSaveInterval = setInterval(() => {
+        if (this.editor && this.templateId) {
+          this.autoSave();
+          console.log('⏰ [visual-editor] Periodic auto-save triggered');
+        }
+      }, 10000); // 10 seconds
+      
+      // ✅ Save when user switches tabs or minimizes browser
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && this.editor && this.templateId) {
+          this.autoSave();
+          console.log('👁️ [visual-editor] Saved on visibility change');
+        }
+      });
+      
+      // ✅ Save before page unload (browser close, navigation)
+      window.addEventListener('beforeunload', () => {
+        if (this.editor && this.templateId) {
+          this.autoSave();
+          console.log('🚪 [visual-editor] Saved before unload');
+        }
+      });
     } else {
       this.loading = false;
     }
   }
 
   ngOnDestroy(): void {
-    this.autoSave();
+    // ✅ Final save before leaving - IMMEDIATE (no delay)
+    this.autoSave(true);
+    
+    // ✅ Clear intervals and timers
+    if (this.periodicSaveInterval) {
+      clearInterval(this.periodicSaveInterval);
+    }
+    
+    if (this.autoSaveTimer) {
+      clearTimeout(this.autoSaveTimer);
+    }
     
     if (this.editor) {
       this.editor.destroy();
@@ -342,15 +408,16 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 }
 
   private loadGoldenHtml(templateId: string): void {
-    // Try to get golden HTML from sessionStorage (set by QA page)
-    const goldenKey = `visual_editor_${templateId}_golden_html`;
-    const goldenHtml = sessionStorage.getItem(goldenKey);
+    console.log('🎯 [EDITOR] loadGoldenHtml() for ID:', templateId);
     
-    if (goldenHtml) {
-      // ✅ SCENARIO 1: Coming from QA page
-      this.originalGoldenHtml = goldenHtml;
+    // Get template from state service
+    const templateForEditor = this.templateState.getTemplateForEditor(templateId);
+    
+    if (templateForEditor) {
+      console.log('✅ [EDITOR] Got template from state, length:', templateForEditor.length);
+      this.originalGoldenHtml = templateForEditor;
     } else {
-      // ✅ SCENARIO 2: Direct access from navbar
+      console.log('⚠️ [EDITOR] No template in state - empty editor');
       this.originalGoldenHtml = '';
     }
   }
@@ -388,17 +455,46 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         
         this.setupCodeEditor();
         
-        // ✅ CASE 1: From QA page with golden HTML
-        if (this.originalGoldenHtml) {
+        // ✅ PRIORITY 1: Check if there's saved progress (edited state)
+        const progressKey = `visual_editor_${this.templateId}_progress`;
+        const hasSavedProgress = localStorage.getItem(progressKey);
+        
+        console.log('🔍 [visual-editor] Checking load priority...');
+        console.log('   - Has saved progress (_progress):', hasSavedProgress ? 'YES ✅' : 'NO');
+        console.log('   - Has golden HTML:', this.originalGoldenHtml ? 'YES' : 'NO');
+        
+        if (hasSavedProgress) {
+          // ✅ CASE 1: Restore from saved progress (highest priority - user's edits!)
+          console.log('✅ [visual-editor] LOADING FROM SAVED PROGRESS (edited state)');
+          this.restoreProgress();
+          setTimeout(() => {
+            this.autoSave();
+            console.log('✅ [visual-editor] Auto-save after restoring progress');
+          }, 500);
+        }
+        else if (this.originalGoldenHtml) {
+          // ✅ CASE 2: Load golden HTML from QA page (first time editing)
+          console.log('✅ [visual-editor] LOADING FROM GOLDEN HTML (original state)');
           try {
             this.editor.setComponents(this.originalGoldenHtml);
+            // ✅ CRITICAL: Save immediately after loading from QA page
+            setTimeout(() => {
+              this.autoSave();
+              console.log('✅ [visual-editor] Initial auto-save after loading golden HTML');
+            }, 500);
           } catch (error) {
             console.error('Failed to load golden HTML:', error);
           }
         } 
-        // ✅ CASE 2: Has template ID but no golden HTML - restore progress
+        // ✅ CASE 3: Has template ID but no golden HTML and no progress - empty editor
         else if (this.templateId) {
-          this.restoreProgress();
+          console.log('⚠️ [visual-editor] No saved progress or golden HTML - starting empty');
+          this.restoreProgress(); // Try anyway, might have something
+          // ✅ If restoration happened, save again to update timestamp
+          setTimeout(() => {
+            this.autoSave();
+            console.log('✅ [visual-editor] Auto-save after restoring progress');
+          }, 500);
         }
         // ✅ CASE 3: No template ID - FRESH EDITOR (do nothing)
         else {
@@ -407,7 +503,25 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         this.loading = false;
       });
       
+      // ✅ CRITICAL: Save on EVERY change (component added, moved, edited, deleted)
       this.editor.on('update', () => {
+        this.autoSave();
+      });
+      
+      // ✅ Additional save triggers for component changes
+      this.editor.on('component:add', () => {
+        this.autoSave();
+      });
+      
+      this.editor.on('component:remove', () => {
+        this.autoSave();
+      });
+      
+      this.editor.on('component:update', () => {
+        this.autoSave();
+      });
+      
+      this.editor.on('style:update', () => {
         this.autoSave();
       });
       
@@ -588,50 +702,207 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     window.URL.revokeObjectURL(url);
   }
 
-  private autoSave(): void {
-    if (!this.editor) return;
+  private autoSave(immediate: boolean = false): void {
+    // console.log('🔄 [autoSave] Called - editor:', !!this.editor, 'templateId:', this.templateId, 'immediate:', immediate);
     
-    try {
-      const html = this.editor.getHtml();
-      const css = this.editor.getCss();
-      
-      const editorState = {
-        html,
-        css,
-        savedAt: new Date().toISOString()
-      };
-      
-      this.cacheService.set(
-        this.EDITOR_CACHE_KEY,
-        editorState,
-        24 * 60 * 60 * 1000,
-        'session'
-      );
-    } catch (error) {
-      console.error('Auto-save failed:', error);
+    if (!this.editor || !this.templateId) {
+      return;
     }
+    
+    // console.log('🔄 [autoSave] Triggered for templateId:', this.templateId);
+    
+    // ✅ NEW: If immediate mode, save RIGHT NOW without delay
+    if (immediate) {
+      // console.log('⚡ [autoSave] ========================================');
+      // console.log('⚡ [autoSave] IMMEDIATE MODE - SYNCHRONOUS SAVE');
+      // console.log('⚡ [autoSave] ========================================');
+      try {
+        if (!this.editor || typeof this.editor.getHtml !== 'function') {
+          // console.log('❌ [autoSave] Editor destroyed or invalid, skipping save');
+          return;
+        }
+        
+        // ✅ ADDITIONAL CHECK: Make sure editor wrapper is accessible
+        if (typeof this.editor.getWrapper !== 'function') {
+          // console.log('❌ [autoSave] getWrapper function not available, skipping save');
+          return;
+        }
+        
+        try {
+          const wrapper = this.editor.getWrapper();
+          if (!wrapper) {
+            // console.log('❌ [autoSave] Editor wrapper not available, skipping save');
+            return;
+          }
+        } catch (e) {
+          // console.log('❌ [autoSave] Error getting wrapper, skipping save');
+          return;
+        }
+        
+        const html = this.editor.getHtml();
+        const css = this.editor.getCss();
+        
+        if (!html || html.trim() === '') {
+          // console.log('❌ [autoSave] Skipping save - empty HTML');
+          return;
+        }
+        
+        // ✅ Save using TemplateStateService
+        this.templateState.saveEditorProgress(this.templateId, html, css);
+        
+        // ✅ Also save to old key for backwards compatibility (temporary)
+        const editorState = {
+          html,
+          css,
+          templateId: this.templateId,
+          savedAt: new Date().toISOString()
+        };
+        
+        const persistKey = `visual_editor_${this.templateId}_progress`;
+        localStorage.setItem(persistKey, JSON.stringify(editorState));
+        
+      } catch (error) {
+        console.error('❌ [autoSave] IMMEDIATE save FAILED:', error);
+      }
+      // console.log('⚡ [autoSave] ========================================');
+      return;
+    }
+    
+    // ✅ Normal debounced save
+    // Clear previous timer and set new one
+    if (this.autoSaveTimer) {
+      clearTimeout(this.autoSaveTimer);
+    }
+    
+    this.autoSaveTimer = setTimeout(() => {
+      try {
+        // ✅ CRITICAL: Check if editor still exists and is valid
+        if (!this.editor || typeof this.editor.getHtml !== 'function') {
+          // console.log('⚠️ [autoSave] Editor destroyed or invalid, skipping save');
+          return;
+        }
+        
+        // ✅ ADDITIONAL CHECK: Make sure editor wrapper is accessible
+        if (typeof this.editor.getWrapper !== 'function') {
+          // console.log('⚠️ [autoSave] getWrapper function not available, skipping save');
+          return;
+        }
+        
+        try {
+          const wrapper = this.editor.getWrapper();
+          if (!wrapper) {
+            // console.log('⚠️ [autoSave] Editor wrapper not available, skipping save');
+            return;
+          }
+        } catch (e) {
+          // console.log('⚠️ [autoSave] Error getting wrapper, skipping save');
+          return;
+        }
+        
+        const html = this.editor.getHtml();
+        const css = this.editor.getCss();
+        
+        if (!html || html.trim() === '') {
+          // console.log('⚠️ [autoSave] Skipping save - empty HTML');
+          return;
+        }
+        
+        // ✅ Save using TemplateStateService
+        this.templateState.saveEditorProgress(this.templateId!, html, css);
+        
+        // ✅ Also save to old key for backwards compatibility (temporary)
+        const editorState = {
+          html,
+          css,
+          templateId: this.templateId,
+          savedAt: new Date().toISOString()
+        };
+        
+        // ✅ PERSIST to localStorage so it survives refresh
+        const persistKey = `visual_editor_${this.templateId}_progress`;
+        localStorage.setItem(persistKey, JSON.stringify(editorState));
+        // console.log('✅ [autoSave] Saved to localStorage:', persistKey);
+        // console.log('✅ [autoSave] HTML length:', html.length);
+      } catch (error) {
+        console.error('❌ [autoSave] Failed:', error);
+      }
+    }, this.AUTO_SAVE_DELAY);
   }
 
   private restoreProgress(): void {
+    if (!this.templateId) {
+      console.log('⚠️ [restoreProgress] Skipped - no templateId');
+      return;
+    }
+    
+    console.log('🔄 [restoreProgress] ========================================');
+    console.log('🔄 [restoreProgress] ATTEMPTING TO RESTORE VISUAL EDITOR STATE');
+    console.log('🔄 [restoreProgress] ========================================');
+    console.log('🔄 [restoreProgress] templateId:', this.templateId);
+    
     try {
-      const savedState = this.cacheService.get<any>(this.EDITOR_CACHE_KEY);
+      // ✅ Try localStorage first (persists on refresh)
+      const persistKey = `visual_editor_${this.templateId}_progress`;
+      const savedJson = localStorage.getItem(persistKey);
       
-      if (savedState && this.editor) {
-        if (savedState.html) {
-          this.editor.setComponents(savedState.html);
-        }
-        
-        if (savedState.css) {
-          this.editor.setStyle(savedState.css);
+      console.log('🔍 [restoreProgress] Checking localStorage key:', persistKey);
+      console.log('🔍 [restoreProgress] Found savedJson:', savedJson ? 'YES' : 'NO');
+      console.log('🔍 [restoreProgress] savedJson length:', savedJson?.length || 0);
+      
+      // 🔍 DEBUG: Log ALL localStorage keys for this templateId
+      console.log('🔍 [restoreProgress] ALL localStorage keys for this template:');
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.includes(this.templateId)) {
+          const value = localStorage.getItem(key);
+          console.log(`   - ${key}: ${value ? value.length + ' chars' : 'null'}`);
         }
       }
+      
+      if (savedJson) {
+        const savedState = JSON.parse(savedJson);
+        
+        console.log('✅ [restoreProgress] Parsed savedState successfully:');
+        console.log('   - hasHtml:', !!savedState.html);
+        console.log('   - hasCss:', !!savedState.css);
+        console.log('   - htmlLength:', savedState.html?.length || 0);
+        console.log('   - cssLength:', savedState.css?.length || 0);
+        console.log('   - savedAt:', savedState.savedAt);
+        console.log('   - HTML preview (first 200 chars):', savedState.html?.substring(0, 200));
+        
+        if (savedState && this.editor) {
+          if (savedState.html) {
+            this.editor.setComponents(savedState.html);
+            console.log('✅ [restoreProgress] ✅ Restored HTML to editor!');
+          }
+          
+          if (savedState.css) {
+            this.editor.setStyle(savedState.css);
+            console.log('✅ [restoreProgress] ✅ Restored CSS to editor!');
+          }
+          
+          console.log('🎉 [restoreProgress] RESTORE COMPLETE!');
+        } else {
+          console.log('⚠️ [restoreProgress] savedState or editor is missing');
+          console.log('   - savedState:', savedState ? 'exists' : 'null');
+          console.log('   - this.editor:', this.editor ? 'exists' : 'null');
+        }
+      } else {
+        console.log('❌ [restoreProgress] NO SAVED STATE FOUND IN LOCALSTORAGE!');
+        console.log('❌ [restoreProgress] Expected key:', persistKey);
+        console.log('❌ [restoreProgress] This means edits were NOT saved before navigation!');
+      }
     } catch (error) {
-      console.error('Restore progress failed:', error);
+      console.error('❌ [restoreProgress] FAILED with error:', error);
     }
+    console.log('🔄 [restoreProgress] ========================================');
   }
 
   clearProgress(): void {
-    this.cacheService.invalidate(this.EDITOR_CACHE_KEY);
+    if (!this.templateId) return;
+    const persistKey = `visual_editor_${this.templateId}_progress`;
+    localStorage.removeItem(persistKey);
+    console.log('✅ [visual-editor] Cleared progress for template:', this.templateId);
   }
 
   private loadFailedEdits(templateId: string): void {
@@ -1184,122 +1455,30 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     this.overlayContainer = null;
   }
 
-  // ============================================
-  // ✅ UPDATED: CHECK PREVIEW WITH AUTO-SAVE
-  // ============================================
 // ============================================
-// ✅ UPDATED: CHECK PREVIEW WITH CONTENT VALIDATION
+// ✅ UPDATED: CHECK PREVIEW WITH AUTO-SAVE
 // ============================================
-async onCheckPreview(): Promise<void> {
-  if (!this.editor) {
-    alert('Editor not initialized');
+onCheckPreview(): void {
+  if (!this.editor || !this.templateId) {
+    console.error('❌ [Check Preview] Aborted - no editor or templateId');
     return;
   }
-  
-  const html = this.editor.getHtml();
-  const css = this.editor.getCss();
-  const fullHtml = `<style>${css}</style>${html}`;
-  
-  // ============================================
-  // ✅ CHECK IF EDITOR IS EMPTY (ALWAYS)
-  // ============================================
-  // Remove all whitespace, newlines, and common empty tags
-  const cleanedHtml = html
-    .replace(/\s+/g, '')
-    .replace(/<div><\/div>/gi, '')
-    .replace(/<p><\/p>/gi, '')
-    .replace(/<span><\/span>/gi, '')
-    .replace(/<br\s*\/?>/gi, '')
-    .replace(/<!--.*?-->/g, '')
-    .replace(/<body[^>]*><\/body>/gi, '')
-    .replace(/<section[^>]*><\/section>/gi, '')
-    .replace(/<article[^>]*><\/article>/gi, '');
-  
-  const hasContent = cleanedHtml && cleanedHtml.trim().length > 0;
-  
-  if (!hasContent) {
-    this.showToast('⚠️ Visual editor is empty. Please add some content to your template first.', 'warning');
-    return;
-  }
-  
-  // ============================================
-  // 🆕 SCENARIO 1: DIRECT ACCESS (No templateId)
-  // ============================================
-  if (!this.templateId) {
-    // Prompt for template name
-    const templateName = await this.promptTemplateName();
-    
-    if (!templateName) {
-      return;
-    }
-    
-    // Save to MongoDB
-    const savedTemplateId = await this.saveNewTemplate(templateName, fullHtml);
-    
-    if (!savedTemplateId) {
-      console.error('❌ Failed to save template');
-      return;
-    }
-    
-    // Set templateId for navigation
-    this.templateId = savedTemplateId;
-    
-    // Save to session for QA page
-    const goldenKey = `visual_editor_${savedTemplateId}_golden_html`;
-    sessionStorage.setItem(goldenKey, fullHtml);
-    
-    // Navigate to QA page
-    this.router.navigate(['/qa', savedTemplateId]);
-    
-    return;
-  }
-  
-  // ============================================
-  // ✅ SCENARIO 2: USE-VARIANT MODE
-  // ============================================
-  const modeKey = `visual_editor_${this.templateId}_editing_mode`;
-  const editingMode = sessionStorage.getItem(modeKey);
-  
-  if (editingMode === 'use-variant') {
-    const metaKey = `visual_editor_${this.templateId}_use_variant_meta`;
-    const metaJson = sessionStorage.getItem(metaKey);
-    
-    if (!metaJson) {
-      alert('Use-variant metadata not found');
-      return;
-    }
-    
-    const meta = JSON.parse(metaJson);
-    const { runId, no } = meta;
-    
-    const editedKey = `visual_editor_edited_html`;
-    sessionStorage.setItem(editedKey, fullHtml);
-    
-    const returnKey = `visual_editor_return_use_variant`;
-    sessionStorage.setItem(returnKey, 'true');
-    
-    sessionStorage.removeItem(modeKey);
-    sessionStorage.removeItem(metaKey);
-    
-    this.autoSave();
-    this.router.navigate(['/qa', this.templateId, 'use', runId, no]);
-    
-  } else {
-    // ============================================
-    // ✅ SCENARIO 3: GOLDEN TEMPLATE FLOW
-    // ============================================
-    const editedKey = `visual_editor_${this.templateId}_edited_html`;
-    sessionStorage.setItem(editedKey, fullHtml);
-    
-    const returnKey = `visual_editor_${this.templateId}_return_flag`;
-    sessionStorage.setItem(returnKey, 'true');
-    
-    this.autoSave();
-    this.router.navigate(['/qa', this.templateId]);
-  }
-}
 
-  /**
+  console.log('� [Check Preview] Initiated...');
+  
+  // 1. Perform an immediate, final save to capture the latest changes.
+  this.autoSave(true);
+  console.log('✅ [Check Preview] Final save complete.');
+
+  // 2. Set the specific flag that the QA page will look for.
+  const returnKey = `visual_editor_${this.templateId}_return_flag`;
+  localStorage.setItem(returnKey, 'true');
+  console.log(`✅ [Check Preview] Set return flag: ${returnKey}`);
+
+  // 3. Navigate back to the QA page.
+  console.log(`🚀 [Check Preview] Navigating to /qa/${this.templateId}`);
+  this.router.navigate(['/qa', this.templateId]);
+}  /**
    * Copy text as plain text (no formatting)
    */
   copyTextToClipboard(text: string, event?: MouseEvent): void {

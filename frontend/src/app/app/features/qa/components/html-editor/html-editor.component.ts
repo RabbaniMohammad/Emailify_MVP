@@ -24,6 +24,60 @@ import type * as Monaco from 'monaco-editor';
 
 type IStandaloneCodeEditor = Monaco.editor.IStandaloneCodeEditor;
 
+// ✅ GLOBAL MONACO SINGLETON - Only load once per application
+let globalMonaco: typeof Monaco | null = null;
+let globalMonacoLoading: Promise<typeof Monaco> | null = null;
+
+// ✅ VERSION CHECK - Verify latest code is loaded
+console.log('🔷 [html-editor.component.ts] Code version: 2025-10-19 19:24 - Monaco Singleton Fixed');
+
+async function getMonacoInstance(): Promise<typeof Monaco> {
+  // If already loaded, return it
+  if (globalMonaco) {
+    console.log('🟢 [monaco-singleton] Returning existing Monaco instance');
+    return globalMonaco;
+  }
+  
+  // If currently loading, wait for it
+  if (globalMonacoLoading) {
+    console.log('🟡 [monaco-singleton] Monaco already loading, waiting...');
+    return globalMonacoLoading;
+  }
+  
+  // Start loading
+  console.log('🔵 [monaco-singleton] Loading Monaco for the first time...');
+  globalMonacoLoading = (async () => {
+    try {
+      // Configure loader
+      loader.config({
+        paths: {
+          vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs',
+        },
+        'vs/nls': {
+          availableLanguages: { '*': 'en' },
+        },
+      });
+      
+      // Load Monaco
+      const monaco = await loader.init();
+      
+      if (!monaco || !monaco.editor) {
+        throw new Error('Monaco loaded but editor property missing');
+      }
+      
+      globalMonaco = monaco;
+      console.log('✅ [monaco-singleton] Monaco loaded successfully!');
+      return monaco;
+    } catch (err) {
+      console.error('❌ [monaco-singleton] Failed to load Monaco:', err);
+      globalMonacoLoading = null; // Reset so we can retry
+      throw err;
+    }
+  })();
+  
+  return globalMonacoLoading;
+}
+
 @Component({
   selector: 'app-html-editor',
   standalone: true,
@@ -100,39 +154,53 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
   }
 
   private async initializeEditor(): Promise<void> {
-    // UPDATED: Prevent multiple initializations
-    if (this.editor || this.isLoading === false || this.isEditorReady) {
+    // ✅ CRITICAL: Prevent multiple initializations
+    if (this.editor || this.isEditorReady || this.isInitializing) {
+      console.log('🟡 [html-editor] Skipping initialization - already initialized or in progress');
       return;
     }
 
+    console.log('🔵 [html-editor] Starting Monaco Editor initialization...');
     this.isInitializing = true;
+    this.isLoading = true;
 
     try {
       // Check if container exists
       if (!this._editorContainer?.nativeElement) {
-        console.error('Editor container not found');
+        console.error('❌ [html-editor] Editor container not found');
         this.isLoading = false;
         this.showError('Editor container not ready');
         this.cdr.markForCheck();
         return;
       }
 
-      // Configure Monaco loader to use CDN
-      loader.config({
-        paths: {
-          vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs',
-        },
-      });
-
-      // Load Monaco
-      this.monaco = await loader.init();
+      console.log('🔵 [html-editor] Loading Monaco using singleton...');
+      
+      // ✅ Use singleton to load Monaco (prevents multiple init() calls)
+      this.monaco = await getMonacoInstance();
+      
+      console.log('✅ [html-editor] Monaco instance obtained:', !!this.monaco, 'has editor:', !!this.monaco?.editor);
+      
+      // ✅ CRITICAL NULL CHECK before using monaco.editor
+      if (!this.monaco || !this.monaco.editor) {
+        console.error('❌ [html-editor] Monaco or monaco.editor is null/undefined!');
+        throw new Error('Monaco editor failed to initialize properly');
+      }
 
       // Restore auto-saved content if exists
       const autoSaved = this.checkForAutoSave();
       const initialValue = autoSaved || this.initialHtml;
 
-      // Create editor instance
-      this.editor = this.monaco.editor.create(this._editorContainer.nativeElement, {
+      console.log('🔵 [html-editor] Creating editor instance with', initialValue?.length || 0, 'chars...');
+      console.log('🔵 [html-editor] Pre-create checks:', {
+        hasMonaco: !!this.monaco,
+        hasEditor: !!this.monaco?.editor,
+        hasCreate: typeof this.monaco?.editor?.create === 'function',
+        hasContainer: !!this._editorContainer?.nativeElement
+      });
+      
+      // ✅ ULTRA DEFENSIVE - Create editor instance
+      this.editor = this.monaco!.editor!.create(this._editorContainer!.nativeElement, {
         value: initialValue,
         language: 'html',
         theme: this.isDarkTheme ? 'vs-dark' : 'vs',
@@ -162,9 +230,12 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
         },
       });
 
+      console.log('✅ [html-editor] Editor instance created successfully');
+      
       this.originalHtml = initialValue;
       this.updateLineCount();
 
+      console.log('🔵 [html-editor] Setting up event listeners and auto-save...');
       this.setupEventListeners();
       this.setupKeyboardShortcuts();
       this.setupAutoSave();
@@ -183,14 +254,30 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
       this.isLoading = false;
       this.cdr.markForCheck();
 
+      console.log('✅ [html-editor] Monaco Editor fully initialized and ready!');
+
       if (autoSaved) {
         this.showInfo('Restored auto-saved changes');
       }
     } catch (error) {
-      console.error('Failed to initialize Monaco Editor:', error);
-      this.showError('Failed to load editor. Please refresh the page.');
+      console.error('❌ [html-editor] Failed to initialize Monaco Editor:', error);
+      console.error('❌ [html-editor] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        monaco: !!this.monaco,
+        hasEditor: !!this.monaco?.editor,
+        container: !!this._editorContainer?.nativeElement,
+        windowMonaco: !!(window as any).monaco
+      });
+      
+      // ✅ RESET FLAGS so user can retry
       this.isLoading = false;
       this.isInitializing = false;
+      this.isEditorReady = false;
+      this.editor = null;
+      this.monaco = null;
+      
+      this.showError('Failed to load editor. Please try again or refresh the page.');
       this.cdr.markForCheck();
     }
   }
@@ -382,6 +469,8 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
 
   // UPDATED: Reset flags on cleanup
   private cleanup(): void {
+    console.log('🔴 [html-editor] Cleanup called');
+    
     if (this.autoSaveInterval) {
       clearInterval(this.autoSaveInterval);
       this.autoSaveInterval = null;
@@ -397,8 +486,13 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
       this.editor = null;
     }
 
+    // ✅ RESET ALL FLAGS properly
+    this.monaco = null;
     this.isEditorReady = false;
-    this.isInitializing = true;
+    this.isInitializing = false; // ✅ IMPORTANT: Set to false, not true!
+    this.isLoading = true;
+    
+    console.log('🔴 [html-editor] Cleanup complete');
   }
 
   getCursorInfo(): string {

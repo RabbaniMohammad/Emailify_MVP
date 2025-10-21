@@ -30,6 +30,7 @@ import { BehaviorSubject, Subject, Subscription, combineLatest } from 'rxjs';
 import { takeUntil, map, distinctUntilChanged } from 'rxjs/operators';
 import { TemplatesService, TemplatesState } from '../../../../core/services/templates.service';
 import { PreviewCacheService } from '../../components/template-preview/preview-cache.service';
+import { TemplateStateService } from '../../../../core/services/template-state.service';
 
 // Interfaces
 export interface TemplateItem {
@@ -94,6 +95,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   private cache = inject(PreviewCacheService);
   private cdr = inject(ChangeDetectorRef);
   private snackBar = inject(MatSnackBar);
+  private templateState = inject(TemplateStateService);
 
   // ViewChild references
   @ViewChild('scrollContainer', { static: false }) scrollContainer!: ElementRef<HTMLElement>;
@@ -303,9 +305,52 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     const item = this.svc.snapshot.items.find(t => t.id === id);
     if (item) {
       this.svc.select(id, item.name);
+      
+      // ✅ CRITICAL: Reset template state to original (temp_1)
+      // This clears any edited state (temp_edit) and ensures fresh start
+      if (item.content) {
+        console.log('🔄 [templates-page] Resetting template state for Run Tests');
+        this.templateState.initializeOriginalTemplate(id, item.content);
+        console.log('✅ [templates-page] Template state reset to original (temp_1)');
+        
+        // Navigate immediately if we have content
+        this.router.navigate(['/qa', id]);
+      } else {
+        // ✅ FETCH CONTENT: If template content not loaded, fetch it first
+        console.log('⚠️ [templates-page] Template content not loaded, fetching...');
+        
+        // Check cache first
+        const cachedHtml = this.cache.get(id) || this.cache.getPersisted(id);
+        
+        if (cachedHtml) {
+          console.log('✅ [templates-page] Found in cache, initializing state');
+          this.templateState.initializeOriginalTemplate(id, cachedHtml);
+          this.router.navigate(['/qa', id]);
+        } else {
+          // Fetch from API
+          console.log('⚠️ [templates-page] Not in cache, fetching from API...');
+          this.http.get(`/api/templates/${id}/raw`, { responseType: 'text' })
+            .subscribe({
+              next: (html) => {
+                console.log('✅ [templates-page] Fetched from API, initializing state');
+                this.templateState.initializeOriginalTemplate(id, html);
+                this.router.navigate(['/qa', id]);
+              },
+              error: (error) => {
+                console.error('❌ [templates-page] Failed to fetch template:', error);
+                this.snackBar.open('Failed to load template', 'Close', {
+                  duration: 3000,
+                  panelClass: ['error-snackbar'],
+                });
+              }
+            });
+        }
+      }
+    } else {
+      // If item not found, just navigate (QA page will handle loading)
+      console.log('⚠️ [templates-page] Template not found in state, navigating anyway');
+      this.router.navigate(['/qa', id]);
     }
-    
-    this.router.navigate(['/qa', id]);
   }
 
   onClick(item: TemplateItem): void {

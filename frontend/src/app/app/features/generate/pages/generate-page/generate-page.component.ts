@@ -22,6 +22,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 
 import { CanComponentDeactivate } from '../../../../core/guards/can-deactivate.guard';
+import { TemplateStateService } from '../../../../core/services/template-state.service';
 
 // Image upload interfaces
 interface ImageAttachment {
@@ -60,6 +61,7 @@ export class GeneratePageComponent implements OnInit, OnDestroy, AfterViewInit, 
   private destroy$ = new Subject<void>();
   private previewCache = inject(PreviewCacheService);
   private scrollAnimation: number | null = null;
+  private templateState = inject(TemplateStateService);
   // Add this property at the top of your component class
 private sentImages: Array<{name: string, size: number}> = [];
 
@@ -534,6 +536,13 @@ onRunTests(): void {
           panelClass: ['success-snackbar'],
         });
 
+        // ✅ Initialize template state with the generated template
+        const currentHtml = this.currentHtml$.value;
+        if (currentHtml && response.templateId) {
+          console.log('🔄 [generate-page] Initializing template state for new template');
+          this.templateState.initializeOriginalTemplate(response.templateId, currentHtml);
+          console.log('✅ [generate-page] Template state initialized');
+        }
 
         this.router.navigate(['/qa', response.templateId]);
 
