@@ -227,7 +227,9 @@ export class QaPageComponent implements OnDestroy {
       const returnKey = `visual_editor_${id}_return_flag`;
       const returnFlag = localStorage.getItem(returnKey);
       
-      console.log('🔍 [qa-page] returnFlag from localStorage:', returnFlag);
+      console.log('🔍🔍🔍 [qa-page] returnFlag from localStorage:', returnFlag);
+      console.log('🔍 [qa-page] returnKey:', returnKey);
+      console.log('🔍 [qa-page] hasEdits:', this.templateState.hasEdits(id));
 
       // CRITICAL LOGIC: ONLY load the edited version if the return flag is explicitly set.
       // This prevents navigation from accidentally showing the edited template.
@@ -237,8 +239,9 @@ export class QaPageComponent implements OnDestroy {
         const editingContext = this.templateState.getEditingContext(id);
         const editedTemplate = this.templateState.getCurrentTemplate(id);
         
-        console.log('🔍 [qa-page] Editing context:', editingContext);
+        console.log('🔍🔍🔍 [qa-page] Editing context:', JSON.stringify(editingContext));
         console.log('🔍 [qa-page] Edited template length:', editedTemplate?.length || 0);
+        console.log('🔍 [qa-page] Edited template preview (first 200 chars):', editedTemplate?.substring(0, 200));
         console.log('🔍 [qa-page] BEFORE processing - this.templateHtml length:', this.templateHtml?.length || 0);
 
         if (editingContext?.type === 'variant' && editedTemplate) {
@@ -287,30 +290,96 @@ export class QaPageComponent implements OnDestroy {
             console.log(`✅ [qa-page] Processed and removed return flag: ${returnKey}`);
             this.cdr.markForCheck();
         }
+        else if (editingContext?.type === 'golden' && editedTemplate) {
+            console.log('✅✅✅ [qa-page] GOLDEN TEMPLATE EDITING - CHECK PREVIEW CLICKED');
+            console.log('🔍 [qa-page] editingContext:', editingContext);
+            console.log('🔍 [qa-page] editedTemplate length:', editedTemplate?.length || 0);
+            console.log('🔍 [qa-page] editedTemplate preview (first 200 chars):', editedTemplate?.substring(0, 200));
+            console.log('🔍 [qa-page] Current goldenSubject value (BEFORE update):', this.goldenSubject.value);
+            console.log('🔍 [qa-page] Current goldenSubject HTML length (BEFORE):', this.goldenSubject.value?.html?.length || 0);
+            
+            // Handle golden template editing (update goldenSubject)
+            console.log('🔍 [qa-page] Calling handleVisualEditorReturn with edited template');
+            await this.handleVisualEditorReturn(id, editedTemplate);
+            
+            console.log('🔍 [qa-page] After handleVisualEditorReturn, goldenSubject value:', this.goldenSubject.value);
+            console.log('🔍 [qa-page] After handleVisualEditorReturn, goldenSubject HTML length (AFTER):', this.goldenSubject.value?.html?.length || 0);
+            console.log('🔍 [qa-page] After handleVisualEditorReturn, goldenSubject HTML preview (first 200 chars):', this.goldenSubject.value?.html?.substring(0, 200));
+            
+            // Restore the TRUE original template back to display
+            const trueOriginal = this.templateState.getTrueOriginalTemplate(id);
+            if (trueOriginal) {
+              console.log('🔍 [qa-page] Restoring TRUE original template for display, length:', trueOriginal.length);
+              this.templateHtml = trueOriginal;
+              this.templateLoading = false;
+              // DO NOT call initializeOriginalTemplate here - it will overwrite the golden editing context!
+              // Just restore the original HTML to the ORIGINAL_KEY for display
+              localStorage.setItem(`template_state_${id}_original`, trueOriginal);
+            } else {
+              console.log('⚠️ [qa-page] No TRUE original found, loading from database');
+              await this.loadOriginalTemplate(id);
+            }
+            
+            localStorage.removeItem(returnKey);
+            console.log(`✅ [qa-page] Processed and removed return flag: ${returnKey}`);
+            console.log('✅ [qa-page] GOLDEN TEMPLATE EDITING COMPLETE');
+            this.cdr.markForCheck();
+        }
         else {
              console.log('⚠️ [qa-page] Return flag found, but context is unclear or no edited template. Loading original.');
              this.loadOriginalTemplate(id);
         }
 
       } else {
-        console.log('🔍 [qa-page] No return flag or no edits - loading original template');
+        console.log('🔍 [qa-page] No return flag - checking for existing edits or loading original');
         
-        // DEFAULT BEHAVIOR: Always load the original template unless "Check Preview" was clicked.
-        const originalTemplate = this.templateState.getOriginalTemplate(id);
+        // Check what was being edited last time
+        const editingContext = this.templateState.getEditingContext(id);
+        console.log('🔍 [qa-page] Editing context:', editingContext);
         
-        console.log('🔍 [qa-page] Original template from state exists:', !!originalTemplate);
-        console.log('🔍 [qa-page] Original template length:', originalTemplate?.length || 0);
-        
-        if (originalTemplate) {
-          console.log('✅ [qa-page] Defaulting to ORIGINAL template from state (temp_1).');
-          this.templateHtml = originalTemplate;
-          this.templateLoading = false;
+        if (editingContext?.type === 'original') {
+          // User was editing original template - check if there are saved edits
+          const editedTemplateKey = `template_state_${id}_edited`;
+          const editedOriginalTemplate = localStorage.getItem(editedTemplateKey);
           
-          console.log('🔍 [qa-page] Set this.templateHtml to original, length:', this.templateHtml?.length || 0);
-          this.cdr.markForCheck();
+          console.log('🔍 [qa-page] Checking for edited original template:', editedTemplateKey);
+          console.log('🔍 [qa-page] Edited original exists:', !!editedOriginalTemplate);
+          
+          if (editedOriginalTemplate) {
+            console.log('✅ [qa-page] Loading EDITED original template (persisted from previous Check Preview)');
+            this.templateHtml = editedOriginalTemplate;
+            this.templateLoading = false;
+            this.cdr.markForCheck();
+          } else {
+            // No edits, load original
+            const originalTemplate = this.templateState.getOriginalTemplate(id);
+            if (originalTemplate) {
+              console.log('✅ [qa-page] Loading ORIGINAL template (no edits exist)');
+              this.templateHtml = originalTemplate;
+              this.templateLoading = false;
+              this.cdr.markForCheck();
+            } else {
+              this.loadOriginalTemplate(id);
+            }
+          }
         } else {
-          console.log('✅ [qa-page] No state found. Loading original from database for the first time.');
-          this.loadOriginalTemplate(id);
+          // No editing context or different context - load original
+          const originalTemplate = this.templateState.getOriginalTemplate(id);
+          
+          console.log('🔍 [qa-page] Original template from state exists:', !!originalTemplate);
+          console.log('🔍 [qa-page] Original template length:', originalTemplate?.length || 0);
+          
+          if (originalTemplate) {
+            console.log('✅ [qa-page] Loading ORIGINAL template from state (temp_1).');
+            this.templateHtml = originalTemplate;
+            this.templateLoading = false;
+            
+            console.log('🔍 [qa-page] Set this.templateHtml to original, length:', this.templateHtml?.length || 0);
+            this.cdr.markForCheck();
+          } else {
+            console.log('✅ [qa-page] No state found. Loading original from database for the first time.');
+            this.loadOriginalTemplate(id);
+          }
         }
       }
       
@@ -541,6 +610,16 @@ export class QaPageComponent implements OnDestroy {
 
   onGenerateGolden(id: string) {
     if (this.goldenLoading) return;
+    
+    // ✅ CRITICAL: Clear visual editor golden keys (fresh cycle)
+    // When regenerating golden, we want to start fresh and discard any previous edits
+    console.log('🧹 [onGenerateGolden] Clearing visual editor golden keys for fresh cycle');
+    localStorage.removeItem(`visual_editor_${id}_golden_html`);
+    localStorage.removeItem(`visual_editor_${id}_snapshot_html`);
+    localStorage.removeItem(`visual_editor_${id}_editing_mode`);
+    localStorage.removeItem(`visual_editor_${id}_failed_edits`);
+    localStorage.removeItem(`visual_editor_${id}_original_stats`);
+    console.log('✅ [onGenerateGolden] Visual editor keys cleared. Starting fresh golden generation.');
     
     this.goldenLoading = true;
     this.goldenAborted = false;
@@ -1250,43 +1329,70 @@ export class QaPageComponent implements OnDestroy {
   }
 
 navigateToVisualEditor(): void {
+  console.log('🟦🟦🟦 [GOLDEN EDIT] "Open Visual Editor" button clicked');
+  
   if (!this.templateId) {
+    console.error('❌ [GOLDEN EDIT] No templateId found');
     this.showError('Template ID not found');
     return;
   }
   
+  console.log('🟦 [GOLDEN EDIT] Template ID:', this.templateId);
+  
   const golden = this.goldenSubject.value;
   
+  console.log('🟦 [GOLDEN EDIT] Golden from goldenSubject.value:', golden);
+  console.log('🟦 [GOLDEN EDIT] Golden HTML exists?', !!golden?.html);
+  console.log('🟦 [GOLDEN EDIT] Golden HTML length:', golden?.html?.length || 0);
+  console.log('🟦 [GOLDEN EDIT] Golden HTML preview (first 200 chars):', golden?.html?.substring(0, 200));
+  
   if (!golden?.html) {
+    console.error('❌ [GOLDEN EDIT] No golden HTML found in goldenSubject');
     this.showError('Golden template not found. Please generate golden template first.');
     return;
   }
   
   // ✅ PERSIST: Save to localStorage (survives refresh)
   const goldenKey = `visual_editor_${this.templateId}_golden_html`;
+  console.log('🟦 [GOLDEN EDIT] Saving golden HTML to localStorage key:', goldenKey);
   localStorage.setItem(goldenKey, golden.html);
+  console.log('✅ [GOLDEN EDIT] Golden HTML saved to localStorage');
   
   // ✅ NEW: Save a SNAPSHOT of golden HTML BEFORE editing (for comparison)
   const snapshotKey = `visual_editor_${this.templateId}_snapshot_html`;
+  console.log('🟦 [GOLDEN EDIT] Saving snapshot to localStorage key:', snapshotKey);
   localStorage.setItem(snapshotKey, golden.html);
+  console.log('✅ [GOLDEN EDIT] Snapshot saved to localStorage');
   
   // ✅ CRITICAL: Set flag to indicate we're editing GOLDEN template
   const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
+  console.log('🟦 [GOLDEN EDIT] Setting editing mode to "golden"');
   localStorage.setItem(editingModeKey, 'golden');
+  
+  // ✅ VERIFICATION: Confirm it was saved
+  const verifyEditingMode = localStorage.getItem(editingModeKey);
+  console.log('✅ [GOLDEN EDIT] Editing mode set and verified:', verifyEditingMode);
+  console.log('🟦 [GOLDEN EDIT] localStorage key:', editingModeKey);
+  console.log('🟦 [GOLDEN EDIT] Verification result:', verifyEditingMode === 'golden' ? 'SUCCESS ✅' : 'FAILED ❌');
+  
+  // ✅ CRITICAL: Initialize golden editing context (sets editing context + clears old edits)
+  this.templateState.initializeGoldenForEditing(this.templateId, golden.html);
   
   // Save failed edits
   if (golden.failedEdits && golden.failedEdits.length > 0) {
     const failedKey = `visual_editor_${this.templateId}_failed_edits`;
+    console.log('🟦 [GOLDEN EDIT] Saving', golden.failedEdits.length, 'failed edits');
     localStorage.setItem(failedKey, JSON.stringify(golden.failedEdits));
   }
   
   // Save original stats
   if (golden.stats) {
     const statsKey = `visual_editor_${this.templateId}_original_stats`;
+    console.log('🟦 [GOLDEN EDIT] Saving original stats:', golden.stats);
     localStorage.setItem(statsKey, JSON.stringify(golden.stats));
   }
   
-  console.log('✅ [qa-page] Saved golden template to localStorage for visual editor');
+  console.log('🟦🟦🟦 [GOLDEN EDIT] All localStorage keys saved. Closing modal and navigating to visual editor...');
   this.closeVisualEditorModal();
   this.router.navigate(['/visual-editor', this.templateId]);
 }
@@ -1315,7 +1421,11 @@ private async handleVisualEditorReturn(
   console.log('🔍 [handleVisualEditorReturn] templateId:', templateId);
   console.log('🔍 [handleVisualEditorReturn] editedHtml length:', editedHtml.length);
   
-  // ✅ CRITICAL: Check editing mode flag (localStorage first, then sessionStorage)
+  // ✅ CRITICAL: Check editing CONTEXT (not editing mode) to determine if this is golden editing
+  const editingContext = this.templateState.getEditingContext(templateId);
+  console.log('🔍 [handleVisualEditorReturn] editingContext:', editingContext);
+  
+  // Also check editing mode flag for backwards compatibility
   const editingModeKey = `visual_editor_${templateId}_editing_mode`;
   let editingMode = localStorage.getItem(editingModeKey) || sessionStorage.getItem(editingModeKey);
   
@@ -1361,53 +1471,85 @@ private async handleVisualEditorReturn(
     }
   }
   
-  // 4. For each failed edit, check if it's fixed
-  const fixedEdits = failedEdits.filter(edit => {
-    const { find } = edit;
-    
-    // Check if "find" text is GONE from edited HTML
-    const isGoneFromEdited = !editedHtml.includes(find);
-    
-    // Check if "find" text still exists in original golden HTML
-    const isStillInOriginal = originalGoldenHtml.includes(find);
-    
-    // Consider it FIXED if it's gone from edited and still in original
-    return isGoneFromEdited && isStillInOriginal;
-  });
+  // 🔴 CRITICAL CHECK: Only update golden if editing mode is 'golden' OR editing context type is 'golden'
+  const isGoldenEditing = editingMode === 'golden' || editingContext?.type === 'golden';
   
-  // 5. Update stats and remaining failed edits
-  const appliedCount = fixedEdits.length;
-  const failedCount = failedEdits.length - appliedCount;
-  
-  console.log('🔍 [handleVisualEditorReturn] Applied fixes count:', appliedCount);
-  console.log('🔍 [handleVisualEditorReturn] Failed fixes count:', failedCount);
-  
-  // Update original stats if available
-  if (originalStats) {
-    originalStats.applied = (originalStats.applied || 0) + appliedCount;
-    originalStats.failed = (originalStats.failed || 0) + failedCount;
+  if (isGoldenEditing) {
+    console.log('✅✅✅ [handleVisualEditorReturn] Editing mode/context is GOLDEN - updating golden template');
+    console.log('🔍 [handleVisualEditorReturn] editingMode:', editingMode);
+    console.log('🔍 [handleVisualEditorReturn] editingContext:', editingContext);
+    console.log('🔍 [handleVisualEditorReturn] originalGoldenHtml length:', originalGoldenHtml.length);
+    console.log('🔍 [handleVisualEditorReturn] editedHtml length:', editedHtml.length);
+    console.log('🔍 [handleVisualEditorReturn] failedEdits:', failedEdits);
+    console.log('🔍 [handleVisualEditorReturn] originalStats:', originalStats);
     
-    // Update the stats in localStorage
-    localStorage.setItem(statsKey, JSON.stringify(originalStats));
+    // 4. For each failed edit, check if it's fixed
+    const fixedEdits = failedEdits.filter(edit => {
+      const { find } = edit;
+      
+      // Check if "find" text is GONE from edited HTML
+      const isGoneFromEdited = !editedHtml.includes(find);
+      
+      // Check if "find" text still exists in original golden HTML
+      const isStillInOriginal = originalGoldenHtml.includes(find);
+      
+      // Consider it FIXED if it's gone from edited and still in original
+      return isGoneFromEdited && isStillInOriginal;
+    });
+    
+    // 5. Update stats and remaining failed edits
+    const appliedCount = fixedEdits.length;
+    const failedCount = failedEdits.length - appliedCount;
+    
+    console.log('🔍 [handleVisualEditorReturn] Applied fixes count:', appliedCount);
+    console.log('🔍 [handleVisualEditorReturn] Failed fixes count:', failedCount);
+    console.log('🔍 [handleVisualEditorReturn] fixedEdits:', fixedEdits);
+    
+    // Update original stats if available
+    if (originalStats) {
+      originalStats.applied = (originalStats.applied || 0) + appliedCount;
+      originalStats.failed = (originalStats.failed || 0) + failedCount;
+      
+      // Update the stats in localStorage
+      localStorage.setItem(statsKey, JSON.stringify(originalStats));
+    }
+    
+    // 6. Update golden template with edited HTML
+    const updatedGolden: GoldenResult = {
+      html: editedHtml,
+      failedEdits: failedEdits.filter(edit => !fixedEdits.includes(edit)), // Remaining failed edits
+      stats: originalStats || { applied: appliedCount, failed: failedCount },
+      // Include other necessary fields...
+    };
+    
+    console.log('🔍 [handleVisualEditorReturn] updatedGolden:', {
+      htmlLength: updatedGolden.html.length,
+      failedEditsCount: updatedGolden.failedEdits?.length || 0,
+      stats: updatedGolden.stats
+    });
+    console.log('🔍 [handleVisualEditorReturn] Calling goldenSubject.next() with updatedGolden');
+    
+    this.goldenSubject.next(updatedGolden);
+    
+    console.log('🔍 [handleVisualEditorReturn] After goldenSubject.next(), current value:', this.goldenSubject.value);
+    console.log('🔍 [handleVisualEditorReturn] Saving to cache');
+    
+    this.qa.saveGoldenToCache(templateId, updatedGolden);
+    
+    console.log('🔍 [handleVisualEditorReturn] Updating button color');
+    
+    // 7. Update button color based on remaining failed edits
+    this.updateVisualEditorButtonColor(updatedGolden.failedEdits);
+    
+    console.log('✅✅✅ [handleVisualEditorReturn] Golden template updated and persisted.');
+  } else {
+    console.log('⚠️⚠️⚠️ [handleVisualEditorReturn] Editing mode is NOT golden:', editingMode);
+    console.log('⚠️ [handleVisualEditorReturn] Editing mode is NOT golden - skipping golden template update');
+    console.log('⚠️ [handleVisualEditorReturn] Original template was edited, golden template remains unchanged');
   }
-  
-  // 6. Update golden template with edited HTML
-  const updatedGolden: GoldenResult = {
-    html: editedHtml,
-    failedEdits: failedEdits.filter(edit => !fixedEdits.includes(edit)), // Remaining failed edits
-    stats: originalStats || { applied: appliedCount, failed: failedCount },
-    // Include other necessary fields...
-  };
-  
-  this.goldenSubject.next(updatedGolden);
-  this.qa.saveGoldenToCache(templateId, updatedGolden);
-  
-  // 7. Update button color based on remaining failed edits
-  this.updateVisualEditorButtonColor(updatedGolden.failedEdits);
   
   this.cdr.markForCheck();
   
-  console.log('✅ [handleVisualEditorReturn] Golden template updated and persisted.');
   console.log('🔍 [handleVisualEditorReturn] END');
 }
 
@@ -1467,6 +1609,12 @@ private async handleVisualEditorReturn(
     localStorage.removeItem(editedHtmlKey);
     localStorage.removeItem(progressKey);
 
+    // ✅ CRITICAL: Set editing mode to 'original' so auto-save routes correctly
+    const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
+    console.log('🟦 [EDIT ORIGINAL] Setting editing mode to "original"');
+    localStorage.setItem(editingModeKey, 'original');
+    console.log('✅ [EDIT ORIGINAL] Editing mode set to "original"');
+
     // Initialize the state with the current template on the screen.
     this.templateState.initializeOriginalTemplate(this.templateId, this.templateHtml);
     
@@ -1494,10 +1642,46 @@ private async handleVisualEditorReturn(
     localStorage.removeItem(editedHtmlKey);
     localStorage.removeItem(progressKey);
 
+    // ✅ CRITICAL: Set editing mode to 'variant' so auto-save routes correctly
+    const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
+    console.log('🟦 [EDIT VARIANT] Setting editing mode to "variant"');
+    localStorage.setItem(editingModeKey, 'variant');
+    console.log('✅ [EDIT VARIANT] Editing mode set to "variant"');
+
     // Initialize the state service for editing this specific variant.
     this.templateState.initializeVariantForEditing(this.templateId, runId, variantNo, variant.html);
     
     console.log(`🚀 [EDIT VARIANT] Navigating to visual editor for ID: ${this.templateId}`);
+    this.router.navigate(['/visual-editor', this.templateId]);
+  }
+
+  /**
+   * Edit the golden template in the visual editor
+   */
+  onEditGoldenTemplate(): void {
+    console.log('🎯 [EDIT GOLDEN] Button clicked for golden template');
+    
+    const goldenHtml = this.goldenSubject.value?.html;
+    
+    if (!this.templateId || !goldenHtml) {
+      console.error('❌ [EDIT GOLDEN] Aborted - missing templateId or golden HTML.');
+      return;
+    }
+
+    // CRITICAL: Clear all old localStorage flags before starting.
+    const returnKey = `visual_editor_${this.templateId}_return_flag`;
+    const editedHtmlKey = `visual_editor_${this.templateId}_edited_html`;
+    const progressKey = `visual_editor_${this.templateId}_progress`;
+
+    console.log(`🧹 [EDIT GOLDEN] Clearing old flags: ${returnKey}, ${editedHtmlKey}, and ${progressKey}`);
+    localStorage.removeItem(returnKey);
+    localStorage.removeItem(editedHtmlKey);
+    localStorage.removeItem(progressKey);
+
+    // Initialize the state service for editing golden template.
+    this.templateState.initializeGoldenForEditing(this.templateId, goldenHtml);
+    
+    console.log(`🚀 [EDIT GOLDEN] Navigating to visual editor for ID: ${this.templateId}`);
     this.router.navigate(['/visual-editor', this.templateId]);
   }
 
