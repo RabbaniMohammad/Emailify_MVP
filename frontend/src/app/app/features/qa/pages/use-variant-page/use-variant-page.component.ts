@@ -1366,12 +1366,24 @@ async onValidLinksUpload(e: Event) {
 }
   private consumeValidLinksRows(rows: any[][]) {
     if (!rows?.length) {
+      this.snackBar.open('No data found in the uploaded file', 'Close', {
+        duration: 5000,
+        horizontalPosition: 'center',
+        verticalPosition: 'bottom',
+        panelClass: ['snackbar-error']
+      });
       this.validLinksSubject.next([]);
       return;
     }
     const header = (rows[0] || []).map((c: any) => String(c ?? '').trim().toLowerCase());
-    const idx = header.findIndex(h => h === 'valid links');
+    const idx = header.findIndex(h => h === 'valid_links');
     if (idx < 0) {
+      this.snackBar.open('Missing "valid_links" column. Please ensure your file has a column named "valid_links"', 'Close', {
+        duration: 5000,
+        horizontalPosition: 'center',
+        verticalPosition: 'bottom',
+        panelClass: ['snackbar-error']
+      });
       this.validLinksSubject.next([]);
       return;
     }

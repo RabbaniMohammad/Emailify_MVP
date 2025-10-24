@@ -313,14 +313,13 @@
               </div>
               <div class="snap-info">
                 <div class="snap-url-container">
-                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <div class="snap-url-row">
                     <a [href]="getOriginalUrl(s)" target="_blank" class="snap-url">
                       {{ getOriginalUrl(s) }}
                     </a>
 
                   
                     <button 
-                      mat-icon-button 
                       class="edit-snap-btn"
                       (click)="onEditSnap(s)"
                       matTooltip="Edit URL">
@@ -371,7 +370,6 @@
 <!-- ✅ Retest button -->
 <!-- ✅ Retest button -->
 <button
-  mat-stroked-button
   class="retest-btn-inline"
   (click)="onRetestUrl(s, editUrlInput.value)"
   [disabled]="isSnapping(s)">
@@ -399,7 +397,6 @@
 <!-- Regular Retest button (when not in edit mode) -->
 <button
   *ngIf="!isSnapInEditMode(s)"
-  mat-button
   class="retest-btn"
   (click)="onRetestUrl(s)"
   [disabled]="isSnapping(s)">
@@ -421,8 +418,8 @@
         <!-- REPLACE the .col-header div in screenshots-col with this: -->
 <div class="col-header">
   <h4>
-    <span class="header-text-full">Link Screenshots</span>
-    <span class="header-text-short">Link</span>
+    <span class="header-text-full">Link Matrix Check</span>
+    <span class="header-text-short">Matrix</span>
   </h4>
   
   <!-- Move submit button INSIDE col-header
@@ -449,7 +446,7 @@
                 <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
               </svg>
               <span>Upload CSV/Excel</span>
-              <small>Must have "valid links" column</small>
+              <small>Must have "valid_links" column</small>
             </div>
           </label>
 
