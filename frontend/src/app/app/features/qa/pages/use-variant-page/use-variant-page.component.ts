@@ -367,10 +367,74 @@ constructor() {
           this.loadingTimeout = undefined;
         }
         
-        this.cdr.markForCheck();
+        this.cdr.detectChanges(); // ✅ FORCE update
         
         // ✅ CRITICAL: Return early - don't run priority checks
         return;
+      }
+    }
+
+    // ✅ PRIORITY 0.5: Check sessionStorage for synthetic runs (skip/bypass original & golden templates)
+    const syntheticKey = `synthetic_run_${runId}`;
+    const syntheticRaw = sessionStorage.getItem(syntheticKey);
+    
+    if (syntheticRaw) {
+      try {
+        console.log('⚡ [use-variant] PRIORITY 0.5: Found synthetic run in sessionStorage for runId:', runId);
+        const syntheticRun = JSON.parse(syntheticRaw);
+        const item = syntheticRun.items?.find((it: any) => it.no === no);
+        
+        if (item?.html) {
+          console.log('✅ [use-variant] Loading synthetic run, HTML length:', item.html.length);
+          
+          // Check if already saved to localStorage
+          const cachedThread = this.qa.getChatCached(runId, no);
+          if (!cachedThread?.html) {
+            // First time loading synthetic run - create intro message
+            const intro: ChatTurn = {
+              role: 'assistant',
+              text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor if replacement didn't happen\n\nWhat would you like to improve?",
+              json: null,
+              ts: Date.now(),
+            };
+            const thread: ChatThread = { html: item.html, messages: [intro] };
+            this.messagesSubject.next(thread.messages);
+            this.qa.saveChat(runId, no, thread);
+          } else {
+            // Already cached - restore from localStorage
+            this.messagesSubject.next(cachedThread.messages || []);
+          }
+          
+          this.htmlSubject.next(item.html);
+          this.snapsSubject.next(await this.qa.getSnapsCached(runId));
+          this.validLinksSubject.next(this.qa.getValidLinks(runId));
+          
+          // ✅ RESTORE cached data
+          const cachedSubjects = this.qa.getSubjectsCached(runId);
+          if (cachedSubjects?.length) {
+            this.subjectsSubject.next(cachedSubjects);
+            this.subjectsLoading = false;
+          }
+          
+          const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
+          if (cachedGrammar) {
+            this.grammarCheckResultSubject.next(cachedGrammar);
+          }
+          
+          this.loadingVariant = false;
+          if (this.loadingTimeout) {
+            clearTimeout(this.loadingTimeout);
+            this.loadingTimeout = undefined;
+          }
+          
+          console.log('✅ [use-variant] Synthetic run loaded successfully');
+          this.cdr.detectChanges(); // ✅ FORCE update
+          this.positionChatAtBottom();
+          return;
+        }
+      } catch (error) {
+        console.error('❌ Error loading synthetic run:', error);
+        // Fall through to normal loading
       }
     }
 

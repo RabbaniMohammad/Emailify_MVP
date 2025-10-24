@@ -162,6 +162,14 @@ export class QaPageComponent implements OnDestroy {
   readonly golden$ = this.goldenSubject.asObservable();
   goldenLoading = false;
 
+  // ✅ Store skipped edits separately for display in modal
+  skippedEdits: Array<{
+    find?: string;
+    replace?: string;
+    reason?: string;
+    status?: string;
+  }> = [];
+
   showVisualEditorModal = false;
   visualEditorButtonColor: 'orange' | 'red' | 'green' = 'orange';
   shouldShake = false;
@@ -655,6 +663,22 @@ export class QaPageComponent implements OnDestroy {
         }
         
         this.goldenSubject.next(res);
+        
+        // ✅ Extract skipped edits from atomicResults
+        if (res.atomicResults && Array.isArray(res.atomicResults)) {
+          this.skippedEdits = res.atomicResults
+            .filter((r: any) => r.status === 'skipped')
+            .map((r: any) => ({
+              find: r.edit?.find,
+              replace: r.edit?.replace,
+              reason: r.reason,
+              status: r.status
+            }));
+          console.log('⏭️ [GOLDEN] Extracted skipped edits:', this.skippedEdits.length);
+        } else {
+          this.skippedEdits = [];
+        }
+        
         this.updateVisualEditorButtonColor(res.failedEdits);
         
         if (res.failedEdits && res.failedEdits.length > 0) {
@@ -1211,9 +1235,48 @@ export class QaPageComponent implements OnDestroy {
       });
   }
 
-  onUseVariant(templateId: string, runId: string, no: number) {
-    // ✅ NO CLEARING - preserve all chat, snaps, and link matrix data
-    // Data is already saved to localStorage and will persist on navigation/refresh
+  async onUseVariant(templateId: string, runId: string, no: number) {
+    // ✅ CRITICAL FIX: Pre-save variant to localStorage BEFORE navigation (same as Golden/Original)
+    console.log('🎯 [onUseVariant] Preparing variant for navigation - runId:', runId, 'no:', no);
+    
+    try {
+      // Get the variant run from memory cache
+      const run = await this.qa.getVariantsRunById(runId);
+      const variant = run?.items?.find(it => it.no === no);
+      
+      if (variant?.html) {
+        console.log('✅ [onUseVariant] Found variant HTML, length:', variant.html.length);
+        
+        // Check if already cached
+        const cached = this.qa.getChatCached(runId, no);
+        
+        if (!cached?.html) {
+          console.log('💾 [onUseVariant] Pre-saving variant to localStorage for seamless navigation');
+          
+          // Create intro message (same as Golden/Original)
+          const intro = {
+            role: 'assistant' as const,
+            text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor if replacement didn't happen\n\nWhat would you like to improve?",
+            json: null,
+            ts: Date.now(),
+          };
+          
+          // ✅ SAVE to localStorage BEFORE navigation (CRITICAL!)
+          const thread = { html: variant.html, messages: [intro] };
+          this.qa.saveChat(runId, no, thread);
+          console.log('✅ [onUseVariant] Variant saved to localStorage successfully');
+        } else {
+          console.log('✅ [onUseVariant] Variant already cached in localStorage');
+        }
+      } else {
+        console.warn('⚠️ [onUseVariant] Variant HTML not found in memory cache');
+      }
+    } catch (error) {
+      console.error('❌ [onUseVariant] Error pre-saving variant:', error);
+      // Continue with navigation anyway - use-variant-page will try to load from API
+    }
+    
+    // Navigate (data is now in localStorage, guaranteed to load)
     this.router.navigate(['/qa', templateId, 'use', runId, no]);
   }
 
