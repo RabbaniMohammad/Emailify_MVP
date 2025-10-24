@@ -3260,6 +3260,7 @@
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  animation: none !important; /* Disable fade animation on parent */
   
   .modal-backdrop {
     position: absolute;
@@ -3267,6 +3268,7 @@
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(8px);
     cursor: pointer;
+    animation: none !important; /* Instant blur, no fade */
   }
   
   .modal-container {
