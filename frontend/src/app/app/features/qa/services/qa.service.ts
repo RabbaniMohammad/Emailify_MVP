@@ -168,37 +168,38 @@ export class QaService {
 
   /* ------------------- Golden / Subjects / Suggestions ------------------- */
   
-  getGoldenCached(id: string): Promise<GoldenResult | null> {
+  async getGoldenCached(id: string): Promise<GoldenResult | null> {
     try {
-      console.log('📖 [qa.service] Reading golden template from localStorage');
-      console.log('   - Template ID:', id);
-      console.log('   - Key:', this.kGolden(id));
-      
-      const raw = localStorage.getItem(this.kGolden(id));
-      if (raw) {
-        console.log('✅ [qa.service] Found cached golden template');
-        console.log('   - Raw data length:', raw.length);
-        
-        const cached = JSON.parse(raw);
-        const result: GoldenResult = {
-          html: cached.html || '',
-          changes: cached.changes || [],
-          failedEdits: cached.failedEdits || [],
-          stats: cached.stats || { applied: 0, failed: 0, total: 0 }
-        };
-        
-        console.log('   - HTML length:', result.html.length);
-        console.log('   - Failed edits:', result.failedEdits?.length || 0);
-        console.log('   - Stats:', result.stats);
-        
-        return Promise.resolve(result);
+      // ✅ Try IndexedDB first
+      const cached = await this.db.getGolden(id);
+      if (cached) {
+        return {
+          html: cached.html,
+          changes: cached.changes,
+          failedEdits: cached.failedEdits || []
+        } as GoldenResult;
       }
       
-      console.log('⚠️ [qa.service] No cached golden template found');
-      return Promise.resolve(null);
-    } catch (error) {
-      console.error('❌ [qa.service] Failed to read golden template from localStorage:', error);
-      return Promise.resolve(null);
+      // Fallback to localStorage for migration
+      const raw = localStorage.getItem(this.kGolden(id));
+      if (raw) {
+        const result = JSON.parse(raw) as GoldenResult;
+        // Migrate to IndexedDB
+        await this.db.cacheGolden({
+          templateId: id,
+          html: result.html || '',
+          changes: result.changes || [],
+          failedEdits: result.failedEdits || [],
+          timestamp: Date.now()
+        });
+        // Clean up localStorage
+        localStorage.removeItem(this.kGolden(id));
+        return result;
+      }
+      
+      return null;
+    } catch {
+      return null;
     }
   }
   
@@ -802,31 +803,8 @@ export class QaService {
   }
 
   saveGoldenToCache(templateId: string, golden: GoldenResult): void {
-    // ✅ Save to localStorage for persistence across page loads/refreshes
-    try {
-      console.log('💾 [qa.service] Saving golden template to localStorage');
-      console.log('   - Template ID:', templateId);
-      console.log('   - Key:', this.kGolden(templateId));
-      console.log('   - HTML length:', golden.html?.length || 0);
-      console.log('   - Failed edits:', golden.failedEdits?.length || 0);
-      console.log('   - Stats:', golden.stats);
-      
-      const cacheData = {
-        html: golden.html || '',
-        changes: golden.changes || [],
-        failedEdits: golden.failedEdits || [],
-        stats: golden.stats || { applied: 0, failed: 0, total: 0 },
-        timestamp: Date.now()
-      };
-      
-      localStorage.setItem(this.kGolden(templateId), JSON.stringify(cacheData));
-      
-      console.log('✅ [qa.service] Golden template saved to localStorage successfully');
-      console.log('   - Saved to key:', this.kGolden(templateId));
-      console.log('   - Data preview:', JSON.stringify(cacheData).substring(0, 200) + '...');
-    } catch (error) {
-      console.error('❌ [qa.service] Failed to save golden template to localStorage:', error);
-    }
+    // 🔥 REMOVED localStorage - golden templates are now cached to IndexedDB
+    // See the tap() in getGolden() which calls db.cacheTemplate()
   }
 
   saveValidLinks(runId: string, links: string[]) {

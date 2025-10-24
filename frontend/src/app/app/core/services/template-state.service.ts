@@ -54,17 +54,12 @@ export class TemplateStateService {
     localStorage.setItem(this.ORIGINAL_KEY(templateId), originalHtml);
     this.debugLogger.logStorage('SET', this.ORIGINAL_KEY(templateId), { length: originalHtml.length });
     
-    // ✅ CRITICAL FIX: Clear ALL editing state to prevent leakage
-    // NOTE: We do NOT clear visual_editor_*_editing_mode because it was just set by the caller!
+    // ✅ CRITICAL FIX: Clear ONLY original template editing state
+    // NOTE: We do NOT clear golden template keys - they must remain isolated!
     const keysToRemove = [
       this.EDITED_KEY(templateId),
       this.EDITOR_PROGRESS_KEY(templateId),
       this.TRUE_ORIGINAL_KEY(templateId),
-      `visual_editor_${templateId}_golden_html`,
-      `visual_editor_${templateId}_progress`,
-      `visual_editor_${templateId}_snapshot_html`,
-      `visual_editor_${templateId}_failed_edits`,
-      `visual_editor_${templateId}_original_stats`,
       `visual_editor_${templateId}_return_flag`,
       `visual_editor_${templateId}_edited_html`
     ];
@@ -166,11 +161,11 @@ export class TemplateStateService {
     });
 
     // ✅ CRITICAL FIX: Clear ALL previous editing state to prevent leakage from original template edits
+    // NOTE: We do NOT clear visual_editor_${templateId}_golden_html because we just saved it above!
     const keysToRemove = [
       this.EDITED_KEY(templateId),
       this.EDITOR_PROGRESS_KEY(templateId),
-      `visual_editor_${templateId}_progress`,
-      `visual_editor_${templateId}_golden_html`  // ✅ CRITICAL: Clear old golden edits!
+      `visual_editor_${templateId}_progress`
     ];
     
     keysToRemove.forEach(key => {
@@ -390,49 +385,59 @@ export class TemplateStateService {
     
     const fullHtml = css ? `<style>${css}</style>${editedHtml}` : editedHtml;
     
-    // ✅ CRITICAL FIX: Check editing context to determine where to save
-    const editingContext = this.getEditingContext(templateId);
-    console.log('🔍 [saveEditedTemplate] editingContext:', editingContext);
-    
-    if (editingContext?.type === 'golden') {
-      // ✅ Save golden template edits to golden-specific key
-      const goldenKey = `visual_editor_${templateId}_golden_html`;
-      localStorage.setItem(goldenKey, fullHtml);
-      console.log('✅ [TemplateState] Saved GOLDEN template edits to:', goldenKey);
-      console.log('   - Saved HTML length:', fullHtml.length);
-      console.log('   - Saved HTML preview (first 200 chars):', fullHtml.substring(0, 200));
-      
-      // Also save to edited_html key for check preview flow
-      const editedHtmlKey = `visual_editor_${templateId}_edited_html`;
-      localStorage.setItem(editedHtmlKey, fullHtml);
-      console.log('✅ [TemplateState] Also saved to edited_html key for check preview flow');
-    } else {
-      // ✅ Save original/variant template edits to standard edited key
-      localStorage.setItem(this.EDITED_KEY(templateId), fullHtml);
-      console.log('✅ [TemplateState] Saved ORIGINAL template edits (temp_edit)');
-    }
+    // Save edited version
+    localStorage.setItem(this.EDITED_KEY(templateId), fullHtml);
     
     // Update state flag to 'edited'
     localStorage.setItem(this.STATE_FLAG_KEY(templateId), 'edited');
     
-    console.log('✅ [TemplateState] Saved edited template - context:', editingContext?.type || 'original');
+    console.log('✅ [TemplateState] Saved edited template (temp_edit)');
   }
   
   /**
    * Save editor progress (auto-save during editing)
    * This is separate from edited template for finer control
+   * 
+   * ✅ CRITICAL: Routes to correct storage key based on editing mode
    */
   saveEditorProgress(templateId: string, html: string, css: string): void {
-    const editorState = {
-      html,
-      css,
-      savedAt: new Date().toISOString()
-    };
+    console.log('💾 [TemplateState] saveEditorProgress called for:', templateId);
     
-    localStorage.setItem(this.EDITOR_PROGRESS_KEY(templateId), JSON.stringify(editorState));
+    // ✅ CRITICAL: Check BOTH editing context AND mode flag to route to correct storage
+    const editingContext = this.getEditingContext(templateId);
+    const editingMode = localStorage.getItem(`visual_editor_${templateId}_editing_mode`);
+    console.log('🔍 [TemplateState] Editing context:', editingContext);
+    console.log('🔍 [TemplateState] Editing mode flag:', editingMode);
     
-    // Also update the edited template
-    this.saveEditedTemplate(templateId, html, css);
+    // Check BOTH for maximum reliability (context is more reliable than flag)
+    if (editingContext?.type === 'golden' || editingMode === 'golden') {
+      // ✅ GOLDEN TEMPLATE: Save to golden-specific keys
+      console.log('✅ [TemplateState] Saving GOLDEN template edits');
+      const fullHtml = css ? `<style>${css}</style>${html}` : html;
+      
+      // Save to golden key (used by getCurrentTemplate)
+      localStorage.setItem(`visual_editor_${templateId}_golden_html`, fullHtml);
+      console.log('   - Saved to: visual_editor_' + templateId + '_golden_html');
+      
+      // Also save to edited_html key (used by check preview flow)
+      localStorage.setItem(`visual_editor_${templateId}_edited_html`, fullHtml);
+      console.log('   - Saved to: visual_editor_' + templateId + '_edited_html');
+      
+    } else {
+      // ✅ ORIGINAL/VARIANT TEMPLATE: Save to standard keys
+      console.log('✅ [TemplateState] Saving ORIGINAL/VARIANT template edits');
+      const editorState = {
+        html,
+        css,
+        savedAt: new Date().toISOString()
+      };
+      
+      localStorage.setItem(this.EDITOR_PROGRESS_KEY(templateId), JSON.stringify(editorState));
+      console.log('   - Saved to:', this.EDITOR_PROGRESS_KEY(templateId));
+      
+      // Also update the edited template
+      this.saveEditedTemplate(templateId, html, css);
+    }
   }
   
   /**
