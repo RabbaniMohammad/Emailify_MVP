@@ -1064,6 +1064,201 @@
       p { font-size: 0.9375rem; }
     }
   }
+
+  // ✅ Responsive loader for mobile
+  .advanced-loader {
+    .loader-spinner {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 1.5rem;
+    }
+
+    .loader-text {
+      h4 {
+        font-size: 1.125rem;
+      }
+
+      p {
+        font-size: 0.875rem;
+        margin: 0 0 1rem 0;
+      }
+
+      .progress-indicator {
+        max-width: 250px;
+
+        .progress-bar {
+          height: 6px;
+        }
+      }
+    }
+  }
+}
+
+// ============================================================================
+// RESPONSIVE LOADER FOR ALL SCREEN SIZES & ORIENTATIONS
+// ============================================================================
+
+// Tablet and smaller
+@media (max-width: 1024px) {
+  .advanced-loader {
+    .loader-spinner {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 2rem;
+    }
+
+    .loader-text {
+      h4 {
+        font-size: 1.25rem;
+      }
+
+      p {
+        font-size: 0.9375rem;
+      }
+
+      .progress-indicator {
+        max-width: 300px;
+      }
+    }
+  }
+}
+
+// Small tablets and large phones
+@media (max-width: 768px) {
+  .advanced-loader {
+    padding: 0.5rem;
+
+    .loader-spinner {
+      width: 70px;
+      height: 70px;
+      margin: 0 auto 1.5rem;
+
+      .spinner-outer,
+      .spinner-inner,
+      .spinner-core {
+        border-width: 3px;
+      }
+    }
+
+    .loader-text {
+      h4 {
+        font-size: 1.125rem;
+        margin: 0 0 0.5rem 0;
+      }
+
+      p {
+        font-size: 0.875rem;
+        margin: 0 0 1.25rem 0;
+      }
+
+      .progress-indicator {
+        max-width: 280px;
+      }
+    }
+  }
+}
+
+// Portrait mode on phones and small screens
+@media (max-width: 480px), (max-height: 600px) {
+  .advanced-loader {
+    padding: 0.5rem;
+
+    .loader-spinner {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 1rem;
+
+      .spinner-outer,
+      .spinner-inner,
+      .spinner-core {
+        border-width: 2px;
+      }
+    }
+
+    .loader-text {
+      h4 {
+        font-size: 1rem;
+        margin: 0 0 0.375rem 0;
+      }
+
+      p {
+        font-size: 0.8125rem;
+        margin: 0 0 1rem 0;
+      }
+
+      .progress-indicator {
+        max-width: 220px;
+
+        .progress-bar {
+          height: 5px;
+        }
+      }
+    }
+  }
+}
+
+// Landscape mode on phones (width > height and small height)
+@media (max-height: 500px) and (orientation: landscape) {
+  .advanced-loader {
+    padding: 0.5rem;
+
+    .loader-spinner {
+      width: 50px;
+      height: 50px;
+      margin: 0 auto 0.75rem;
+
+      .spinner-outer,
+      .spinner-inner,
+      .spinner-core {
+        border-width: 2px;
+      }
+    }
+
+    .loader-text {
+      h4 {
+        font-size: 0.9375rem;
+        margin: 0 0 0.25rem 0;
+      }
+
+      p {
+        font-size: 0.75rem;
+        margin: 0 0 0.75rem 0;
+      }
+
+      .progress-indicator {
+        max-width: 200px;
+
+        .progress-bar {
+          height: 4px;
+        }
+      }
+    }
+  }
+}
+
+// Very small screens (extra small phones)
+@media (max-width: 360px) {
+  .advanced-loader {
+    .loader-spinner {
+      width: 50px;
+      height: 50px;
+      margin: 0 auto 0.875rem;
+    }
+
+    .loader-text {
+      h4 {
+        font-size: 0.9375rem;
+      }
+
+      p {
+        font-size: 0.75rem;
+      }
+
+      .progress-indicator {
+        max-width: 180px;
+      }
+    }
+  }
 }
 
 // ============================================================================
