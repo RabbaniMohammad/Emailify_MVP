@@ -1,51 +1,56 @@
-# ✅ Verification Summary Stats Persistence Fix
+# ✅ Verification Summary & Performance Metrics Persistence Fix
 
 ## Problem
-The **Verification Summary** component (showing `total`, `applied`, `failed` edit counts) was **NOT persisting** across:
+The **Verification Summary** component (showing `total`, `applied`, `failed` edit counts) and **Performance Metrics** (showing timing data) were **NOT persisting** across:
 - ❌ Page refreshes
 - ❌ Navigation between pages
 - ❌ Browser restarts
 
-The stats only existed in memory in the `goldenSubject` BehaviorSubject and were lost when the component reloaded.
+The stats and timings only existed in memory in the `goldenSubject` BehaviorSubject and were lost when the component reloaded.
 
 ---
 
 ## Solution
-Added **localStorage persistence** for verification stats using the key pattern `qa:stats:${templateId}`.
+Added **localStorage persistence** for both verification stats and performance timings using key patterns:
+- `qa:stats:${templateId}` - For verification summary
+- `qa:timings:${templateId}` - For performance metrics
 
 ---
 
 ## Changes Made
 
-### 1. **qa.service.ts** - Added stats localStorage key
+### 1. **qa.service.ts** - Added localStorage keys
 ```typescript
-private kStats(id: string) { return `qa:stats:${id}`; }  // ✅ NEW
+private kStats(id: string)   { return `qa:stats:${id}`; }    // ✅ Verification stats
+private kTimings(id: string) { return `qa:timings:${id}`; }  // ✅ Performance metrics
 ```
 
-### 2. **qa.service.ts** - Updated `getGoldenCached()` to load stats
+### 2. **qa.service.ts** - Updated `getGoldenCached()` to load stats & timings
 ```typescript
 async getGoldenCached(id: string): Promise<GoldenResult | null> {
   const cached = await this.db.getGolden(id);
   if (cached) {
     // ✅ Load stats from localStorage
     const statsJson = localStorage.getItem(this.kStats(id));
-    let stats = null;
-    if (statsJson) {
-      stats = JSON.parse(statsJson);
-    }
+    let stats = statsJson ? JSON.parse(statsJson) : null;
+    
+    // ✅ Load timings from localStorage
+    const timingsJson = localStorage.getItem(this.kTimings(id));
+    let timings = timingsJson ? JSON.parse(timingsJson) : null;
     
     return {
       html: cached.html,
       changes: cached.changes,
       failedEdits: cached.failedEdits || [],
-      stats: stats  // ✅ Include stats
+      stats: stats,      // ✅ Include stats
+      timings: timings   // ✅ Include timings
     } as GoldenResult;
   }
   // ...
 }
 ```
 
-### 3. **qa.service.ts** - Updated `fetchGoldenFromAPI()` to save stats
+### 3. **qa.service.ts** - Updated `fetchGoldenFromAPI()` to save stats & timings
 ```typescript
 tap(async res => {
   // Save to IndexedDB...
@@ -53,12 +58,16 @@ tap(async res => {
   // ✅ Save stats to localStorage
   if (res.stats) {
     localStorage.setItem(this.kStats(id), JSON.stringify(res.stats));
-    console.log('✅ [qa.service] Saved stats to localStorage:', res.stats);
+  }
+  
+  // ✅ Save timings to localStorage
+  if (res.timings) {
+    localStorage.setItem(this.kTimings(id), JSON.stringify(res.timings));
   }
 })
 ```
 
-### 4. **qa.service.ts** - Updated `saveGoldenToCache()` to save stats
+### 4. **qa.service.ts** - Updated `saveGoldenToCache()` to save stats & timings
 ```typescript
 saveGoldenToCache(templateId: string, golden: GoldenResult): void {
   // Save to IndexedDB...
@@ -66,7 +75,11 @@ saveGoldenToCache(templateId: string, golden: GoldenResult): void {
   // ✅ Save stats to localStorage
   if (golden.stats) {
     localStorage.setItem(this.kStats(templateId), JSON.stringify(golden.stats));
-    console.log('✅ [qa.service] Saved stats to localStorage:', golden.stats);
+  }
+  
+  // ✅ Save timings to localStorage
+  if (golden.timings) {
+    localStorage.setItem(this.kTimings(templateId), JSON.stringify(golden.timings));
   }
 }
 ```
@@ -76,21 +89,24 @@ saveGoldenToCache(templateId: string, golden: GoldenResult): void {
 ## Data Flow
 
 ### When Golden Template is Generated:
-1. API returns `GoldenResult` with `stats` object
+1. API returns `GoldenResult` with `stats` and `timings` objects
 2. **IndexedDB** stores: `html`, `changes`, `failedEdits`
-3. **localStorage** stores: `stats` → `qa:stats:${templateId}`
+3. **localStorage** stores: 
+   - `stats` → `qa:stats:${templateId}`
+   - `timings` → `qa:timings:${templateId}`
 
 ### When User Returns from Visual Editor:
-1. Updated `golden` with new stats is created
+1. Updated `golden` with new stats/timings is created
 2. `qa.saveGoldenToCache()` is called
-3. Stats are saved to localStorage
-4. Stats persist across refresh
+3. Stats and timings are saved to localStorage
+4. Data persists across refresh
 
 ### When Page Loads/Refreshes:
 1. `getGoldenCached()` loads from IndexedDB
 2. Stats loaded from localStorage `qa:stats:${templateId}`
-3. Combined result returned with all data
-4. Verification Summary displays correctly
+3. Timings loaded from localStorage `qa:timings:${templateId}`
+4. Combined result returned with all data
+5. Both components display correctly
 
 ---
 
@@ -101,13 +117,15 @@ saveGoldenToCache(templateId: string, golden: GoldenResult): void {
 | Golden HTML | IndexedDB | `goldenTemplates` | ✅ Yes |
 | Applied Edits | IndexedDB | `goldenTemplates.changes` | ✅ Yes |
 | Failed Edits | IndexedDB | `goldenTemplates.failedEdits` | ✅ Yes |
-| **Verification Stats** | **localStorage** | **`qa:stats:${templateId}`** | **✅ Yes (NEW)** |
+| **Verification Stats** | **localStorage** | **`qa:stats:${templateId}`** | **✅ Yes** |
+| **Performance Timings** | **localStorage** | **`qa:timings:${templateId}`** | **✅ Yes** |
 | Variants | IndexedDB + localStorage | `variantsRuns` + `qa:variants:*` | ✅ Yes |
 
 ---
 
-## Verification Stats Object Structure
+## Data Structures
 
+### Verification Stats Object
 ```typescript
 {
   total: number,      // Total edits attempted
@@ -118,51 +136,79 @@ saveGoldenToCache(templateId: string, golden: GoldenResult): void {
 }
 ```
 
+### Performance Timings Object
+```typescript
+{
+  total: number,         // Total processing time (ms)
+  parsing: number,       // HTML parsing time (ms)
+  processing: number,    // Edit processing time (ms)
+  verification: number   // Verification time (ms)
+}
+```
+
+---
+
+## UI Components Now Persistent
+
+### ✅ Verification Summary
+- **1 TOTAL** - Total edits count
+- **1 APPLIED** - Applied edits count
+- **0 FAILED** - Failed edits count
+
+### ✅ Performance Metrics (Debug Mode)
+- **Total: 8ms** - Total processing time
+- **Parsing: 0ms** - HTML parsing time
+- **Processing: 7ms** - Edit processing time
+- **Verification: 1ms** - Verification time
+
 ---
 
 ## Cleanup
 
-Stats are automatically cleaned up when:
+Stats and timings are automatically cleaned up when:
 - User logs out → `clearAllQaData()` removes all `qa:*` keys
-- Template is deleted → Stats key removed with template
-- Cache expiration → Old stats cleaned with template data
+- Template is deleted → Keys removed with template
+- Cache expiration → Old data cleaned with template
 
 ---
 
 ## Testing Checklist
 
-✅ **Test 1: Generate Golden Template**
-- Click "Run Tests"
-- Wait for golden template generation
-- Verify Verification Summary shows correct counts
+✅ **Test 1: Verification Summary Persistence**
+- Generate golden template
+- Note stats (e.g., "1 TOTAL, 1 APPLIED")
 - **Refresh page** → Stats should persist ✅
 
-✅ **Test 2: Edit in Visual Editor**
-- Click "Edit Golden"
-- Make changes in visual editor
-- Click "Check Preview"
-- Verify stats update correctly
-- **Navigate away and back** → Stats should persist ✅
-
-✅ **Test 3: Multiple Templates**
-- Work with Template A → Generate golden
-- Switch to Template B → Generate golden
-- **Navigate back to Template A** → Stats should be Template A's stats ✅
-- **Navigate to Template B** → Stats should be Template B's stats ✅
-
-✅ **Test 4: Browser Restart**
+✅ **Test 2: Performance Metrics Persistence**
+- Enable debug mode (click bug icon)
 - Generate golden template
-- Note the stats (e.g., "1 TOTAL, 1 APPLIED")
+- Note timings (e.g., "Total: 8ms, Processing: 7ms")
+- **Refresh page** → Timings should persist ✅
+
+✅ **Test 3: Navigate Away and Back**
+- Generate golden template
+- Navigate to another page
+- **Navigate back** → Both stats and timings should persist ✅
+
+✅ **Test 4: Visual Editor Round Trip**
+- Generate golden template
+- Edit in visual editor
+- Return via "Check Preview"
+- **Verify** stats and timings update correctly ✅
+
+✅ **Test 5: Browser Restart**
+- Generate golden template
+- Note both stats and timings
 - **Close browser completely**
-- **Reopen and navigate to QA page** → Stats should persist ✅
+- **Reopen** → Both should persist ✅
 
 ---
 
 ## Migration
 
-Old templates without stats:
-- Will show `0` values initially
-- Once regenerated or edited, stats will be saved
+Old templates without stats/timings:
+- Will show `0` values or hide components initially
+- Once regenerated or edited, data will be saved
 - No data loss - backward compatible ✅
 
 ---
@@ -172,4 +218,4 @@ Old templates without stats:
 
 ---
 
-**Status:** ✅ COMPLETE - Verification Summary now persists across all navigation and refreshes!
+**Status:** ✅ COMPLETE - Both Verification Summary AND Performance Metrics now persist across all navigation and refreshes!

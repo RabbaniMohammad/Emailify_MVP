@@ -330,10 +330,19 @@ export class DatabaseService extends Dexie {
 
   async clearAllCache(): Promise<void> {
     try {
+      console.log('🧹 [DB] Clearing ALL IndexedDB tables on logout...');
+      
       await this.templates.clear();
       await this.conversations.clear();
       await this.validLinks.clear();
+      await this.screenshots.clear();
       
+      // ✅ CRITICAL: Clear QA-specific tables
+      await this.goldenTemplates.clear();
+      await this.suggestions.clear();
+      await this.variantsRuns.clear();
+      
+      console.log('✅ [DB] All IndexedDB tables cleared successfully');
     } catch (error) {
       console.error('❌ [DB] Failed to clear cache:', error);
     }

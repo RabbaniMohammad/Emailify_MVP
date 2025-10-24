@@ -485,15 +485,23 @@ export class QaService {
    */
   clearAllQaData(): void {
     try {
+      console.log('🧹 [qa.service] Clearing ALL QA data on logout...');
+      
       // Get all localStorage keys
       const keysToRemove: string[] = [];
       
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith('qa:')) {
+        if (key && (
+          key.startsWith('qa:') ||              // QA data
+          key.startsWith('template_state_') ||  // Template state
+          key.startsWith('visual_editor_')      // Visual editor data
+        )) {
           keysToRemove.push(key);
         }
       }
+      
+      console.log(`🧹 [qa.service] Found ${keysToRemove.length} keys to remove`);
       
       // Remove all QA keys
       keysToRemove.forEach(key => localStorage.removeItem(key));
@@ -503,8 +511,9 @@ export class QaService {
       this.subjectsCache$.clear();
       this.suggestionsCache$.clear();
       
+      console.log('✅ [qa.service] All QA localStorage data cleared');
     } catch (e) {
-      console.error('Failed to clear QA data:', e);
+      console.error('❌ [qa.service] Failed to clear QA data:', e);
     }
   }
 
