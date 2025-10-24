@@ -35,10 +35,10 @@ export class AuthCallbackComponent implements OnInit {
       if (window.opener) {
         window.close();
       } else {
-        // Navigate to home if opened in main window
+        // Navigate to home if opened in main window - replaceUrl to avoid back button going to callback
         const returnUrl = sessionStorage.getItem('auth_return_url') || '/';
         sessionStorage.removeItem('auth_return_url');
-        this.router.navigate([returnUrl]);
+        this.router.navigate([returnUrl], { replaceUrl: true });
       }
     } else {
       this.router.navigate(['/auth'], { queryParams: { error: 'callback_failed' } });

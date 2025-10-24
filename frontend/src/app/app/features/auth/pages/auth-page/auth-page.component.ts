@@ -34,7 +34,8 @@ export class AuthPageComponent implements OnInit, OnDestroy {
     this.authService.isAuthenticated$.subscribe(isAuth => {
       if (isAuth) {
         const returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/';
-        this.router.navigate([returnUrl]);
+        // ✅ Use replaceUrl to prevent back button returning to login page
+        this.router.navigate([returnUrl], { replaceUrl: true });
       }
     });
 
@@ -72,7 +73,8 @@ export class AuthPageComponent implements OnInit, OnDestroy {
     const { type, user } = event.data;
     if (type === 'AUTH_SUCCESS') {
         this.authService.handleAuthSuccess(user);
-        window.location.href = '/';
+        // ✅ Use replaceUrl to replace /auth in history, preventing back button from returning to login
+        this.router.navigate(['/'], { replaceUrl: true });
     } else if (type === 'AUTH_PENDING') {
         this.router.navigate(['/auth/pending']);
     } else if (type === 'AUTH_DEACTIVATED') {
