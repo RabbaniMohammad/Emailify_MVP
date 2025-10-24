@@ -1834,4 +1834,20 @@ private async handleVisualEditorReturn(
     this.router.navigate(['/visual-editor', this.templateId]);
   }
 
+  /**
+   * Check if a variant has failed edits
+   */
+  hasFailedEdits(variant: any): boolean {
+    return variant?.failedEdits && variant.failedEdits.length > 0;
+  }
+
+  /**
+   * Get tooltip text for variant edit button
+   */
+  getEditTooltip(variant: any): string {
+    return this.hasFailedEdits(variant) 
+      ? 'Failed edits detected - open editor' 
+      : 'Edit in Visual Editor';
+  }
+
 }

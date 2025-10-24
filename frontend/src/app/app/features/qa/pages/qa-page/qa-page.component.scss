@@ -2636,23 +2636,75 @@
   
   .panel-header {
     .debug-toggle-btn {
-      width: 32px;
-      height: 32px;
+      flex-shrink: 0;
       margin-left: auto;
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      padding: 0 !important;
+      border: 2px solid rgba(109, 40, 217, 0.2);
+      outline: none;
+      cursor: pointer;
       color: #6b7280;
+      background: transparent;
+      border-radius: 8px;
       transition: all var(--transition-normal);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      
+      mat-icon {
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+        line-height: 20px;
+        position: relative;
+        z-index: 1;
+        transition: color 0.2s ease;
+      }
+      
+      // Custom ripple effect for square button
+      &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        border-radius: 6px;
+        background: var(--gradient-primary);
+        transform: scale(0);
+        transition: transform 0.2s ease;
+      }
+      
+      &:active {
+        transform: scale(0.98);
+        
+        &::before {
+          transform: scale(1);
+        }
+        
+        mat-icon {
+          color: white;
+        }
+      }
       
       &.active {
         background: var(--gradient-primary);
         color: white;
+        border-color: transparent;
         
         mat-icon {
+          color: white;
           animation: pulse 1s infinite;
         }
       }
       
-      &:hover {
-        background: rgba(109, 40, 217, 0.1);
+      &:focus {
+        outline: none;
+        border-color: rgba(109, 40, 217, 0.4);
       }
     }
   }
@@ -3926,15 +3978,18 @@
       height: 36px;
       min-width: 36px;
       padding: 0 !important;
+      border: none;
+      outline: none;
+      cursor: pointer;
       background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
       color: white !important;
       border-radius: 8px;
-      border: none;
       transition: all 0.3s ease;
       display: flex;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
+      position: relative;
+      overflow: hidden;
       
       mat-icon {
         font-size: 20px;
@@ -3942,6 +3997,26 @@
         height: 20px;
         line-height: 20px;
         color: white !important;
+        position: relative;
+        z-index: 1;
+      }
+      
+      // Custom ripple effect for square button
+      &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(0);
+        transition: transform 0.3s ease;
+      }
+      
+      &:active::before {
+        transform: scale(1);
       }
       
       &:hover {
@@ -3952,6 +4027,29 @@
       
       &:active {
         transform: scale(0.98);
+      }
+      
+      &:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.3);
+      }
+
+      // Red variant for failed edits
+      &.has-failed-edits {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        
+        &::before {
+          background: rgba(255, 255, 255, 0.3);
+        }
+        
+        &:hover {
+          box-shadow: 0 4px 16px rgba(239, 68, 68, 0.5);
+          background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+        }
+        
+        &:focus {
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
+        }
       }
     }
   }

@@ -175,7 +175,6 @@
               </div>
               <h4>Verification Summary</h4>
               <button 
-                mat-icon-button 
                 class="debug-toggle-btn"
                 (click)="toggleDebugInfo()"
                 [class.active]="showDebugInfo"
@@ -518,10 +517,10 @@
               </div>
               <h4>What Changed</h4>
                 <button 
-                  mat-icon-button 
                   class="variant-edit-btn"
+                  [class.has-failed-edits]="hasFailedEdits(v)"
                   (click)="onEditVariant(vr.runId, v.no, v)"
-                  matTooltip="Edit in Visual Editor">
+                  [matTooltip]="getEditTooltip(v)">
                   <mat-icon>edit</mat-icon>
                 </button>
             </div>

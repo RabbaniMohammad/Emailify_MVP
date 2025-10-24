@@ -90,6 +90,11 @@ export type VariantItem = {
   changes: Array<{ before: string; after: string; parent: string; reason?: string }>;
   why: string[];
   artifacts: { usedIdeas: string[] };
+  failedEdits?: Array<{
+    find: string;
+    replace: string;
+    reason?: string;
+  }>;
 };
 
 export type VariantsRun = {
