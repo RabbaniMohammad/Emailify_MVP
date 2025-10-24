@@ -1464,11 +1464,39 @@ onCheckPreview(): void {
     return;
   }
 
-  console.log('� [Check Preview] Initiated...');
+  console.log('🔍 [Check Preview] Initiated...');
   
-  // 1. Perform an immediate, final save to capture the latest changes.
-  this.autoSave(true);
-  console.log('✅ [Check Preview] Final save complete.');
+  // ✅ CRITICAL: Perform SYNCHRONOUS save to ensure data is written BEFORE navigation
+  console.log('🔍 [Check Preview] Performing final synchronous save...');
+  
+  try {
+    const html = this.editor.getHtml();
+    const css = this.editor.getCss();
+    
+    if (html && html.trim()) {
+      console.log('🔍 [Check Preview] HTML length:', html.length);
+      console.log('🔍 [Check Preview] CSS length:', css?.length || 0);
+      
+      // Save immediately (synchronous)
+      this.templateState.saveEditorProgress(this.templateId, html, css);
+      console.log('✅ [Check Preview] Editor progress saved synchronously');
+      
+      // Also save to visual_editor progress key
+      const editorState = {
+        html,
+        css,
+        templateId: this.templateId,
+        savedAt: new Date().toISOString()
+      };
+      localStorage.setItem(`visual_editor_${this.templateId}_progress`, JSON.stringify(editorState));
+      console.log('✅ [Check Preview] Visual editor progress saved');
+      
+    } else {
+      console.warn('⚠️ [Check Preview] Empty HTML, skipping save');
+    }
+  } catch (error) {
+    console.error('❌ [Check Preview] Save failed:', error);
+  }
 
   // 2. Set the specific flag that the QA page will look for.
   const returnKey = `visual_editor_${this.templateId}_return_flag`;

@@ -295,16 +295,20 @@ export class QaPageComponent implements OnDestroy {
             console.log('🔍 [qa-page] editingContext:', editingContext);
             console.log('🔍 [qa-page] editedTemplate length:', editedTemplate?.length || 0);
             console.log('🔍 [qa-page] editedTemplate preview (first 200 chars):', editedTemplate?.substring(0, 200));
-            console.log('🔍 [qa-page] Current goldenSubject value (BEFORE update):', this.goldenSubject.value);
-            console.log('🔍 [qa-page] Current goldenSubject HTML length (BEFORE):', this.goldenSubject.value?.html?.length || 0);
+            console.log('🔍 [qa-page] Current goldenSubject value:', this.goldenSubject.value);
             
             // Handle golden template editing (update goldenSubject)
             console.log('🔍 [qa-page] Calling handleVisualEditorReturn with edited template');
             await this.handleVisualEditorReturn(id, editedTemplate);
             
             console.log('🔍 [qa-page] After handleVisualEditorReturn, goldenSubject value:', this.goldenSubject.value);
-            console.log('🔍 [qa-page] After handleVisualEditorReturn, goldenSubject HTML length (AFTER):', this.goldenSubject.value?.html?.length || 0);
-            console.log('🔍 [qa-page] After handleVisualEditorReturn, goldenSubject HTML preview (first 200 chars):', this.goldenSubject.value?.html?.substring(0, 200));
+            
+            // ✅ CRITICAL: Clear the golden editing context so we don't interfere with future loads
+            // But KEEP the visual_editor_*_golden_html for visual editor persistence
+            console.log('🔍 [qa-page] Clearing golden editing context (not golden HTML)');
+            localStorage.removeItem(`template_state_${id}_editing_context`);
+            localStorage.removeItem(`visual_editor_${id}_editing_mode`);
+            console.log('✅ [qa-page] Golden editing context cleared');
             
             // Restore the TRUE original template back to display
             const trueOriginal = this.templateState.getTrueOriginalTemplate(id);
@@ -1363,6 +1367,14 @@ navigateToVisualEditor(): void {
   console.log('🟦 [GOLDEN EDIT] Saving snapshot to localStorage key:', snapshotKey);
   localStorage.setItem(snapshotKey, golden.html);
   console.log('✅ [GOLDEN EDIT] Snapshot saved to localStorage');
+  
+  // ✅ CRITICAL: Clear old flags and progress to prevent contamination
+  console.log('🧹 [GOLDEN EDIT] Clearing old editor state before opening...');
+  localStorage.removeItem(`visual_editor_${this.templateId}_return_flag`);
+  localStorage.removeItem(`visual_editor_${this.templateId}_edited_html`);
+  localStorage.removeItem(`visual_editor_${this.templateId}_progress`);
+  localStorage.removeItem(`template_state_${this.templateId}_editor_progress`); // ✅ Clear original template progress!
+  console.log('✅ [GOLDEN EDIT] Old state cleared');
   
   // ✅ CRITICAL: Set flag to indicate we're editing GOLDEN template
   const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;

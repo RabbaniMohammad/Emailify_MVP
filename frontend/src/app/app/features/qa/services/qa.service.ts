@@ -803,8 +803,28 @@ export class QaService {
   }
 
   saveGoldenToCache(templateId: string, golden: GoldenResult): void {
-    // 🔥 REMOVED localStorage - golden templates are now cached to IndexedDB
-    // See the tap() in getGolden() which calls db.cacheTemplate()
+    // ✅ Save golden template to IndexedDB for persistence
+    console.log('💾 [qa.service] Saving golden template to IndexedDB');
+    console.log('   - Template ID:', templateId);
+    console.log('   - HTML length:', golden?.html?.length || 0);
+    console.log('   - Failed edits:', golden?.failedEdits?.length || 0);
+    
+    if (!golden?.html) {
+      console.warn('⚠️ [qa.service] No HTML in golden template, skipping save');
+      return;
+    }
+    
+    this.db.cacheGolden({
+      templateId: templateId,
+      html: golden.html,
+      changes: golden.changes || [],
+      failedEdits: golden.failedEdits || [],
+      timestamp: Date.now()
+    }).then(() => {
+      console.log('✅ [qa.service] Golden template saved to IndexedDB successfully');
+    }).catch((err) => {
+      console.error('❌ [qa.service] Failed to save golden template to IndexedDB:', err);
+    });
   }
 
   saveValidLinks(runId: string, links: string[]) {

@@ -138,13 +138,22 @@ export class TemplateStateService {
     });
 
     // CRITICAL: Save the TRUE original template before we overwrite anything
+    // ✅ IMPORTANT: Check if there's an EDITED version of the original template
+    // If user edited original template first, we want to preserve the EDITED version, not the raw original
+    const editedOriginal = localStorage.getItem(this.EDITED_KEY(templateId));
     const currentOriginal = localStorage.getItem(this.ORIGINAL_KEY(templateId));
-    if (currentOriginal) {
-      console.log('💾 [TemplateState] Preserving TRUE original template (length:', currentOriginal.length, ')');
-      localStorage.setItem(this.TRUE_ORIGINAL_KEY(templateId), currentOriginal);
+    
+    const templateToPreserve = editedOriginal || currentOriginal;
+    
+    if (templateToPreserve) {
+      console.log('💾 [TemplateState] Preserving TRUE original template');
+      console.log('   - Source:', editedOriginal ? 'EDITED original' : 'RAW original');
+      console.log('   - Length:', templateToPreserve.length);
+      localStorage.setItem(this.TRUE_ORIGINAL_KEY(templateId), templateToPreserve);
       this.debugLogger.logStorage('SET', this.TRUE_ORIGINAL_KEY(templateId), { 
-        length: currentOriginal.length,
-        reason: 'Preserving original before golden edit'
+        length: templateToPreserve.length,
+        reason: 'Preserving original (edited or raw) before golden edit',
+        wasEdited: !!editedOriginal
       });
     }
 
@@ -153,19 +162,17 @@ export class TemplateStateService {
     localStorage.setItem(this.EDITING_CONTEXT_KEY(templateId), JSON.stringify(context));
     this.debugLogger.logStorage('SET', this.EDITING_CONTEXT_KEY(templateId), context);
 
-    // Use the golden template's HTML as the "original" for this editing session
-    localStorage.setItem(this.ORIGINAL_KEY(templateId), goldenHtml);
-    this.debugLogger.logStorage('SET', this.ORIGINAL_KEY(templateId), { 
-      length: goldenHtml.length,
-      note: 'Golden HTML stored as "original" for this editing session'
-    });
+    // ✅ CRITICAL: Do NOT overwrite template_state_{id}_original!
+    // Golden template should remain completely isolated in visual_editor_* keys
+    // The original template key should remain untouched for original template editing
+    console.log('✅ [TemplateState] NOT overwriting original template key - golden is isolated');
 
-    // ✅ CRITICAL FIX: Clear ALL previous editing state to prevent leakage from original template edits
-    // NOTE: We do NOT clear visual_editor_${templateId}_golden_html because we just saved it above!
+    // ✅ CRITICAL FIX: Clear ONLY editing state that might interfere
+    // NOTE: We do NOT clear visual_editor_${templateId}_golden_html or original template keys!
     const keysToRemove = [
-      this.EDITED_KEY(templateId),
-      this.EDITOR_PROGRESS_KEY(templateId),
-      `visual_editor_${templateId}_progress`
+      this.EDITED_KEY(templateId),           // Clear original template edits
+      this.EDITOR_PROGRESS_KEY(templateId),  // Clear original template progress
+      `visual_editor_${templateId}_progress` // Clear generic progress
     ];
     
     keysToRemove.forEach(key => {
@@ -302,14 +309,17 @@ export class TemplateStateService {
       action: 'Starting template load for visual editor'
     });
     
-    // ✅ CRITICAL: Check if we're editing GOLDEN template
+    // ✅ CRITICAL: Check BOTH editing mode AND context for golden template
     const editingMode = localStorage.getItem(`visual_editor_${templateId}_editing_mode`);
+    const editingContext = this.getEditingContext(templateId);
     console.log('🟦 [TemplateState] Editing mode:', editingMode);
+    console.log('🟦 [TemplateState] Editing context:', editingContext);
     this.debugLogger.logStorage('GET', `visual_editor_${templateId}_editing_mode`, { value: editingMode });
     
-    if (editingMode === 'golden') {
-      console.log('🟦 [TemplateState] Editing mode is GOLDEN, checking for golden HTML...');
-      this.debugLogger.logTemplateState('checkingGoldenHtml', templateId, { editingMode });
+    // ✅ PRIORITY 1: Golden template (check BOTH mode and context)
+    if (editingMode === 'golden' || editingContext?.type === 'golden') {
+      console.log('🟦 [TemplateState] Editing mode/context is GOLDEN, loading golden HTML...');
+      this.debugLogger.logTemplateState('checkingGoldenHtml', templateId, { editingMode, editingContext });
       
       const goldenHtml = localStorage.getItem(`visual_editor_${templateId}_golden_html`);
       
@@ -324,12 +334,12 @@ export class TemplateStateService {
         });
         return goldenHtml;
       } else {
-        console.error('❌ [TemplateState] Editing mode is "golden" but no golden_html found in localStorage!');
-        this.debugLogger.error('TEMPLATE_STATE', 'Golden mode but no golden HTML!', { templateId, editingMode });
+        console.error('❌ [TemplateState] Editing mode/context is "golden" but no golden_html found in localStorage!');
+        this.debugLogger.error('TEMPLATE_STATE', 'Golden mode but no golden HTML!', { templateId, editingMode, editingContext });
       }
     }
     
-    // Check editor progress first (in case of refresh during editing)
+    // ✅ PRIORITY 2: Check editor progress (ONLY for original/variant editing)
     const editorProgress = localStorage.getItem(this.EDITOR_PROGRESS_KEY(templateId));
     console.log('🟦 [TemplateState] Editor progress exists?', !!editorProgress);
     this.debugLogger.logStorage('GET', this.EDITOR_PROGRESS_KEY(templateId), { exists: !!editorProgress });
