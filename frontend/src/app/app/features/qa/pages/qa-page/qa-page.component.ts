@@ -575,7 +575,6 @@ export class QaPageComponent implements OnDestroy {
       console.error('Failed to store synthetic run:', e);
     }
 
-    this.showSuccess('Bypassing variants - using Golden Template directly...');
     this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
   }
 
@@ -624,7 +623,6 @@ export class QaPageComponent implements OnDestroy {
       console.error('Failed to store synthetic run:', e);
     }
 
-    this.showSuccess('Skipping to chat with original template...');
     this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
   }
 
@@ -691,17 +689,6 @@ export class QaPageComponent implements OnDestroy {
         
         if (res.failedEdits && res.failedEdits.length > 0) {
           this.triggerShakeAnimationOnce(id);
-        }
-        
-        const appliedCount = res.stats?.applied ?? res.changes?.length ?? 0;
-        const failedCount = res.stats?.failed ?? 0;
-        
-        if (failedCount > 0) {
-          this.showWarning(
-            `Golden template generated! Applied ${appliedCount} change(s), but ${failedCount} edit(s) could not be applied. Check diagnostics below.`
-          );
-        } else {
-          this.showSuccess(`Golden template generated successfully! Applied ${appliedCount} change(s).`);
         }
         
         this.cdr.markForCheck();
