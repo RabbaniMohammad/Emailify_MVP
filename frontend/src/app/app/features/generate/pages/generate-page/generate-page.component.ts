@@ -425,19 +425,8 @@ private async continueConversation(message: string): Promise<void> {
   //   this.sentImages.push({ name: file.name, size: file.size });
   // });
 
-  const currentMessages = this.messages$.value;
-
-  currentMessages.push({
-    role: 'user',
-    content: message,
-    timestamp: new Date(),
-    images: imageAttachments.length > 0 ? imageAttachments : undefined
-  });
-  
-
-  this.messages$.next([...currentMessages]);
-  this.scrollToBottom();
-
+  // ✅ FIX: Don't add user message here - already added in onSend()
+  // User message was already added to messages$ in onSend() before calling this method
 
   this.generationService
     .continueConversation(this.conversationId, message, imageAttachments)
