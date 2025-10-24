@@ -153,6 +153,8 @@ export class QaService {
   private kGolden(id: string)      { return `qa:golden:${id}`; }
   private kSubjects(id: string)    { return `qa:subjects:${id}`; }
   private kSuggestions(id: string) { return `qa:suggestions:${id}`; }
+  private kStats(id: string)       { return `qa:stats:${id}`; }  // ✅ Verification stats
+  private kTimings(id: string)     { return `qa:timings:${id}`; }  // ✅ Performance metrics
   
   private kRunId(tplId: string)    { return `qa:variants:runId:${tplId}`; }
   private kRunData(runId: string)  { return `qa:variants:run:${runId}`; }
@@ -173,10 +175,34 @@ export class QaService {
       // ✅ Try IndexedDB first
       const cached = await this.db.getGolden(id);
       if (cached) {
+        // ✅ CRITICAL: Load stats from localStorage
+        const statsJson = localStorage.getItem(this.kStats(id));
+        let stats = null;
+        if (statsJson) {
+          try {
+            stats = JSON.parse(statsJson);
+          } catch (e) {
+            console.warn('⚠️ Failed to parse stats from localStorage');
+          }
+        }
+        
+        // ✅ CRITICAL: Load timings from localStorage
+        const timingsJson = localStorage.getItem(this.kTimings(id));
+        let timings = null;
+        if (timingsJson) {
+          try {
+            timings = JSON.parse(timingsJson);
+          } catch (e) {
+            console.warn('⚠️ Failed to parse timings from localStorage');
+          }
+        }
+        
         return {
           html: cached.html,
           changes: cached.changes,
-          failedEdits: cached.failedEdits || []
+          failedEdits: cached.failedEdits || [],
+          stats: stats,      // ✅ Add stats from localStorage
+          timings: timings   // ✅ Add timings from localStorage
         } as GoldenResult;
       }
       
@@ -192,6 +218,17 @@ export class QaService {
           failedEdits: result.failedEdits || [],
           timestamp: Date.now()
         });
+        
+        // ✅ Also save stats to localStorage during migration
+        if (result.stats) {
+          localStorage.setItem(this.kStats(id), JSON.stringify(result.stats));
+        }
+        
+        // ✅ Also save timings to localStorage during migration
+        if (result.timings) {
+          localStorage.setItem(this.kTimings(id), JSON.stringify(result.timings));
+        }
+        
         // Clean up localStorage
         localStorage.removeItem(this.kGolden(id));
         return result;
@@ -290,6 +327,18 @@ export class QaService {
             failedEdits: res.failedEdits || [],
             timestamp: Date.now()
           });
+          
+          // ✅ CRITICAL: Save stats to localStorage for persistence
+          if (res.stats) {
+            localStorage.setItem(this.kStats(id), JSON.stringify(res.stats));
+            console.log('✅ [qa.service] Saved stats to localStorage:', res.stats);
+          }
+          
+          // ✅ CRITICAL: Save timings to localStorage for persistence
+          if (res.timings) {
+            localStorage.setItem(this.kTimings(id), JSON.stringify(res.timings));
+            console.log('✅ [qa.service] Saved timings to localStorage:', res.timings);
+          }
         } catch (e) {
           console.error('Failed to cache golden template:', e);
         }
@@ -808,12 +857,15 @@ export class QaService {
     console.log('   - Template ID:', templateId);
     console.log('   - HTML length:', golden?.html?.length || 0);
     console.log('   - Failed edits:', golden?.failedEdits?.length || 0);
+    console.log('   - Stats:', golden?.stats);
+    console.log('   - Timings:', golden?.timings);
     
     if (!golden?.html) {
       console.warn('⚠️ [qa.service] No HTML in golden template, skipping save');
       return;
     }
     
+    // ✅ Save to IndexedDB
     this.db.cacheGolden({
       templateId: templateId,
       html: golden.html,
@@ -825,6 +877,26 @@ export class QaService {
     }).catch((err) => {
       console.error('❌ [qa.service] Failed to save golden template to IndexedDB:', err);
     });
+    
+    // ✅ CRITICAL: Save stats to localStorage for persistence across refresh
+    if (golden.stats) {
+      try {
+        localStorage.setItem(this.kStats(templateId), JSON.stringify(golden.stats));
+        console.log('✅ [qa.service] Saved stats to localStorage:', golden.stats);
+      } catch (e) {
+        console.error('❌ [qa.service] Failed to save stats to localStorage:', e);
+      }
+    }
+    
+    // ✅ CRITICAL: Save timings to localStorage for persistence across refresh
+    if (golden.timings) {
+      try {
+        localStorage.setItem(this.kTimings(templateId), JSON.stringify(golden.timings));
+        console.log('✅ [qa.service] Saved timings to localStorage:', golden.timings);
+      } catch (e) {
+        console.error('❌ [qa.service] Failed to save timings to localStorage:', e);
+      }
+    }
   }
 
   saveValidLinks(runId: string, links: string[]) {
