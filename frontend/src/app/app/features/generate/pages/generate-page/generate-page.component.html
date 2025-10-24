@@ -44,26 +44,20 @@
 
   <!-- Preview Wrapper -->
   <div class="preview-wrapper">
-    <!-- Loading Overlay -->
-    <div class="custom-loading-overlay" *ngIf="isGenerating$ | async">
-      <!-- ... your loading animation ... -->
-    </div>
-
-    <!-- ⭐ ONE COMPONENT WITH EVERYTHING -->
-<app-template-preview-panel
-  *ngIf="!(isGenerating$ | async)"
-  [html]="(currentHtml$ | async) || ''"
-  [(templateName)]="templateName"
-  [loading]="false"
-  [showHeader]="true"
-  [allowRefresh]="false"
-  [allowFullscreen]="true"
-  [allowViewModes]="true"
-  [showGenerateActions]="true"
-  [isGeneratePage]="true"
-  (saveTemplate)="onSaveTemplate()"
-  (runTests)="onRunTests()">
-</app-template-preview-panel>
+    <!-- ⭐ FIXED: Always show component, use loading state instead of hiding -->
+    <app-template-preview-panel
+      [html]="(currentHtml$ | async) || ''"
+      [(templateName)]="templateName"
+      [loading]="(isGenerating$ | async) ?? false"
+      [showHeader]="true"
+      [allowRefresh]="false"
+      [allowFullscreen]="true"
+      [allowViewModes]="true"
+      [showGenerateActions]="true"
+      [isGeneratePage]="true"
+      (saveTemplate)="onSaveTemplate()"
+      (runTests)="onRunTests()">
+    </app-template-preview-panel>
   </div>
 </section>
 
