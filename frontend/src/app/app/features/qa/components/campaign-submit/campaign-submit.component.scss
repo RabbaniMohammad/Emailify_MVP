@@ -5,7 +5,7 @@
 .campaign-submit-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
   padding: 1rem;
   max-height: calc(85vh - 180px);
   overflow-y: auto;
@@ -31,7 +31,7 @@
   
   @media (max-width: 768px) {
     padding: 1.25rem;
-    gap: 1.25rem;
+    gap: 1rem;
   }
 }
 
@@ -738,7 +738,6 @@
 // ============================================
 
 .submit-section {
-  margin-top: 1rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -1258,7 +1257,6 @@
 // ============================================
 
 .subject-generator-section {
-  margin-bottom: 1.5rem;
   padding: 1.5rem;
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(236, 72, 153, 0.08) 100%);
   border: 1px solid rgba(139, 92, 246, 0.2);

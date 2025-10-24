@@ -6,7 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { BehaviorSubject, Subject, firstValueFrom, takeUntil, Subscription } from 'rxjs';
+import { BehaviorSubject, Subject, firstValueFrom, takeUntil, Subscription, debounceTime } from 'rxjs';
 import { timeout, catchError, retry } from 'rxjs/operators';
 import { 
   CampaignSubmitService, 
@@ -18,6 +18,7 @@ import {
 } from '../../pages/use-variant-page/campaign-submit.service';
 import { QaService } from '../../services/qa.service';
 import { ActivatedRoute } from '@angular/router';
+import { CampaignStorageService } from '../../services/campaign-storage.service';
 
 import { FormsModule } from '@angular/forms';
 
@@ -46,7 +47,13 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private qa = inject(QaService);
   private ar = inject(ActivatedRoute);
+  private storageService = inject(CampaignStorageService);
   private currentSelectedSubject: string | null = null;
+  
+  // Route params for storage key
+  private templateId: string = '';
+  private runId: string = '';
+  private variantNo: string = '';
 
   // Form Controls
   subjectControl = new FormControl<string>('', {
@@ -135,6 +142,14 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
   ) {}
 
 ngOnInit(): void {
+  // Get route params for storage key
+  this.templateId = this.ar.snapshot.paramMap.get('id') || '';
+  this.runId = this.ar.snapshot.paramMap.get('runId') || '';
+  this.variantNo = this.ar.snapshot.paramMap.get('no') || '';
+  
+  // Load saved data if exists
+  this.loadSavedData();
+  
   this.loadMailchimpAudiences();
   
   // Subscribe to service observables
@@ -149,6 +164,7 @@ ngOnInit(): void {
     .pipe(takeUntil(this.destroy$))
     .subscribe(audience => {
       this.selectedAudience = audience;
+      this.saveCurrentState();
       this.cdr.markForCheck();
     });
 
@@ -156,6 +172,7 @@ ngOnInit(): void {
     .pipe(takeUntil(this.destroy$))
     .subscribe(reconciliation => {
       this.reconciliation = reconciliation;
+      this.saveCurrentState();
       this.cdr.markForCheck();
     });
 
@@ -163,12 +180,16 @@ ngOnInit(): void {
     .pipe(takeUntil(this.destroy$))
     .subscribe(analysis => {
       this.timezoneAnalysis = analysis;
+      this.saveCurrentState();
       this.cdr.markForCheck();
     });
 
-  // ✅ NEW: Watch for manual input clearing
+  // ✅ Auto-save form controls with debounce
   this.subjectControl.valueChanges
-    .pipe(takeUntil(this.destroy$))
+    .pipe(
+      debounceTime(500),
+      takeUntil(this.destroy$)
+    )
     .subscribe(value => {
       const trimmedValue = value.trim();
       
@@ -184,16 +205,143 @@ ngOnInit(): void {
         
         this.cdr.markForCheck();
       }
+      
+      // Auto-save subject
+      this.saveCurrentState();
+    });
+    
+  this.bodyAdditionControl.valueChanges
+    .pipe(
+      debounceTime(500),
+      takeUntil(this.destroy$)
+    )
+    .subscribe(() => {
+      this.saveCurrentState();
     });
 }
 
   ngOnDestroy(): void {
+    // Save current state before destroying
+    this.saveCurrentState();
+    
     this.destroy$.next();
     this.destroy$.complete();
     
     // ✅ NEW: Cleanup subjects
     if (this.subjectsSub) this.subjectsSub.unsubscribe();
     if (this.subjectsTimeoutId) clearTimeout(this.subjectsTimeoutId);
+  }
+
+  // ============================================
+  // PERSISTENCE METHODS
+  // ============================================
+
+  /**
+   * Load saved data from localStorage
+   */
+  private loadSavedData(): void {
+    if (!this.templateId || !this.runId || !this.variantNo) return;
+    
+    const savedData = this.storageService.getCampaignData(
+      this.templateId,
+      this.runId,
+      this.variantNo
+    );
+    
+    if (!savedData) return;
+    
+    // Restore form controls
+    if (savedData.subject) {
+      this.subjectControl.setValue(savedData.subject, { emitEvent: false });
+    }
+    if (savedData.bodyAddition) {
+      this.bodyAdditionControl.setValue(savedData.bodyAddition, { emitEvent: false });
+    }
+    
+    // Restore state
+    if (savedData.selectedAudience) {
+      this.selectedAudience = savedData.selectedAudience;
+      this.campaignService.selectAudience(savedData.selectedAudience);
+    }
+    
+    if (savedData.masterData && savedData.masterData.length > 0) {
+      this.masterData = savedData.masterData;
+      this.uploadedFileName = savedData.uploadedFileName || '';
+    }
+    
+    if (savedData.reconciliation) {
+      this.reconciliation = savedData.reconciliation;
+    }
+    
+    if (savedData.scheduleGroups && savedData.scheduleGroups.length > 0) {
+      this.scheduleGroups = savedData.scheduleGroups;
+    }
+    
+    if (savedData.timezoneAnalysis) {
+      this.timezoneAnalysis = savedData.timezoneAnalysis;
+    }
+    
+    if (savedData.testEmails && savedData.testEmails.length > 0) {
+      this.testEmails = savedData.testEmails;
+    }
+    
+    if (savedData.generatedSubjects && savedData.generatedSubjects.length > 0) {
+      this.subjectsSubject.next(savedData.generatedSubjects);
+    }
+    
+    if (savedData.testEmailSent) {
+      this.testEmailSent = savedData.testEmailSent;
+      this.testEmailSentAt = savedData.testEmailSentAt ? new Date(savedData.testEmailSentAt) : null;
+    }
+    
+    this.addNewMembersToAudience = savedData.addNewMembersToAudience || false;
+    
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Save current state to localStorage
+   */
+  private saveCurrentState(): void {
+    if (!this.templateId || !this.runId || !this.variantNo) return;
+    
+    this.storageService.saveCampaignData(
+      this.templateId,
+      this.runId,
+      this.variantNo,
+      {
+        selectedAudience: this.selectedAudience,
+        masterData: this.masterData,
+        uploadedFileName: this.uploadedFileName,
+        reconciliation: this.reconciliation,
+        addNewMembersToAudience: this.addNewMembersToAudience,
+        scheduleGroups: this.scheduleGroups,
+        timezoneAnalysis: this.timezoneAnalysis,
+        subject: this.subjectControl.value,
+        bodyAddition: this.bodyAdditionControl.value,
+        generatedSubjects: this.subjectsSubject.value || [],
+        testEmails: this.testEmails,
+        testEmailSent: this.testEmailSent,
+        testEmailSentAt: this.testEmailSentAt?.toISOString() || null,
+        templateId: this.templateId,
+        runId: this.runId,
+        variantNo: this.variantNo,
+        savedAt: new Date().toISOString()
+      }
+    );
+  }
+
+  /**
+   * Clear saved data (call after successful submission)
+   */
+  clearSavedData(): void {
+    if (!this.templateId || !this.runId || !this.variantNo) return;
+    
+    this.storageService.clearCampaignData(
+      this.templateId,
+      this.runId,
+      this.variantNo
+    );
   }
 
   // ============================================
@@ -250,6 +398,9 @@ async onGenerateSubjects(): Promise<void> {
       
       // Now update the subjects
       this.subjectsSubject.next(subjects);
+      
+      // Save generated subjects
+      this.saveCurrentState();
       
       this.showSuccess(`Generated ${subjects.length} subject line suggestion${subjects.length > 1 ? 's' : ''}!`);
       this.cdr.markForCheck();
@@ -359,6 +510,9 @@ onSelectSubject(selectedSubject: string): void {
   // Update subjects list
   this.subjectsSubject.next(newSubjects);
   
+  // Save state after subject selection
+  this.saveCurrentState();
+  
   // Trigger change detection
   this.cdr.markForCheck();
   
@@ -453,6 +607,9 @@ isSubjectSelected(subject: string): boolean {
       this.scheduleGroups = this.campaignService.groupByScheduleTime(data);
 
       this.showSuccess(`Uploaded ${data.length} rows successfully`);
+      
+      // Save state after upload
+      this.saveCurrentState();
 
       // Auto-reconcile if audience selected
       if (this.selectedAudience) {
@@ -529,6 +686,9 @@ isSubjectSelected(subject: string): boolean {
       this.testEmailLoadingSubject.next('success');
       this.testEmailSent = true;
       this.testEmailSentAt = new Date();
+      
+      // Save test email state
+      this.saveCurrentState();
 
       if (result.failed.length > 0) {
         this.showError(`Sent ${result.sent}, failed ${result.failed.length}`);
@@ -661,6 +821,9 @@ isSubjectSelected(subject: string): boolean {
       }
 
       this.submitLoadingSubject.next('success');
+      
+      // Clear saved data after successful submission
+      this.clearSavedData();
       
       const successMsg = this.addNewMembersToAudience 
         ? `Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled.`
