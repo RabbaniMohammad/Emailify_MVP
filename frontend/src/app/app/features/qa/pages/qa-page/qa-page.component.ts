@@ -213,6 +213,14 @@ export class QaPageComponent implements OnDestroy {
       this.goldenSubject.next(cachedGolden);
       this.suggestionsSubject.next(cachedSuggestions);
       if (prevRun) {
+        // ✅ LOG: Check what variants data we have from cache/backend
+        console.log(`🔍 [VARIANTS CACHE] Found ${prevRun.items?.length || 0} variants`);
+        prevRun.items?.forEach((variant, index) => {
+          console.log(`🔍 [VARIANT ${index + 1}] From cache - has changes:`, !!variant?.changes);
+          console.log(`🔍 [VARIANT ${index + 1}] From cache - changes count:`, variant?.changes?.length || 0);
+          console.log(`🔍 [VARIANT ${index + 1}] From cache - changes:`, variant?.changes);
+        });
+        
         this.variantsSubject.next(prevRun);
         this.variantsGenerating = false;
       }
@@ -1032,6 +1040,12 @@ export class QaPageComponent implements OnDestroy {
 
           if ((item as any)?.done) break;
 
+          // ✅ LOG: Check what data comes from backend
+          console.log(`🔍 [VARIANT ${i + 1}] Received from backend:`, item);
+          console.log(`🔍 [VARIANT ${i + 1}] Has changes:`, !!(item as VariantItem)?.changes);
+          console.log(`🔍 [VARIANT ${i + 1}] Changes count:`, (item as VariantItem)?.changes?.length || 0);
+          console.log(`🔍 [VARIANT ${i + 1}] Changes data:`, (item as VariantItem)?.changes);
+
           run = { ...run, items: [...run.items, item as VariantItem] };
           this.variantsSubject.next(run);
           this.qa.saveVariantsRun(templateId, run);
@@ -1558,6 +1572,9 @@ private async handleVisualEditorReturn(
     console.log('🔍 [handleVisualEditorReturn] failedEdits:', failedEdits);
     console.log('🔍 [handleVisualEditorReturn] originalStats:', originalStats);
     
+    // ✅ Get the current golden to preserve all fields (edits, changes, etc.)
+    const currentGolden = this.goldenSubject.value;
+    
     // 4. For each failed edit, check if it's fixed
     const fixedEdits = failedEdits.filter(edit => {
       const { find } = edit;
@@ -1572,29 +1589,48 @@ private async handleVisualEditorReturn(
       return isGoneFromEdited && isStillInOriginal;
     });
     
-    // 5. Update stats and remaining failed edits
-    const appliedCount = fixedEdits.length;
-    const failedCount = failedEdits.length - appliedCount;
+    // 5. Calculate remaining failed edits after manual fixes
+    const remainingFailedEdits = failedEdits.filter(edit => !fixedEdits.includes(edit));
+    const manuallyFixedCount = fixedEdits.length;
     
-    console.log('🔍 [handleVisualEditorReturn] Applied fixes count:', appliedCount);
-    console.log('🔍 [handleVisualEditorReturn] Failed fixes count:', failedCount);
+    console.log('🔍 [handleVisualEditorReturn] Manually fixed count:', manuallyFixedCount);
+    console.log('🔍 [handleVisualEditorReturn] Remaining failed count:', remainingFailedEdits.length);
     console.log('🔍 [handleVisualEditorReturn] fixedEdits:', fixedEdits);
     
-    // Update original stats if available
-    if (originalStats) {
-      originalStats.applied = (originalStats.applied || 0) + appliedCount;
-      originalStats.failed = (originalStats.failed || 0) + failedCount;
-      
-      // Update the stats in localStorage
-      localStorage.setItem(statsKey, JSON.stringify(originalStats));
+    // ✅ CORRECT CALCULATION: Recalculate stats based on remaining failed edits
+    let updatedStats;
+    if (originalStats && originalStats.total) {
+      // We have original stats - use total to calculate correctly
+      updatedStats = {
+        total: originalStats.total,
+        applied: originalStats.total - remainingFailedEdits.length,
+        failed: remainingFailedEdits.length,
+        blocked: originalStats.blocked || 0,
+        skipped: originalStats.skipped || 0
+      };
+    } else {
+      // Fallback if no original stats
+      updatedStats = {
+        total: failedEdits.length,
+        applied: manuallyFixedCount,
+        failed: remainingFailedEdits.length,
+        blocked: 0,
+        skipped: 0
+      };
     }
     
+    console.log('🔍 [handleVisualEditorReturn] updatedStats:', updatedStats);
+    
+    // Update the stats in localStorage
+    localStorage.setItem(statsKey, JSON.stringify(updatedStats));
+    
     // 6. Update golden template with edited HTML
+    // ✅ CRITICAL: Preserve all original golden fields (edits, changes, atomicResults, etc.)
     const updatedGolden: GoldenResult = {
-      html: editedHtml,
-      failedEdits: failedEdits.filter(edit => !fixedEdits.includes(edit)), // Remaining failed edits
-      stats: originalStats || { applied: appliedCount, failed: failedCount },
-      // Include other necessary fields...
+      ...currentGolden,  // Spread all existing fields
+      html: editedHtml,  // Update HTML
+      failedEdits: remainingFailedEdits,  // Update failed edits
+      stats: updatedStats,  // Update stats
     };
     
     console.log('🔍 [handleVisualEditorReturn] updatedGolden:', {
@@ -1701,21 +1737,30 @@ private async handleVisualEditorReturn(
    * Edit a specific variant in the visual editor
    */
   onEditVariant(runId: string, variantNo: number, variant: any): void {
-    console.log(`🎯 [EDIT VARIANT] Button clicked for variant ${variantNo}`);
+    console.log(`🎯🎯🎯 [EDIT VARIANT] Button clicked for variant ${variantNo}`);
+    console.log('🔍 [EDIT VARIANT] Full variant data:', variant);
+    console.log('🔍 [EDIT VARIANT] Variant.changes (applied edits):', variant?.changes);
+    console.log('🔍 [EDIT VARIANT] Variant.failedEdits (needs manual fixing):', variant?.failedEdits);
+    console.log('🔍 [EDIT VARIANT] Changes count:', variant?.changes?.length);
+    console.log('🔍 [EDIT VARIANT] Failed edits count:', variant?.failedEdits?.length);
+    
     if (!this.templateId || !variant?.html) {
       console.error('❌ [EDIT VARIANT] Aborted - missing templateId or variant HTML.');
       return;
     }
 
-    // CRITICAL FIX: Clear all old localStorage flags before starting.
+    // CRITICAL FIX: Clear all old localStorage AND sessionStorage flags before starting.
     const returnKey = `visual_editor_${this.templateId}_return_flag`;
     const editedHtmlKey = `visual_editor_${this.templateId}_edited_html`;
     const progressKey = `visual_editor_${this.templateId}_progress`;
+    const failedKey = `visual_editor_${this.templateId}_failed_edits`;
 
-    console.log(`🧹 [EDIT VARIANT] Clearing old flags: ${returnKey}, ${editedHtmlKey}, and ${progressKey}`);
+    console.log(`🧹 [EDIT VARIANT] Clearing old flags from localStorage and sessionStorage`);
     localStorage.removeItem(returnKey);
     localStorage.removeItem(editedHtmlKey);
     localStorage.removeItem(progressKey);
+    localStorage.removeItem(failedKey);
+    sessionStorage.removeItem(failedKey);
 
     // ✅ CRITICAL: Set editing mode to 'variant' so auto-save routes correctly
     const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
@@ -1724,7 +1769,36 @@ private async handleVisualEditorReturn(
     console.log('✅ [EDIT VARIANT] Editing mode set to "variant"');
 
     // Initialize the state service for editing this specific variant.
+    // ⚠️ CRITICAL: This MUST be called BEFORE saving failed edits because it clears them!
     this.templateState.initializeVariantForEditing(this.templateId, runId, variantNo, variant.html);
+    
+    // ✅ CRITICAL: Save failed edits AFTER initialization (which clears them)
+    // The backend sends both:
+    // - changes: edits that were successfully applied
+    // - failedEdits: edits that failed to apply (these need manual fixing)
+    if (variant.failedEdits && variant.failedEdits.length > 0) {
+      console.log(`✅ [EDIT VARIANT] Variant has ${variant.failedEdits.length} failed edits from backend`);
+      console.log('🔍 [EDIT VARIANT] Failed edits:', variant.failedEdits);
+      console.log('🔍 [EDIT VARIANT] Saving to localStorage key:', failedKey);
+      
+      localStorage.setItem(failedKey, JSON.stringify(variant.failedEdits));
+      
+      // Verify it was saved
+      const verify = localStorage.getItem(failedKey);
+      console.log('✅ [EDIT VARIANT] Verification - saved successfully:', !!verify);
+      console.log('🔍 [EDIT VARIANT] Verification - data length:', verify?.length);
+    } else {
+      console.log(`🧹 [EDIT VARIANT] No failed edits in variant ${variantNo}`);
+      console.log(`ℹ️  [EDIT VARIANT] This variant has ${variant.changes?.length || 0} applied changes (successfully applied)`);
+      console.log(`ℹ️  [EDIT VARIANT] Failed edits would show edits that couldn't be applied automatically`);
+    }
+    
+    // ✅ FINAL VERIFICATION: Check if failed edits are still in localStorage before navigation
+    const finalCheck = localStorage.getItem(failedKey);
+    console.log('🔍🔍🔍 [EDIT VARIANT] FINAL CHECK before navigation:');
+    console.log('   - Failed edits key:', failedKey);
+    console.log('   - Still in localStorage:', !!finalCheck);
+    console.log('   - Data length:', finalCheck?.length || 0);
     
     console.log(`🚀 [EDIT VARIANT] Navigating to visual editor for ID: ${this.templateId}`);
     this.router.navigate(['/visual-editor', this.templateId]);

@@ -174,6 +174,13 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.templateId) {
         this.loadGoldenHtml(this.templateId);
         this.loadFailedEdits(this.templateId);
+        
+        // ✅ Re-check after a short delay in case data was just saved
+        setTimeout(() => {
+          console.log('🔄 [ngOnInit] Re-checking failed edits after delay...');
+          this.loadFailedEdits(this.templateId!);
+          this.cdr.markForCheck();
+        }, 100);
       }
     });
     
@@ -907,9 +914,17 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 
   private loadFailedEdits(templateId: string): void {
     const failedKey = `visual_editor_${templateId}_failed_edits`;
-    const failedEditsJson = sessionStorage.getItem(failedKey);
+    
+    // ✅ Check BOTH localStorage and sessionStorage (QA page uses localStorage, variants use sessionStorage)
+    let failedEditsJson = localStorage.getItem(failedKey) || sessionStorage.getItem(failedKey);
+    
+    console.log('🔍 [loadFailedEdits] Checking for failed edits...');
+    console.log('🔍 [loadFailedEdits] Key:', failedKey);
+    console.log('🔍 [loadFailedEdits] Found in localStorage:', !!localStorage.getItem(failedKey));
+    console.log('🔍 [loadFailedEdits] Found in sessionStorage:', !!sessionStorage.getItem(failedKey));
     
     if (!failedEditsJson) {
+      console.log('❌ [loadFailedEdits] No failed edits found');
       this.showFloatingWidget = false;
       return;
     }
@@ -917,8 +932,13 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     try {
       this.failedEdits = JSON.parse(failedEditsJson);
       
+      console.log('✅ [loadFailedEdits] Loaded', this.failedEdits.length, 'failed edits');
+      console.log('🔍 [loadFailedEdits] Failed edits:', this.failedEdits);
+      
       if (this.failedEdits.length > 0) {
         this.showFloatingWidget = true;
+        console.log('✅ [loadFailedEdits] Showing floating widget - showFloatingWidget:', this.showFloatingWidget);
+        console.log('✅ [loadFailedEdits] failedEdits count:', this.failedEdits.length);
         
         const pulseKey = `${this.PULSE_SHOWN_KEY}_${templateId}`;
         const pulseShown = sessionStorage.getItem(pulseKey);
@@ -926,13 +946,20 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         if (!pulseShown) {
           this.hasShownPulseAnimation = false;
           sessionStorage.setItem(pulseKey, 'true');
+          console.log('🎬 [loadFailedEdits] Will show pulse animation');
         } else {
           this.hasShownPulseAnimation = true;
+          console.log('⏭️  [loadFailedEdits] Pulse animation already shown');
         }
+        
+        // ✅ Force change detection to show the widget
+        this.cdr.markForCheck();
       } else {
         this.showFloatingWidget = false;
+        console.log('❌ [loadFailedEdits] No failed edits to show');
       }
     } catch (error) {
+      console.error('❌ [loadFailedEdits] Error parsing failed edits:', error);
       this.showFloatingWidget = false;
     }
   }
