@@ -264,8 +264,11 @@ export class QaPageComponent implements OnDestroy {
               this.templateHtml = originalTemplate;
               this.templateLoading = false;
               
-              // Restore the TRUE original back to the ORIGINAL_KEY so future operations work correctly
-              this.templateState.initializeOriginalTemplate(id, originalTemplate);
+              // ✅ FIX: Just restore the HTML for display, DON'T call initializeOriginalTemplate
+              // That would overwrite the variant editing context!
+              // Just save to ORIGINAL_KEY directly to restore display
+              localStorage.setItem(`template_state_${id}_original`, originalTemplate);
+              console.log('✅ [qa-page] Restored original template for display without overwriting variant context');
             } else {
               console.log('⚠️ [qa-page] No TRUE original template found, loading from database');
               await this.loadOriginalTemplate(id);
@@ -311,12 +314,9 @@ export class QaPageComponent implements OnDestroy {
             
             console.log('🔍 [qa-page] After handleVisualEditorReturn, goldenSubject value:', this.goldenSubject.value);
             
-            // ✅ CRITICAL: Clear the golden editing context so we don't interfere with future loads
-            // But KEEP the visual_editor_*_golden_html for visual editor persistence
-            console.log('🔍 [qa-page] Clearing golden editing context (not golden HTML)');
-            localStorage.removeItem(`template_state_${id}_editing_context`);
-            localStorage.removeItem(`visual_editor_${id}_editing_mode`);
-            console.log('✅ [qa-page] Golden editing context cleared');
+            // ✅ FIX: Do NOT clear editing context (matches original template behavior)
+            // This allows user to navigate back to visual editor and continue editing
+            console.log('✅ [qa-page] Keeping golden editing context for continued editing (matches original template flow)');
             
             // Restore the TRUE original template back to display
             const trueOriginal = this.templateState.getTrueOriginalTemplate(id);

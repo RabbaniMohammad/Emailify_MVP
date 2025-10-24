@@ -155,6 +155,7 @@ export class QaService {
   private kSuggestions(id: string) { return `qa:suggestions:${id}`; }
   private kStats(id: string)       { return `qa:stats:${id}`; }  // ✅ Verification stats
   private kTimings(id: string)     { return `qa:timings:${id}`; }  // ✅ Performance metrics
+  private kAtomicResults(id: string) { return `qa:atomicResults:${id}`; }  // ✅ Atomic results (includes skipped edits)
   
   private kRunId(tplId: string)    { return `qa:variants:runId:${tplId}`; }
   private kRunData(runId: string)  { return `qa:variants:run:${runId}`; }
@@ -197,12 +198,25 @@ export class QaService {
           }
         }
         
+        // ✅ CRITICAL: Load atomicResults from localStorage (includes skipped edits)
+        const atomicResultsJson = localStorage.getItem(this.kAtomicResults(id));
+        let atomicResults = null;
+        if (atomicResultsJson) {
+          try {
+            atomicResults = JSON.parse(atomicResultsJson);
+            console.log('✅ [qa.service] Restored atomicResults from localStorage:', atomicResults?.length || 0, 'items');
+          } catch (e) {
+            console.warn('⚠️ Failed to parse atomicResults from localStorage');
+          }
+        }
+        
         return {
           html: cached.html,
           changes: cached.changes,
           failedEdits: cached.failedEdits || [],
-          stats: stats,      // ✅ Add stats from localStorage
-          timings: timings   // ✅ Add timings from localStorage
+          stats: stats,           // ✅ Add stats from localStorage
+          timings: timings,       // ✅ Add timings from localStorage
+          atomicResults: atomicResults  // ✅ Add atomicResults from localStorage
         } as GoldenResult;
       }
       
@@ -227,6 +241,11 @@ export class QaService {
         // ✅ Also save timings to localStorage during migration
         if (result.timings) {
           localStorage.setItem(this.kTimings(id), JSON.stringify(result.timings));
+        }
+        
+        // ✅ Also save atomicResults to localStorage during migration
+        if (result.atomicResults && result.atomicResults.length > 0) {
+          localStorage.setItem(this.kAtomicResults(id), JSON.stringify(result.atomicResults));
         }
         
         // Clean up localStorage
@@ -338,6 +357,12 @@ export class QaService {
           if (res.timings) {
             localStorage.setItem(this.kTimings(id), JSON.stringify(res.timings));
             console.log('✅ [qa.service] Saved timings to localStorage:', res.timings);
+          }
+          
+          // ✅ CRITICAL: Save atomicResults to localStorage for persistence (includes skipped edits)
+          if (res.atomicResults && res.atomicResults.length > 0) {
+            localStorage.setItem(this.kAtomicResults(id), JSON.stringify(res.atomicResults));
+            console.log('✅ [qa.service] Saved atomicResults to localStorage:', res.atomicResults.length, 'items');
           }
         } catch (e) {
           console.error('Failed to cache golden template:', e);
@@ -601,6 +626,9 @@ export class QaService {
   clearGolden(id: string) {
     try {
       localStorage.removeItem(this.kGolden(id));
+      localStorage.removeItem(this.kStats(id));  // ✅ Clear stats
+      localStorage.removeItem(this.kTimings(id));  // ✅ Clear timings
+      localStorage.removeItem(this.kAtomicResults(id));  // ✅ Clear atomic results (skipped edits)
       this.goldenCache$.delete(id);
     } catch {}
   }
@@ -868,6 +896,7 @@ export class QaService {
     console.log('   - Failed edits:', golden?.failedEdits?.length || 0);
     console.log('   - Stats:', golden?.stats);
     console.log('   - Timings:', golden?.timings);
+    console.log('   - Atomic results:', golden?.atomicResults?.length || 0);
     
     if (!golden?.html) {
       console.warn('⚠️ [qa.service] No HTML in golden template, skipping save');
@@ -904,6 +933,16 @@ export class QaService {
         console.log('✅ [qa.service] Saved timings to localStorage:', golden.timings);
       } catch (e) {
         console.error('❌ [qa.service] Failed to save timings to localStorage:', e);
+      }
+    }
+    
+    // ✅ CRITICAL: Save atomicResults to localStorage for persistence (includes skipped edits)
+    if (golden.atomicResults && golden.atomicResults.length > 0) {
+      try {
+        localStorage.setItem(this.kAtomicResults(templateId), JSON.stringify(golden.atomicResults));
+        console.log('✅ [qa.service] Saved atomicResults to localStorage:', golden.atomicResults.length, 'items');
+      } catch (e) {
+        console.error('❌ [qa.service] Failed to save atomicResults to localStorage:', e);
       }
     }
   }

@@ -241,26 +241,41 @@ function chunkText(s: string, max = 3500): string[] {
 
 function grammarSystemPrompt(): string {
   return [
-    "You are a copy editor. Only fix grammar, spelling, punctuation, capitalization, and duplicated words.",
-    "DO NOT change numbers, prices, product/brand names, URLs, merge tags (e.g., *|FNAME|*), or tracking codes.",
-    'Return ONLY valid JSON matching this schema:',
+    "You are a professional copy editor. Fix ONLY clear grammar, spelling, punctuation, and capitalization errors.",
     "",
-    '{"edits":[{"find":"<exact substring from input text node>",',
-    '           "replace":"<final corrected text>",',
-    '           "before_context":"<10-40 chars from before the find>",',
-    '           "after_context":"<10-40 chars from after the find>",',
-    '           "reason":"<short>"}]}',
+    "STRICT RULES:",
+    "1. DO NOT change numbers, prices, brand names, URLs, or merge tags (e.g., *|FNAME|*)",
+    "2. DO NOT change product names, company names, or proper nouns",
+    "3. Keep each edit focused on ONE specific, objective error",
+    "4. Copy text EXACTLY from input - no paraphrasing or rewording",
+    "5. Only suggest edits for clear, unambiguous errors",
+    "6. When in doubt, skip it - be conservative",
     "",
-    "Rules:",
-    "- 'find' and contexts must be copied EXACTLY from the input text (no HTML).",
-    "- Keep edits minimal; don't rewrite tone or meaning.",
-    "- ✅ CRITICAL: Make separate edits for text that appears to cross link boundaries.",
-    "- ✅ Example: If 'ew single, Bagel wah over us' has errors, make TWO edits SEPERATELY:",
-    "  1) 'ew single' → 'new single' (inside link)",
-    "  2) 'wah over us' → 'wash over us' (outside link)",
-    "  3) *ALWAYS AIM FOR ONE EDIT ONLY SENTENCE 1 HAS $ MISTAKES should AIM for 4 different edits*",
-    "4) understand the difference between the headings and normal text you are mixing the edits. edits should be seperately for each tag.",
-    "- Max 30 edits per request.",
+    "Return ONLY valid JSON:",
+    '{"edits":[{',
+    '  "find":"<exact substring with error>",',
+    '  "replace":"<corrected text>",',
+    '  "before_context":"<10-40 chars before>",',
+    '  "after_context":"<10-40 chars after>",',
+    '  "reason":"<brief explanation>"',
+    '}]}',
+    "",
+    "IMPORTANT:",
+    "- 'find' and contexts must be EXACTLY from input text (no HTML tags)",
+    "- Provide good before/after context for accurate matching",
+    "- Maximum 30 edits per request",
+    "- Each edit should fix ONE error only",
+    "",
+    "Examples of GOOD edits:",
+    "- 'teh' → 'the' (obvious typo)",
+    "- 'dont' → 'don't' (missing apostrophe)",
+    "- 'washington' → 'Washington' (proper noun capitalization)",
+    "",
+    "Examples of BAD edits (DO NOT suggest):",
+    "- Changing '$19.99' to 'nineteen dollars'",
+    "- Rewriting sentences for style",
+    "- Changing brand names or product names",
+    "- Editing URLs or email addresses",
   ].join("\n");
 }
 
@@ -1216,7 +1231,8 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
       
       const completion = await openai.chat.completions.create({
         model: OPENAI_MODEL,
-        temperature: 0.2,
+        temperature: 0,  // ✅ Changed from 0.2 to 0 for maximum determinism
+        seed: 42,        // ✅ Added seed for reproducible results
         messages: [
           { role: 'system', content: grammarSystemPrompt() },
           { role: 'user', content: `Visible email text:\n\n${chunk || 'No text.'}` }
