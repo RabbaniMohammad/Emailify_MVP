@@ -470,6 +470,8 @@
   font-size: 0.875rem;
   font-weight: 500;
   color: #374151;
+  display: block;
+  margin-bottom: 0.25rem;
   
   .required {
     color: #ef4444;
@@ -509,29 +511,6 @@
   font-size: 0.75rem;
   color: #9ca3af;
   pointer-events: none;
-}
-
-.textarea-input {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.9375rem;
-  color: #111827;
-  outline: none;
-  resize: vertical;
-  font-family: inherit;
-  transition: all 0.2s ease;
-  
-  &::placeholder {
-    color: #9ca3af;
-  }
-  
-  &:focus {
-    border-color: #8b5cf6;
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-  }
 }
 
 .input-hint {
@@ -686,6 +665,7 @@
 }
 
 .test-email-btn {
+  width: 100%;
   background: #3b82f6 !important;
   color: white !important;
   border: none !important;
@@ -1407,13 +1387,16 @@
   font-size: 0.875rem !important;
   padding: 0.625rem 1.25rem !important;
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25) !important;
-  display: flex !important;
+  display: inline-flex !important;
+  flex-direction: row !important;
   align-items: center !important;
+  justify-content: center !important;
   gap: 0.5rem !important;
   transition: all 0.2s ease !important;
   min-height: 40px !important;
   white-space: nowrap !important;
   flex-shrink: 0;
+  cursor: pointer;
   
   @media (max-width: 768px) {
     font-size: 0.8125rem !important;

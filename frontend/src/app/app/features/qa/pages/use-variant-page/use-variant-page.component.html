@@ -778,29 +778,4 @@
     </div>
   </div>
 </div>
-
-<!-- Campaign Submit Modal -->
-<div class="campaign-modal" *ngIf="campaignModalOpen$ | async" @fadeInOut>
-  <div class="campaign-modal-backdrop" (click)="closeCampaignModal()"></div>
-  <div class="campaign-modal-content">
-    <button class="campaign-modal-close" (click)="closeCampaignModal()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
-    </button>
-    
-    <div class="campaign-modal-header">
-      <h2>Submit Campaign</h2>
-      <p>Configure and schedule your email campaign</p>
-    </div>
-    
-    <div class="campaign-modal-body">
-      <app-campaign-submit
-        [templateHtml]="(html$ | async) || ''"
-        (closeRequested)="closeCampaignModal()">
-      </app-campaign-submit>
-    </div>
-  </div>
-</div>
 </div>

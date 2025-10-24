@@ -62,6 +62,13 @@ export const routes: Routes = [
     canActivate: [authGuard],
     canDeactivate: [qaDeactivateGuard]
   },
+  {
+    path: 'qa/:id/use/:runId/:no/campaign',
+    loadComponent: () =>
+      import('./app/features/qa/pages/campaign-setup-page/campaign-setup-page.component')
+        .then(m => m.CampaignSetupPageComponent),
+    canActivate: [authGuard]
+  },
   
 // ✅ Visual Editor routes - ADD BOTH
 {

@@ -263,7 +263,6 @@
     </div>
     
     <button 
-      mat-raised-button
       class="generate-subjects-btn"
       (click)="onGenerateSubjects()"
       [disabled]="subjectsLoading">
@@ -333,20 +332,6 @@
       <div class="input-error" *ngIf="subjectControl.touched && subjectControl.invalid">
         Subject line is required
       </div>
-    </div>
-
-    <!-- Body Addition (Optional) -->
-    <div class="input-group">
-      <label class="input-label">
-        Additional Content (Optional)
-      </label>
-      <textarea 
-        class="textarea-input"
-        placeholder="Add extra information to append to template..."
-        [formControl]="bodyAdditionControl"
-        rows="4">
-      </textarea>
-      <small class="input-hint">This will be added to the end of your template HTML</small>
     </div>
 
 <!-- Schedule Preview with Timezone Info -->

@@ -24,8 +24,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ViewChild, ElementRef } from '@angular/core';
 
-import { CampaignSubmitComponent } from '../../components/campaign-submit/campaign-submit.component';
-
 // import { Component, ChangeDetectionStrategy, ChangeDetectorRef, inject, AfterViewInit, OnInit, OnDestroy, HostListener  } from '@angular/core';
 // import { CommonModule } from '@angular/common';
 // import { ActivatedRoute, Router  } from '@angular/router';
@@ -55,8 +53,7 @@ type LinkCheck = { url: string; inFile: boolean; inHtml: boolean };
     MatInputModule,
     MatFormFieldModule,
     MatTooltipModule,
-    FormsModule, 
-    CampaignSubmitComponent
+    FormsModule
   ],
   templateUrl: './use-variant-page.component.html',
   styleUrls: ['./use-variant-page.component.scss'],
@@ -121,16 +118,6 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   get isTemplateModalOpen(): boolean { 
     return this.templateModalOpenSubject.value; 
   }
-
-  // Add these AFTER the existing templateModalOpenSubject
-  private campaignModalOpenSubject!: BehaviorSubject<boolean>;
-  readonly campaignModalOpen$!: Observable<boolean>;
-  private campaignModalKey = '';
-
-  get isCampaignModalOpen(): boolean { 
-    return this.campaignModalOpenSubject?.value || false; 
-  }
-  
 
   private snapsSubject = new BehaviorSubject<SnapResult[]>([]);
   readonly snaps$ = this.snapsSubject.asObservable();
@@ -285,11 +272,6 @@ constructor() {
     const wasModalOpen = this.restoreTemplateModalState();
     this.templateModalOpenSubject = new BehaviorSubject<boolean>(wasModalOpen);
     
-    // ✅ INITIALIZE CAMPAIGN MODAL STATE
-    this.campaignModalKey = `campaign_modal_${runId}_${no}`;
-    const wasCampaignModalOpen = this.restoreCampaignModalState();
-    this.campaignModalOpenSubject = new BehaviorSubject<boolean>(wasCampaignModalOpen);
-    
     this.editorStateKey = `editor_state_${runId}_${no}`;
     this.draftMessageKey = `draft_message_${runId}_${no}`;
     
@@ -302,13 +284,11 @@ constructor() {
     }
   } else {
     this.templateModalOpenSubject = new BehaviorSubject<boolean>(false);
-    this.campaignModalOpenSubject = new BehaviorSubject<boolean>(false);
     this.editorOpenSubject = new BehaviorSubject<boolean>(false);
   }
 
   // ✅ CREATE OBSERVABLES
   this.templateModalOpen$ = this.templateModalOpenSubject.asObservable();
-  this.campaignModalOpen$ = this.campaignModalOpenSubject.asObservable();
   this.editorOpen$ = this.editorOpenSubject.asObservable();
 
   // Timeout safety
@@ -575,9 +555,6 @@ constructor() {
     if (this.templateModalOpenSubject.value) {
       document.body.style.overflow = 'hidden';
     }
-    if (this.campaignModalOpenSubject.value) {
-      document.body.style.overflow = 'hidden';
-    }
   });
 }
 
@@ -698,11 +675,14 @@ proceedToCampaignSubmit(): void {
   // Close grammar check modal
   this.closeTemplateModal();
   
-  // Small delay for smooth transition
-  setTimeout(() => {
-    // Open campaign modal
-    this.openCampaignModal();
-  }, 300);
+  // Navigate to campaign setup page
+  const id = this.ar.snapshot.paramMap.get('id');
+  const runId = this.ar.snapshot.paramMap.get('runId');
+  const no = this.ar.snapshot.paramMap.get('no');
+  
+  if (id && runId && no) {
+    this.router.navigate(['/qa', id, 'use', runId, no, 'campaign']);
+  }
 }
 
 /**
@@ -781,43 +761,6 @@ getValidLinkCount(): number {
 // ============================================
 // CAMPAIGN MODAL METHODS
 // ============================================
-
-openCampaignModal(): void {
-  if (this.isFinalizing) return;
-  
-  this.campaignModalOpenSubject.next(true);
-  this.saveCampaignModalState(true);
-  document.body.style.overflow = 'hidden';
-  this.cdr.markForCheck();
-}
-
-closeCampaignModal(): void {
-  this.campaignModalOpenSubject.next(false);
-  this.saveCampaignModalState(false);
-  document.body.style.overflow = 'auto';
-  this.cdr.markForCheck();
-}
-
-private saveCampaignModalState(isOpen: boolean): void {
-  try {
-    if (this.campaignModalKey) {
-      sessionStorage.setItem(this.campaignModalKey, isOpen.toString());
-    }
-  } catch (error) {
-  }
-}
-
-private restoreCampaignModalState(): boolean {
-  try {
-    if (this.campaignModalKey) {
-      const saved = sessionStorage.getItem(this.campaignModalKey);
-      return saved === 'true';
-    }
-  } catch (error) {
-  }
-  return false;
-}
-
 
 // ============================================
 // GRAMMAR CHECK
