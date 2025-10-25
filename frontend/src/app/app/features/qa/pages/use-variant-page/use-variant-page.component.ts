@@ -136,6 +136,9 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   // Track which snap is in edit mode
   private editingSnapUrl: string | null = null;
   
+  // Track if returning from campaign page
+  private returningFromCampaign = false;
+  
   get isFinalizing() { return this.finalizingSubject.value; }
   get isEditorOpen(): boolean { return this.editorOpenSubject.value; }
   get editorOpenSync(): boolean { return this.editorOpenSubject.value; }
@@ -269,14 +272,60 @@ constructor() {
   if (runId && no) {
     // ✅ INITIALIZE TEMPLATE MODAL STATE FIRST
     this.templateModalKey = `template_modal_${runId}_${no}`;
+    
+    // ✅ CHECK: Are we returning from campaign page?
+    const returnFromCampaignKey = `return_to_modal_${runId}_${no}`;
+    this.returningFromCampaign = sessionStorage.getItem(returnFromCampaignKey) === 'true';
+    
+    // ✅ CLEAR THE FLAG IMMEDIATELY (before any other logic uses it)
+    if (this.returningFromCampaign) {
+      sessionStorage.removeItem(returnFromCampaignKey);
+      console.log('🔄 [use-variant] Detected return from campaign - flag saved to instance variable');
+    }
+    
     const wasModalOpen = this.restoreTemplateModalState();
     this.templateModalOpenSubject = new BehaviorSubject<boolean>(wasModalOpen);
+    
+    // ✅ IMMEDIATELY HIDE NAVBAR IF MODAL WAS OPEN (before Angular renders)
+    if (wasModalOpen || this.returningFromCampaign) {
+      document.body.classList.add('modal-open');
+      document.body.style.overflow = 'hidden';
+      console.log('🔄 [use-variant] Modal should be open - hiding navbar immediately');
+    }
     
     this.editorStateKey = `editor_state_${runId}_${no}`;
     this.draftMessageKey = `draft_message_${runId}_${no}`;
     
     const wasEditorOpen = this.restoreEditorState();
     this.editorOpenSubject = new BehaviorSubject<boolean>(wasEditorOpen);
+    
+    // ✅ AUTO-RECOVERY: Only if modal was open AND NOT returning from campaign
+    if (wasModalOpen && !this.returningFromCampaign) {
+      const cachedResult = this.qa.getGrammarCheckCached(runId, Number(no));
+      
+      if (cachedResult) {
+        console.log('🔄 [use-variant] Page refresh detected - restoring cached results without API call');
+        // Restore cached results without making API call
+        this.grammarCheckResultSubject.next(cachedResult);
+        this.grammarCheckLoadingSubject.next(false);
+      } else {
+        console.log('🔄 [use-variant] Page refresh detected but NO cached results - will restart validation');
+        // Delay to ensure component is fully initialized
+        setTimeout(() => {
+          this.autoRestartValidationAfterRefresh();
+        }, 500);
+      }
+    }
+    
+    // ✅ CAMPAIGN RETURN: Load cached results immediately in constructor
+    if (this.returningFromCampaign) {
+      const cachedResult = this.qa.getGrammarCheckCached(runId, Number(no));
+      if (cachedResult) {
+        console.log('🔄 [use-variant] Campaign return - loading cached results in constructor');
+        this.grammarCheckResultSubject.next(cachedResult);
+        this.grammarCheckLoadingSubject.next(false);
+      }
+    }
     
     const savedDraft = this.restoreDraft();
     if (savedDraft) {
@@ -676,18 +725,42 @@ openTemplateModal(): void {
     return;
   }
   
-  // ✅ ALWAYS RESET AND RE-CHECK (content may have changed in editor/chatbot!)
-  this.grammarCheckLoadingSubject.next(false);
-  this.grammarCheckResultSubject.next(null);
+  // ✅ SMART CHECK: Only reset if no cached results exist
+  const runId = this.ar.snapshot.paramMap.get('runId');
+  const no = this.ar.snapshot.paramMap.get('no');
+  
+  let shouldValidate = true;
+  
+  if (runId && no) {
+    const cachedResult = this.qa.getGrammarCheckCached(runId, Number(no));
+    if (cachedResult) {
+      console.log('✅ [modal] Found cached grammar results - using cache instead of API call');
+      // Restore cached results without making API call
+      this.grammarCheckResultSubject.next(cachedResult);
+      this.grammarCheckLoadingSubject.next(false);
+      shouldValidate = false;
+    } else {
+      console.log('✅ [modal] No cached results - will validate from scratch');
+      this.grammarCheckLoadingSubject.next(false);
+      this.grammarCheckResultSubject.next(null);
+    }
+  }
   
   this.templateModalOpenSubject.next(true);
   this.saveTemplateModalState(true);
   document.body.style.overflow = 'hidden';
   
-  // ✅ ALWAYS AUTO-TRIGGER FRESH VALIDATION
-  setTimeout(() => {
-    this.checkTemplateGrammar();
-  }, 300);
+  // ✅ HIDE TOOLBAR WHEN MODAL IS OPEN
+  document.body.classList.add('modal-open');
+  console.log('✅ [modal] Added modal-open class to body, toolbar should be hidden');
+  console.log('✅ [modal] Body classes:', document.body.className);
+  
+  // ✅ ONLY AUTO-TRIGGER VALIDATION IF NO CACHED RESULTS
+  if (shouldValidate) {
+    setTimeout(() => {
+      this.checkTemplateGrammar();
+    }, 300);
+  }
   
   this.cdr.markForCheck();
 }
@@ -708,21 +781,58 @@ closeTemplateModal(): void {
   this.templateModalOpenSubject.next(false);
   this.saveTemplateModalState(false);
   document.body.style.overflow = 'auto';
+  
+  // ✅ SHOW TOOLBAR WHEN MODAL IS CLOSED
+  document.body.classList.remove('modal-open');
+  
   this.cdr.markForCheck();
 }
 
 proceedToCampaignSubmit(): void {
-  // Close grammar check modal
-  this.closeTemplateModal();
+  // ✅ SAVE FLAG: Reopen modal when returning from campaign page
+  const runId = this.ar.snapshot.paramMap.get('runId');
+  const no = this.ar.snapshot.paramMap.get('no');
+  
+  if (runId && no) {
+    sessionStorage.setItem(`return_to_modal_${runId}_${no}`, 'true');
+    console.log('✅ [campaign] Set flag to reopen modal on return');
+  }
+  
+  // ✅ CLOSE MODAL WITHOUT CLEARING CACHE (keep results for when user returns)
+  this.templateModalOpenSubject.next(false);
+  this.saveTemplateModalState(false);
+  document.body.style.overflow = 'auto';
+  document.body.classList.remove('modal-open');
+  console.log('✅ [campaign] Closed modal but KEPT cached results for return');
   
   // Navigate to campaign setup page
   const id = this.ar.snapshot.paramMap.get('id');
-  const runId = this.ar.snapshot.paramMap.get('runId');
-  const no = this.ar.snapshot.paramMap.get('no');
   
   if (id && runId && no) {
     this.router.navigate(['/qa', id, 'use', runId, no, 'campaign']);
   }
+}
+
+/**
+ * Check if we should reopen modal after returning from campaign page
+ */
+private checkAndReopenModalAfterCampaign(): void {
+  // Use instance variable set in constructor
+  if (!this.returningFromCampaign) return;
+  
+  console.log('✅ [campaign return] Reopening modal (data already loaded in constructor)');
+  
+  // Reopen modal after a short delay to ensure page is ready
+  setTimeout(() => {
+    // Open modal (data already loaded in constructor!)
+    this.templateModalOpenSubject.next(true);
+    // Don't call saveTemplateModalState here - let it stay closed in storage
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('modal-open');
+    console.log('✅ [campaign return] Modal reopened with cached results');
+    
+    this.cdr.markForCheck();
+  }, 300);
 }
 
 /**
@@ -863,6 +973,40 @@ retryGrammarCheck(): void {
   this.checkTemplateGrammar();
 }
 
+/**
+ * Auto-restart validation after page refresh if modal was open
+ */
+private autoRestartValidationAfterRefresh(): void {
+  console.log('🔄 [use-variant] Auto-restarting validation after refresh');
+  
+  // Reset loading state and result
+  this.grammarCheckLoadingSubject.next(false);
+  this.grammarCheckResultSubject.next(null);
+  
+  // Ensure modal stays open
+  this.templateModalOpenSubject.next(true);
+  document.body.style.overflow = 'hidden';
+  
+  // Trigger fresh validation
+  setTimeout(() => {
+    this.checkTemplateGrammar();
+  }, 300);
+  
+  this.cdr.markForCheck();
+}
+
+/**
+ * Browser beforeunload warning to prevent refresh during validation
+ */
+@HostListener('window:beforeunload', ['$event'])
+unloadNotification($event: BeforeUnloadEvent): void {
+  // ✅ Warn if grammar check is loading OR modal is open
+  if (this.grammarCheckLoadingSubject.value || this.templateModalOpenSubject.value) {
+    $event.preventDefault();
+    $event.returnValue = 'Validation in progress. Refreshing will lose results. Continue?';
+  }
+}
+
 private saveTemplateModalState(isOpen: boolean): void {
   try {
     if (this.templateModalKey) {
@@ -999,6 +1143,10 @@ private restoreTemplateModalState(): boolean {
         window.scrollTo(0, 0);
         
         this.positionChatAtBottom();
+        
+        // ✅ CHECK: Should we reopen modal after returning from campaign page?
+        this.checkAndReopenModalAfterCampaign();
+        
       } catch (error) {
         console.error('Error in ngAfterViewInit:', error);
       }

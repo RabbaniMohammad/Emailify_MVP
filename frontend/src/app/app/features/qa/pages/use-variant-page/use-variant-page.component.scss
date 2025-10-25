@@ -5497,3 +5497,19 @@
     }
   }
 }
+// ============================================
+// HIDE TOOLBAR WHEN MODAL IS OPEN
+// ============================================
+:host {
+  ::ng-deep body.modal-open {
+    app-toolbar {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      overflow: hidden !important;
+      pointer-events: none !important;
+    }
+  }
+}

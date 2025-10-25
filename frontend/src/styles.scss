@@ -79,3 +79,27 @@ body { margin: 0; font-family: Roboto, 'Helvetica Neue', sans-serif; }
     }
   }
 }
+
+// ============================================
+// HIDE TOOLBAR WHEN MODAL IS OPEN
+// ============================================
+body.modal-open {
+  // Hide the toolbar component
+  app-toolbar,
+  app-toolbar > *,
+  mat-toolbar,
+  .mat-toolbar {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+  
+  // Adjust main content to fill the space
+  router-outlet + *,
+  app-root > *:not(app-toolbar) {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+  }
+}
