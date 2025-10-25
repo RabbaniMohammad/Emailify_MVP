@@ -332,6 +332,10 @@ export class DatabaseService extends Dexie {
     try {
       console.log('🧹 [DB] Clearing ALL IndexedDB tables on logout...');
       
+      // Log counts BEFORE clearing
+      const beforeStats = await this.getCacheStats();
+      console.log('📊 [DB] BEFORE clear:', beforeStats);
+      
       await this.templates.clear();
       await this.conversations.clear();
       await this.validLinks.clear();
@@ -342,6 +346,9 @@ export class DatabaseService extends Dexie {
       await this.suggestions.clear();
       await this.variantsRuns.clear();
       
+      // Log counts AFTER clearing
+      const afterStats = await this.getCacheStats();
+      console.log('📊 [DB] AFTER clear:', afterStats);
       console.log('✅ [DB] All IndexedDB tables cleared successfully');
     } catch (error) {
       console.error('❌ [DB] Failed to clear cache:', error);

@@ -230,8 +230,7 @@
       class="message-input"
       [(ngModel)]="userInput"
       (keydown.enter)="onEnterKey($event)"
-      rows="3"
-      [disabled]="(isGenerating$ | async) ?? false">
+      rows="3">
     </textarea>
 
     <button
