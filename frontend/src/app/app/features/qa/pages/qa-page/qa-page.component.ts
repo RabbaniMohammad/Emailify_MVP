@@ -212,19 +212,35 @@ export class QaPageComponent implements OnDestroy {
       
       this.goldenSubject.next(cachedGolden);
       this.suggestionsSubject.next(cachedSuggestions);
+      
+      // ✅ Process cached variants
+      let variantsToLoad = prevRun;
       if (prevRun) {
         // ✅ LOG: Check what variants data we have from cache/backend
         console.log(`🔍 [VARIANTS CACHE] Found ${prevRun.items?.length || 0} variants`);
+        console.log(`🔍 [VARIANTS CACHE] Target was: ${prevRun.target}`);
         prevRun.items?.forEach((variant, index) => {
           console.log(`🔍 [VARIANT ${index + 1}] From cache - has changes:`, !!variant?.changes);
           console.log(`🔍 [VARIANT ${index + 1}] From cache - changes count:`, variant?.changes?.length || 0);
           console.log(`🔍 [VARIANT ${index + 1}] From cache - changes:`, variant?.changes);
         });
         
-        this.variantsSubject.next(prevRun);
+        // ✅ CRITICAL FIX: If generation was interrupted, update target to match actual items
+        // This prevents skeleton loaders from showing forever (e.g., target=5 but only 1 item received)
+        const actualCount = prevRun.items?.length || 0;
+        if (actualCount > 0 && actualCount < prevRun.target) {
+          console.log(`⚠️ [VARIANTS CACHE] Incomplete run detected - target: ${prevRun.target}, actual: ${actualCount}`);
+          console.log(`✅ [VARIANTS CACHE] Adjusting target from ${prevRun.target} to ${actualCount} to hide skeletons`);
+          variantsToLoad = { ...prevRun, target: actualCount };
+        }
+        
+        this.variantsSubject.next(variantsToLoad);
+        // ✅ FIX: If we have cached variants, generation must be complete
+        // This fixes skeleton loaders stuck after navigating away during generation
         this.variantsGenerating = false;
+        console.log('✅ [VARIANTS CACHE] Reset variantsGenerating to false (variants loaded from cache)');
       }
-      this.variantsRunId = prevRun?.runId || null;
+      this.variantsRunId = variantsToLoad?.runId || null;
 
       if (cachedGolden?.html) {
         this.goldenLoading = false;
@@ -232,6 +248,14 @@ export class QaPageComponent implements OnDestroy {
       }
       if (cachedSuggestions) {
         this.suggestionsLoading = false;
+      }
+
+      // ✅ FIX: Reset variant generation flag if not actively generating
+      // This prevents skeleton loaders from showing forever after page navigation
+      // If we're here in ngOnInit, any previous generation is no longer active
+      if (this.variantsGenerating) {
+        console.log('⚠️ [VARIANTS] Found stale variantsGenerating flag, resetting...');
+        this.variantsGenerating = false;
       }
 
       // ============================================

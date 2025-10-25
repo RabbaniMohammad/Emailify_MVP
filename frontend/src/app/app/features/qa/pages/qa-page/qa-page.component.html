@@ -557,8 +557,9 @@
         </div>
       </div>
 
+      <!-- ✅ ONLY show skeletons when ACTIVELY generating (not when loaded from cache) -->
       <div class="variant-skeleton glass-card" 
-           *ngFor="let placeholder of getSkeletonArray(vr?.target || 5, vr?.items?.length || 0); trackBy: trackByIndex" 
+           *ngFor="let placeholder of getSkeletonArray(variantsGenerating ? (vr?.target || 5) : 0, vr?.items?.length || 0); trackBy: trackByIndex" 
            [@variantAnimation]>
         <div class="skeleton-content">
           <div class="skeleton-header">
