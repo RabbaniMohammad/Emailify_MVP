@@ -319,17 +319,57 @@ constructor() {
       const editedHtml = sessionStorage.getItem(editedKey);
       
       if (editedHtml) {
+        console.log('✅ [RETURN FROM EDITOR] Edited HTML received, length:', editedHtml.length);
+        
         // Update HTML
         this.htmlSubject.next(editedHtml);
         
-        // Update chat thread
-        const messages = this.messagesSubject.value;
+        // ✅ CRITICAL: Restore cached data BEFORE updating thread
+        const cachedThread = this.qa.getChatCached(runId, no);
+        const messages = cachedThread?.messages || this.messagesSubject.value;
+        
+        console.log('✅ [RETURN FROM EDITOR] Messages to preserve:', messages.length);
+        
+        // Update chat thread with preserved messages
         const thread: ChatThread = { html: editedHtml, messages };
         this.qa.saveChat(runId, no, thread);
         
-        // Clear grammar check (force re-check)
-        this.grammarCheckResultSubject.next(null);
-        this.qa.clearGrammarCheck(runId, no);
+        console.log('✅ [RETURN FROM EDITOR] Saved edited HTML to localStorage cache');
+        
+        // ✅ VERIFY save worked
+        const verifyThread = this.qa.getChatCached(runId, no);
+        if (verifyThread?.html === editedHtml) {
+          console.log('✅ [RETURN FROM EDITOR] VERIFIED: Edited HTML successfully saved to cache');
+        } else {
+          console.error('❌ [RETURN FROM EDITOR] FAILED: Cache verification failed!');
+        }
+        
+        // ✅ Restore messages to UI
+        if (messages.length > 0) {
+          this.messagesSubject.next(messages);
+        }
+        
+        // ✅ CRITICAL: Restore screenshots from cache
+        this.snapsSubject.next(await this.qa.getSnapsCached(runId));
+        
+        // ✅ Restore grammar check results
+        const cachedGrammar = this.qa.getGrammarCheckCached(runId, no);
+        if (cachedGrammar) {
+          this.grammarCheckResultSubject.next(cachedGrammar);
+        } else {
+          // Clear grammar check (force re-check with new HTML)
+          this.grammarCheckResultSubject.next(null);
+          this.qa.clearGrammarCheck(runId, no);
+        }
+        
+        // ✅ Restore other cached data
+        this.validLinksSubject.next(this.qa.getValidLinks(runId));
+        
+        const cachedSubjects = this.qa.getSubjectsCached(runId);
+        if (cachedSubjects?.length) {
+          this.subjectsSubject.next(cachedSubjects);
+          this.subjectsLoading = false;
+        }
         
         // ✅ CLOSE template modal
         this.templateModalOpenSubject.next(false);
@@ -367,8 +407,10 @@ constructor() {
         if (item?.html) {
           console.log('✅ [use-variant] Loading synthetic run, HTML length:', item.html.length);
           
-          // Check if already saved to localStorage
+          // ✅ CRITICAL: Check if already saved to localStorage (with edited HTML!)
           const cachedThread = this.qa.getChatCached(runId, no);
+          let htmlToUse = item.html; // Default to synthetic run HTML
+          
           if (!cachedThread?.html) {
             // First time loading synthetic run - create intro message
             const intro: ChatTurn = {
@@ -380,12 +422,16 @@ constructor() {
             const thread: ChatThread = { html: item.html, messages: [intro] };
             this.messagesSubject.next(thread.messages);
             this.qa.saveChat(runId, no, thread);
+            console.log('✅ [use-variant] First time - using synthetic run HTML');
           } else {
-            // Already cached - restore from localStorage
+            // ✅ Already cached - USE CACHED HTML (which may be edited!)
+            htmlToUse = cachedThread.html;
             this.messagesSubject.next(cachedThread.messages || []);
+            console.log('✅ [use-variant] Cache exists - using cached HTML, length:', htmlToUse.length);
           }
           
-          this.htmlSubject.next(item.html);
+          // ✅ Use the correct HTML (cached if available, synthetic if not)
+          this.htmlSubject.next(htmlToUse);
           this.snapsSubject.next(await this.qa.getSnapsCached(runId));
           this.validLinksSubject.next(this.qa.getValidLinks(runId));
           
@@ -630,24 +676,18 @@ openTemplateModal(): void {
     return;
   }
   
-  // ✅ DON'T RESET IF ALREADY HAS RESULTS
-  const hasExistingResults = this.grammarCheckResultSubject.value !== null;
-  
-  if (!hasExistingResults) {
-    this.grammarCheckLoadingSubject.next(false);
-    this.grammarCheckResultSubject.next(null);
-  }
+  // ✅ ALWAYS RESET AND RE-CHECK (content may have changed in editor/chatbot!)
+  this.grammarCheckLoadingSubject.next(false);
+  this.grammarCheckResultSubject.next(null);
   
   this.templateModalOpenSubject.next(true);
   this.saveTemplateModalState(true);
   document.body.style.overflow = 'hidden';
   
-  // ✅ ONLY AUTO-TRIGGER IF NO EXISTING RESULTS
-  if (!hasExistingResults) {
-    setTimeout(() => {
-      this.checkTemplateGrammar();
-    }, 300);
-  }
+  // ✅ ALWAYS AUTO-TRIGGER FRESH VALIDATION
+  setTimeout(() => {
+    this.checkTemplateGrammar();
+  }, 300);
   
   this.cdr.markForCheck();
 }

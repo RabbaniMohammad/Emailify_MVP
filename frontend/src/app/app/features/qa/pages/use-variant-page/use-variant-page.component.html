@@ -535,15 +535,15 @@
     </button>
     
     <div class="template-modal-header">
-      <h2>Template Quality Check</h2>
-      <p>Automated spelling and grammar analysis</p>
+      <h2>Template Pre-Launch Review</h2>
+      <p>Comprehensive validation before sending to Mailchimp</p>
     </div>
     
     <div class="template-modal-body">
       <!-- Two Column Grid -->
       <div class="modal-grid">
         
-        <!-- ✅ LEFT SECTION: Grammar Check -->
+        <!-- ✅ LEFT SECTION: Content Review -->
         <div class="modal-left-section">
           <div class="section-card">
             <div class="card-header">
@@ -553,8 +553,8 @@
                 </svg>
               </div>
               <div class="header-text">
-                <h3>Spelling Check</h3>
-                <p>AI-powered analysis</p>
+                <h3>Content Review</h3>
+                <p>AI-powered validation</p>
               </div>
             </div>
 
@@ -590,7 +590,7 @@
               </div>
               <div class="loading-text">
                 <h4>Analyzing your template...</h4>
-                <p>Our AI is checking for spelling mistakes</p>
+                <p>Our AI is checking content quality and accuracy</p>
               </div>
             </div>
 
@@ -604,8 +604,8 @@
                     <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                   </svg>
                 </div>
-                <h4>Perfect! No spelling mistakes found</h4>
-                <p>Your template is ready to go 🎉</p>
+                <h4>Perfect! No content issues found</h4>
+                <p>Your template is ready to launch 🎉</p>
               </div>
 
               <!-- Has Errors -->
@@ -617,7 +617,7 @@
                     </svg>
                   </div>
                   <div class="error-text">
-                    <h4>Found {{ result.count }} spelling mistake{{ result.count > 1 ? 's' : '' }}</h4>
+                    <h4>Found {{ result.count }} content issue{{ result.count > 1 ? 's' : '' }}</h4>
                     <p class="error-message">Please use the chatbot or editor to fix these issues</p>
                   </div>
                 </div>
@@ -687,7 +687,7 @@
 
     <div class="campaign-trigger-content">
 <div class="trigger-info">
-  <!-- ✅ Grammar Check Status -->
+  <!-- ✅ Content Validation Status -->
   <div class="info-item" 
        [class.completed]="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && !(grammarCheckResult$ | async)!.hasErrors"
        [class.pending]="(grammarCheckLoading$ | async) || !(grammarCheckResult$ | async)"
@@ -708,21 +708,40 @@
       <circle cx="12" cy="12" r="10" opacity="0.3"/>
     </svg>
     <span>
-      <ng-container *ngIf="grammarCheckLoading$ | async">Checking grammar...</ng-container>
-      <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === false">Grammar checked</ng-container>
+      <ng-container *ngIf="grammarCheckLoading$ | async">Validating content...</ng-container>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === false">Content validated</ng-container>
       <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === true">
-        Grammar issues ({{ (grammarCheckResult$ | async)!.count }})
+        Content issues ({{ (grammarCheckResult$ | async)!.count }})
       </ng-container>
-      <ng-container *ngIf="!(grammarCheckLoading$ | async) && !(grammarCheckResult$ | async)">Grammar check pending</ng-container>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && !(grammarCheckResult$ | async)">Validation pending</ng-container>
     </span>
   </div>
 
   <!-- ✅ Template Ready Status -->
-  <div class="info-item completed">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  <div class="info-item" 
+       [class.completed]="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && !(grammarCheckResult$ | async)!.hasErrors"
+       [class.pending]="(grammarCheckLoading$ | async) || !(grammarCheckResult$ | async)"
+       [class.error]="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors">
+    <!-- Success Icon -->
+    <svg *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && !(grammarCheckResult$ | async)!.hasErrors" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
     </svg>
-    <span>Template ready</span>
+    <!-- Warning Icon -->
+    <svg *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+    <!-- Loading Icon -->
+    <svg *ngIf="(grammarCheckLoading$ | async) || !(grammarCheckResult$ | async)" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10" opacity="0.3"/>
+    </svg>
+    <span>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && !(grammarCheckResult$ | async)!.hasErrors">Template ready</ng-container>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors">Template needs fixes</ng-container>
+      <ng-container *ngIf="(grammarCheckLoading$ | async) || !(grammarCheckResult$ | async)">Checking template...</ng-container>
+    </span>
   </div>
 
   <!-- ✅ Link Validation Status -->

@@ -1720,11 +1720,17 @@ private async handleVisualEditorReturn(
     const returnKey = `visual_editor_${this.templateId}_return_flag`;
     const editedHtmlKey = `visual_editor_${this.templateId}_edited_html`;
     const progressKey = `visual_editor_${this.templateId}_progress`;
+    const failedEditsKey = `visual_editor_${this.templateId}_failed_edits`;
 
-    console.log(`🧹 [EDIT] Clearing old flags: ${returnKey}, ${editedHtmlKey}, and ${progressKey}`);
+    console.log(`🧹 [EDIT ORIGINAL] Clearing old flags: ${returnKey}, ${editedHtmlKey}, ${progressKey}, and ${failedEditsKey}`);
     localStorage.removeItem(returnKey);
     localStorage.removeItem(editedHtmlKey);
     localStorage.removeItem(progressKey);
+    
+    // ✅ CRITICAL: Clear failed edits from Golden template - they don't apply to Original
+    localStorage.removeItem(failedEditsKey);
+    sessionStorage.removeItem(failedEditsKey);
+    console.log('🧹 [EDIT ORIGINAL] Cleared failed edits (these belong to Golden template, not Original)');
 
     // ✅ CRITICAL: Set editing mode to 'original' so auto-save routes correctly
     const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;

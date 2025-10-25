@@ -774,7 +774,7 @@ function applyContextEdits(
       
       diagnostics.manualFixGuidance = {
         strategy: 'not-found',
-        recommendation: 'Text may have already been corrected, or GPT hallucinated this error.',
+        recommendation: 'Text spans across HTML element boundaries or has already been corrected. Manual review recommended.',
         searchHints: [
           edit.find,
           normalized,
@@ -788,7 +788,7 @@ function applyContextEdits(
         index,
         edit: originalEdit,
         status: 'not_found',
-        reason: 'Text not found in HTML - GPT may have hallucinated or text was already corrected',
+        reason: 'Text spans across HTML element boundaries - cannot be automatically modified without risking template structure',
         diagnostics,
       });
       failedCount++;
@@ -1056,12 +1056,12 @@ if (span) {
         };
         
       } else {
-        failureReason = 'Text not found in HTML';
+        failureReason = 'Text spans across element boundaries';
         status = 'not_found';
         
         manualFixGuidance = {
           strategy: 'not-found',
-          recommendation: 'Text was not found - it may have already been corrected, or GPT hallucinated this error.',
+          recommendation: 'Text spans across HTML element boundaries or has already been corrected. Manual adjustment recommended to preserve template structure.',
           searchHints: [edit.find]
         };
       }

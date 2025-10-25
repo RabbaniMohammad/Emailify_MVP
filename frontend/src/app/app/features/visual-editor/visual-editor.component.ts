@@ -913,6 +913,21 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
   }
 
   private loadFailedEdits(templateId: string): void {
+    // ✅ CRITICAL DEFENSE: Check if editing mode is 'original' - if so, NEVER show failed edits
+    const editingModeKey = `visual_editor_${templateId}_editing_mode`;
+    const editingMode = localStorage.getItem(editingModeKey);
+    
+    console.log('🔍 [loadFailedEdits] Checking editing mode...');
+    console.log('🔍 [loadFailedEdits] Editing mode:', editingMode);
+    
+    if (editingMode === 'original') {
+      console.log('🚫 [loadFailedEdits] Editing ORIGINAL template - failed edits widget DISABLED');
+      console.log('🚫 [loadFailedEdits] Reason: Original template has no AI modifications, so no failed edits exist');
+      this.showFloatingWidget = false;
+      this.failedEdits = [];
+      return;
+    }
+    
     const failedKey = `visual_editor_${templateId}_failed_edits`;
     
     // ✅ Check BOTH localStorage and sessionStorage (QA page uses localStorage, variants use sessionStorage)
@@ -1525,14 +1540,54 @@ onCheckPreview(): void {
     console.error('❌ [Check Preview] Save failed:', error);
   }
 
-  // 2. Set the specific flag that the QA page will look for.
-  const returnKey = `visual_editor_${this.templateId}_return_flag`;
-  localStorage.setItem(returnKey, 'true');
-  console.log(`✅ [Check Preview] Set return flag: ${returnKey}`);
-
-  // 3. Navigate back to the QA page.
-  console.log(`🚀 [Check Preview] Navigating to /qa/${this.templateId}`);
-  this.router.navigate(['/qa', this.templateId]);
+  // 2. ✅ SMART NAVIGATION: Check where user came from and set correct return flags
+  const metaKey = `visual_editor_${this.templateId}_use_variant_meta`;
+  const useVariantMeta = sessionStorage.getItem(metaKey);
+  
+  if (useVariantMeta) {
+    // ✅ User came from Use Variants page - save with Use Variants keys
+    try {
+      const meta = JSON.parse(useVariantMeta);
+      const { runId, no } = meta;
+      
+      console.log('🔍 [Check Preview] Found use-variant metadata:', meta);
+      
+      // ✅ CRITICAL: Get HTML and CSS, then combine them into full HTML document
+      const html = this.editor.getHtml();
+      const css = this.editor.getCss();
+      const fullHtml = `<style>${css}</style>${html}`;
+      
+      // ✅ Save FULL HTML (with embedded CSS) to the key Use Variants page expects
+      sessionStorage.setItem('visual_editor_edited_html', fullHtml);
+      console.log('✅ [Check Preview] Saved edited HTML with CSS for Use Variants page');
+      console.log('✅ [Check Preview] Full HTML length:', fullHtml.length);
+      
+      // ✅ CRITICAL: Set return flag Use Variants page expects
+      sessionStorage.setItem('visual_editor_return_use_variant', 'true');
+      console.log('✅ [Check Preview] Set Use Variants return flag');
+      
+      console.log(`🚀 [Check Preview] Navigating back to Use Variants page: /qa/${this.templateId}/use/${runId}/${no}`);
+      this.router.navigate(['/qa', this.templateId, 'use', runId, no]);
+    } catch (error) {
+      console.error('❌ [Check Preview] Failed to parse use-variant metadata, falling back to QA page:', error);
+      
+      // Fallback to QA page if parsing fails
+      const returnKey = `visual_editor_${this.templateId}_return_flag`;
+      localStorage.setItem(returnKey, 'true');
+      
+      console.log(`🚀 [Check Preview] Fallback - Navigating to /qa/${this.templateId}`);
+      this.router.navigate(['/qa', this.templateId]);
+    }
+  } else {
+    // ✅ User came from QA page - use QA page keys
+    const returnKey = `visual_editor_${this.templateId}_return_flag`;
+    localStorage.setItem(returnKey, 'true');
+    console.log(`✅ [Check Preview] Set QA page return flag: ${returnKey}`);
+    
+    console.log('🔍 [Check Preview] No use-variant metadata found - user came from QA page');
+    console.log(`🚀 [Check Preview] Navigating to /qa/${this.templateId}`);
+    this.router.navigate(['/qa', this.templateId]);
+  }
 }  /**
    * Copy text as plain text (no formatting)
    */

@@ -344,7 +344,7 @@ function applyEditsToHTML(html: string, edits: GrammarEdit[]): GrammarCheckResul
         after_context: edit.after_context,
         reason: edit.reason,
         status: 'failed',
-        error: 'Text not found in HTML or context mismatch',
+        error: 'Text spans across HTML element boundaries - cannot be safely modified',
       });
     }
   });
