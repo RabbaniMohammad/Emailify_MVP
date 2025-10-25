@@ -127,7 +127,7 @@
             [class.orange]="visualEditorButtonColor === 'orange'"
             [class.red]="visualEditorButtonColor === 'red'"
             [class.green]="visualEditorButtonColor === 'green'"
-            (click)="openVisualEditorModal()">
+            (click)="openVisualEditorModal(); $event.stopPropagation()">
             <span class="btn-content">
               <span class="btn-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -1382,13 +1382,6 @@ export class QaPageComponent implements OnDestroy {
   }
 
   openVisualEditorModal(): void {
-    const golden = this.goldenSubject.value;
-    const failedCount = golden?.failedEdits?.length || 0;
-    
-    if (failedCount > 0) {
-      this.triggerShakeAnimation();
-    }
-    
     this.showVisualEditorModal = true;
     this.cdr.markForCheck();
   }

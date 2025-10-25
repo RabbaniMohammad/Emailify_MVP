@@ -1551,6 +1551,61 @@ onCheckPreview(): void {
   }
 
   /**
+   * Trigger browser's native find (Ctrl+F) and show helpful message
+   */
+  searchTextInPage(text: string, event?: MouseEvent): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    
+    console.log('🔍 [SEARCH] Triggering browser search for text:', text);
+    
+    try {
+      // Find the GrapesJS iframe
+      let iframe = document.querySelector('iframe#gjs') as HTMLIFrameElement;
+      
+      if (!iframe) {
+        iframe = document.querySelector('.gjs-frame') as HTMLIFrameElement;
+      }
+      
+      if (!iframe) {
+        iframe = document.querySelector('iframe') as HTMLIFrameElement;
+      }
+      
+      if (iframe && iframe.contentWindow) {
+        // Focus the iframe so Ctrl+F works there
+        iframe.contentWindow.focus();
+        
+        // Copy text to clipboard for easy pasting
+        navigator.clipboard.writeText(text).then(() => {
+          console.log('✅ [SEARCH] Text copied to clipboard');
+          
+          // Show helpful message
+          this.showToast(
+            `Text copied! Press Ctrl+F to search manually (text may span HTML boundaries)`,
+            'info'
+          );
+        }).catch(() => {
+          // Fallback if clipboard fails
+          this.showToast(
+            `Press Ctrl+F to search for: "${this.truncateText(text, 30)}"`,
+            'info'
+          );
+        });
+      } else {
+        console.log('⚠️ [SEARCH] Iframe not found');
+        this.showToast('Editor not ready. Please wait and try again.', 'warning');
+      }
+    } catch (error) {
+      console.error('❌ [SEARCH] Error during search:', error);
+      this.showToast(
+        `Press Ctrl+F to search for: "${this.truncateText(text, 30)}"`,
+        'info'
+      );
+    }
+  }
+
+  /**
    * Make text selectable and copyable
    */
   makeTextCopyable(element: HTMLElement, text: string): void {
@@ -1606,13 +1661,13 @@ onCheckPreview(): void {
       max-width: 400px;
       white-space: pre-line;
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 10px;
     `;
     
     toast.innerHTML = `
-      <span style="font-size: 18px; margin-top: 2px;">${icon}</span>
-      <span>${message}</span>
+      <span style="font-size: 18px; line-height: 1; display: flex; align-items: center; flex-shrink: 0;">${icon}</span>
+      <span style="line-height: 1.4;">${message}</span>
     `;
     
     document.body.appendChild(toast);

@@ -209,9 +209,9 @@
 <div class="text-block find-text">
   <span class="label">Find:</span>
   <code 
-    class="copyable"
-    (click)="copyTextToClipboard(edit.find || '', $event)"
-    title="Click to copy">
+    class="searchable"
+    (click)="searchTextInPage(edit.find || '', $event)"
+    title="Click to search in page">
     {{ edit.find }}
   </code>
 </div>
