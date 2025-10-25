@@ -1657,23 +1657,29 @@ router.post('/template/grammar-check', async (req: Request, res: Response) => {
     }
 
     const systemPrompt = [
-      'You are a spelling checker. Check ONLY for spelling mistakes.',
+      'You are a spelling checker. Check ONLY for spelling mistakes and gibberish.',
       'DO NOT check grammar, punctuation, or style.',
       'DO NOT change numbers, prices, brand names, URLs, or merge tags (*|FNAME|*).',
+      '',
       'Return ONLY valid JSON with this exact structure:',
       '{',
       '  "mistakes": [',
       '    {',
-      '      "word": "<misspelled word>",',
-      '      "suggestion": "<correct spelling>",',
+      '      "word": "<misspelled word or gibberish>",',
+      '      "suggestion": "<correct spelling or removal>",',
       '      "context": "<sentence where it appears>"',
       '    }',
       '  ]',
       '}',
       '',
       'Rules:',
-      '- Only flag clear spelling errors',
+      '- Only flag clear spelling errors and gibberish text',
+      '- Flag gibberish: Random letter sequences that are not valid words in ANY language',
+      '  Examples of gibberish to flag: "sfbfbwifbwdicbwidvbwc", "xyzqwrt", "asdfjkl", "qwertyuiop"',
+      '- DO NOT flag valid words in other languages (Spanish, French, German, etc.)',
+      '  Examples to IGNORE: "hola" (Spanish), "bonjour" (French), "danke" (German)',
       '- Ignore proper nouns, brand names, and technical terms',
+      '- Ignore intentional stylistic choices like "looove" or "yaaay"',
       '- Max 20 mistakes',
     ].join('\n');
 
