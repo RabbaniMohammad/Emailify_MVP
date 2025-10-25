@@ -581,6 +581,7 @@ export class QaPageComponent implements OnDestroy {
     this.qa.clearChatForRun(syntheticRun.runId, 1);
     this.qa.clearSnapsForRun(syntheticRun.runId);
     this.qa.clearValidLinks(syntheticRun.runId);
+    this.qa.clearGrammarCheck(syntheticRun.runId, 1);
     
     try {
       // ✅ Save to sessionStorage for immediate navigation
@@ -629,6 +630,7 @@ export class QaPageComponent implements OnDestroy {
     this.qa.clearChatForRun(syntheticRun.runId, 1);
     this.qa.clearSnapsForRun(syntheticRun.runId);
     this.qa.clearValidLinks(syntheticRun.runId);
+    this.qa.clearGrammarCheck(syntheticRun.runId, 1);
     
     try {
       // ✅ Save to sessionStorage for immediate navigation
@@ -1264,6 +1266,14 @@ export class QaPageComponent implements OnDestroy {
     // ✅ CRITICAL FIX: Pre-save variant to localStorage BEFORE navigation (same as Golden/Original)
     console.log('🎯 [onUseVariant] Preparing variant for navigation - runId:', runId, 'no:', no);
     
+    // ✅ Clear existing data for this variant (screenshots, link matrix, grammar check, etc.) - force re-finalization
+    console.log('🧹 [onUseVariant] Clearing existing data for fresh start');
+    this.qa.clearChatForRun(runId, no);
+    this.qa.clearSnapsForRun(runId);
+    this.qa.clearValidLinks(runId);
+    this.qa.clearGrammarCheck(runId, no);
+    console.log('✅ [onUseVariant] Data cleared - screenshots, link matrix, and grammar check erased');
+    
     try {
       // Get the variant run from memory cache
       const run = await this.qa.getVariantsRunById(runId);
@@ -1272,27 +1282,20 @@ export class QaPageComponent implements OnDestroy {
       if (variant?.html) {
         console.log('✅ [onUseVariant] Found variant HTML, length:', variant.html.length);
         
-        // Check if already cached
-        const cached = this.qa.getChatCached(runId, no);
+        console.log('💾 [onUseVariant] Pre-saving variant to localStorage for seamless navigation');
         
-        if (!cached?.html) {
-          console.log('💾 [onUseVariant] Pre-saving variant to localStorage for seamless navigation');
-          
-          // Create intro message (same as Golden/Original)
-          const intro = {
-            role: 'assistant' as const,
-            text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor if replacement didn't happen\n\nWhat would you like to improve?",
-            json: null,
-            ts: Date.now(),
-          };
-          
-          // ✅ SAVE to localStorage BEFORE navigation (CRITICAL!)
-          const thread = { html: variant.html, messages: [intro] };
-          this.qa.saveChat(runId, no, thread);
-          console.log('✅ [onUseVariant] Variant saved to localStorage successfully');
-        } else {
-          console.log('✅ [onUseVariant] Variant already cached in localStorage');
-        }
+        // Create intro message (same as Golden/Original)
+        const intro = {
+          role: 'assistant' as const,
+          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor if replacement didn't happen\n\nWhat would you like to improve?",
+          json: null,
+          ts: Date.now(),
+        };
+        
+        // ✅ SAVE to localStorage BEFORE navigation (CRITICAL!)
+        const thread = { html: variant.html, messages: [intro] };
+        this.qa.saveChat(runId, no, thread);
+        console.log('✅ [onUseVariant] Variant saved to localStorage successfully');
       } else {
         console.warn('⚠️ [onUseVariant] Variant HTML not found in memory cache');
       }
