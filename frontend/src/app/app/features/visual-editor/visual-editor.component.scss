@@ -1,11 +1,10 @@
 .visual-editor-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 70px); /* Subtract toolbar height */
+  height: 100vh; /* Full viewport height */
   width: 100%;
   background: #f8fafc;
   overflow: hidden;
-//   margin-top: 70px; /* Push below toolbar */
 }
 
 .editor-header {

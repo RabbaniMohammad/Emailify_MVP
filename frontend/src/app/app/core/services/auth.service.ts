@@ -366,9 +366,10 @@ export class AuthService implements OnDestroy {
     // This clears:
     // - All sessionStorage (templates list, search results, selected template)
     // - User-specific localStorage items (template-, user-, last- prefixes)
+    // - Grammar check cache (grammar_)
     // - Memory cache
     // But keeps: General app preferences (theme, language, etc.)
-    this.cache.clearUserData(['template-', 'user-', 'last-', 'selected-', 'generate:']);
+    this.cache.clearUserData(['template-', 'user-', 'last-', 'selected-', 'generate:', 'grammar_', 'return_to_modal_']);
 
     // ✅ Clear IndexedDB cache (non-blocking)
     this.db.clearAllCache()

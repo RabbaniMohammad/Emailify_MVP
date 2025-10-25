@@ -61,13 +61,19 @@ async function getMonacoInstance(): Promise<typeof Monaco> {
       // Load Monaco
       const monaco = await loader.init();
       
-      if (!monaco || !monaco.editor) {
-        throw new Error('Monaco loaded but editor property missing');
+      console.log('🔍 [monaco-singleton] Monaco object from loader:', monaco);
+      console.log('🔍 [monaco-singleton] window.monaco:', (window as any).monaco);
+      
+      // ✅ FIX: Monaco loader returns undefined, but attaches to window.monaco
+      const monacoInstance = monaco || (window as any).monaco;
+      
+      if (!monacoInstance) {
+        throw new Error('Monaco failed to load');
       }
       
-      globalMonaco = monaco;
+      globalMonaco = monacoInstance;
       console.log('✅ [monaco-singleton] Monaco loaded successfully!');
-      return monaco;
+      return monacoInstance;
     } catch (err) {
       console.error('❌ [monaco-singleton] Failed to load Monaco:', err);
       globalMonacoLoading = null; // Reset so we can retry
@@ -112,6 +118,11 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
   @Output() htmlChanged = new EventEmitter<string>();
   @Output() editorClosed = new EventEmitter<void>();
 
+  ngOnInit(): void {
+    console.log('🔵 [html-editor] ngOnInit - initialHtml length:', this.initialHtml.length);
+    console.log('🔵 [html-editor] initialHtml preview:', this.initialHtml.substring(0, 200));
+  }
+
   private snackBar = inject(MatSnackBar);
   private cdr = inject(ChangeDetectorRef);
 
@@ -127,7 +138,7 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
   isDarkTheme = true;
   
   // NEW: Flags to prevent re-initialization and suppress notifications
-  private isInitializing = true;
+  private isInitializing = false; // ✅ FIX: Start as false, set to true when init starts
   private isEditorReady = false;
 
   ngAfterViewInit(): void {

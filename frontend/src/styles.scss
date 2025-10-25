@@ -83,7 +83,9 @@ body { margin: 0; font-family: Roboto, 'Helvetica Neue', sans-serif; }
 // ============================================
 // HIDE TOOLBAR WHEN MODAL IS OPEN
 // ============================================
-body.modal-open {
+// ✅ HIDE TOOLBAR ONLY FOR VALIDATION MODAL (not all modals!)
+// ============================================
+body.validation-modal-open {
   // Hide the toolbar component
   app-toolbar,
   app-toolbar > *,

@@ -5503,8 +5503,10 @@
 // ============================================
 // HIDE TOOLBAR WHEN MODAL IS OPEN
 // ============================================
+// HIDE TOOLBAR WHEN VALIDATION MODAL IS OPEN
+// ============================================
 :host {
-  ::ng-deep body.modal-open {
+  ::ng-deep body.validation-modal-open {
     app-toolbar {
       display: none !important;
       visibility: hidden !important;

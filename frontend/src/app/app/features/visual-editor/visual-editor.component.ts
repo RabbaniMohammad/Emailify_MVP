@@ -188,9 +188,11 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
+    console.log('🔵 [visual-editor] ngAfterViewInit called');
     const container = document.getElementById('gjs');
     
     if (container) {
+      console.log('✅ [visual-editor] GJS container found, initializing editor...');
       this.initGrapesJS();
       
       // ✅ CRITICAL: Periodic auto-save every 10 seconds as backup
@@ -217,7 +219,9 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       });
     } else {
+      console.error('❌ [visual-editor] GJS container NOT FOUND!');
       this.loading = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -431,6 +435,15 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 
   private initGrapesJS(): void {
     try {
+      // ✅ SAFETY: Set timeout to prevent infinite loading
+      const loadingTimeout = setTimeout(() => {
+        if (this.loading) {
+          console.warn('⚠️ [visual-editor] Editor took too long to load - forcing loading off');
+          this.loading = false;
+          this.cdr.markForCheck();
+        }
+      }, 5000); // 5 seconds max
+      
       this.editor = grapesjs.init({
         container: '#gjs',
         fromElement: false,
@@ -449,6 +462,11 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       });
 
       this.editor.on('load', () => {
+        console.log('🎉 [visual-editor] Editor LOAD event fired!');
+        
+        // ✅ Clear the timeout since editor loaded successfully
+        clearTimeout(loadingTimeout);
+        
         // Remove the default GrapeJS "view code" button (first </> icon)
         try {
           const panels = this.editor.Panels;

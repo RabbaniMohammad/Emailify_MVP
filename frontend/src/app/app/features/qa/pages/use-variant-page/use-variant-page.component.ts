@@ -288,7 +288,7 @@ constructor() {
     
     // ✅ IMMEDIATELY HIDE NAVBAR IF MODAL WAS OPEN (before Angular renders)
     if (wasModalOpen || this.returningFromCampaign) {
-      document.body.classList.add('modal-open');
+      document.body.classList.add('validation-modal-open');
       document.body.style.overflow = 'hidden';
       console.log('🔄 [use-variant] Modal should be open - hiding navbar immediately');
     }
@@ -694,6 +694,10 @@ canDeactivate(): boolean {
 
   // EDITOR METHODS - UPDATED TO PERSIST STATE
   openEditor(): void {
+    console.log('🔵 [use-variant] Opening editor...');
+    console.log('🔵 [use-variant] htmlSubject.value length:', this.htmlSubject.value.length);
+    console.log('🔵 [use-variant] HTML preview (first 200 chars):', this.htmlSubject.value.substring(0, 200));
+    
     this.editorOpenSubject.next(true);
     this.saveEditorState(true);
     this.cdr.detectChanges();
@@ -751,8 +755,8 @@ openTemplateModal(): void {
   document.body.style.overflow = 'hidden';
   
   // ✅ HIDE TOOLBAR WHEN MODAL IS OPEN
-  document.body.classList.add('modal-open');
-  console.log('✅ [modal] Added modal-open class to body, toolbar should be hidden');
+  document.body.classList.add('validation-modal-open');
+  console.log('✅ [modal] Added validation-modal-open class to body, toolbar should be hidden');
   console.log('✅ [modal] Body classes:', document.body.className);
   
   // ✅ ONLY AUTO-TRIGGER VALIDATION IF NO CACHED RESULTS
@@ -778,7 +782,7 @@ closeTemplateModal(): void {
   document.body.style.overflow = 'auto';
   
   // ✅ SHOW TOOLBAR WHEN MODAL IS CLOSED
-  document.body.classList.remove('modal-open');
+  document.body.classList.remove('validation-modal-open');
   
   console.log('✅ [modal] Closed modal but KEPT cached results for next open');
   
@@ -799,7 +803,7 @@ proceedToCampaignSubmit(): void {
   this.templateModalOpenSubject.next(false);
   this.saveTemplateModalState(false);
   document.body.style.overflow = 'auto';
-  document.body.classList.remove('modal-open');
+  document.body.classList.remove('validation-modal-open');
   console.log('✅ [campaign] Closed modal but KEPT cached results for return');
   
   // Navigate to campaign setup page
@@ -825,7 +829,7 @@ private checkAndReopenModalAfterCampaign(): void {
     this.templateModalOpenSubject.next(true);
     // Don't call saveTemplateModalState here - let it stay closed in storage
     document.body.style.overflow = 'hidden';
-    document.body.classList.add('modal-open');
+    document.body.classList.add('validation-modal-open');
     console.log('✅ [campaign return] Modal reopened with cached results');
     
     this.cdr.markForCheck();
@@ -1517,6 +1521,11 @@ navigateToVisualEditorWithGrammar(): void {
   // ✅ Save as failed edits for widget
   const failedKey = `visual_editor_${templateId}_failed_edits`;
   sessionStorage.setItem(failedKey, JSON.stringify(failedEdits));
+  
+  // ✅ CLEANUP: Remove validation-modal-open class before navigating
+  document.body.classList.remove('validation-modal-open');
+  document.body.style.overflow = 'auto';
+  console.log('✅ [OPEN EDITOR] Cleaned up modal state before navigation');
   
   // Navigate
   this.router.navigate(['/visual-editor', templateId]);
