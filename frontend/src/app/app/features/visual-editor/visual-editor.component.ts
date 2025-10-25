@@ -405,7 +405,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       this.http.post('/api/templates', payload)
     );
     
-    this.showToast('✅ Template saved successfully!', 'success');
+    this.showToast('Template saved successfully!', 'success');
     
     return response.id || response.templateId || response._id;
     
@@ -1518,10 +1518,47 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 // ============================================
 // ✅ UPDATED: CHECK PREVIEW WITH AUTO-SAVE
 // ============================================
-onCheckPreview(): void {
+async onCheckPreview(): Promise<void> {
   if (!this.editor || !this.templateId) {
     console.error('❌ [Check Preview] Aborted - no editor or templateId');
     return;
+  }
+
+  // ✅ CRITICAL FIX: If temp ID, prompt for name and save to database first
+  if (this.templateId.startsWith('temp_')) {
+    console.log('🔍 [Check Preview] Temporary ID detected - prompting for template name...');
+    
+    // Get current HTML
+    const html = this.editor.getHtml();
+    const css = this.editor.getCss();
+    const fullHtml = `<style>${css}</style>${html}`;
+    
+    // Prompt for template name
+    const templateName = await this.promptTemplateName();
+    
+    if (!templateName) {
+      console.log('❌ [Check Preview] User cancelled template name prompt');
+      return;
+    }
+    
+    // Save to database
+    console.log('💾 [Check Preview] Saving template to database...');
+    const newTemplateId = await this.saveNewTemplate(templateName, fullHtml);
+    
+    if (!newTemplateId) {
+      console.error('❌ [Check Preview] Failed to save template');
+      return;
+    }
+    
+    console.log('✅ [Check Preview] Template saved with ID:', newTemplateId);
+    
+    // Update templateId to the real database ID
+    this.templateId = newTemplateId;
+    
+    // Clear temp ID from localStorage
+    localStorage.removeItem('visual_editor_temp_id');
+    
+    // Continue with normal flow using the new template ID
   }
 
   console.log('🔍 [Check Preview] Initiated...');
