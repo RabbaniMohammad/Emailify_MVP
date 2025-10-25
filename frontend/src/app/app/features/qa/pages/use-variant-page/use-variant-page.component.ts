@@ -1286,15 +1286,25 @@ navigateToVisualEditorWithGrammar(): void {
     return;
   }
   
+  console.log('🔍 [OPEN EDITOR] Template ID:', templateId);
+  console.log('🔍 [OPEN EDITOR] Run ID:', runId);
+  console.log('🔍 [OPEN EDITOR] Variant No:', no);
+  console.log('🔍 [OPEN EDITOR] HTML length:', html.length);
+  console.log('🔍 [OPEN EDITOR] HTML preview (first 500 chars):', html.substring(0, 500));
+  console.log('🔍 [OPEN EDITOR] HTML source:', this.htmlSubject.value === html ? 'htmlSubject' : 'unknown');
+  
   const grammarResult = this.grammarCheckResultSubject.value;
   if (!grammarResult || !grammarResult.hasErrors) {
     alert('No grammar errors to fix');
     return;
   }
   
+  console.log('🔍 [OPEN EDITOR] Grammar errors:', grammarResult.mistakes.length);
+  
   // ✅ Save template HTML for editing
   const htmlKey = `visual_editor_${templateId}_golden_html`;
   sessionStorage.setItem(htmlKey, html);
+  console.log('✅ [OPEN EDITOR] Saved to sessionStorage:', htmlKey);
   
   // ✅ Save snapshot for comparison
   const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
