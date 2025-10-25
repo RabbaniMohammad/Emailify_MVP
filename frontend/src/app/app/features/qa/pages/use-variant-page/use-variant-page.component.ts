@@ -766,15 +766,10 @@ openTemplateModal(): void {
 }
 
 closeTemplateModal(): void {
-  // ✅ CLEAR GRAMMAR CHECK STATE AND STORAGE
-  const runId = this.ar.snapshot.paramMap.get('runId');
-  const no = this.ar.snapshot.paramMap.get('no');
+  // ✅ KEEP CACHE - Only clear UI state, not localStorage
+  // Cache will only be cleared when customer clicks "Recheck" button
   
-  if (runId && no) {
-    this.qa.clearGrammarCheck(runId, Number(no));
-  }
-  
-  // Clean up state
+  // Clean up UI state only
   this.grammarCheckLoadingSubject.next(false);
   this.grammarCheckResultSubject.next(null);
   
@@ -784,6 +779,8 @@ closeTemplateModal(): void {
   
   // ✅ SHOW TOOLBAR WHEN MODAL IS CLOSED
   document.body.classList.remove('modal-open');
+  
+  console.log('✅ [modal] Closed modal but KEPT cached results for next open');
   
   this.cdr.markForCheck();
 }
@@ -832,7 +829,7 @@ private checkAndReopenModalAfterCampaign(): void {
     console.log('✅ [campaign return] Modal reopened with cached results');
     
     this.cdr.markForCheck();
-  }, 300);
+  }, 200);
 }
 
 /**

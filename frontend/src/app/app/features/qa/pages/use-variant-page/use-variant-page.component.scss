@@ -2596,6 +2596,8 @@
   transition: all 0.3s ease !important;
   position: relative !important;
   overflow: hidden !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35) !important; // ✅ ADD STRONGER SHADOW
+  border: 2px solid rgba(255, 255, 255, 0.5) !important; // ✅ ADD WHITE BORDER
   
   &::before {
     content: '';
@@ -2620,7 +2622,8 @@
   
   &:hover {
     transform: translateY(-2px) scale(1.05);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4) !important;
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.5) !important; // ✅ STRONGER HOVER SHADOW
+    border-color: rgba(255, 255, 255, 0.8) !important; // ✅ BRIGHTER BORDER ON HOVER
     
     &::before {
       left: 100%;
