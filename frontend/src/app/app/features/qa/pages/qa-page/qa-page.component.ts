@@ -1490,6 +1490,11 @@ navigateToVisualEditor(): void {
     localStorage.setItem(statsKey, JSON.stringify(golden.stats));
   }
   
+  // ✅ CRITICAL FIX: Clear use-variant metadata to prevent wrong navigation on Check Preview
+  const metaKey = `visual_editor_${this.templateId}_use_variant_meta`;
+  sessionStorage.removeItem(metaKey);
+  console.log('✅ [GOLDEN EDIT from modal] Cleared use-variant metadata - Check Preview will return to QA page');
+  
   console.log('🟦🟦🟦 [GOLDEN EDIT] All localStorage keys saved. Closing modal and navigating to visual editor...');
   this.closeVisualEditorModal();
   this.router.navigate(['/visual-editor', this.templateId]);
@@ -1744,6 +1749,11 @@ private async handleVisualEditorReturn(
     // Initialize the state with the current template on the screen.
     this.templateState.initializeOriginalTemplate(this.templateId, this.templateHtml);
     
+    // ✅ CRITICAL FIX: Clear use-variant metadata to prevent wrong navigation on Check Preview
+    const metaKey = `visual_editor_${this.templateId}_use_variant_meta`;
+    sessionStorage.removeItem(metaKey);
+    console.log('✅ [EDIT ORIGINAL] Cleared use-variant metadata - Check Preview will return to QA page');
+    
     console.log('🚀 [EDIT] Navigating to visual editor for ID:', this.templateId);
     this.router.navigate(['/visual-editor', this.templateId]);
   }
@@ -1815,6 +1825,12 @@ private async handleVisualEditorReturn(
     console.log('   - Still in localStorage:', !!finalCheck);
     console.log('   - Data length:', finalCheck?.length || 0);
     
+    // ✅ CRITICAL FIX: Clear use-variant metadata for VARIANT editing from QA page
+    // This ensures the metadata is fresh and accurate when navigating from use-variants page
+    const metaKey = `visual_editor_${this.templateId}_use_variant_meta`;
+    sessionStorage.removeItem(metaKey);
+    console.log('✅ [EDIT VARIANT] Cleared old use-variant metadata from sessionStorage');
+    
     console.log(`🚀 [EDIT VARIANT] Navigating to visual editor for ID: ${this.templateId}`);
     this.router.navigate(['/visual-editor', this.templateId]);
   }
@@ -1844,6 +1860,11 @@ private async handleVisualEditorReturn(
 
     // Initialize the state service for editing golden template.
     this.templateState.initializeGoldenForEditing(this.templateId, goldenHtml);
+    
+    // ✅ CRITICAL FIX: Clear use-variant metadata to prevent wrong navigation on Check Preview
+    const metaKey = `visual_editor_${this.templateId}_use_variant_meta`;
+    sessionStorage.removeItem(metaKey);
+    console.log('✅ [EDIT GOLDEN] Cleared use-variant metadata - Check Preview will return to QA page');
     
     console.log(`🚀 [EDIT GOLDEN] Navigating to visual editor for ID: ${this.templateId}`);
     this.router.navigate(['/visual-editor', this.templateId]);
