@@ -64,6 +64,9 @@ export class TemplatesService {
   private currentSearchQuery = '';
 
   constructor() {
+    console.log('🎯 TemplatesService constructor called');
+    console.log('📦 localStorage keys:', Object.keys(localStorage));
+    console.log('📦 sessionStorage keys:', Object.keys(sessionStorage));
     this.restoreSelection();
     this.restoreSearchQuery(); // ✅ NEW: Restore search query on init
   }
@@ -264,16 +267,20 @@ export class TemplatesService {
   // ✅ NEW: Reorder templates to show last selected first
   private reorderByLastSelected(items: TemplateItem[]): TemplateItem[] {
     const lastSelectedId = this.cache.get<string>(CACHE_KEYS.LAST_SELECTED);
+    console.log('🔄 reorderByLastSelected - lastSelectedId from cache:', lastSelectedId);
     
     if (!lastSelectedId || items.length === 0) {
+      console.log('❌ No reordering: lastSelectedId is null or items is empty');
       return items;
     }
     
     const selectedIndex = items.findIndex(item => item.id === lastSelectedId);
+    console.log('📍 Found template at index:', selectedIndex);
     
     if (selectedIndex > 0) {
       const selected = items[selectedIndex];
       const reordered = [selected, ...items.slice(0, selectedIndex), ...items.slice(selectedIndex + 1)];
+      console.log('✅ Reordered - moved template to front:', selected.name);
       return reordered;
     }
     
@@ -337,13 +344,24 @@ export class TemplatesService {
 
   private restoreSelection(): void {
     const selected = this.cache.get<{ id: string; name: string }>(CACHE_KEYS.SELECTED);
+    console.log('🔄 restoreSelection called, found:', selected);
     
     if (selected && selected.id) {
+      console.log('✅ Restoring selection:', selected.id, selected.name);
       this.updateState({ selectedId: selected.id, selectedName: selected.name });
+    } else {
+      console.log('❌ No selection to restore');
     }
   }
 
   private updateState(partial: Partial<TemplatesState>): void {
     this.state.next({ ...this.state.getValue(), ...partial });
+  }
+
+  // ✅ NEW: Reset service state on logout
+  clearState(): void {
+    console.log('🧹 TemplatesService.clearState() - Resetting to INITIAL_STATE');
+    this.state.next(INITIAL_STATE);
+    this.currentSearchQuery = '';
   }
 }

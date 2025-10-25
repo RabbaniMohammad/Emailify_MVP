@@ -5,6 +5,7 @@ import { BehaviorSubject, Observable, tap, catchError, of, firstValueFrom, inter
 import { CacheService } from './cache.service';
 import { QaService } from '../../features/qa/services/qa.service';
 import { DatabaseService } from '../../../core/services/db.service';
+import { TemplatesService } from './templates.service';
 
 export interface User {
   _id: string;
@@ -26,8 +27,9 @@ export class AuthService implements OnDestroy {
   private http = inject(HttpClient);
   private router = inject(Router);
   private cache = inject(CacheService);
-  private qa = inject(QaService);
+  private qaService = inject(QaService);
   private db = inject(DatabaseService);
+  private templatesService = inject(TemplatesService);
 
   // ==================== State Management ====================
   private currentUserSubject = new BehaviorSubject<User | null>(null);
@@ -337,7 +339,7 @@ export class AuthService implements OnDestroy {
    */
   logout(): Observable<any> {
     this.stopStatusMonitoring();
-    this.qa.clearAllQaData(); 
+    this.qaService.clearAllQaData(); 
     
     return this.http.post('/api/auth/logout', {}, { withCredentials: true }).pipe(
       tap({
@@ -365,11 +367,20 @@ export class AuthService implements OnDestroy {
     // ✅ Clear all user-specific caches
     // This clears:
     // - All sessionStorage (templates list, search results, selected template)
-    // - User-specific localStorage items (template-, user-, last- prefixes)
+    // - User-specific localStorage items (template-, templates-, user-, last- prefixes)
     // - Grammar check cache (grammar_)
     // - Memory cache
     // But keeps: General app preferences (theme, language, etc.)
-    this.cache.clearUserData(['template-', 'user-', 'last-', 'selected-', 'generate:', 'grammar_', 'return_to_modal_']);
+    this.cache.clearUserData(['template-', 'templates-', 'user-', 'last-', 'selected-', 'generate:', 'grammar_', 'return_to_modal_']);
+
+    // ✅ CRITICAL: Also clear legacy keys without prefixes
+    try {
+      localStorage.removeItem('lastTemplateId');
+      localStorage.removeItem('lastTemplateName');
+      console.log('🧹 Cleared legacy template keys: lastTemplateId, lastTemplateName');
+    } catch (error) {
+      console.error('❌ Error clearing legacy keys:', error);
+    }
 
     // ✅ Clear IndexedDB cache (non-blocking)
     this.db.clearAllCache()
@@ -379,6 +390,8 @@ export class AuthService implements OnDestroy {
         console.error('❌ Failed to clear IndexedDB cache:', err);
       });
 
+    // ✅ NEW: Clear TemplatesService in-memory state
+    this.templatesService.clearState();
   }
 
   // ==================== Getters ====================

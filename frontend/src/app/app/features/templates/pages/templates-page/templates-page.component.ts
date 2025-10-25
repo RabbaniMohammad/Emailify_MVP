@@ -181,6 +181,8 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   private inflightRequests = new Map<string, Subscription>();
 
   ngOnInit(): void {
+    console.log('🏠 TemplatesPageComponent ngOnInit called');
+    
     // Subscribe to selected item changes to load content
     this.selectedId$
       .pipe(
@@ -188,6 +190,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
         distinctUntilChanged()
       )
       .subscribe(id => {
+        console.log('🔔 selectedId$ changed to:', id);
         if (id) {
           this.loadTemplateContent(id);
         } else {
@@ -200,6 +203,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
     // ✅ RESTORE SEARCH QUERY FROM SERVICE STATE
     const currentState = this.svc.snapshot;
+    console.log('📸 Current state snapshot:', currentState);
     if (currentState.searchQuery) {
       this.searchQuery = currentState.searchQuery;
     }
@@ -207,6 +211,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     // Always load templates on init
     // ✅ ALWAYS call search to trigger reordering, even if items exist
     // This ensures the last-selected template appears first on navigation back
+    console.log('🔍 Calling svc.search with query:', this.searchQuery);
     this.svc.search(this.searchQuery);
     
     // ✅ Scroll to top when component loads (shows selected template first)
@@ -292,6 +297,8 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     this.svc.select(item.id, item.name);
     this.userInitiatedSelection = true;
     
+    // ⚠️ DEPRECATED: These legacy keys are cleared on logout but not used anywhere
+    // Keeping for backward compatibility but prefer using TemplatesService cache
     try {
       localStorage.setItem('lastTemplateId', item.id);
       localStorage.setItem('lastTemplateName', item.name || '');

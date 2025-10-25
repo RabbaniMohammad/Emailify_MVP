@@ -381,49 +381,24 @@ export class QaPageComponent implements OnDestroy {
         const editingContext = this.templateState.getEditingContext(id);
         console.log('🔍 [qa-page] Editing context:', editingContext);
         
-        if (editingContext?.type === 'original') {
-          // User was editing original template - check if there are saved edits
-          const editedTemplateKey = `template_state_${id}_edited`;
-          const editedOriginalTemplate = localStorage.getItem(editedTemplateKey);
+        // ✅ CRITICAL FIX: Always load the TRUE ORIGINAL template when no return flag
+        // This matches the behavior of Golden and Variants templates
+        // Edits should ONLY be applied when user clicks "Check Preview"
+        const originalTemplate = this.templateState.getOriginalTemplate(id);
+        
+        console.log('🔍 [qa-page] Original template from state exists:', !!originalTemplate);
+        console.log('🔍 [qa-page] Original template length:', originalTemplate?.length || 0);
+        
+        if (originalTemplate) {
+          console.log('✅ [qa-page] Loading TRUE ORIGINAL template (unchanged) - edits NOT applied without Check Preview');
+          this.templateHtml = originalTemplate;
+          this.templateLoading = false;
           
-          console.log('🔍 [qa-page] Checking for edited original template:', editedTemplateKey);
-          console.log('🔍 [qa-page] Edited original exists:', !!editedOriginalTemplate);
-          
-          if (editedOriginalTemplate) {
-            console.log('✅ [qa-page] Loading EDITED original template (persisted from previous Check Preview)');
-            this.templateHtml = editedOriginalTemplate;
-            this.templateLoading = false;
-            this.cdr.markForCheck();
-          } else {
-            // No edits, load original
-            const originalTemplate = this.templateState.getOriginalTemplate(id);
-            if (originalTemplate) {
-              console.log('✅ [qa-page] Loading ORIGINAL template (no edits exist)');
-              this.templateHtml = originalTemplate;
-              this.templateLoading = false;
-              this.cdr.markForCheck();
-            } else {
-              this.loadOriginalTemplate(id);
-            }
-          }
+          console.log('🔍 [qa-page] Set this.templateHtml to original, length:', this.templateHtml?.length || 0);
+          this.cdr.markForCheck();
         } else {
-          // No editing context or different context - load original
-          const originalTemplate = this.templateState.getOriginalTemplate(id);
-          
-          console.log('🔍 [qa-page] Original template from state exists:', !!originalTemplate);
-          console.log('🔍 [qa-page] Original template length:', originalTemplate?.length || 0);
-          
-          if (originalTemplate) {
-            console.log('✅ [qa-page] Loading ORIGINAL template from state (temp_1).');
-            this.templateHtml = originalTemplate;
-            this.templateLoading = false;
-            
-            console.log('🔍 [qa-page] Set this.templateHtml to original, length:', this.templateHtml?.length || 0);
-            this.cdr.markForCheck();
-          } else {
-            console.log('✅ [qa-page] No state found. Loading original from database for the first time.');
-            this.loadOriginalTemplate(id);
-          }
+          console.log('✅ [qa-page] No state found. Loading original from database for the first time.');
+          this.loadOriginalTemplate(id);
         }
       }
       
@@ -1372,6 +1347,35 @@ export class QaPageComponent implements OnDestroy {
   trackByEdit = (i: number, e: any) => e.before + '|' + e.after + '|' + (e.parent || '');
   trackByFailedEdit = (index: number, edit: any) => `${edit.find}_${edit.replace}_${index}`;
 
+  /**
+   * Extract visible text from HTML (excluding tags, attributes, scripts, styles)
+   * This is used for accurate failed edit detection
+   */
+  private extractVisibleText(html: string): string {
+    try {
+      // Create a temporary DOM element to parse HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+      
+      // Remove script and style tags
+      const scripts = tempDiv.querySelectorAll('script, style');
+      scripts.forEach(el => el.remove());
+      
+      // Get only the text content (visible text)
+      const text = tempDiv.textContent || tempDiv.innerText || '';
+      
+      console.log('🔍 [extractVisibleText] HTML length:', html.length);
+      console.log('🔍 [extractVisibleText] Extracted text length:', text.length);
+      console.log('🔍 [extractVisibleText] Text preview:', text.substring(0, 200));
+      
+      return text;
+    } catch (error) {
+      console.error('❌ [extractVisibleText] Failed to extract text:', error);
+      // Fallback to original HTML if extraction fails
+      return html;
+    }
+  }
+
   private updateVisualEditorButtonColor(failedEdits: any[] | undefined): void {
     if (!failedEdits || failedEdits.length === 0) {
       this.visualEditorButtonColor = 'green';
@@ -1589,18 +1593,40 @@ private async handleVisualEditorReturn(
     // ✅ Get the current golden to preserve all fields (edits, changes, etc.)
     const currentGolden = this.goldenSubject.value;
     
+    // ✅ CRITICAL FIX: Extract VISIBLE TEXT ONLY (not HTML tags/attributes)
+    console.log('🔍 [handleVisualEditorReturn] Extracting visible text for accurate detection...');
+    const originalVisibleText = this.extractVisibleText(originalGoldenHtml);
+    const editedVisibleText = this.extractVisibleText(editedHtml);
+    
+    console.log('🔍 [handleVisualEditorReturn] Original visible text length:', originalVisibleText.length);
+    console.log('🔍 [handleVisualEditorReturn] Edited visible text length:', editedVisibleText.length);
+    
     // 4. For each failed edit, check if it's fixed
     const fixedEdits = failedEdits.filter(edit => {
-      const { find } = edit;
+      const { find, replace } = edit;
       
-      // Check if "find" text is GONE from edited HTML
-      const isGoneFromEdited = !editedHtml.includes(find);
+      console.log(`🔍 [Detection] Checking edit: "${find}" → "${replace}"`);
       
-      // Check if "find" text still exists in original golden HTML
-      const isStillInOriginal = originalGoldenHtml.includes(find);
+      // ✅ IMPROVED: Search in VISIBLE TEXT only (case-insensitive with word boundaries)
+      // This prevents false matches in HTML tags, attributes, class names, etc.
+      const findLower = find.toLowerCase();
+      const originalTextLower = originalVisibleText.toLowerCase();
+      const editedTextLower = editedVisibleText.toLowerCase();
       
-      // Consider it FIXED if it's gone from edited and still in original
-      return isGoneFromEdited && isStillInOriginal;
+      // Check if "find" text exists in original visible text
+      const isInOriginal = originalTextLower.includes(findLower);
+      
+      // Check if "find" text is GONE from edited visible text
+      const isGoneFromEdited = !editedTextLower.includes(findLower);
+      
+      const isFixed = isGoneFromEdited && isInOriginal;
+      
+      console.log(`   - In original: ${isInOriginal}`);
+      console.log(`   - Gone from edited: ${isGoneFromEdited}`);
+      console.log(`   - Result: ${isFixed ? '✅ FIXED' : '❌ Not fixed'}`);
+      
+      // Consider it FIXED if it's gone from edited and was in original
+      return isFixed;
     });
     
     // 5. Calculate remaining failed edits after manual fixes

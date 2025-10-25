@@ -1746,12 +1746,13 @@
 }
 
 .accent-btn .cancel-text {
-  color: #ffffff !important;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  color: #ef4444 !important; // Red color - matches primary button
+  font-weight: 600 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
   
   &:hover {
-    color: #fecaca !important; // Light red tint
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+    color: #dc2626 !important; // Darker red on hover
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
   }
 }
 
@@ -1780,6 +1781,22 @@
   .modern-spinner {
     border-color: rgba(109, 40, 217, 0.2) !important;
     border-top-color: var(--primary-purple) !important;
+  }
+}
+
+// Primary button (Generate Golden) - Red spinner when loading
+.primary-btn {
+  .modern-spinner {
+    border-color: rgba(239, 68, 68, 0.3) !important; // Light red border
+    border-top-color: #ef4444 !important; // Red spinner (matches Cancel text)
+  }
+}
+
+// Accent button (Generate Variants) - Red spinner when loading
+.accent-btn {
+  .modern-spinner {
+    border-color: rgba(239, 68, 68, 0.3) !important; // Light red border
+    border-top-color: #ef4444 !important; // Red spinner (matches Cancel text)
   }
 }
 

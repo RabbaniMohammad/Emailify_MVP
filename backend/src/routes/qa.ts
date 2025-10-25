@@ -1327,7 +1327,7 @@ router.post('/:id/subjects', async (req: Request, res: Response) => {
       model: OPENAI_MODEL,
       temperature: 0.5,
       messages: [
-        { role: 'system', content: 'Return ONLY valid JSON: {"subjects": ["..."]}. 5 concise subject lines, <=60 chars, no emojis.' },
+        { role: 'system', content: 'Return ONLY valid JSON: {"subjects": ["..."]}. Generate 5 concise subject lines (<=60 chars). IMPORTANT: At least 2 subjects MUST include relevant emojis that relate to the email template content (e.g., 🎉 for celebrations, 📧 for emails, 🌟 for special offers, 🎁 for gifts, etc.). Choose emojis based on the template topic, NOT random emojis. The other 3 can be without emojis.' },
         { role: 'user', content: `Campaign Name: ${name}\n\nBody:\n${body}` }
       ],
       response_format: { type: 'json_object' as const }
