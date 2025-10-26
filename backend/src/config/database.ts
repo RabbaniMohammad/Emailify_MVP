@@ -9,7 +9,14 @@ const connectDB = async (): Promise<void> => {
       throw new Error('MONGODB_URI is not defined in environment variables');
     }
 
-    await mongoose.connect(mongoURI);
+    // Connection pool configuration for better concurrent user handling
+    await mongoose.connect(mongoURI, {
+      maxPoolSize: 50,        // Max 50 connections (Free tier allows 500)
+      minPoolSize: 5,         // Keep 5 connections ready
+      serverSelectionTimeoutMS: 5000,  // Timeout after 5s if can't connect
+      socketTimeoutMS: 45000,          // Close sockets after 45s inactivity
+      family: 4,              // Use IPv4, skip IPv6
+    });
     
     logger.info('✅ MongoDB Atlas connected successfully');
     

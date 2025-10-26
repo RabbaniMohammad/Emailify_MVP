@@ -9,6 +9,7 @@ import compression from 'compression';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import express, { Request, Response, NextFunction } from 'express';
+import rateLimit from 'express-rate-limit';
 import logger from 'jet-logger';
 import campaignRoutes from './routes/campaign.routes';
 
@@ -74,6 +75,28 @@ app.use(
 if (ENV.NodeEnv === NodeEnvs.Dev) {
   app.use(morgan('dev'));
 }
+
+// Rate limiting - protect against abuse and overload
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.RATE_LIMIT_MAX_REQUESTS ? parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) : 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  message: 'Too many requests from this IP, please try again later.',
+});
+
+// Apply rate limiting to all API routes
+app.use('/api/', limiter);
+
+// Stricter rate limiting for AI generation endpoints (expensive operations)
+const aiLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // Max 20 AI requests per hour per IP
+  message: 'Too many AI generation requests, please try again later.',
+});
+
+app.use('/api/generate', aiLimiter);
+app.use('/api/qa', aiLimiter);
 
 // Security
 if (ENV.NodeEnv === NodeEnvs.Production) {
