@@ -143,14 +143,8 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   originalGoldenHtml: string = '';
 
   ngOnInit(): void {
-    console.log('🔵 [ngOnInit] START');
-    
     this.route.paramMap.subscribe(params => {
       this.templateId = params.get('id');
-      
-      console.log('🔍 [ngOnInit] Route param ID:', this.templateId);
-      console.log('🔍 [ngOnInit] Route params:', params);
-      
       // ✅ NEW: If no templateId in URL, generate a temporary one for direct access
       if (!this.templateId) {
         // Check if we already have a temp ID in localStorage
@@ -161,23 +155,17 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
           // Generate new temporary ID
           tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
           localStorage.setItem(tempIdKey, tempId);
-          console.log('✅ [ngOnInit] Generated temporary ID:', tempId);
         } else {
-          console.log('✅ [ngOnInit] Using existing temporary ID:', tempId);
         }
         
         this.templateId = tempId;
       }
-      
-      console.log('✅ [ngOnInit] Final templateId:', this.templateId);
-      
       if (this.templateId) {
         this.loadGoldenHtml(this.templateId);
         this.loadFailedEdits(this.templateId);
         
         // ✅ Re-check after a short delay in case data was just saved
         setTimeout(() => {
-          console.log('🔄 [ngOnInit] Re-checking failed edits after delay...');
           this.loadFailedEdits(this.templateId!);
           this.cdr.markForCheck();
         }, 100);
@@ -188,18 +176,15 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    console.log('🔵 [visual-editor] ngAfterViewInit called');
     const container = document.getElementById('gjs');
     
     if (container) {
-      console.log('✅ [visual-editor] GJS container found, initializing editor...');
       this.initGrapesJS();
       
       // ✅ CRITICAL: Periodic auto-save every 10 seconds as backup
       this.periodicSaveInterval = setInterval(() => {
         if (this.editor && this.templateId) {
           this.autoSave();
-          console.log('⏰ [visual-editor] Periodic auto-save triggered');
         }
       }, 10000); // 10 seconds
       
@@ -207,7 +192,6 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       document.addEventListener('visibilitychange', () => {
         if (document.hidden && this.editor && this.templateId) {
           this.autoSave();
-          console.log('👁️ [visual-editor] Saved on visibility change');
         }
       });
       
@@ -215,7 +199,6 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       window.addEventListener('beforeunload', () => {
         if (this.editor && this.templateId) {
           this.autoSave();
-          console.log('🚪 [visual-editor] Saved before unload');
         }
       });
     } else {
@@ -419,16 +402,12 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 }
 
   private loadGoldenHtml(templateId: string): void {
-    console.log('🎯 [EDITOR] loadGoldenHtml() for ID:', templateId);
-    
     // Get template from state service
     const templateForEditor = this.templateState.getTemplateForEditor(templateId);
     
     if (templateForEditor) {
-      console.log('✅ [EDITOR] Got template from state, length:', templateForEditor.length);
       this.originalGoldenHtml = templateForEditor;
     } else {
-      console.log('⚠️ [EDITOR] No template in state - empty editor');
       this.originalGoldenHtml = '';
     }
   }
@@ -438,7 +417,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       // ✅ SAFETY: Set timeout to prevent infinite loading
       const loadingTimeout = setTimeout(() => {
         if (this.loading) {
-          console.warn('⚠️ [visual-editor] Editor took too long to load - forcing loading off');
           this.loading = false;
           this.cdr.markForCheck();
         }
@@ -462,8 +440,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       });
 
       this.editor.on('load', () => {
-        console.log('🎉 [visual-editor] Editor LOAD event fired!');
-        
         // ✅ Clear the timeout since editor loaded successfully
         clearTimeout(loadingTimeout);
         
@@ -475,7 +451,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
           panels.removeButton('options', 'gjs-open-import-webpage');
           panels.removeButton('views', 'open-code');
         } catch (e) {
-          console.log('Some default buttons not found (this is okay)');
         }
         
         this.setupCodeEditor();
@@ -483,29 +458,20 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         // ✅ PRIORITY 1: Check if there's saved progress (edited state)
         const progressKey = `visual_editor_${this.templateId}_progress`;
         const hasSavedProgress = localStorage.getItem(progressKey);
-        
-        console.log('🔍 [visual-editor] Checking load priority...');
-        console.log('   - Has saved progress (_progress):', hasSavedProgress ? 'YES ✅' : 'NO');
-        console.log('   - Has golden HTML:', this.originalGoldenHtml ? 'YES' : 'NO');
-        
         if (hasSavedProgress) {
           // ✅ CASE 1: Restore from saved progress (highest priority - user's edits!)
-          console.log('✅ [visual-editor] LOADING FROM SAVED PROGRESS (edited state)');
           this.restoreProgress();
           setTimeout(() => {
             this.autoSave();
-            console.log('✅ [visual-editor] Auto-save after restoring progress');
           }, 500);
         }
         else if (this.originalGoldenHtml) {
           // ✅ CASE 2: Load golden HTML from QA page (first time editing)
-          console.log('✅ [visual-editor] LOADING FROM GOLDEN HTML (original state)');
           try {
             this.editor.setComponents(this.originalGoldenHtml);
             // ✅ CRITICAL: Save immediately after loading from QA page
             setTimeout(() => {
               this.autoSave();
-              console.log('✅ [visual-editor] Initial auto-save after loading golden HTML');
             }, 500);
           } catch (error) {
             console.error('Failed to load golden HTML:', error);
@@ -513,12 +479,10 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         } 
         // ✅ CASE 3: Has template ID but no golden HTML and no progress - empty editor
         else if (this.templateId) {
-          console.log('⚠️ [visual-editor] No saved progress or golden HTML - starting empty');
           this.restoreProgress(); // Try anyway, might have something
           // ✅ If restoration happened, save again to update timestamp
           setTimeout(() => {
             this.autoSave();
-            console.log('✅ [visual-editor] Auto-save after restoring progress');
           }, 500);
         }
         // ✅ CASE 3: No template ID - FRESH EDITOR (do nothing)
@@ -856,91 +820,50 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 
   private restoreProgress(): void {
     if (!this.templateId) {
-      console.log('⚠️ [restoreProgress] Skipped - no templateId');
       return;
     }
-    
-    console.log('🔄 [restoreProgress] ========================================');
-    console.log('🔄 [restoreProgress] ATTEMPTING TO RESTORE VISUAL EDITOR STATE');
-    console.log('🔄 [restoreProgress] ========================================');
-    console.log('🔄 [restoreProgress] templateId:', this.templateId);
-    
     try {
       // ✅ Try localStorage first (persists on refresh)
       const persistKey = `visual_editor_${this.templateId}_progress`;
       const savedJson = localStorage.getItem(persistKey);
-      
-      console.log('🔍 [restoreProgress] Checking localStorage key:', persistKey);
-      console.log('🔍 [restoreProgress] Found savedJson:', savedJson ? 'YES' : 'NO');
-      console.log('🔍 [restoreProgress] savedJson length:', savedJson?.length || 0);
-      
       // 🔍 DEBUG: Log ALL localStorage keys for this templateId
-      console.log('🔍 [restoreProgress] ALL localStorage keys for this template:');
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.includes(this.templateId)) {
           const value = localStorage.getItem(key);
-          console.log(`   - ${key}: ${value ? value.length + ' chars' : 'null'}`);
         }
       }
       
       if (savedJson) {
         const savedState = JSON.parse(savedJson);
-        
-        console.log('✅ [restoreProgress] Parsed savedState successfully:');
-        console.log('   - hasHtml:', !!savedState.html);
-        console.log('   - hasCss:', !!savedState.css);
-        console.log('   - htmlLength:', savedState.html?.length || 0);
-        console.log('   - cssLength:', savedState.css?.length || 0);
-        console.log('   - savedAt:', savedState.savedAt);
-        console.log('   - HTML preview (first 200 chars):', savedState.html?.substring(0, 200));
-        
         if (savedState && this.editor) {
           if (savedState.html) {
             this.editor.setComponents(savedState.html);
-            console.log('✅ [restoreProgress] ✅ Restored HTML to editor!');
           }
           
           if (savedState.css) {
             this.editor.setStyle(savedState.css);
-            console.log('✅ [restoreProgress] ✅ Restored CSS to editor!');
           }
-          
-          console.log('🎉 [restoreProgress] RESTORE COMPLETE!');
         } else {
-          console.log('⚠️ [restoreProgress] savedState or editor is missing');
-          console.log('   - savedState:', savedState ? 'exists' : 'null');
-          console.log('   - this.editor:', this.editor ? 'exists' : 'null');
         }
       } else {
-        console.log('❌ [restoreProgress] NO SAVED STATE FOUND IN LOCALSTORAGE!');
-        console.log('❌ [restoreProgress] Expected key:', persistKey);
-        console.log('❌ [restoreProgress] This means edits were NOT saved before navigation!');
       }
     } catch (error) {
       console.error('❌ [restoreProgress] FAILED with error:', error);
     }
-    console.log('🔄 [restoreProgress] ========================================');
   }
 
   clearProgress(): void {
     if (!this.templateId) return;
     const persistKey = `visual_editor_${this.templateId}_progress`;
     localStorage.removeItem(persistKey);
-    console.log('✅ [visual-editor] Cleared progress for template:', this.templateId);
   }
 
   private loadFailedEdits(templateId: string): void {
     // ✅ CRITICAL DEFENSE: Check if editing mode is 'original' - if so, NEVER show failed edits
     const editingModeKey = `visual_editor_${templateId}_editing_mode`;
     const editingMode = localStorage.getItem(editingModeKey);
-    
-    console.log('🔍 [loadFailedEdits] Checking editing mode...');
-    console.log('🔍 [loadFailedEdits] Editing mode:', editingMode);
-    
     if (editingMode === 'original') {
-      console.log('🚫 [loadFailedEdits] Editing ORIGINAL template - failed edits widget DISABLED');
-      console.log('🚫 [loadFailedEdits] Reason: Original template has no AI modifications, so no failed edits exist');
       this.showFloatingWidget = false;
       this.failedEdits = [];
       return;
@@ -950,46 +873,29 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     
     // ✅ Check BOTH localStorage and sessionStorage (QA page uses localStorage, variants use sessionStorage)
     let failedEditsJson = localStorage.getItem(failedKey) || sessionStorage.getItem(failedKey);
-    
-    console.log('🔍 [loadFailedEdits] Checking for failed edits...');
-    console.log('🔍 [loadFailedEdits] Key:', failedKey);
-    console.log('🔍 [loadFailedEdits] Found in localStorage:', !!localStorage.getItem(failedKey));
-    console.log('🔍 [loadFailedEdits] Found in sessionStorage:', !!sessionStorage.getItem(failedKey));
-    
     if (!failedEditsJson) {
-      console.log('❌ [loadFailedEdits] No failed edits found');
       this.showFloatingWidget = false;
       return;
     }
     
     try {
       this.failedEdits = JSON.parse(failedEditsJson);
-      
-      console.log('✅ [loadFailedEdits] Loaded', this.failedEdits.length, 'failed edits');
-      console.log('🔍 [loadFailedEdits] Failed edits:', this.failedEdits);
-      
       if (this.failedEdits.length > 0) {
         this.showFloatingWidget = true;
-        console.log('✅ [loadFailedEdits] Showing floating widget - showFloatingWidget:', this.showFloatingWidget);
-        console.log('✅ [loadFailedEdits] failedEdits count:', this.failedEdits.length);
-        
         const pulseKey = `${this.PULSE_SHOWN_KEY}_${templateId}`;
         const pulseShown = sessionStorage.getItem(pulseKey);
         
         if (!pulseShown) {
           this.hasShownPulseAnimation = false;
           sessionStorage.setItem(pulseKey, 'true');
-          console.log('🎬 [loadFailedEdits] Will show pulse animation');
         } else {
           this.hasShownPulseAnimation = true;
-          console.log('⏭️  [loadFailedEdits] Pulse animation already shown');
         }
         
         // ✅ Force change detection to show the widget
         this.cdr.markForCheck();
       } else {
         this.showFloatingWidget = false;
-        console.log('❌ [loadFailedEdits] No failed edits to show');
       }
     } catch (error) {
       console.error('❌ [loadFailedEdits] Error parsing failed edits:', error);
@@ -1004,31 +910,24 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       try {
         const position = JSON.parse(savedPosition);
         this.widgetPosition = position;
-        console.log('🔄 [RESTORE] Restored widget position:', this.widgetPosition);
       } catch (error) {
         console.error('❌ [RESTORE] Failed to restore widget position');
         this.widgetPosition = { x: 20, y: 100 }; // Default pixel position
       }
     } else {
       this.widgetPosition = { x: 20, y: 100 }; // Default pixel position
-      console.log('🔄 [RESTORE] Using default widget position:', this.widgetPosition);
     }
   }
 
   private saveWidgetPosition(): void {
     localStorage.setItem(this.WIDGET_POSITION_KEY, JSON.stringify(this.widgetPosition));
-    console.log('💾 [SAVE] Saved widget position:', this.widgetPosition);
   }
 
   onButtonMouseDown(event: MouseEvent): void {
     const currentTime = Date.now();
     const timeSinceLastClick = currentTime - this.lastButtonClickTime;
-    
-    console.log('🔵 [MOUSEDOWN] Time since last click:', timeSinceLastClick, 'ms');
-    
     // If this is the SECOND mousedown within threshold, START DRAGGING
     if (timeSinceLastClick < this.DOUBLE_CLICK_THRESHOLD && timeSinceLastClick > 0) {
-      console.log('✅ [SECOND MOUSEDOWN - HOLD TO DRAG]');
       event.stopPropagation();
       event.preventDefault();
       
@@ -1046,14 +945,10 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         x: event.clientX - rect.left,
         y: event.clientY - rect.top
       };
-      
-      console.log('🔵 Drag offset:', this.dragOffset);
-      
       // Reset timer so third click won't trigger
       this.lastButtonClickTime = 0;
     } else {
       // This is the FIRST click, just record the time
-      console.log('1️⃣ [FIRST CLICK MOUSEDOWN]');
       this.lastButtonClickTime = currentTime;
     }
   }
@@ -1063,12 +958,8 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     
     const currentTime = Date.now();
     const timeSinceMouseDown = currentTime - this.lastButtonClickTime;
-    
-    console.log('🔵 [CLICK/MOUSEUP] Time since mousedown:', timeSinceMouseDown, 'ms');
-    
     // Only toggle if this is a complete first click (not the start of second click)
     if (timeSinceMouseDown < this.DOUBLE_CLICK_THRESHOLD && this.lastButtonClickTime > 0) {
-      console.log('✅ [FIRST CLICK COMPLETE] Toggling widget');
       this.isWidgetOpen = !this.isWidgetOpen;
       
       // Initialize modal position when opening
@@ -1077,7 +968,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
           x: this.widgetPosition.x,
           y: this.widgetPosition.y + 70  // Position modal below button
         };
-        console.log('📍 [MODAL INIT] Modal positioned at:', this.modalPosition);
       }
       
       if (this.isWidgetOpen && !this.hasShownPulseAnimation) {
@@ -1087,7 +977,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       this.cdr.markForCheck();
     } else {
       // Old click (timeout expired), just toggle immediately
-      console.log('✅ [IMMEDIATE TOGGLE] Old click, toggle now');
       this.isWidgetOpen = !this.isWidgetOpen;
       
       // Initialize modal position when opening
@@ -1096,7 +985,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
           x: this.widgetPosition.x,
           y: this.widgetPosition.y + 70  // Position modal below button
         };
-        console.log('📍 [MODAL INIT] Modal positioned at:', this.modalPosition);
       }
       
       if (this.isWidgetOpen && !this.hasShownPulseAnimation) {
@@ -1118,7 +1006,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 
   onDragMove(event: MouseEvent): void {
     if (!this.isDragging || !this.dragEnabled) {
-      console.log('🟡 [DRAG MOVE] Skipped - isDragging:', this.isDragging, 'dragEnabled:', this.dragEnabled);
       return;
     }
     
@@ -1137,9 +1024,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     y = Math.max(0, Math.min(y, viewportHeight - buttonSize));
     
     const newPosition = { x, y };
-    
-    console.log('🟡 [DRAG MOVE] New position (px):', newPosition);
-    
     this.widgetPosition = newPosition;
     
     // 🆕 ALSO move the modal to follow the button
@@ -1148,7 +1032,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         x: x,
         y: y + 70  // Offset so modal appears below button
       };
-      console.log('🟡 [DRAG MOVE] Modal following button to:', this.modalPosition);
     }
     
     this.cdr.markForCheck();
@@ -1170,13 +1053,11 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
   onDocumentMouseMove(event: MouseEvent): void {
     // Check button dragging
     if (this.isDragging && this.dragEnabled) {
-      console.log('📍 [DOCUMENT MOUSEMOVE] Calling onDragMove for button');
       this.onDragMove(event);
     }
     
     // Check modal dragging
     if (this.isModalDragging && this.modalDragEnabled) {
-      console.log('📍 [DOCUMENT MOUSEMOVE] Calling onModalDragMove for modal');
       this.onModalDragMove(event);
     }
   }
@@ -1184,11 +1065,9 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
   @HostListener('document:mouseup', ['$event'])
   onDocumentMouseUp(event: MouseEvent): void {
     if (this.isDragging) {
-      console.log('🛑 [DOCUMENT MOUSEUP] Ending button drag');
       this.onDragEnd(event);
     }
     if (this.isModalDragging) {
-      console.log('🛑 [DOCUMENT MOUSEUP] Ending modal drag');
       this.onModalDragEnd(event);
     }
   }
@@ -1200,12 +1079,8 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
   onModalHeaderMouseDown(event: MouseEvent): void {
     const currentTime = Date.now();
     const timeSinceLastClick = currentTime - this.lastModalClickTime;
-    
-    console.log('🟣 [MODAL MOUSEDOWN] Time since last click:', timeSinceLastClick, 'ms');
-    
     // If this is the SECOND mousedown within threshold, START DRAGGING
     if (timeSinceLastClick < this.DOUBLE_CLICK_THRESHOLD && timeSinceLastClick > 0) {
-      console.log('✅ [MODAL SECOND MOUSEDOWN - HOLD TO DRAG]');
       event.stopPropagation();
       event.preventDefault();
       
@@ -1230,16 +1105,12 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         x: rect.left,
         y: rect.top
       };
-      
-      console.log('🟣 Modal drag offset:', this.modalDragOffset);
-      
       // Reset timer so third click won't trigger
       this.lastModalClickTime = 0;
       
       this.cdr.markForCheck();
     } else {
       // This is the FIRST click, just record the time
-      console.log('1️⃣ [MODAL FIRST MOUSEDOWN]');
       this.lastModalClickTime = currentTime;
     }
   }
@@ -1250,13 +1121,8 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 
   onModalDragMove(event: MouseEvent): void {
     if (!this.isModalDragging || !this.modalDragEnabled) {
-      console.log('� [MODAL DRAG MOVE] Skipped - isModalDragging:', this.isModalDragging, 'modalDragEnabled:', this.modalDragEnabled);
       return;
     }
-    
-    console.log('🟠 [MODAL DRAG MOVE] Mouse position:', { x: event.clientX, y: event.clientY });
-    console.log('🟠 [MODAL DRAG MOVE] Modal drag offset:', this.modalDragOffset);
-    
     event.stopPropagation();
     event.preventDefault();
     
@@ -1266,17 +1132,11 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     // Calculate new position in pixels
     let x = event.clientX - this.modalDragOffset.x;
     let y = event.clientY - this.modalDragOffset.y;
-    
-    console.log('🟠 [MODAL DRAG MOVE] Calculated position before constraint:', { x, y });
-    
     // Constrain to viewport (modal is approximately 400px wide and 500px tall)
     x = Math.max(0, Math.min(x, viewportWidth - 400));
     y = Math.max(0, Math.min(y, viewportHeight - 500));
     
     const newPosition = { x, y };
-    
-    console.log('🟠 [MODAL DRAG MOVE] New position (px):', newPosition);
-    
     this.modalPosition = newPosition;
     
     // 🆕 ALSO move the container (blue circle) to follow the modal
@@ -1290,14 +1150,11 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 
   onModalDragEnd(event: MouseEvent): void {
     if (this.isModalDragging) {
-      console.log('🔴 [MODAL DRAG END] Ending drag at position:', this.modalPosition);
       event.stopPropagation();
       event.preventDefault();
       
       this.isModalDragging = false;
       // Keep modalDragEnabled true so modal stays draggable
-      console.log('🔴 [MODAL DRAG END] isModalDragging set to false, modalDragEnabled:', this.modalDragEnabled);
-      
       // Save the button position too
       this.saveWidgetPosition();
     }
@@ -1526,8 +1383,6 @@ async onCheckPreview(): Promise<void> {
 
   // ✅ CRITICAL FIX: If temp ID, prompt for name and save to database first
   if (this.templateId.startsWith('temp_')) {
-    console.log('🔍 [Check Preview] Temporary ID detected - prompting for template name...');
-    
     // Get current HTML
     const html = this.editor.getHtml();
     const css = this.editor.getCss();
@@ -1537,21 +1392,16 @@ async onCheckPreview(): Promise<void> {
     const templateName = await this.promptTemplateName();
     
     if (!templateName) {
-      console.log('❌ [Check Preview] User cancelled template name prompt');
       return;
     }
     
     // Save to database
-    console.log('💾 [Check Preview] Saving template to database...');
     const newTemplateId = await this.saveNewTemplate(templateName, fullHtml);
     
     if (!newTemplateId) {
       console.error('❌ [Check Preview] Failed to save template');
       return;
     }
-    
-    console.log('✅ [Check Preview] Template saved with ID:', newTemplateId);
-    
     // Update templateId to the real database ID
     this.templateId = newTemplateId;
     
@@ -1560,24 +1410,14 @@ async onCheckPreview(): Promise<void> {
     
     // Continue with normal flow using the new template ID
   }
-
-  console.log('🔍 [Check Preview] Initiated...');
-  
   // ✅ CRITICAL: Perform SYNCHRONOUS save to ensure data is written BEFORE navigation
-  console.log('🔍 [Check Preview] Performing final synchronous save...');
-  
   try {
     const html = this.editor.getHtml();
     const css = this.editor.getCss();
     
     if (html && html.trim()) {
-      console.log('🔍 [Check Preview] HTML length:', html.length);
-      console.log('🔍 [Check Preview] CSS length:', css?.length || 0);
-      
       // Save immediately (synchronous)
       this.templateState.saveEditorProgress(this.templateId, html, css);
-      console.log('✅ [Check Preview] Editor progress saved synchronously');
-      
       // Also save to visual_editor progress key
       const editorState = {
         html,
@@ -1586,10 +1426,7 @@ async onCheckPreview(): Promise<void> {
         savedAt: new Date().toISOString()
       };
       localStorage.setItem(`visual_editor_${this.templateId}_progress`, JSON.stringify(editorState));
-      console.log('✅ [Check Preview] Visual editor progress saved');
-      
     } else {
-      console.warn('⚠️ [Check Preview] Empty HTML, skipping save');
     }
   } catch (error) {
     console.error('❌ [Check Preview] Save failed:', error);
@@ -1604,9 +1441,6 @@ async onCheckPreview(): Promise<void> {
     try {
       const meta = JSON.parse(useVariantMeta);
       const { runId, no } = meta;
-      
-      console.log('🔍 [Check Preview] Found use-variant metadata:', meta);
-      
       // ✅ CRITICAL: Get HTML and CSS, then combine them into full HTML document
       const html = this.editor.getHtml();
       const css = this.editor.getCss();
@@ -1614,14 +1448,8 @@ async onCheckPreview(): Promise<void> {
       
       // ✅ Save FULL HTML (with embedded CSS) to the key Use Variants page expects
       sessionStorage.setItem('visual_editor_edited_html', fullHtml);
-      console.log('✅ [Check Preview] Saved edited HTML with CSS for Use Variants page');
-      console.log('✅ [Check Preview] Full HTML length:', fullHtml.length);
-      
       // ✅ CRITICAL: Set return flag Use Variants page expects
       sessionStorage.setItem('visual_editor_return_use_variant', 'true');
-      console.log('✅ [Check Preview] Set Use Variants return flag');
-      
-      console.log(`🚀 [Check Preview] Navigating back to Use Variants page: /qa/${this.templateId}/use/${runId}/${no}`);
       this.router.navigate(['/qa', this.templateId, 'use', runId, no]);
     } catch (error) {
       console.error('❌ [Check Preview] Failed to parse use-variant metadata, falling back to QA page:', error);
@@ -1629,18 +1457,12 @@ async onCheckPreview(): Promise<void> {
       // Fallback to QA page if parsing fails
       const returnKey = `visual_editor_${this.templateId}_return_flag`;
       localStorage.setItem(returnKey, 'true');
-      
-      console.log(`🚀 [Check Preview] Fallback - Navigating to /qa/${this.templateId}`);
       this.router.navigate(['/qa', this.templateId]);
     }
   } else {
     // ✅ User came from QA page - use QA page keys
     const returnKey = `visual_editor_${this.templateId}_return_flag`;
     localStorage.setItem(returnKey, 'true');
-    console.log(`✅ [Check Preview] Set QA page return flag: ${returnKey}`);
-    
-    console.log('🔍 [Check Preview] No use-variant metadata found - user came from QA page');
-    console.log(`🚀 [Check Preview] Navigating to /qa/${this.templateId}`);
     this.router.navigate(['/qa', this.templateId]);
   }
 }  /**
@@ -1667,9 +1489,6 @@ async onCheckPreview(): Promise<void> {
     if (event) {
       event.stopPropagation();
     }
-    
-    console.log('🔍 [SEARCH] Triggering browser search for text:', text);
-    
     try {
       // Find the GrapesJS iframe
       let iframe = document.querySelector('iframe#gjs') as HTMLIFrameElement;
@@ -1688,8 +1507,6 @@ async onCheckPreview(): Promise<void> {
         
         // Copy text to clipboard for easy pasting
         navigator.clipboard.writeText(text).then(() => {
-          console.log('✅ [SEARCH] Text copied to clipboard');
-          
           // Show helpful message
           this.showToast(
             `Text copied! Press Ctrl+F to search manually (text may span HTML boundaries)`,
@@ -1703,7 +1520,6 @@ async onCheckPreview(): Promise<void> {
           );
         });
       } else {
-        console.log('⚠️ [SEARCH] Iframe not found');
         this.showToast('Editor not ready. Please wait and try again.', 'warning');
       }
     } catch (error) {

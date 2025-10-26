@@ -304,7 +304,6 @@ getConversationCached(conversationId: string): ConversationState | null {
 cacheConversation(conversationId: string, state: ConversationState): void {
   try {
     localStorage.setItem(this.kConversation(conversationId), JSON.stringify(state));
-    console.log('✅ [template-generation] Saved conversation to localStorage:', conversationId);
   } catch (err) {
     console.error('❌ Failed to cache conversation to localStorage:', err);
   }

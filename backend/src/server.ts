@@ -21,6 +21,7 @@ import qaRouter from '@src/routes/qa';
 import authRouter  from '@src/routes/auth';
 import adminRouter from '@src/routes/admin';
 import templateGenerationRouter from '@src/routes/templateGeneration'; // ✅ NEW
+import debugLogsRouter from '@src/routes/debug-logs'; // Debug logging endpoint
 
 import Paths from '@src/common/constants/Paths';
 import ENV from '@src/common/constants/ENV';
@@ -95,6 +96,9 @@ mailchimp.setConfig({
 // Auth routes (must be before other API routes)
 app.use('/api/auth', authRouter);
 
+// Debug logging endpoint
+app.use('/api/debug-logs', debugLogsRouter);
+
 // app.use('/api/qa-new', qaNewRouter);
 // app.use('/api/qa', qaNewRouter);
 
@@ -165,7 +169,6 @@ app.use('/api', campaignRoutes);
 const port = Number(process.env.PORT ?? 3000);
 app.set('port', port);
 app.listen(port, () => {
-  console.log(`✅ API listening on http://localhost:${port}`);
 });
 
 // Crash hardening

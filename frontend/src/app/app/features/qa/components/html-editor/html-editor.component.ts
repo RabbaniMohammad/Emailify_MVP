@@ -29,23 +29,18 @@ let globalMonaco: typeof Monaco | null = null;
 let globalMonacoLoading: Promise<typeof Monaco> | null = null;
 
 // ✅ VERSION CHECK - Verify latest code is loaded
-console.log('🔷 [html-editor.component.ts] Code version: 2025-10-19 19:24 - Monaco Singleton Fixed');
-
 async function getMonacoInstance(): Promise<typeof Monaco> {
   // If already loaded, return it
   if (globalMonaco) {
-    console.log('🟢 [monaco-singleton] Returning existing Monaco instance');
     return globalMonaco;
   }
   
   // If currently loading, wait for it
   if (globalMonacoLoading) {
-    console.log('🟡 [monaco-singleton] Monaco already loading, waiting...');
     return globalMonacoLoading;
   }
   
   // Start loading
-  console.log('🔵 [monaco-singleton] Loading Monaco for the first time...');
   globalMonacoLoading = (async () => {
     try {
       // Configure loader
@@ -60,10 +55,6 @@ async function getMonacoInstance(): Promise<typeof Monaco> {
       
       // Load Monaco
       const monaco = await loader.init();
-      
-      console.log('🔍 [monaco-singleton] Monaco object from loader:', monaco);
-      console.log('🔍 [monaco-singleton] window.monaco:', (window as any).monaco);
-      
       // ✅ FIX: Monaco loader returns undefined, but attaches to window.monaco
       const monacoInstance = monaco || (window as any).monaco;
       
@@ -72,7 +63,6 @@ async function getMonacoInstance(): Promise<typeof Monaco> {
       }
       
       globalMonaco = monacoInstance;
-      console.log('✅ [monaco-singleton] Monaco loaded successfully!');
       return monacoInstance;
     } catch (err) {
       console.error('❌ [monaco-singleton] Failed to load Monaco:', err);
@@ -119,8 +109,6 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
   @Output() editorClosed = new EventEmitter<void>();
 
   ngOnInit(): void {
-    console.log('🔵 [html-editor] ngOnInit - initialHtml length:', this.initialHtml.length);
-    console.log('🔵 [html-editor] initialHtml preview:', this.initialHtml.substring(0, 200));
   }
 
   private snackBar = inject(MatSnackBar);
@@ -167,11 +155,8 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
   private async initializeEditor(): Promise<void> {
     // ✅ CRITICAL: Prevent multiple initializations
     if (this.editor || this.isEditorReady || this.isInitializing) {
-      console.log('🟡 [html-editor] Skipping initialization - already initialized or in progress');
       return;
     }
-
-    console.log('🔵 [html-editor] Starting Monaco Editor initialization...');
     this.isInitializing = true;
     this.isLoading = true;
 
@@ -184,14 +169,8 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
         this.cdr.markForCheck();
         return;
       }
-
-      console.log('🔵 [html-editor] Loading Monaco using singleton...');
-      
       // ✅ Use singleton to load Monaco (prevents multiple init() calls)
       this.monaco = await getMonacoInstance();
-      
-      console.log('✅ [html-editor] Monaco instance obtained:', !!this.monaco, 'has editor:', !!this.monaco?.editor);
-      
       // ✅ CRITICAL NULL CHECK before using monaco.editor
       if (!this.monaco || !this.monaco.editor) {
         console.error('❌ [html-editor] Monaco or monaco.editor is null/undefined!');
@@ -201,15 +180,6 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
       // Restore auto-saved content if exists
       const autoSaved = this.checkForAutoSave();
       const initialValue = autoSaved || this.initialHtml;
-
-      console.log('🔵 [html-editor] Creating editor instance with', initialValue?.length || 0, 'chars...');
-      console.log('🔵 [html-editor] Pre-create checks:', {
-        hasMonaco: !!this.monaco,
-        hasEditor: !!this.monaco?.editor,
-        hasCreate: typeof this.monaco?.editor?.create === 'function',
-        hasContainer: !!this._editorContainer?.nativeElement
-      });
-      
       // ✅ ULTRA DEFENSIVE - Create editor instance
       this.editor = this.monaco!.editor!.create(this._editorContainer!.nativeElement, {
         value: initialValue,
@@ -240,13 +210,8 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
           strings: true,
         },
       });
-
-      console.log('✅ [html-editor] Editor instance created successfully');
-      
       this.originalHtml = initialValue;
       this.updateLineCount();
-
-      console.log('🔵 [html-editor] Setting up event listeners and auto-save...');
       this.setupEventListeners();
       this.setupKeyboardShortcuts();
       this.setupAutoSave();
@@ -264,9 +229,6 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
 
       this.isLoading = false;
       this.cdr.markForCheck();
-
-      console.log('✅ [html-editor] Monaco Editor fully initialized and ready!');
-
       if (autoSaved) {
         this.showInfo('Restored auto-saved changes');
       }
@@ -480,8 +442,6 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
 
   // UPDATED: Reset flags on cleanup
   private cleanup(): void {
-    console.log('🔴 [html-editor] Cleanup called');
-    
     if (this.autoSaveInterval) {
       clearInterval(this.autoSaveInterval);
       this.autoSaveInterval = null;
@@ -502,8 +462,6 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
     this.isEditorReady = false;
     this.isInitializing = false; // ✅ IMPORTANT: Set to false, not true!
     this.isLoading = true;
-    
-    console.log('🔴 [html-editor] Cleanup complete');
   }
 
   getCursorInfo(): string {

@@ -371,10 +371,10 @@ router.post('/campaign/send-test', async (req: Request, res: Response) => {
 router.post('/campaign/cleanup-temp', async (req: Request, res: Response) => {
   try {
     const { audienceId, emails } = req.body;
-    const validEmails = emails.filter(e => isValidEmail(e));
+    const validEmails = emails.filter((e: string) => isValidEmail(e));
 
     await MC.lists.batchListMembers(audienceId, {
-      members: validEmails.map(email => ({
+      members: validEmails.map((email: string) => ({
         email_address: email,
         status: 'archived'
       })),

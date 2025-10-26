@@ -168,13 +168,7 @@ router.get('/', async (req: Request, res: Response) => {
     const query  = String(req.query.query ?? '').trim().toLowerCase();
     const limit  = Math.min(Number(req.query.limit ?? 50), 250);
     const offset = Number(req.query.offset ?? 0);
-
-    console.log('📋 [LIST_TEMPLATES] Fetching templates list');
-    console.log('📋 [LIST_TEMPLATES] Query:', query || '(none)');
-    console.log('📋 [LIST_TEMPLATES] Limit:', limit, 'Offset:', offset);
-
     // ✅ Fetch Mailchimp templates
-    console.log('📬 [LIST_TEMPLATES] Fetching Mailchimp templates...');
     const resp: McTemplatesList = await mc.templates.list({ count: limit, offset, type: 'user' });
 
     const source: McTemplate[] = Array.isArray(resp.templates) ? resp.templates : [];
@@ -203,27 +197,12 @@ router.get('/', async (req: Request, res: Response) => {
         source: 'mailchimp', // ✅ NEW FIELD
       }))
       .filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
-
-    console.log('✅ [LIST_TEMPLATES] Mailchimp templates fetched:', mailchimpItems.length);
-
     // ✅ Fetch Generated templates from MongoDB
-    console.log('🤖 [LIST_TEMPLATES] Fetching generated templates from MongoDB...');
     const generatedTemplates = await GeneratedTemplate.find({})
       .sort({ createdAt: -1 })
       .limit(100) // Reasonable limit
       .lean();
-
-    console.log('✅ [LIST_TEMPLATES] Generated templates fetched:', generatedTemplates.length);
-
     const generatedItems = generatedTemplates.map((t: any) => {
-      console.log('📊 [LIST_TEMPLATES] Mapping template:', {
-        id: t.templateId,
-        name: t.name,
-        templateType: t.templateType,
-        createdBy: t.createdBy,
-        source: t.source
-      });
-
       return {
         id: t.templateId,
         name: t.name,
@@ -242,24 +221,14 @@ router.get('/', async (req: Request, res: Response) => {
         source: t.source || 'AI Generated', // ✅ NEW FIELD
       };
     });
-
-    console.log('📊 [LIST_TEMPLATES] Generated items mapped:', generatedItems.length);
-
     // ✅ Merge both lists (generated templates first, then Mailchimp)
     let items = [...generatedItems, ...mailchimpItems];
-    console.log('🔀 [LIST_TEMPLATES] Merged lists, total before filter:', items.length);
-
     // ✅ Apply search filter if provided
     if (query) {
-      console.log('🔍 [LIST_TEMPLATES] Applying search filter:', query);
       items = items.filter((t) => t.name.toLowerCase().includes(query));
-      console.log('✅ [LIST_TEMPLATES] Filtered results:', items.length);
     }
 
     const total = items.length;
-    
-    console.log(`✅ [LIST_TEMPLATES] Final result: ${generatedItems.length} generated + ${mailchimpItems.length} Mailchimp = ${total} total`);
-
     res.json({ items, total });
   } catch (err: unknown) {
     const e = err as any;
@@ -309,7 +278,6 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
     // Check if the same template already exists (by exact html OR by name + user)
     const existing = await GeneratedTemplate.findOne({ $or: [ { html: finalContent }, { name: finalName, userId } ] });
     if (existing) {
-      console.log('ℹ️ [POST /api/templates] Template already exists, returning existing id:', existing.templateId);
       return res.json({ id: existing.templateId });
     }
 
@@ -344,9 +312,6 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
     }
 
     const generatedTemplate = await GeneratedTemplate.create(doc);
-
-    console.log('✅ [POST /api/templates] Created GeneratedTemplate:', generatedTemplate.templateId);
-
     res.json({ id: generatedTemplate.templateId || generatedTemplate._id });
   } catch (err: any) {
     console.error('❌ [POST /api/templates] Error creating template:', err);
@@ -364,13 +329,8 @@ router.get('/:id', async (req: Request, res: Response) => {
   });
 
   const id = String(req.params.id);
-  
-  console.log('📡 [GET_TEMPLATE] Fetching template:', id);
-  
   try {
     if (isGeneratedTemplate(id)) {
-      console.log('🤖 [GET_TEMPLATE] Detected as generated template');
-      
       // ✅ Fetch full template with all metadata
       const template = await GeneratedTemplate.findOne({ templateId: id });
       
@@ -378,18 +338,6 @@ router.get('/:id', async (req: Request, res: Response) => {
         console.error('❌ [GET_TEMPLATE] Generated template not found:', id);
         throw new Error(`Generated template not found: ${id}`);
       }
-      
-      console.log('✅ [GET_TEMPLATE] Generated template found:', template.name);
-      console.log('📊 [GET_TEMPLATE] Template metadata:', {
-        templateType: template.templateType,
-        createdBy: template.createdBy,
-        source: template.source,
-        responsive: template.responsive,
-        createdAt: template.createdAt,
-        updatedAt: template.updatedAt
-      });
-      console.log('📄 [GET_TEMPLATE] HTML length:', template.html?.length);
-      
       return res.status(200).json({ 
         id, 
         name: template.name, 
@@ -409,31 +357,15 @@ router.get('/:id', async (req: Request, res: Response) => {
         screenshotUrl: null,
       });
     }
-
-    console.log('📬 [GET_TEMPLATE] Fetching Mailchimp template');
     const sdk: any = mc;
     let template: any = null;
     
     if (typeof sdk.templates?.get === 'function') {
-      console.log('📡 [GET_TEMPLATE] Using sdk.templates.get()');
       template = await sdk.templates.get(id);
     } else if (typeof sdk.templates?.getTemplate === 'function') {
-      console.log('📡 [GET_TEMPLATE] Using sdk.templates.getTemplate()');
       template = await sdk.templates.getTemplate(id);
     }
-
-    console.log('📄 [GET_TEMPLATE] Fetching HTML content...');
     const { name, html, source } = await getHtmlForTemplate(id);
-    
-    console.log('✅ [GET_TEMPLATE] Mailchimp template fetched');
-    console.log(`📊 [GET_TEMPLATE] Template ${id} → html length: ${html.length} (source: ${source})`);
-    console.log('📊 [GET_TEMPLATE] Metadata:', {
-      type: template?.type,
-      category: template?.category,
-      createdBy: template?.created_by,
-      responsive: template?.responsive
-    });
-    
     return res.status(200).json({ 
       id, 
       name, 
@@ -470,20 +402,15 @@ router.delete('/:id', async (req: Request, res: Response) => {
     const id = String(req.params.id);
     
     if (isGeneratedTemplate(id)) {
-      console.log('🗑️ Deleting generated template:', id);
-      
       const result = await GeneratedTemplate.deleteOne({ templateId: id });
       
       if (result.deletedCount === 0) {
-        console.warn('⚠️ Generated template not found:', id);
         return res.json({ 
           success: true, 
           message: 'Template already deleted or not found',
           id 
         });
       }
-      
-      console.log('✅ Generated template deleted:', id);
       return res.json({ 
         success: true, 
         message: 'Generated template deleted successfully',
@@ -492,9 +419,6 @@ router.delete('/:id', async (req: Request, res: Response) => {
     }
 
     const templates: any = MC_ANY.templates;
-    
-    console.log('🗑️ Deleting Mailchimp template:', id);
-    
     if (typeof templates.delete === 'function') {
       await templates.delete(id);
     } else if (typeof templates.remove === 'function') {
@@ -504,8 +428,6 @@ router.delete('/:id', async (req: Request, res: Response) => {
     } else {
       throw new Error('Delete method not available on templates API');
     }
-    
-    console.log('✅ Template deleted successfully:', id);
     res.json({ 
       success: true, 
       message: 'Template deleted successfully',
@@ -518,7 +440,6 @@ router.delete('/:id', async (req: Request, res: Response) => {
     const message = err?.response?.text || err?.message || 'Failed to delete template';
     
     if (status === 404) {
-      console.warn('⚠️ Template not found, may have been already deleted');
       return res.json({ 
         success: true, 
         message: 'Template already deleted or not found',
@@ -558,8 +479,6 @@ router.get('/:id/raw', async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
     res.send(fullHtml);
-
-    console.log(`Template ${id} → html length: ${fullHtml.length} (source: ${source})`);
   } catch (err: any) {
     console.error(`❌ Error fetching raw template ${req.params.id}:`, err);
     res

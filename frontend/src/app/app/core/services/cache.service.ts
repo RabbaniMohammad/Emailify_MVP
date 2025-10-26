@@ -193,8 +193,6 @@ export class CacheService {
    * @param userSpecificPrefixes Array of prefixes for user-specific data
    */
   clearUserData(userSpecificPrefixes: string[] = ['template-', 'user-', 'last-']): void {
-    console.log('🧹 clearUserData called with prefixes:', userSpecificPrefixes);
-    
     // Clear memory cache
     this.memoryCache.clear();
 
@@ -206,12 +204,10 @@ export class CacheService {
 
     // Clear only user-specific items from localStorage
     userSpecificPrefixes.forEach(prefix => {
-      console.log(`🔍 Clearing prefix "${prefix}" from localStorage`);
       this.clearStorageByPrefix(prefix, localStorage);
     });
     
     // Log what's left in localStorage
-    console.log('📦 Remaining localStorage keys:', Object.keys(localStorage));
   }
 
   /**
@@ -269,10 +265,7 @@ export class CacheService {
           keysToRemove.push(key);
         }
       }
-      
-      console.log(`  ➜ Found ${keysToRemove.length} keys to remove with prefix "${prefix}":`, keysToRemove);
       keysToRemove.forEach(key => {
-        console.log(`    ✂️ Removing: ${key}`);
         storage.removeItem(key);
       });
     } catch (error) {

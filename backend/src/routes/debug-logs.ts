@@ -68,7 +68,6 @@ router.post('/clear', async (req: Request, res: Response) => {
     // Delete the log file if it exists
     if (fs.existsSync(logFilePath)) {
       fs.unlinkSync(logFilePath);
-      console.log(`✅ Cleared debug logs for session: ${sessionId}`);
     }
 
     res.json({ success: true, message: 'Logs cleared' });

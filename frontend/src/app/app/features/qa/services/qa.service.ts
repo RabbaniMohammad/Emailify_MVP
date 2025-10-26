@@ -188,7 +188,6 @@ export class QaService {
           try {
             stats = JSON.parse(statsJson);
           } catch (e) {
-            console.warn('⚠️ Failed to parse stats from localStorage');
           }
         }
         
@@ -199,7 +198,6 @@ export class QaService {
           try {
             timings = JSON.parse(timingsJson);
           } catch (e) {
-            console.warn('⚠️ Failed to parse timings from localStorage');
           }
         }
         
@@ -209,9 +207,7 @@ export class QaService {
         if (atomicResultsJson) {
           try {
             atomicResults = JSON.parse(atomicResultsJson);
-            console.log('✅ [qa.service] Restored atomicResults from localStorage:', atomicResults?.length || 0, 'items');
           } catch (e) {
-            console.warn('⚠️ Failed to parse atomicResults from localStorage');
           }
         }
         
@@ -355,19 +351,16 @@ export class QaService {
           // ✅ CRITICAL: Save stats to localStorage for persistence
           if (res.stats) {
             localStorage.setItem(this.kStats(id), JSON.stringify(res.stats));
-            console.log('✅ [qa.service] Saved stats to localStorage:', res.stats);
           }
           
           // ✅ CRITICAL: Save timings to localStorage for persistence
           if (res.timings) {
             localStorage.setItem(this.kTimings(id), JSON.stringify(res.timings));
-            console.log('✅ [qa.service] Saved timings to localStorage:', res.timings);
           }
           
           // ✅ CRITICAL: Save atomicResults to localStorage for persistence (includes skipped edits)
           if (res.atomicResults && res.atomicResults.length > 0) {
             localStorage.setItem(this.kAtomicResults(id), JSON.stringify(res.atomicResults));
-            console.log('✅ [qa.service] Saved atomicResults to localStorage:', res.atomicResults.length, 'items');
           }
         } catch (e) {
           console.error('Failed to cache golden template:', e);
@@ -515,8 +508,6 @@ export class QaService {
    */
   clearAllQaData(): void {
     try {
-      console.log('🧹 [qa.service] Clearing ALL QA data on logout...');
-      
       // Get all localStorage keys
       const keysToRemove: string[] = [];
       
@@ -530,9 +521,6 @@ export class QaService {
           keysToRemove.push(key);
         }
       }
-      
-      console.log(`🧹 [qa.service] Found ${keysToRemove.length} keys to remove`);
-      
       // Remove all QA keys
       keysToRemove.forEach(key => localStorage.removeItem(key));
       
@@ -540,8 +528,6 @@ export class QaService {
       this.goldenCache$.clear();
       this.subjectsCache$.clear();
       this.suggestionsCache$.clear();
-      
-      console.log('✅ [qa.service] All QA localStorage data cleared');
     } catch (e) {
       console.error('❌ [qa.service] Failed to clear QA data:', e);
     }
@@ -784,7 +770,6 @@ export class QaService {
   saveChat(runId: string, no: number, thread: ChatThread) {
     try {
       localStorage.setItem(this.kChat(runId, no), JSON.stringify(thread));
-      console.log('✅ [qa.service] Saved chat to localStorage for runId:', runId, 'no:', no);
     } catch (e) {
       console.error('❌ [qa.service] Failed to save chat to localStorage:', e);
     }
@@ -838,7 +823,6 @@ export class QaService {
   saveSnaps(runId: string, snaps: SnapResult[]) {
     try {
       localStorage.setItem(this.kSnaps(runId), JSON.stringify(snaps));
-      console.log('✅ [qa.service] Saved snaps to localStorage for runId:', runId);
     } catch (err) {
       console.error('❌ [qa.service] Failed to save snaps to localStorage:', err);
     }
@@ -895,16 +879,7 @@ export class QaService {
 
   saveGoldenToCache(templateId: string, golden: GoldenResult): void {
     // ✅ Save golden template to IndexedDB for persistence
-    console.log('💾 [qa.service] Saving golden template to IndexedDB');
-    console.log('   - Template ID:', templateId);
-    console.log('   - HTML length:', golden?.html?.length || 0);
-    console.log('   - Failed edits:', golden?.failedEdits?.length || 0);
-    console.log('   - Stats:', golden?.stats);
-    console.log('   - Timings:', golden?.timings);
-    console.log('   - Atomic results:', golden?.atomicResults?.length || 0);
-    
     if (!golden?.html) {
-      console.warn('⚠️ [qa.service] No HTML in golden template, skipping save');
       return;
     }
     
@@ -916,7 +891,6 @@ export class QaService {
       failedEdits: golden.failedEdits || [],
       timestamp: Date.now()
     }).then(() => {
-      console.log('✅ [qa.service] Golden template saved to IndexedDB successfully');
     }).catch((err) => {
       console.error('❌ [qa.service] Failed to save golden template to IndexedDB:', err);
     });
@@ -925,7 +899,6 @@ export class QaService {
     if (golden.stats) {
       try {
         localStorage.setItem(this.kStats(templateId), JSON.stringify(golden.stats));
-        console.log('✅ [qa.service] Saved stats to localStorage:', golden.stats);
       } catch (e) {
         console.error('❌ [qa.service] Failed to save stats to localStorage:', e);
       }
@@ -935,7 +908,6 @@ export class QaService {
     if (golden.timings) {
       try {
         localStorage.setItem(this.kTimings(templateId), JSON.stringify(golden.timings));
-        console.log('✅ [qa.service] Saved timings to localStorage:', golden.timings);
       } catch (e) {
         console.error('❌ [qa.service] Failed to save timings to localStorage:', e);
       }
@@ -945,7 +917,6 @@ export class QaService {
     if (golden.atomicResults && golden.atomicResults.length > 0) {
       try {
         localStorage.setItem(this.kAtomicResults(templateId), JSON.stringify(golden.atomicResults));
-        console.log('✅ [qa.service] Saved atomicResults to localStorage:', golden.atomicResults.length, 'items');
       } catch (e) {
         console.error('❌ [qa.service] Failed to save atomicResults to localStorage:', e);
       }
@@ -963,7 +934,6 @@ export class QaService {
       );
       
       localStorage.setItem(this.kValidLinks(runId), JSON.stringify(clean));
-      console.log('✅ [qa.service] Saved valid links to localStorage for runId:', runId);
     } catch (err) {
       console.error('❌ [qa.service] Failed to save valid links to localStorage:', err);
     }
@@ -1015,23 +985,14 @@ export class QaService {
    * Get chat thread from IndexedDB cache
    */
   async getChatThreadFromCache(runId: string, variantNo: number): Promise<ChatThread | null> {
-    console.log('🔍 [QA Service] Getting chat thread from IndexedDB:', `${runId}:${variantNo}`);
     const cached = await this.db.getConversation(`${runId}:${variantNo}`);
-    console.log('📦 [QA Service] IndexedDB raw result:', cached ? 'FOUND' : 'NOT FOUND', {
-      hasMessages: !!cached?.messages,
-      messagesCount: cached?.messages?.length || 0,
-      hasHtml: !!(cached as any)?.html,
-      htmlLength: (cached as any)?.html?.length || 0
-    });
     if (cached && cached.messages) {
       const thread = {
         html: (cached as any).html || '',
         messages: cached.messages
       };
-      console.log('✅ [QA Service] Returning thread with', thread.html.length, 'chars HTML');
       return thread;
     }
-    console.log('❌ [QA Service] No valid thread found in IndexedDB');
     return null;
   }
 
@@ -1039,11 +1000,6 @@ export class QaService {
    * Save chat thread to IndexedDB cache
    */
   async saveChatThreadToCache(runId: string, variantNo: number, thread: ChatThread): Promise<void> {
-    console.log('💾 [QA Service] Saving chat thread to IndexedDB:', {
-      key: `${runId}:${variantNo}`,
-      htmlLength: thread.html?.length || 0,
-      messagesCount: thread.messages?.length || 0
-    });
     await this.db.cacheConversation({
       runId: `${runId}:${variantNo}`,
       messages: thread.messages,
@@ -1051,7 +1007,6 @@ export class QaService {
       timestamp: Date.now(),
       ...(thread.html && { templateId: thread.html.substring(0, 50) }) // Store snippet for reference
     } as any);
-    console.log('✅ [QA Service] Chat thread saved to IndexedDB');
   }
 
   /**

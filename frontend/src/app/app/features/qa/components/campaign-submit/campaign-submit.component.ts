@@ -156,7 +156,6 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
     // Save template HTML when it changes (set from parent)
     // Only save if we have valid storage keys
     if (changes['templateHtml'] && changes['templateHtml'].currentValue && this._templateId && this._runId && this._variantNo) {
-      console.log('📝 Template HTML input changed, saving to storage');
       this.saveCurrentState();
     }
   }
@@ -172,14 +171,6 @@ ngOnInit(): void {
   this._templateId = this.templateId || this.ar.snapshot.paramMap.get('id') || '';
   this._runId = this.runId || this.ar.snapshot.paramMap.get('runId') || '';
   this._variantNo = this.variantNo || this.ar.snapshot.paramMap.get('no') || '';
-  
-  console.log('🔑 Storage key params:', {
-    templateId: this._templateId,
-    runId: this._runId,
-    variantNo: this._variantNo,
-    source: this.templateId ? 'Input' : 'Route'
-  });
-  
   // Load saved data if exists
   this.loadSavedData();
   
@@ -265,7 +256,6 @@ ngOnInit(): void {
   // Small delay to ensure all observables have emitted initial values
   setTimeout(() => {
     this.isInitialized = true;
-    console.log('✅ Component initialized - auto-save enabled');
     // Force change detection to update button state
     this.cdr.markForCheck();
   }, 100);
@@ -292,21 +282,8 @@ ngOnInit(): void {
    */
   private loadSavedData(): void {
     if (!this._templateId || !this._runId || !this._variantNo) {
-      console.log('❌ Cannot load saved data - missing params:', {
-        templateId: this._templateId,
-        runId: this._runId,
-        variantNo: this._variantNo
-      });
       return;
     }
-    
-    console.log('🔍 Attempting to load data with key:', {
-      templateId: this._templateId,
-      runId: this._runId,
-      variantNo: this._variantNo,
-      storageKey: `campaign_form_${this._templateId}_${this._runId}_${this._variantNo}`
-    });
-    
     const savedData = this.storageService.getCampaignData(
       this._templateId,
       this._runId,
@@ -314,25 +291,8 @@ ngOnInit(): void {
     );
     
     if (!savedData || !savedData.savedAt) {
-      console.log('📭 No saved campaign data found or data is empty');
       return;
     }
-    
-    console.log('📦 Restoring saved campaign data:', {
-      hasSubject: !!savedData.subject,
-      hasAudience: !!savedData.selectedAudience,
-      hasMasterData: !!savedData.masterData?.length,
-      hasReconciliation: !!savedData.reconciliation,
-      reconciliationDetails: savedData.reconciliation ? {
-        existingCount: savedData.reconciliation.summary?.existingCount,
-        newCount: savedData.reconciliation.summary?.newCount,
-        ignoredCount: savedData.reconciliation.summary?.ignoredCount
-      } : null,
-      hasTestEmails: !!savedData.testEmails?.length,
-      hasScheduleGroups: !!savedData.scheduleGroups?.length,
-      savedAt: savedData.savedAt
-    });
-    
     // Restore form controls
     if (savedData.subject) {
       this.subjectControl.setValue(savedData.subject, { emitEvent: false });
@@ -394,27 +354,16 @@ ngOnInit(): void {
     // ✅ Restore template HTML if available
     if (savedData.templateHtml && !this.templateHtml) {
       this.templateHtml = savedData.templateHtml;
-      console.log('✅ Template HTML restored from storage:', { length: this.templateHtml.length });
     }
     
     this.addNewMembersToAudience = savedData.addNewMembersToAudience || false;
     
     // ✅ Log final state after restoration for debugging
-    console.log('🔍 Post-restoration state check:', {
-      hasReconciliation: this.reconciliation !== null,
-      hasScheduleGroups: this.scheduleGroups.length > 0,
-      subjectValid: this.subjectControl.valid,
-      subjectValue: this.subjectControl.value,
-      submitLoadingState: this.submitLoadingSubject.value,
-      canSubmit: this.canSubmit
-    });
-    
     // Force change detection to ensure UI updates
     this.cdr.markForCheck();
     
     // Double-check after a small delay (ensure all async operations complete)
     setTimeout(() => {
-      console.log('🔄 Final canSubmit check after delay:', this.canSubmit);
       this.cdr.markForCheck();
     }, 0);
   }
@@ -425,16 +374,10 @@ ngOnInit(): void {
   private saveCurrentState(): void {
     // ✅ Don't save during initial load/restoration
     if (!this.isInitialized) {
-      console.log('⏸️ Skipping save - component not fully initialized yet');
       return;
     }
     
     if (!this._templateId || !this._runId || !this._variantNo) {
-      console.warn('⚠️ Cannot save - missing storage keys:', {
-        templateId: this._templateId,
-        runId: this._runId,
-        variantNo: this._variantNo
-      });
       return;
     }
     
@@ -458,17 +401,6 @@ ngOnInit(): void {
       variantNo: this._variantNo,
       savedAt: new Date().toISOString()
     };
-    
-    console.log('💾 Saving campaign data:', {
-      key: `campaign_form_${this._templateId}_${this._runId}_${this._variantNo}`,
-      hasSubject: !!dataToSave.subject,
-      hasAudience: !!dataToSave.selectedAudience,
-      hasMasterData: !!dataToSave.masterData?.length,
-      hasReconciliation: !!dataToSave.reconciliation,
-      hasTemplateHtml: !!dataToSave.templateHtml?.length,
-      timestamp: dataToSave.savedAt
-    });
-    
     this.storageService.saveCampaignData(
       this._templateId,
       this._runId,
@@ -825,15 +757,6 @@ isSubjectSelected(subject: string): boolean {
     try {
       const subject = this.subjectControl.value;
       let html = this.templateHtml;
-
-      console.log('📧 Sending test email with:', {
-        subject,
-        subjectLength: subject?.length,
-        htmlLength: html?.length,
-        testEmailsCount: this.testEmails.length,
-        bodyAddition: this.bodyAdditionControl.value?.length || 0
-      });
-
       // Append body addition if provided
       if (this.bodyAdditionControl.value.trim()) {
         html += `\n\n<!-- Additional Content -->\n${this.bodyAdditionControl.value}`;

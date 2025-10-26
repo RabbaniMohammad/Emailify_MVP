@@ -575,9 +575,7 @@ onRunTests(): void {
         // ✅ Initialize template state with the generated template
         const currentHtml = this.currentHtml$.value;
         if (currentHtml && response.templateId) {
-          console.log('🔄 [generate-page] Initializing template state for new template');
           this.templateState.initializeOriginalTemplate(response.templateId, currentHtml);
-          console.log('✅ [generate-page] Template state initialized');
         }
 
         this.router.navigate(['/qa', response.templateId]);

@@ -181,8 +181,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   private inflightRequests = new Map<string, Subscription>();
 
   ngOnInit(): void {
-    console.log('🏠 TemplatesPageComponent ngOnInit called');
-    
     // Subscribe to selected item changes to load content
     this.selectedId$
       .pipe(
@@ -190,7 +188,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
         distinctUntilChanged()
       )
       .subscribe(id => {
-        console.log('🔔 selectedId$ changed to:', id);
         if (id) {
           this.loadTemplateContent(id);
         } else {
@@ -203,7 +200,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
     // ✅ RESTORE SEARCH QUERY FROM SERVICE STATE
     const currentState = this.svc.snapshot;
-    console.log('📸 Current state snapshot:', currentState);
     if (currentState.searchQuery) {
       this.searchQuery = currentState.searchQuery;
     }
@@ -211,7 +207,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     // Always load templates on init
     // ✅ ALWAYS call search to trigger reordering, even if items exist
     // This ensures the last-selected template appears first on navigation back
-    console.log('🔍 Calling svc.search with query:', this.searchQuery);
     this.svc.search(this.searchQuery);
     
     // ✅ Scroll to top when component loads (shows selected template first)
@@ -316,30 +311,22 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
       // ✅ CRITICAL: Reset template state to original (temp_1)
       // This clears any edited state (temp_edit) and ensures fresh start
       if (item.content) {
-        console.log('🔄 [templates-page] Resetting template state for Run Tests');
         this.templateState.initializeOriginalTemplate(id, item.content);
-        console.log('✅ [templates-page] Template state reset to original (temp_1)');
-        
         // Navigate immediately if we have content
         this.router.navigate(['/qa', id]);
       } else {
         // ✅ FETCH CONTENT: If template content not loaded, fetch it first
-        console.log('⚠️ [templates-page] Template content not loaded, fetching...');
-        
         // Check cache first
         const cachedHtml = this.cache.get(id) || this.cache.getPersisted(id);
         
         if (cachedHtml) {
-          console.log('✅ [templates-page] Found in cache, initializing state');
           this.templateState.initializeOriginalTemplate(id, cachedHtml);
           this.router.navigate(['/qa', id]);
         } else {
           // Fetch from API
-          console.log('⚠️ [templates-page] Not in cache, fetching from API...');
           this.http.get(`/api/templates/${id}/raw`, { responseType: 'text' })
             .subscribe({
               next: (html) => {
-                console.log('✅ [templates-page] Fetched from API, initializing state');
                 this.templateState.initializeOriginalTemplate(id, html);
                 this.router.navigate(['/qa', id]);
               },
@@ -355,7 +342,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
       }
     } else {
       // If item not found, just navigate (QA page will handle loading)
-      console.log('⚠️ [templates-page] Template not found in state, navigating anyway');
       this.router.navigate(['/qa', id]);
     }
   }

@@ -523,7 +523,6 @@ function applyReplacementToNodes(
   }
   
   if (affectedNodes.length === 0) {
-    console.log('⚠️ No affected nodes found');
     return false;
   }
   
@@ -545,13 +544,11 @@ function applyReplacementToNodes(
     const hasNonInteractive = interactiveParents.some(p => p === null);
     
     if (hasInteractive && hasNonInteractive) {
-      console.log('🚫 Rejected: crosses interactive boundary');
       return false;
     }
     
     const uniqueInteractive = new Set(interactiveParents.filter(p => p !== null));
     if (uniqueInteractive.size > 1) {
-      console.log('🚫 Rejected: multiple interactive elements');
       return false;
     }
   }
@@ -560,35 +557,23 @@ function applyReplacementToNodes(
     if (affectedNodes.length === 1) {
       const { node, localStart, localEnd } = affectedNodes[0];
       const original = String(node.data || '');
-      
-      console.log(`  Single node: "${original.substring(localStart, localEnd)}" → "${replacement}"`);
-      
       node.data = original.substring(0, localStart) + replacement + original.substring(localEnd);
       
       return true;
       
     } else {
-      console.log(`  Multi-node (${affectedNodes.length} nodes)`);
-      
       const first = affectedNodes[0];
       const firstOriginal = String(first.node.data || '');
       first.node.data = firstOriginal.substring(0, first.localStart) + replacement;
-      
-      console.log(`  First: "${firstOriginal}" → "${first.node.data}"`);
-      
       for (let i = 1; i < affectedNodes.length - 1; i++) {
         const middle = affectedNodes[i];
         const middleOriginal = String(middle.node.data || '');
         middle.node.data = '';
-        console.log(`  Middle[${i}]: "${middleOriginal}" → ""`);
       }
       
       const last = affectedNodes[affectedNodes.length - 1];
       const lastOriginal = String(last.node.data || '');
       last.node.data = lastOriginal.substring(last.localEnd);
-      
-      console.log(`  Last: "${lastOriginal}" → "${last.node.data}"`);
-      
       return true;
     }
   } catch (error) {
@@ -664,13 +649,9 @@ function applyContextEdits(
   edits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string }>
 ): AtomicEditResponse {
   const startTime = Date.now();
-  console.log('\n🔧 [ATOMIC] Starting atomic verification for', edits.length, 'edits');
-  
   const parseStart = Date.now();
   const $ = (cheerio as any).load(html, { decodeEntities: false });
   const parseTime = Date.now() - parseStart;
-  console.log('📄 [ATOMIC] HTML parsed in', parseTime, 'ms');
-  
   const deny = deniedParents();
   const results: EditResult[] = [];
   
@@ -683,10 +664,6 @@ function applyContextEdits(
   
   edits.forEach((originalEdit, index) => {
     const editStart = Date.now();
-    console.log(`\n--- [EDIT ${index + 1}/${edits.length}] ---`);
-    console.log('Find:', originalEdit.find?.substring(0, 50));
-    console.log('Replace:', originalEdit.replace?.substring(0, 50));
-    
     const edit = {
       find: String(originalEdit?.find || ''),
       replace: String(originalEdit?.replace || ''),
@@ -701,7 +678,6 @@ function applyContextEdits(
     };
 
     if (!edit.find || !edit.replace) {
-      console.log('⏭️ [SKIP] Empty find or replace');
       results.push({
         index,
         edit: originalEdit,
@@ -714,7 +690,6 @@ function applyContextEdits(
     }
 
     if (edit.find === edit.replace) {
-      console.log('⏭️ [SKIP] Find equals replace');
       results.push({
         index,
         edit: originalEdit,
@@ -727,7 +702,6 @@ function applyContextEdits(
     }
 
     if (/https?:\/\//i.test(edit.find) || /https?:\/\//i.test(edit.replace)) {
-      console.log('🚫 [BLOCKED] Contains URL');
       results.push({
         index,
         edit: originalEdit,
@@ -740,7 +714,6 @@ function applyContextEdits(
     }
 
     if (/\*\|[A-Z0-9_]+\|\*/.test(edit.find) || /\*\|[A-Z0-9_]+\|\*/.test(edit.replace)) {
-      console.log('🚫 [BLOCKED] Contains merge tag');
       results.push({
         index,
         edit: originalEdit,
@@ -765,11 +738,7 @@ function applyContextEdits(
     diagnostics.rawOccurrences = rawOccurrences;
     diagnostics.normalizedOccurrences = normalizedOccurrences;
     diagnostics.normalizedFind = normalized;
-    
-    console.log('🔍 [SEARCH] Raw occurrences:', rawOccurrences, '| Normalized:', normalizedOccurrences);
-
     if (rawOccurrences === 0 && normalizedOccurrences === 0) {
-      console.log('❌ [NOT_FOUND] Text does not exist in HTML');
       diagnostics.timings!.search = Date.now() - searchStart;
       
       diagnostics.manualFixGuidance = {
@@ -819,8 +788,6 @@ function applyContextEdits(
       
 if (span) {
   diagnostics.contextMatched = true;
-  console.log('✅ [CONTEXT] Matched in', tag, 'tag');
-  
   // ✅ NEW: Find affected nodes and save their original state BEFORE applying
   const affectedNodes = findAffectedNodes(nodeMap, span.start, span.end);
   
@@ -832,8 +799,6 @@ if (span) {
       originalData: String(n.node.data || '')
     });
   });
-  console.log(`💾 [BACKUP] Saved ${originalNodeStates.length} node(s) original state`);
-  
   // Detect boundary issues
   if (affectedNodes.length > 1) {
     const spanningElements = affectedNodes.map(n => {
@@ -861,8 +826,6 @@ if (span) {
       htmlSnippet,
       xpath
     });
-    
-    console.log('🔍 [BOUNDARY] Text spans across:', spanningElements.join(' → '));
   }
   
   // Try to apply the replacement
@@ -886,43 +849,25 @@ if (span) {
     const verificationPassed = oldTextGone && newTextPresent && allWordsPresent;
     
     diagnostics.timings!.verify = Date.now() - verifyStart;
-    
-    console.log(`  Verification: oldTextGone=${oldTextGone}, newTextPresent=${newTextPresent}, allWordsPresent=${allWordsPresent}`);
-    
     if (verificationPassed) {
-      console.log('✅ [APPLIED] Successfully applied and verified');
       applied = true;
       appliedTag = tag;
       return false; // Stop iteration
     } else {
       // ✅ NEW: ROLLBACK on verification failure
-      console.log('⚠️ [VERIFY_FAIL] Verification failed - ROLLING BACK changes');
-      console.log(`   Find text still present: ${newFullText.includes(edit.find)}`);
-      console.log(`   Replace text present: ${newTextPresent}`);
-      
       originalNodeStates.forEach(({ node, originalData }) => {
         node.data = originalData;
       });
-      
-      console.log(`🔄 [ROLLBACK] Successfully restored ${originalNodeStates.length} node(s) to original state`);
-      
       // ✅ Verify rollback worked
       const { fullText: rolledBackText } = consolidateTextNodesRecursive($, el);
       const rollbackVerified = rolledBackText === fullText;
-      console.log(`   Rollback verification: text restored = ${rollbackVerified}`);
-      
       diagnostics.crossesBoundary = true;
     }
   } else {
     // ✅ NEW: ROLLBACK on apply failure
-    console.log('❌ [APPLY_FAIL] Failed to apply - ROLLING BACK changes');
-    
     originalNodeStates.forEach(({ node, originalData }) => {
       node.data = originalData;
     });
-    
-    console.log(`🔄 [ROLLBACK] Successfully restored ${originalNodeStates.length} node(s) to original state`);
-    
     diagnostics.crossesBoundary = true;
   }
 }else {
@@ -940,26 +885,13 @@ if (span) {
             xpath,
             visualPreview: `${contextBefore}${edit.find}${contextAfter}`
           });
-          
-          console.log('\n🔍 [CONTEXT MISMATCH DEBUG]');
-          console.log('GPT Expected:');
-          console.log('  Before: "' + edit.before + '"');
-          console.log('  Find:   "' + edit.find + '"');
-          console.log('  After:  "' + edit.after + '"');
-          console.log('');
-          console.log('Actually Found in HTML:');
-          console.log('  "' + contextBefore + '[' + edit.find + ']' + contextAfter + '"');
-          console.log('  Tag: <' + tag + '>');
         }
       }
     });
 
     diagnostics.timings!.search = Date.now() - searchStart;
     const editTime = Date.now() - editStart;
-    console.log('⏱️ [TIMING] Edit processed in', editTime, 'ms');
-
     if (applied) {
-      console.log('✅ [SUCCESS] Edit applied successfully');
       results.push({
         index,
         edit: originalEdit,
@@ -1067,9 +999,6 @@ if (span) {
       }
       
       diagnostics.manualFixGuidance = manualFixGuidance;
-      
-      console.log('❌ [FAILED]', status, '-', failureReason);
-      
       results.push({
         index,
         edit: originalEdit,
@@ -1083,11 +1012,6 @@ if (span) {
 
   const processingTime = Date.now() - processingStart;
   const totalTime = Date.now() - startTime;
-  
-  console.log('\n📊 [SUMMARY] Atomic verification complete');
-  console.log('Total:', edits.length, '| Applied:', appliedCount, '| Failed:', failedCount, '| Blocked:', blockedCount);
-  console.log('⏱️ Total time:', totalTime, 'ms');
-
   return {
     html: $.html(),
     results,
@@ -1209,24 +1133,13 @@ async function getSuggestionsFromHtml(html: string): Promise<{ gibberish: Array<
 
 router.post('/:id/golden', async (req: Request, res: Response) => {
   const requestStart = Date.now();
-  console.log('\n🌟 ============ GOLDEN TEMPLATE REQUEST ============');
-  
   try {
     const id = String(req.params.id);
-    console.log('📋 Template ID:', id);
-    
     const { name, html } = await getRobustTemplateHtml(id);
-    console.log('📄 Template loaded:', name, '| Size:', html.length, 'bytes');
-
     const visible = extractVisibleText(html);
     const chunks = chunkText(visible, 3500);
-    console.log('📝 Extracted text:', visible.length, 'chars |', chunks.length, 'chunks');
-
     let allEdits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string }> = [];
-    
-    console.log('\n🤖 Calling GPT for grammar analysis...');
     for (let i = 0; i < chunks.length; i++) {
-      console.log(`📤 Processing chunk ${i + 1}/${chunks.length}`);
       const chunk = chunks[i];
       
       const completion = await openai.chat.completions.create({
@@ -1251,11 +1164,8 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
             after_context: String(e?.after_context || ''),
             reason: e?.reason ? String(e.reason) : undefined,
           })).filter((e: any) => e.find && e.replace);
-          
-          console.log(`📥 GPT returned ${edits.length} edits for chunk ${i + 1}`);
           allEdits = allEdits.concat(edits);
           if (allEdits.length >= 60) {
-            console.log('⚠️ Reached 60 edits limit, stopping');
             break;
           }
         }
@@ -1263,10 +1173,6 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
         console.error('❌ Failed to parse GPT response for chunk', i + 1, ':', e);
       }
     }
-
-    console.log('\n✅ GPT analysis complete. Total edits suggested:', allEdits.length);
-    
-    console.log('\n🔬 Starting atomic verification...');
     const atomicResult = applyContextEdits(html, allEdits);
     
     const doc = ensureFullDocShell(name, atomicResult.html);
@@ -1274,15 +1180,6 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
     const appliedEdits = atomicResult.results.filter(r => r.status === 'applied');
     const failedEdits = atomicResult.results.filter(r => r.status !== 'applied' && r.status !== 'skipped');
     const changes = appliedEdits.map(r => r.change!).filter(Boolean);
-    
-    console.log('\n📊 ============ FINAL RESULTS ============');
-    console.log('✅ Applied:', atomicResult.stats.applied);
-    console.log('❌ Failed:', atomicResult.stats.failed);
-    console.log('🚫 Blocked:', atomicResult.stats.blocked);
-    console.log('⏭️ Skipped:', atomicResult.stats.skipped);
-    console.log('⏱️ Total time:', Date.now() - requestStart, 'ms');
-    console.log('==========================================\n');
-
     res.json({
       html: doc,
       edits: allEdits,
@@ -1770,7 +1667,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
     let json: ChatAssistantJson = { intent: 'suggest', ideas: [] };
     try {
       const raw = completion.choices[0]?.message?.content || '{"intent":"suggest"}';
-      console.log('🤖 OpenAI Response:', raw); // DEBUG: See what AI returns
       
       const parsed: unknown = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {

@@ -330,12 +330,8 @@ export class DatabaseService extends Dexie {
 
   async clearAllCache(): Promise<void> {
     try {
-      console.log('🧹 [DB] Clearing ALL IndexedDB tables on logout...');
-      
       // Log counts BEFORE clearing
       const beforeStats = await this.getCacheStats();
-      console.log('📊 [DB] BEFORE clear:', beforeStats);
-      
       await this.templates.clear();
       await this.conversations.clear();
       await this.validLinks.clear();
@@ -348,8 +344,6 @@ export class DatabaseService extends Dexie {
       
       // Log counts AFTER clearing
       const afterStats = await this.getCacheStats();
-      console.log('📊 [DB] AFTER clear:', afterStats);
-      console.log('✅ [DB] All IndexedDB tables cleared successfully');
     } catch (error) {
       console.error('❌ [DB] Failed to clear cache:', error);
     }
@@ -493,8 +487,6 @@ export class DatabaseService extends Dexie {
 
       golden.timestamp = Date.now();
       await this.goldenTemplates.put(golden);
-      
-      console.log('✅ [DB] Cached golden template:', golden.templateId);
     } catch (error) {
       console.error('❌ [DB] Failed to cache golden template:', error);
     }
@@ -527,7 +519,6 @@ export class DatabaseService extends Dexie {
   async invalidateGolden(templateId: string): Promise<void> {
     try {
       await this.goldenTemplates.delete(templateId);
-      console.log('🗑️ [DB] Invalidated golden template:', templateId);
     } catch (error) {
       console.error('❌ [DB] Failed to invalidate golden template:', error);
     }
@@ -541,7 +532,6 @@ export class DatabaseService extends Dexie {
         .toArray();
       
       await this.goldenTemplates.bulkDelete(oldest.map(g => g.templateId));
-      console.log(`🧹 [DB] Cleaned ${oldest.length} old golden templates`);
     } catch (error) {
       console.error('❌ [DB] Failed to clean old golden templates:', error);
     }
@@ -561,8 +551,6 @@ export class DatabaseService extends Dexie {
 
       suggestions.timestamp = Date.now();
       await this.suggestions.put(suggestions);
-      
-      console.log('✅ [DB] Cached suggestions:', suggestions.templateId);
     } catch (error) {
       console.error('❌ [DB] Failed to cache suggestions:', error);
     }
@@ -595,7 +583,6 @@ export class DatabaseService extends Dexie {
   async invalidateSuggestions(templateId: string): Promise<void> {
     try {
       await this.suggestions.delete(templateId);
-      console.log('🗑️ [DB] Invalidated suggestions:', templateId);
     } catch (error) {
       console.error('❌ [DB] Failed to invalidate suggestions:', error);
     }
@@ -609,7 +596,6 @@ export class DatabaseService extends Dexie {
         .toArray();
       
       await this.suggestions.bulkDelete(oldest.map(s => s.templateId));
-      console.log(`🧹 [DB] Cleaned ${oldest.length} old suggestions`);
     } catch (error) {
       console.error('❌ [DB] Failed to clean old suggestions:', error);
     }
@@ -629,8 +615,6 @@ export class DatabaseService extends Dexie {
 
       variantsRun.timestamp = Date.now();
       await this.variantsRuns.put(variantsRun);
-      
-      console.log('✅ [DB] Cached variants run:', variantsRun.templateId);
     } catch (error) {
       console.error('❌ [DB] Failed to cache variants run:', error);
     }
@@ -663,7 +647,6 @@ export class DatabaseService extends Dexie {
   async invalidateVariantsRun(templateId: string): Promise<void> {
     try {
       await this.variantsRuns.delete(templateId);
-      console.log('🗑️ [DB] Invalidated variants run:', templateId);
     } catch (error) {
       console.error('❌ [DB] Failed to invalidate variants run:', error);
     }
@@ -677,7 +660,6 @@ export class DatabaseService extends Dexie {
         .toArray();
       
       await this.variantsRuns.bulkDelete(oldest.map(v => v.templateId));
-      console.log(`🧹 [DB] Cleaned ${oldest.length} old variants runs`);
     } catch (error) {
       console.error('❌ [DB] Failed to clean old variants runs:', error);
     }

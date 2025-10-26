@@ -377,7 +377,6 @@ export class AuthService implements OnDestroy {
     try {
       localStorage.removeItem('lastTemplateId');
       localStorage.removeItem('lastTemplateName');
-      console.log('🧹 Cleared legacy template keys: lastTemplateId, lastTemplateName');
     } catch (error) {
       console.error('❌ Error clearing legacy keys:', error);
     }

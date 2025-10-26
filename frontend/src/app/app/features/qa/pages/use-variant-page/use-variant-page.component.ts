@@ -28,10 +28,6 @@ import { ViewChild, ElementRef } from '@angular/core';
 // import { CommonModule } from '@angular/common';
 // import { ActivatedRoute, Router  } from '@angular/router';
 
-
-
-
-
 type AssistantPayload = {
   assistantText: string;
   json: ChatAssistantJson;
@@ -212,14 +208,6 @@ get isGrammarChecking(): boolean {
 }
 
 ngOnInit() {
-  console.log('');
-  console.log('🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣');
-  console.log('🟣 [use-variant] ====== ngOnInit CALLED ======');
-  console.log('🟣 [use-variant] Timestamp:', new Date().toISOString());
-  console.log('🟣 [use-variant] htmlSubject.value length:', this.htmlSubject.value.length);
-  console.log('🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣🟣');
-  console.log('');
-  
   window.scrollTo(0, 0);
   
   combineLatest([this.runId$, this.no$]).subscribe(([runId, no]) => {
@@ -234,14 +222,6 @@ ngOnInit() {
 }
 
 ngOnDestroy(): void {
-  console.log('');
-  console.log('🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴');
-  console.log('🔴 [use-variant] ====== ngOnDestroy CALLED ======');
-  console.log('🔴 [use-variant] Timestamp:', new Date().toISOString());
-  console.log('🔴 [use-variant] htmlSubject.value length at destroy:', this.htmlSubject.value.length);
-  console.log('🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴');
-  console.log('');
-  
   this.routerSub?.unsubscribe();
   this.refreshSub?.unsubscribe();
   this.navigationRefreshSub?.unsubscribe();
@@ -255,20 +235,7 @@ constructor() {
   // RESTORE STATE FIRST - before any template rendering
   const runId = this.ar.snapshot.paramMap.get('runId');
   const no = this.ar.snapshot.paramMap.get('no');
-  
-  console.log('');
-  console.log('═══════════════════════════════════════════════════════════');
-  console.log('🔵 [use-variant] ====== CONSTRUCTOR CALLED ======');
-  console.log('🔵 [use-variant] Timestamp:', new Date().toISOString());
-  console.log('🔵 [use-variant] CONSTRUCTOR params:', { runId, no });
-  console.log('🔵 [use-variant] htmlSubject initial value length:', this.htmlSubject.value.length);
-  console.log('═══════════════════════════════════════════════════════════');
-  console.log('');
-
   // ✅ DON'T PRELOAD IN CONSTRUCTOR - Let subscription handle it
-  console.log('🔵 [use-variant] CONSTRUCTOR: Skipping preload, letting subscription handle data loading');
-  console.log('🔵 [use-variant] CONSTRUCTOR: runId:', runId, 'no:', no);
-
   if (runId && no) {
     // ✅ INITIALIZE TEMPLATE MODAL STATE FIRST
     this.templateModalKey = `template_modal_${runId}_${no}`;
@@ -280,7 +247,6 @@ constructor() {
     // ✅ CLEAR THE FLAG IMMEDIATELY (before any other logic uses it)
     if (this.returningFromCampaign) {
       sessionStorage.removeItem(returnFromCampaignKey);
-      console.log('🔄 [use-variant] Detected return from campaign - flag saved to instance variable');
     }
     
     const wasModalOpen = this.restoreTemplateModalState();
@@ -290,7 +256,6 @@ constructor() {
     if (wasModalOpen || this.returningFromCampaign) {
       document.body.classList.add('validation-modal-open');
       document.body.style.overflow = 'hidden';
-      console.log('🔄 [use-variant] Modal should be open - hiding navbar immediately');
     }
     
     this.editorStateKey = `editor_state_${runId}_${no}`;
@@ -304,12 +269,10 @@ constructor() {
       const cachedResult = this.qa.getGrammarCheckCached(runId, Number(no));
       
       if (cachedResult) {
-        console.log('🔄 [use-variant] Page refresh detected - restoring cached results without API call');
         // Restore cached results without making API call
         this.grammarCheckResultSubject.next(cachedResult);
         this.grammarCheckLoadingSubject.next(false);
       } else {
-        console.log('🔄 [use-variant] Page refresh detected but NO cached results - will restart validation');
         // Delay to ensure component is fully initialized
         setTimeout(() => {
           this.autoRestartValidationAfterRefresh();
@@ -321,7 +284,6 @@ constructor() {
     if (this.returningFromCampaign) {
       const cachedResult = this.qa.getGrammarCheckCached(runId, Number(no));
       if (cachedResult) {
-        console.log('🔄 [use-variant] Campaign return - loading cached results in constructor');
         this.grammarCheckResultSubject.next(cachedResult);
         this.grammarCheckLoadingSubject.next(false);
       }
@@ -350,15 +312,7 @@ constructor() {
 
   // Subscribe to runId changes
   this.runId$.subscribe(async (runId) => {
-    console.log('� [use-variant] ====== SUBSCRIPTION TRIGGERED ======');
-    console.log('🟢 [use-variant] SUBSCRIPTION runId:', runId);
-    console.log('🟢 [use-variant] SUBSCRIPTION htmlSubject.value length BEFORE:', this.htmlSubject.value.length);
     const no = Number(this.ar.snapshot.paramMap.get('no')!);
-    console.log('▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓');
-    console.log('🟢 [use-variant] variantNo:', no);
-    console.log('🟢 [use-variant] htmlSubject current length:', this.htmlSubject.value.length);
-    console.log('▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓');
-
     // ✅ PRIORITY 0: Check for return from visual editor FIRST (before anything else!)
     const returnKey = `visual_editor_return_use_variant`;
     const returnFlag = sessionStorage.getItem(returnKey);
@@ -368,27 +322,18 @@ constructor() {
       const editedHtml = sessionStorage.getItem(editedKey);
       
       if (editedHtml) {
-        console.log('✅ [RETURN FROM EDITOR] Edited HTML received, length:', editedHtml.length);
-        
         // Update HTML
         this.htmlSubject.next(editedHtml);
         
         // ✅ CRITICAL: Restore cached data BEFORE updating thread
         const cachedThread = this.qa.getChatCached(runId, no);
         const messages = cachedThread?.messages || this.messagesSubject.value;
-        
-        console.log('✅ [RETURN FROM EDITOR] Messages to preserve:', messages.length);
-        
         // Update chat thread with preserved messages
         const thread: ChatThread = { html: editedHtml, messages };
         this.qa.saveChat(runId, no, thread);
-        
-        console.log('✅ [RETURN FROM EDITOR] Saved edited HTML to localStorage cache');
-        
         // ✅ VERIFY save worked
         const verifyThread = this.qa.getChatCached(runId, no);
         if (verifyThread?.html === editedHtml) {
-          console.log('✅ [RETURN FROM EDITOR] VERIFIED: Edited HTML successfully saved to cache');
         } else {
           console.error('❌ [RETURN FROM EDITOR] FAILED: Cache verification failed!');
         }
@@ -449,13 +394,10 @@ constructor() {
     
     if (syntheticRaw) {
       try {
-        console.log('⚡ [use-variant] PRIORITY 0.5: Found synthetic run in sessionStorage for runId:', runId);
         const syntheticRun = JSON.parse(syntheticRaw);
         const item = syntheticRun.items?.find((it: any) => it.no === no);
         
         if (item?.html) {
-          console.log('✅ [use-variant] Loading synthetic run, HTML length:', item.html.length);
-          
           // ✅ CRITICAL: Check if already saved to localStorage (with edited HTML!)
           const cachedThread = this.qa.getChatCached(runId, no);
           let htmlToUse = item.html; // Default to synthetic run HTML
@@ -471,12 +413,10 @@ constructor() {
             const thread: ChatThread = { html: item.html, messages: [intro] };
             this.messagesSubject.next(thread.messages);
             this.qa.saveChat(runId, no, thread);
-            console.log('✅ [use-variant] First time - using synthetic run HTML');
           } else {
             // ✅ Already cached - USE CACHED HTML (which may be edited!)
             htmlToUse = cachedThread.html;
             this.messagesSubject.next(cachedThread.messages || []);
-            console.log('✅ [use-variant] Cache exists - using cached HTML, length:', htmlToUse.length);
           }
           
           // ✅ Use the correct HTML (cached if available, synthetic if not)
@@ -501,8 +441,6 @@ constructor() {
             clearTimeout(this.loadingTimeout);
             this.loadingTimeout = undefined;
           }
-          
-          console.log('✅ [use-variant] Synthetic run loaded successfully');
           this.cdr.detectChanges(); // ✅ FORCE update
           this.positionChatAtBottom();
           return;
@@ -515,10 +453,8 @@ constructor() {
 
     try {
       // ✅ PRIORITY 1: Check localStorage cache (fastest)
-      console.log('⚡ [use-variant] PRIORITY 1: Checking localStorage for runId:', runId, 'no:', no);
       const cachedThread = this.qa.getChatCached(runId, no);
       if (cachedThread?.html) {
-        console.log('✅ [use-variant] PRIORITY 1: Found in localStorage, loading template');
         this.htmlSubject.next(cachedThread.html);
         this.messagesSubject.next(cachedThread.messages || []);
         this.snapsSubject.next(await this.qa.getSnapsCached(runId));
@@ -542,7 +478,6 @@ constructor() {
           clearTimeout(this.loadingTimeout);
           this.loadingTimeout = undefined;
         }
-        console.log('🎯 [use-variant] localStorage restore complete. HTML in subject:', this.htmlSubject.value?.length || 0, 'chars');
         this.cdr.markForCheck();
         this.positionChatAtBottom();
         return;
@@ -694,10 +629,6 @@ canDeactivate(): boolean {
 
   // EDITOR METHODS - UPDATED TO PERSIST STATE
   openEditor(): void {
-    console.log('🔵 [use-variant] Opening editor...');
-    console.log('🔵 [use-variant] htmlSubject.value length:', this.htmlSubject.value.length);
-    console.log('🔵 [use-variant] HTML preview (first 200 chars):', this.htmlSubject.value.substring(0, 200));
-    
     this.editorOpenSubject.next(true);
     this.saveEditorState(true);
     this.cdr.detectChanges();
@@ -738,13 +669,11 @@ openTemplateModal(): void {
   if (runId && no) {
     const cachedResult = this.qa.getGrammarCheckCached(runId, Number(no));
     if (cachedResult) {
-      console.log('✅ [modal] Found cached grammar results - using cache instead of API call');
       // Restore cached results without making API call
       this.grammarCheckResultSubject.next(cachedResult);
       this.grammarCheckLoadingSubject.next(false);
       shouldValidate = false;
     } else {
-      console.log('✅ [modal] No cached results - will validate from scratch');
       this.grammarCheckLoadingSubject.next(false);
       this.grammarCheckResultSubject.next(null);
     }
@@ -756,9 +685,6 @@ openTemplateModal(): void {
   
   // ✅ HIDE TOOLBAR WHEN MODAL IS OPEN
   document.body.classList.add('validation-modal-open');
-  console.log('✅ [modal] Added validation-modal-open class to body, toolbar should be hidden');
-  console.log('✅ [modal] Body classes:', document.body.className);
-  
   // ✅ ONLY AUTO-TRIGGER VALIDATION IF NO CACHED RESULTS
   if (shouldValidate) {
     setTimeout(() => {
@@ -783,9 +709,6 @@ closeTemplateModal(): void {
   
   // ✅ SHOW TOOLBAR WHEN MODAL IS CLOSED
   document.body.classList.remove('validation-modal-open');
-  
-  console.log('✅ [modal] Closed modal but KEPT cached results for next open');
-  
   this.cdr.markForCheck();
 }
 
@@ -796,7 +719,6 @@ proceedToCampaignSubmit(): void {
   
   if (runId && no) {
     sessionStorage.setItem(`return_to_modal_${runId}_${no}`, 'true');
-    console.log('✅ [campaign] Set flag to reopen modal on return');
   }
   
   // ✅ CLOSE MODAL WITHOUT CLEARING CACHE (keep results for when user returns)
@@ -804,19 +726,11 @@ proceedToCampaignSubmit(): void {
   this.saveTemplateModalState(false);
   document.body.style.overflow = 'auto';
   document.body.classList.remove('validation-modal-open');
-  console.log('✅ [campaign] Closed modal but KEPT cached results for return');
-  
   // Navigate to campaign setup page with HTML state
   const id = this.ar.snapshot.paramMap.get('id');
   const currentHtml = this.htmlSubject.value;
   
   if (id && runId && no) {
-    console.log('🚀 Navigating to campaign with HTML:', { 
-      htmlLength: currentHtml?.length || 0,
-      runId, 
-      variantNo: no 
-    });
-    
     this.router.navigate(['/qa', id, 'use', runId, no, 'campaign'], {
       state: { 
         templateHtml: currentHtml,
@@ -833,9 +747,6 @@ proceedToCampaignSubmit(): void {
 private checkAndReopenModalAfterCampaign(): void {
   // Use instance variable set in constructor
   if (!this.returningFromCampaign) return;
-  
-  console.log('✅ [campaign return] Reopening modal (data already loaded in constructor)');
-  
   // Reopen modal after a short delay to ensure page is ready
   setTimeout(() => {
     // Open modal (data already loaded in constructor!)
@@ -843,8 +754,6 @@ private checkAndReopenModalAfterCampaign(): void {
     // Don't call saveTemplateModalState here - let it stay closed in storage
     document.body.style.overflow = 'hidden';
     document.body.classList.add('validation-modal-open');
-    console.log('✅ [campaign return] Modal reopened with cached results');
-    
     this.cdr.markForCheck();
   }, 200);
 }
@@ -991,8 +900,6 @@ retryGrammarCheck(): void {
  * Auto-restart validation after page refresh if modal was open
  */
 private autoRestartValidationAfterRefresh(): void {
-  console.log('🔄 [use-variant] Auto-restarting validation after refresh');
-  
   // Reset loading state and result
   this.grammarCheckLoadingSubject.next(false);
   this.grammarCheckResultSubject.next(null);
@@ -1487,27 +1394,14 @@ navigateToVisualEditorWithGrammar(): void {
     alert('No template HTML found');
     return;
   }
-  
-  console.log('🔍 [OPEN EDITOR] Template ID:', templateId);
-  console.log('🔍 [OPEN EDITOR] Run ID:', runId);
-  console.log('🔍 [OPEN EDITOR] Variant No:', no);
-  console.log('🔍 [OPEN EDITOR] HTML length:', html.length);
-  console.log('🔍 [OPEN EDITOR] HTML preview (first 500 chars):', html.substring(0, 500));
-  console.log('🔍 [OPEN EDITOR] HTML source:', this.htmlSubject.value === html ? 'htmlSubject' : 'unknown');
-  
   const grammarResult = this.grammarCheckResultSubject.value;
   if (!grammarResult || !grammarResult.hasErrors) {
     alert('No grammar errors to fix');
     return;
   }
-  
-  console.log('🔍 [OPEN EDITOR] Grammar errors:', grammarResult.mistakes.length);
-  
   // ✅ Save template HTML for editing
   const htmlKey = `visual_editor_${templateId}_golden_html`;
   sessionStorage.setItem(htmlKey, html);
-  console.log('✅ [OPEN EDITOR] Saved to sessionStorage:', htmlKey);
-  
   // ✅ Save snapshot for comparison
   const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
   sessionStorage.setItem(snapshotKey, html);
@@ -1538,8 +1432,6 @@ navigateToVisualEditorWithGrammar(): void {
   // ✅ CLEANUP: Remove validation-modal-open class before navigating
   document.body.classList.remove('validation-modal-open');
   document.body.style.overflow = 'auto';
-  console.log('✅ [OPEN EDITOR] Cleaned up modal state before navigation');
-  
   // Navigate
   this.router.navigate(['/visual-editor', templateId]);
 }

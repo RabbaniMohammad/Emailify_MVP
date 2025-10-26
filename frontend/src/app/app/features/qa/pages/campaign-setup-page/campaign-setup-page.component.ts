@@ -43,12 +43,7 @@ export class CampaignSetupPageComponent implements OnInit, OnDestroy {
     
     if (state?.templateHtml) {
       this.templateHtml = state.templateHtml;
-      console.log('✅ Template HTML loaded from navigation state:', { 
-        length: this.templateHtml.length,
-        preview: this.templateHtml.substring(0, 100) + '...'
-      });
     } else {
-      console.warn('⚠️ No HTML in navigation state, trying to load from cache...');
       // Fallback: Load the template HTML from the variant cache
       this.loadTemplateHtml();
     }
@@ -64,24 +59,12 @@ export class CampaignSetupPageComponent implements OnInit, OnDestroy {
       console.error('❌ Missing runId or variant number', { runId: this.runId, no: this.no });
       return;
     }
-
-    console.log('📥 Loading template HTML for:', { runId: this.runId, variantNo: this.no });
-
     // Get the variant from QA service cache
     this.qa.getVariantsRunById(this.runId).then(run => {
-      console.log('📦 Received run data:', { 
-        hasRun: !!run, 
-        itemsCount: run?.items?.length || 0 
-      });
-
       if (run && run.items && run.items.length > 0) {
         const variantIndex = parseInt(this.no) - 1;
         if (variantIndex >= 0 && variantIndex < run.items.length) {
           this.templateHtml = run.items[variantIndex].html;
-          console.log('✅ Template HTML loaded:', { 
-            length: this.templateHtml?.length || 0,
-            preview: this.templateHtml?.substring(0, 100) + '...'
-          });
         } else {
           console.error('❌ Variant index out of bounds', { 
             variantIndex, 

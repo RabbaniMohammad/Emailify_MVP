@@ -103,7 +103,6 @@ async function checkWithLanguageTool(text: string): Promise<LanguageToolMatch[]>
     });
 
     if (!response.ok) {
-      console.warn('❌ LanguageTool API error:', response.status);
       return [];
     }
 
@@ -373,42 +372,25 @@ function applyEditsToHTML(html: string, edits: GrammarEdit[]): GrammarCheckResul
  * Combines all detection methods for maximum accuracy
  */
 export async function checkGrammar(html: string): Promise<GrammarCheckResult> {
-  console.log('🔍 Starting advanced grammar check...');
-  
   // Extract visible text from HTML
   const textNodes = extractTextNodes(html);
   const fullText = textNodes.map(tn => tn.text).join(' ');
-  
-  console.log(`📝 Extracted ${textNodes.length} text nodes, ${fullText.length} chars`);
-  
   // Run all detection methods in parallel
   const [languageToolMatches] = await Promise.all([
     checkWithLanguageTool(fullText),
   ]);
-  
-  console.log(`🤖 LanguageTool found ${languageToolMatches.length} issues`);
-  
   // Convert LanguageTool matches to edits
   const languageToolEdits = convertLanguageToolMatches(fullText, languageToolMatches);
   
   // Find custom issues
   const duplicateEdits = findDuplicateWords(fullText);
   const spacingEdits = findSpacingIssues(fullText);
-  
-  console.log(`🔍 Custom detection: ${duplicateEdits.length} duplicates, ${spacingEdits.length} spacing issues`);
-  
   // Combine all edits (deduplicate by find+replace)
   const allEdits = [...languageToolEdits, ...duplicateEdits, ...spacingEdits];
   const uniqueEdits = Array.from(
     new Map(allEdits.map(e => [`${e.find}::${e.replace}`, e])).values()
   );
-  
-  console.log(`✅ Total unique edits: ${uniqueEdits.length}`);
-  
   // Apply edits to HTML
   const result = applyEditsToHTML(html, uniqueEdits);
-  
-  console.log(`📊 Applied: ${result.stats.applied}, Failed: ${result.stats.failed}`);
-  
   return result;
 }

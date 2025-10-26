@@ -50,9 +50,6 @@
           // This is a simplified version - you'll need html2canvas library for full functionality
           const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
           const filename = `${CONFIG.pageName}_${viewportName}_${timestamp}.png`;
-          
-          console.log(`📸 Screenshot captured: ${viewportLabel} (${filename})`);
-          
           // Note: This will only log. For actual capture, use html2canvas library
           resolve(filename);
         } catch (error) {
@@ -86,19 +83,10 @@
 
   // Main capture process
   async function captureAllViewports() {
-    console.log('🚀 Starting automated screenshot capture...');
-    console.log('━'.repeat(60));
-    
     CONFIG.pageName = getPageName();
-    console.log(`📄 Page: ${CONFIG.pageName}`);
-    console.log(`📸 Capturing ${CONFIG.viewports.length} viewports...`);
-    console.log('━'.repeat(60));
-    
     const results = [];
     
     for (const viewport of CONFIG.viewports) {
-      console.log(`\n🔄 Resizing to: ${viewport.label} (${viewport.width}x${viewport.height})`);
-      
       // Resize viewport
       resizeViewport(viewport.width, viewport.height);
       
@@ -114,14 +102,7 @@
         });
       }
     }
-    
-    console.log('\n━'.repeat(60));
-    console.log('✅ Screenshot capture complete!');
-    console.log('━'.repeat(60));
-    console.log('\n📊 Summary:');
     results.forEach((result, index) => {
-      console.log(`${index + 1}. ${result.viewport} (${result.size})`);
-      console.log(`   ${result.filename}`);
     });
     
     // Generate report
@@ -137,10 +118,6 @@
       viewports: results,
       userAgent: navigator.userAgent
     };
-    
-    console.log('\n📋 Copy this report:');
-    console.log(JSON.stringify(report, null, 2));
-    
     // Copy to clipboard if available
     if (navigator.clipboard) {
       navigator.clipboard.writeText(JSON.stringify(report, null, 2))
@@ -149,46 +126,7 @@
   }
 
   // Instructions
-  console.log(`
-╔════════════════════════════════════════════════════════════╗
-║                                                            ║
-║   📸 SCREENSHOT CAPTURE TOOL - INSTRUCTIONS               ║
-║                                                            ║
-╚════════════════════════════════════════════════════════════╝
-
-⚠️  IMPORTANT: This script simulates viewport changes.
-    For actual screenshot capture, follow these steps:
-
-MANUAL SCREENSHOT METHOD (Recommended):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Open DevTools (F12)
-2. Click "Toggle Device Toolbar" (Ctrl+Shift+M)
-3. Select viewport size from dropdown or custom size
-4. Take screenshot (Ctrl+Shift+P → "Capture screenshot")
-5. Repeat for each viewport size:
-   • Mobile: 375x667, 414x896
-   • Tablet: 768x1024, 1024x768
-   • Desktop: 1366x768, 1920x1080
-
-AUTOMATED METHOD (Requires Extension):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Install Chrome Extension: "GoFullPage" or "Awesome Screenshot"
-2. Run: captureAllViewports()
-3. Extension will automatically capture all viewports
-
-Current Viewports to Test:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${CONFIG.viewports.map((v, i) => `${i + 1}. ${v.label}: ${v.width}x${v.height}`).join('\n')}
-
-To start automated resize (view only):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Run: captureAllViewports()
-
-  `);
-
   // Expose functions to global scope
   window.captureAllViewports = captureAllViewports;
   window.screenshotConfig = CONFIG;
-  
-  console.log('✅ Screenshot tool loaded! Run captureAllViewports() to start.');
 })();

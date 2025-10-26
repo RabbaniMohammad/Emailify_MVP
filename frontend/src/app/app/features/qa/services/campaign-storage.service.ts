@@ -75,14 +75,6 @@ export class CampaignStorageService {
       };
       
       localStorage.setItem(key, JSON.stringify(updatedData));
-      
-      console.log('✅ Data saved to localStorage:', {
-        key,
-        dataSize: JSON.stringify(updatedData).length,
-        hasSubject: !!updatedData.subject,
-        hasAudience: !!updatedData.selectedAudience,
-        hasMasterData: updatedData.masterData?.length || 0
-      });
     } catch (error) {
       console.error('❌ Error saving campaign data to localStorage:', error);
     }
