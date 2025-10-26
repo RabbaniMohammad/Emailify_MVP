@@ -537,6 +537,7 @@
                   (click)="onEditVariant(vr.runId, v.no, v)"
                   [matTooltip]="getEditTooltip(v)">
                   <mat-icon>edit</mat-icon>
+                  <span class="edit-badge" *ngIf="hasFailedEdits(v)">{{ getFailedEditsCount(v) }}</span>
                 </button>
             </div>
             <ul class="changes-list">
@@ -615,10 +616,10 @@
         <div class="modal-title">
           <mat-icon>warning</mat-icon>
           <h3>Failed Edits Detected</h3>
-          <span class="count-badge" *ngIf="(golden$ | async)?.failedEdits?.length">
-            {{ (golden$ | async)?.failedEdits?.length }}
-          </span>
         </div>
+        <span class="failed-count-badge" *ngIf="(golden$ | async)?.failedEdits?.length">
+          {{ (golden$ | async)?.failedEdits?.length }}
+        </span>
         <button mat-icon-button (click)="closeVisualEditorModal()" class="modal-close-btn">
           <mat-icon>close</mat-icon>
         </button>

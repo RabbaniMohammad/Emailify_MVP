@@ -1613,11 +1613,19 @@ private async handleVisualEditorReturn(
   }
 
   /**
+   * Get the count of failed edits for a variant
+   */
+  getFailedEditsCount(variant: any): number {
+    return variant?.failedEdits?.length || 0;
+  }
+
+  /**
    * Get tooltip text for variant edit button
    */
   getEditTooltip(variant: any): string {
-    return this.hasFailedEdits(variant) 
-      ? 'Failed edits detected - open editor' 
+    const count = this.getFailedEditsCount(variant);
+    return count > 0
+      ? `${count} failed edit${count > 1 ? 's' : ''} detected - open editor` 
       : 'Edit in Visual Editor';
   }
 
