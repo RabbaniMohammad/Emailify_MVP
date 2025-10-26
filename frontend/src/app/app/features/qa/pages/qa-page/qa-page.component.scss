@@ -3357,8 +3357,16 @@
   .modal-body {
     flex: 1;
     overflow-y: auto;
-    padding: 2rem;
+    padding: 0; // ✅ Remove padding, let inner content control spacing
     max-height: 60vh;
+    min-height: 0;
+    display: flex; // ✅ Use flex to center content
+    
+    // ✅ Hide scrollbar for simple states (info/success) but keep height constraint
+    &:has(.info-state),
+    &:has(.success-state) {
+      overflow-y: hidden;
+    }
     
     &::-webkit-scrollbar {
       width: 8px;
@@ -3617,29 +3625,122 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 3rem 2rem;
+      padding: 2rem;
       text-align: center;
+      min-height: auto;
       
       mat-icon {
-        font-size: 64px;
-        width: 64px;
-        height: 64px;
+        font-size: 72px;
+        width: 72px;
+        height: 72px;
         color: var(--success-green);
-        margin-bottom: 1rem;
+        margin-bottom: 1.5rem;
+        animation: scaleIn 0.5s ease-out;
       }
       
       h4 {
-        margin: 0 0 0.5rem 0;
-        font-size: 1.25rem;
+        margin: 0 0 0.75rem 0;
+        font-size: 1.5rem;
         font-weight: 700;
         color: #1f2937;
+        letter-spacing: -0.02em;
       }
       
       p {
         margin: 0;
-        font-size: 0.9375rem;
+        font-size: 1rem;
         color: #6b7280;
-        line-height: 1.6;
+        line-height: 1.7;
+        max-width: 400px;
+      }
+    }
+
+    // ✅ NEW: Info State (Orange - No Tests)
+    .info-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      text-align: center;
+      width: 100%;
+      
+      > mat-icon:first-child {
+        font-size: 72px;
+        width: 72px;
+        height: 72px;
+        color: #f59e0b;
+        margin-bottom: 1.5rem;
+        animation: pulse 2s ease-in-out infinite;
+      }
+      
+      h4 {
+        margin: 0 0 0.75rem 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1f2937;
+        letter-spacing: -0.02em;
+      }
+      
+      p {
+        margin: 0 0 1.5rem 0;
+        font-size: 1rem;
+        color: #6b7280;
+        line-height: 1.7;
+        max-width: 420px;
+      }
+
+      .action-hint {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.875rem 1.25rem;
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(251, 191, 36, 0.1) 100%);
+        border: 2px dashed rgba(245, 158, 11, 0.3);
+        border-radius: 12px;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: #92400e;
+        
+        mat-icon {
+          font-size: 20px;
+          width: 20px;
+          height: 20px;
+          color: #f59e0b;
+          animation: bounce 1.5s ease-in-out infinite;
+        }
+      }
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.6;
+      }
+    }
+
+    @keyframes bounce {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-8px);
+      }
+    }
+
+    @keyframes scaleIn {
+      0% {
+        transform: scale(0);
+        opacity: 0;
+      }
+      50% {
+        transform: scale(1.1);
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
       }
     }
   }
@@ -3672,30 +3773,219 @@
 // Responsive
 @media (max-width: 768px) {
   .visual-editor-modal {
-    padding: 1rem;
+    padding: 0.5rem;
     
     .modal-container {
-      max-height: 90vh;
+      max-height: 95vh;
+      max-width: 100%;
+      border-radius: var(--radius-lg);
     }
     
-    .modal-header,
-    .modal-body,
-    .modal-footer {
-      padding: 1.25rem;
-    }
-    
-    .modal-header .modal-title h3 {
-      font-size: 1.25rem;
+    .modal-header {
+      padding: 1rem 1.25rem;
+      
+      .modal-title {
+        gap: 0.5rem;
+        
+        mat-icon {
+          font-size: 24px;
+          width: 24px;
+          height: 24px;
+        }
+        
+        h3 {
+          font-size: 1.25rem;
+        }
+      }
     }
     
     .modal-body {
+      max-height: 70vh;
+      
+      .info-state {
+        padding: 1.5rem 1rem;
+        
+        > mat-icon:first-child {
+          font-size: 60px;
+          width: 60px;
+          height: 60px;
+          margin-bottom: 1rem;
+        }
+        
+        h4 {
+          font-size: 1.25rem;
+        }
+        
+        p {
+          font-size: 0.9375rem;
+        }
+        
+        .action-hint {
+          font-size: 0.875rem;
+          padding: 0.75rem 1rem;
+        }
+      }
+      
+      .success-state {
+        padding: 1.5rem 1rem;
+        
+        mat-icon {
+          font-size: 60px;
+          width: 60px;
+          height: 60px;
+          margin-bottom: 1rem;
+        }
+        
+        h4 {
+          font-size: 1.25rem;
+        }
+        
+        p {
+          font-size: 0.9375rem;
+        }
+      }
+      
       .edit-preview {
         flex-direction: column;
         align-items: flex-start !important;
+        gap: 0.5rem;
         
         .arrow-icon {
           transform: rotate(90deg);
         }
+      }
+      
+      .failed-edit-item {
+        padding: 1rem;
+      }
+    }
+    
+    .modal-footer {
+      padding: 1rem 1.25rem;
+      gap: 0.75rem;
+      
+      button {
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+      }
+    }
+  }
+}
+
+// ✅ Landscape mode on mobile devices
+@media (max-height: 600px) and (orientation: landscape) {
+  .visual-editor-modal {
+    padding: 0.5rem;
+    
+    .modal-container {
+      max-height: 95vh;
+      max-width: 90%;
+    }
+    
+    .modal-header {
+      padding: 0.75rem 1rem;
+      
+      .modal-title {
+        h3 {
+          font-size: 1.125rem;
+        }
+        
+        mat-icon {
+          font-size: 20px;
+          width: 20px;
+          height: 20px;
+        }
+      }
+    }
+    
+    .modal-body {
+      max-height: calc(95vh - 120px);
+      
+      .info-state {
+        padding: 1rem;
+        
+        > mat-icon:first-child {
+          font-size: 48px;
+          width: 48px;
+          height: 48px;
+          margin-bottom: 0.75rem;
+        }
+        
+        h4 {
+          font-size: 1.125rem;
+          margin-bottom: 0.5rem;
+        }
+        
+        p {
+          font-size: 0.875rem;
+          margin-bottom: 1rem;
+        }
+        
+        .action-hint {
+          font-size: 0.8125rem;
+          padding: 0.625rem 0.875rem;
+          
+          mat-icon {
+            font-size: 18px;
+            width: 18px;
+            height: 18px;
+          }
+        }
+      }
+      
+      .success-state {
+        padding: 1rem;
+        
+        mat-icon {
+          font-size: 48px;
+          width: 48px;
+          height: 48px;
+          margin-bottom: 0.75rem;
+        }
+        
+        h4 {
+          font-size: 1.125rem;
+          margin-bottom: 0.5rem;
+        }
+        
+        p {
+          font-size: 0.875rem;
+        }
+      }
+    }
+    
+    .modal-footer {
+      padding: 0.75rem 1rem;
+      
+      button {
+        font-size: 0.8125rem;
+        padding: 0.5rem 0.875rem;
+      }
+    }
+  }
+}
+
+// ✅ Small mobile devices (portrait)
+@media (max-width: 480px) {
+  .visual-editor-modal {
+    .modal-container {
+      max-width: calc(100vw - 1rem);
+    }
+    
+    .modal-body {
+      .info-state,
+      .success-state {
+        p {
+          max-width: 100%;
+        }
+      }
+    }
+    
+    .modal-footer {
+      flex-direction: column-reverse;
+      
+      button {
+        width: 100%;
       }
     }
   }

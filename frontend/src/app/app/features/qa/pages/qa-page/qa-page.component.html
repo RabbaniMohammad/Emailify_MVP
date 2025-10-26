@@ -99,7 +99,7 @@
       <div class="scrollable-content" style="flex: 1; overflow-y: auto; min-height: 0;">
         <!-- Primary Actions -->
         <div class="actions-group">
-          <!-- Generate Golden Button -->
+          <!-- Run Test Button -->
           <button 
             mat-raised-button 
             class="modern-btn primary-btn"
@@ -111,7 +111,7 @@
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                 </svg>
               </span>
-              <span class="btn-text">Generate Golden</span>
+              <span class="btn-text">Run Test</span>
               <span class="btn-shimmer"></span>
             </span>
             <span class="spinner-container" *ngIf="goldenLoading">
@@ -120,7 +120,7 @@
             </span>
           </button>
 
-          <!-- Visual Editor Button -->
+          <!-- Failed Edits Button -->
           <button 
             mat-raised-button 
             class="modern-btn visual-editor-btn"
@@ -134,7 +134,7 @@
                   <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                 </svg>
               </span>
-              <span class="btn-text">Visual Editor</span>
+              <span class="btn-text">Failed Edits</span>
               <span class="btn-shimmer"></span>
             </span>
           </button>
@@ -584,10 +584,22 @@
     <div class="modal-backdrop" (click)="closeVisualEditorModal()"></div>
     
     <div class="modal-container" [@modalContentAnimation]>
-      <div class="modal-header">
+      <!-- Header for Orange State (No Tests Run) -->
+      <div class="modal-header" *ngIf="visualEditorButtonColor === 'orange'">
+        <div class="modal-title">
+          <mat-icon>pending</mat-icon>
+          <h3>No Tests Run Yet</h3>
+        </div>
+        <button mat-icon-button (click)="closeVisualEditorModal()" class="modal-close-btn">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <!-- Header for Red State (Failed Edits) -->
+      <div class="modal-header" *ngIf="visualEditorButtonColor === 'red'">
         <div class="modal-title">
           <mat-icon>warning</mat-icon>
-          <h3>Could Not Apply</h3>
+          <h3>Failed Edits Detected</h3>
           <span class="count-badge" *ngIf="(golden$ | async)?.failedEdits?.length">
             {{ (golden$ | async)?.failedEdits?.length }}
           </span>
@@ -596,9 +608,34 @@
           <mat-icon>close</mat-icon>
         </button>
       </div>
+
+      <!-- Header for Green State (All Success) -->
+      <div class="modal-header" *ngIf="visualEditorButtonColor === 'green'">
+        <div class="modal-title">
+          <mat-icon>check_circle</mat-icon>
+          <h3>All Edits Applied</h3>
+        </div>
+        <button mat-icon-button (click)="closeVisualEditorModal()" class="modal-close-btn">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
       
       <div class="modal-body">
-        <ng-container *ngIf="(golden$ | async)?.failedEdits?.length">
+        <!-- Orange State: No tests run yet -->
+        <ng-container *ngIf="visualEditorButtonColor === 'orange'">
+          <div class="info-state">
+            <mat-icon>info</mat-icon>
+            <h4>Template Not Tested</h4>
+            <p>This template hasn't been tested yet. Click "Run Test" to check for issues and validate all edits.</p>
+            <div class="action-hint">
+              <span>Click the "Run Test" button below to begin</span>
+              <mat-icon>arrow_downward</mat-icon>
+            </div>
+          </div>
+        </ng-container>
+
+        <!-- Red State: Failed edits exist -->
+        <ng-container *ngIf="visualEditorButtonColor === 'red' && (golden$ | async)?.failedEdits?.length">
           <div class="modal-message">
             <mat-icon>info</mat-icon>
             <p>The following edits could not be applied automatically. Please use the Visual Editor to fix them manually.</p>
@@ -714,20 +751,33 @@
           </div>
         </ng-container>
         
-        <ng-container *ngIf="!(golden$ | async)?.failedEdits?.length && (!skippedEdits || skippedEdits.length === 0)">
+        <!-- Green State: All edits successful -->
+        <ng-container *ngIf="visualEditorButtonColor === 'green'">
           <div class="success-state">
             <mat-icon>check_circle</mat-icon>
-            <h4>All Edits Applied Successfully!</h4>
-            <p>No manual fixes needed. You can still use the Visual Editor to make custom changes.</p>
+            <h4>All Edits Applied Successfully</h4>
+            <p>All automated edits have been applied successfully. You can use the Visual Editor for additional customizations if needed.</p>
           </div>
         </ng-container>
       </div>
       
       <div class="modal-footer">
         <button mat-button (click)="closeVisualEditorModal()">Cancel</button>
-        <button mat-raised-button class="primary" (click)="navigateToVisualEditor()">
+        <button 
+          mat-raised-button 
+          class="primary" 
+          (click)="navigateToVisualEditor()"
+          *ngIf="visualEditorButtonColor !== 'orange'">
           <mat-icon>edit</mat-icon>
           Open Visual Editor
+        </button>
+        <button 
+          mat-raised-button 
+          class="primary" 
+          (click)="closeVisualEditorModal(); onGenerateGolden(templateId!)"
+          *ngIf="visualEditorButtonColor === 'orange'">
+          <mat-icon>play_arrow</mat-icon>
+          Run Test Now
         </button>
       </div>
     </div>
