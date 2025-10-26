@@ -166,10 +166,10 @@
                     color="primary"
                     class="run-btn"
                     (click)="onAction(item, $event)"
-                    aria-label="Run tests"
+                    aria-label="QA Check"
                   >
-                    <mat-icon>play_arrow</mat-icon>
-                    <span>Run tests</span>
+                    <mat-icon>visibility</mat-icon>
+                    <span>QA Check</span>
                   </button>
                 </div>
 
@@ -382,14 +382,16 @@
         </div>
 
         <!-- Enhanced iframe Container with View Modes -->
-        <div class="iframe-wrapper" [ngClass]="{
+        <div class="iframe-wrapper" 
+          [class.loading]="loading"
+          [ngClass]="{
           'desktop-mode': viewMode === 'desktop',
           'tablet-mode': viewMode === 'tablet',
           'mobile-mode': viewMode === 'mobile'
         }">
           <div class="iframe-container">
             <iframe
-              *ngIf="allowScripts; else safeIframe"
+              *ngIf="allowScripts && safeSrcdoc; else safeIframe"
               class="preview-frame"
               [attr.srcdoc]="safeSrcdoc"
               sandbox="allow-same-origin allow-forms allow-scripts"
@@ -399,6 +401,7 @@
 
             <ng-template #safeIframe>
               <iframe
+                *ngIf="safeSrcdoc"
                 class="preview-frame"
                 [attr.srcdoc]="safeSrcdoc"
                 sandbox="allow-same-origin allow-forms"

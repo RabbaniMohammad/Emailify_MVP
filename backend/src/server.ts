@@ -1,4 +1,4 @@
-// Load env early
+// sudo nano /var/www/emailify-backend/backend/.env// Load env early
 import 'dotenv/config';
 
 import mongoose from 'mongoose';
@@ -77,22 +77,26 @@ if (ENV.NodeEnv === NodeEnvs.Dev) {
 }
 
 // Rate limiting - protect against abuse and overload
+// 🔓 DISABLED FOR DEVELOPMENT - Re-enable for production!
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.RATE_LIMIT_MAX_REQUESTS ? parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) : 100, // Limit each IP to 100 requests per windowMs
+  max: process.env.RATE_LIMIT_MAX_REQUESTS ? parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) : Number.MAX_SAFE_INTEGER, // ⚠️ EFFECTIVELY DISABLED
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   message: 'Too many requests from this IP, please try again later.',
+  skip: () => process.env.NODE_ENV === 'development', // Skip in development
 });
 
-// Apply rate limiting to all API routes
+// Apply rate limiting to all API routes (disabled in dev mode)
 app.use('/api/', limiter);
 
 // Stricter rate limiting for AI generation endpoints (expensive operations)
+// 🔓 RELAXED FOR DEVELOPMENT
 const aiLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: process.env.AI_RATE_LIMIT_MAX_REQUESTS ? parseInt(process.env.AI_RATE_LIMIT_MAX_REQUESTS) : 20, // Configurable AI rate limit
+  max: process.env.AI_RATE_LIMIT_MAX_REQUESTS ? parseInt(process.env.AI_RATE_LIMIT_MAX_REQUESTS) : 100, // Increased from 20 to 100
   message: 'Too many AI generation requests, please try again later.',
+  skip: () => process.env.NODE_ENV === 'development', // Skip in development
 });
 
 app.use('/api/generate', aiLimiter);

@@ -181,6 +181,8 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   private inflightRequests = new Map<string, Subscription>();
 
   ngOnInit(): void {
+    console.log('🔄 [TemplatesPage] ngOnInit called - Component initialized');
+    
     // Subscribe to selected item changes to load content
     this.selectedId$
       .pipe(
@@ -188,6 +190,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
         distinctUntilChanged()
       )
       .subscribe(id => {
+        console.log('📌 [TemplatesPage] Selected ID changed:', id);
         if (id) {
           this.loadTemplateContent(id);
         } else {
@@ -217,6 +220,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    console.log('💀 [TemplatesPage] ngOnDestroy called - Component destroyed');
     this.destroy$.next();
     this.destroy$.complete();
     this.fetchSub?.unsubscribe();
@@ -283,6 +287,8 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
   // Template list methods with double-click prevention
   onSelect(item: TemplateItem): void {
+    console.log('👆 [TemplatesPage] Template selected:', item.id, item.name);
+    
     // Only hide button if switching to a different template
     const currentSelected = this.svc.snapshot.selectedId;
     if (currentSelected && currentSelected !== item.id) {
@@ -528,10 +534,15 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
   // Optimized template loading with metadata caching
   private loadTemplateContent(id: string): void {
+    console.log('⏳ [TemplatesPage] Loading template content:', id);
+    
     // Clear previous state
     this.previewError = undefined;
     this.runButtonItemId = undefined;
     this.templateMetadata = null;
+    
+    // ✅ IMMEDIATELY clear old preview to prevent flash
+    this.safeSrcdoc = null;
     
     // Clear any pending loading timer
     if (this.loadingTimer) {
@@ -541,10 +552,13 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
     if (!id) {
       this.loading = false;
-      this.safeSrcdoc = null;
       this.cdr.markForCheck();
       return;
     }
+
+    // Show loading state
+    this.loading = true;
+    this.cdr.markForCheck();
 
     // Check cache first
     const cached = this.cache.get(id) || this.cache.getPersisted(id);
@@ -588,9 +602,6 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
       const wrapped = this.ensureDoc(cached);
       const cleaned = this.stripDangerousBits(wrapped);
       this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
-      
-      // Show loading very briefly for smooth UX
-      this.loading = true;
       this.cdr.markForCheck();
       
       // Hide loading after iframe renders
@@ -600,7 +611,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           this.showRunButton(id);
           this.cdr.markForCheck();
         }
-      }, 0);
+      }, 50); // ⚡ Reduced to 50ms for faster display
       
       return;
     }

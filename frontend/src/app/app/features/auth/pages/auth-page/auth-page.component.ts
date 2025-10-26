@@ -24,9 +24,10 @@ export class AuthPageComponent implements OnInit, OnDestroy {
     this.checkLandscape();
     window.addEventListener('resize', this.checkLandscape.bind(this));
 
-      // 🔓 TEMPORARY: Skip authentication
-      // this.router.navigate(['/']);
-      // return;
+    // // 🔓 TEMPORARY: Skip authentication - early return prevents subscription loop
+    // this.router.navigate(['/'], { replaceUrl: true });
+    // return;
+    
     // Listen for messages from OAuth popup
     window.addEventListener('message', this.handleAuthMessage.bind(this));
 
