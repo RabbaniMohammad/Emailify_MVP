@@ -91,7 +91,7 @@ app.use('/api/', limiter);
 // Stricter rate limiting for AI generation endpoints (expensive operations)
 const aiLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20, // Max 20 AI requests per hour per IP
+  max: process.env.AI_RATE_LIMIT_MAX_REQUESTS ? parseInt(process.env.AI_RATE_LIMIT_MAX_REQUESTS) : 20, // Configurable AI rate limit
   message: 'Too many AI generation requests, please try again later.',
 });
 
