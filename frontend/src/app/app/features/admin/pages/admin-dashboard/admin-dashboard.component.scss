@@ -13,11 +13,27 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 
   .header-content {
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
+    padding: 0 2rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
+
+    @media (max-width: 1200px) {
+      padding: 0 1.5rem;
+    }
+
+    @media (max-width: 768px) {
+      padding: 0 1rem;
+      flex-direction: column;
+      gap: 1.5rem;
+      text-align: center;
+    }
+
+    @media (max-width: 480px) {
+      padding: 0 0.5rem;
+    }
   }
 
   .header-text {
@@ -101,13 +117,29 @@
 }
 
 .admin-tabs {
-  max-width: 1400px;
-  margin: 2rem 0.5rem;
-  // margin: 2rem auto; //here
+  max-width: 1600px;
+  margin: 2rem auto;
+  padding: 0 2rem;
   background: white;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   overflow: hidden;
+
+  // Responsive padding
+  @media (max-width: 1200px) {
+    padding: 0 1.5rem;
+  }
+
+  @media (max-width: 768px) {
+    margin: 1rem;
+    padding: 0 1rem;
+    border-radius: 8px;
+  }
+
+  @media (max-width: 480px) {
+    margin: 0.5rem;
+    padding: 0 0.5rem;
+  }
 
   ::ng-deep {
     .mat-mdc-tab-labels {
@@ -149,8 +181,15 @@
 .tab-content {
   padding: 2rem;
   min-height: 360px;
-  // min-height: 400px; //here
 
+  @media (max-width: 768px) {
+    padding: 1.5rem;
+    min-height: 300px;
+  }
+
+  @media (max-width: 480px) {
+    padding: 1rem;
+  }
 }
 
 .loading-state {
