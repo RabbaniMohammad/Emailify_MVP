@@ -1,0 +1,41 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Clean, professional AI + Email logo - Circuit Envelope -->
+  <defs>
+    <linearGradient id="emailgen-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6366f1;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Main Envelope Shape -->
+  <rect x="8" y="14" width="32" height="20" rx="2.5" 
+        stroke="url(#emailgen-gradient)" stroke-width="2" fill="none"/>
+  
+  <!-- Envelope Flap -->
+  <path d="M8 14 L24 25 L40 14" 
+        stroke="url(#emailgen-gradient)" stroke-width="2" 
+        stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- AI Circuit Nodes (Inside Envelope) -->
+  <!-- Central Node -->
+  <circle cx="24" cy="24" r="1.5" fill="url(#emailgen-gradient)"/>
+  
+  <!-- Connected Nodes - Left -->
+  <circle cx="16" cy="22" r="1" fill="url(#emailgen-gradient)" opacity="0.7"/>
+  <line x1="16" y1="22" x2="22.5" y2="23.5" 
+        stroke="url(#emailgen-gradient)" stroke-width="0.8" opacity="0.5"/>
+  
+  <!-- Connected Nodes - Right -->
+  <circle cx="32" cy="22" r="1" fill="url(#emailgen-gradient)" opacity="0.7"/>
+  <line x1="32" y1="22" x2="25.5" y2="23.5" 
+        stroke="url(#emailgen-gradient)" stroke-width="0.8" opacity="0.5"/>
+  
+  <!-- Bottom Nodes -->
+  <circle cx="18" cy="28" r="1" fill="url(#emailgen-gradient)" opacity="0.6"/>
+  <line x1="18" y1="28" x2="22.5" y2="24.5" 
+        stroke="url(#emailgen-gradient)" stroke-width="0.8" opacity="0.4"/>
+  
+  <circle cx="30" cy="28" r="1" fill="url(#emailgen-gradient)" opacity="0.6"/>
+  <line x1="30" y1="28" x2="25.5" y2="24.5" 
+        stroke="url(#emailgen-gradient)" stroke-width="0.8" opacity="0.4"/>
+</svg>
