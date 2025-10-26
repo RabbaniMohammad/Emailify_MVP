@@ -80,7 +80,7 @@ type AtomicEditResponse = {
     applied: number;
     failed: number;
     blocked: number;
-    skipped: number;
+    // ✅ Removed skipped
   };
   timings: {
     total: number;
@@ -1012,15 +1012,17 @@ if (span) {
 
   const processingTime = Date.now() - processingStart;
   const totalTime = Date.now() - startTime;
+  const filteredResults = results.filter(r => r.status !== 'skipped'); // ✅ Remove skipped from results
+  
   return {
     html: $.html(),
-    results,
+    results: filteredResults,
     stats: {
-      total: edits.length,
+      total: filteredResults.length, // ✅ Only count non-skipped edits
       applied: appliedCount,
       failed: failedCount,
       blocked: blockedCount,
-      skipped: skippedCount,
+      // ✅ Removed skipped from stats
     },
     timings: {
       total: totalTime,
@@ -1285,7 +1287,7 @@ type VariantItem = {
     applied: number;
     failed: number;
     blocked: number;
-    skipped: number;
+    // ✅ Removed skipped
   };
 };
 

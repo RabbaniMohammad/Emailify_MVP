@@ -162,13 +162,7 @@ export class QaPageComponent implements OnDestroy {
   readonly golden$ = this.goldenSubject.asObservable();
   goldenLoading = false;
 
-  // ✅ Store skipped edits separately for display in modal
-  skippedEdits: Array<{
-    find?: string;
-    replace?: string;
-    reason?: string;
-    status?: string;
-  }> = [];
+  // ✅ Removed skippedEdits - no longer tracking
 
   showVisualEditorModal = false;
   visualEditorButtonColor: 'orange' | 'red' | 'green' = 'orange';
@@ -578,19 +572,7 @@ export class QaPageComponent implements OnDestroy {
         
         this.goldenSubject.next(res);
         
-        // ✅ Extract skipped edits from atomicResults
-        if (res.atomicResults && Array.isArray(res.atomicResults)) {
-          this.skippedEdits = res.atomicResults
-            .filter((r: any) => r.status === 'skipped')
-            .map((r: any) => ({
-              find: r.edit?.find,
-              replace: r.edit?.replace,
-              reason: r.reason,
-              status: r.status
-            }));
-        } else {
-          this.skippedEdits = [];
-        }
+        // ✅ Removed skipped edits extraction - no longer needed
         
         this.updateVisualEditorButtonColor(res.failedEdits);
         
@@ -1173,7 +1155,7 @@ export class QaPageComponent implements OnDestroy {
       'applied': 'check_circle',
       'not_found': 'search_off',
       'blocked': 'block',
-      'skipped': 'skip_next',
+      // ✅ Removed 'skipped'
       'context_mismatch': 'find_in_page',
       'boundary_issue': 'link_off',
       'already_correct': 'done_all',
@@ -1186,7 +1168,7 @@ export class QaPageComponent implements OnDestroy {
       'applied': 'success',
       'not_found': 'error',
       'blocked': 'warn',
-      'skipped': 'disabled',
+      // ✅ Removed 'skipped'
       'context_mismatch': 'warn',
       'boundary_issue': 'warn',
       'already_correct': 'info',
@@ -1199,7 +1181,7 @@ export class QaPageComponent implements OnDestroy {
       'applied': 'Applied',
       'not_found': 'Not Found',
       'blocked': 'Blocked',
-      'skipped': 'Skipped',
+      // ✅ Removed 'skipped'
       'context_mismatch': 'Context Mismatch',
       'boundary_issue': 'Boundary Issue',
       'already_correct': 'Already Correct',
@@ -1448,7 +1430,7 @@ private async handleVisualEditorReturn(
         applied: originalStats.total - remainingFailedEdits.length,
         failed: remainingFailedEdits.length,
         blocked: originalStats.blocked || 0,
-        skipped: originalStats.skipped || 0
+        // ✅ Removed skipped
       };
     } else {
       // Fallback if no original stats
@@ -1457,7 +1439,7 @@ private async handleVisualEditorReturn(
         applied: manuallyFixedCount,
         failed: remainingFailedEdits.length,
         blocked: 0,
-        skipped: 0
+        // ✅ Removed skipped
       };
     }
     // Update the stats in localStorage

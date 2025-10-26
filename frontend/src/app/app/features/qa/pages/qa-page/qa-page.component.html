@@ -137,6 +137,12 @@
               <span class="btn-text">Failed Edits</span>
               <span class="btn-shimmer"></span>
             </span>
+            <!-- ✅ Failed Edits Counter Badge -->
+            <span 
+              *ngIf="(golden$ | async)?.failedEdits?.length" 
+              class="failed-edits-badge">
+              {{ (golden$ | async)?.failedEdits?.length }}
+            </span>
           </button>
         </div>
 
@@ -179,7 +185,7 @@
                 (click)="toggleDebugInfo()"
                 [class.active]="showDebugInfo"
                 matTooltip="Toggle Debug Info">
-                <mat-icon>bug_report</mat-icon>
+                <mat-icon>info</mat-icon>
               </button>
             </div>
 
@@ -232,17 +238,18 @@
                 </div>
               </div>
 
-              <div class="stat-card skipped" *ngIf="(golden.stats?.skipped || 0) > 0">
-                <div class="stat-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                </div>
-                <div class="stat-content">
-                  <span class="stat-value">{{ golden.stats?.skipped || 0 }}</span>
-                  <span class="stat-label">Skipped</span>
-                </div>
+              <!-- ✅ Removed Skipped stat card -->
+            </div>
+
+            <!-- ✅ Perfect Template Message (when total is 0) -->
+            <div class="perfect-template-message" *ngIf="(golden.stats?.total || 0) === 0" [@fadeIn]>
+              <div class="perfect-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
               </div>
+              <h4>🎉 Perfect Template!</h4>
+              <p>Your template is already optimized. No edits needed!</p>
             </div>
 
             <!-- Timings (Debug Mode) -->
@@ -724,40 +731,7 @@
           </div>
         </ng-container>
 
-        <!-- Skipped Edits Section -->
-        <ng-container *ngIf="skippedEdits && skippedEdits.length > 0">
-          <div class="skipped-edits-section">
-            <div class="section-header">
-              <mat-icon>skip_next</mat-icon>
-              <h4>Auto-Skipped Edits</h4>
-              <span class="count-badge skipped-badge">{{ skippedEdits.length }}</span>
-            </div>
-            <p class="section-description">
-              These edits were automatically skipped because they were invalid or unnecessary (empty text, no changes, etc.).
-            </p>
-            <ul class="skipped-edits-list">
-              <li *ngFor="let edit of skippedEdits" class="skipped-edit-item">
-                
-                <div class="status-badge disabled">
-                  <mat-icon>skip_next</mat-icon>
-                  <span>Skipped</span>
-                </div>
-                
-                <div class="edit-preview">
-                  <code class="preview-find">"{{ edit.find || '(empty)' }}"</code>
-                  <mat-icon class="arrow-icon">arrow_forward</mat-icon>
-                  <code class="preview-replace">"{{ edit.replace || '(empty)' }}"</code>
-                </div>
-
-                <div class="skip-reason">
-                  <mat-icon>info</mat-icon>
-                  <span>{{ edit.reason || 'Automatically skipped by system' }}</span>
-                </div>
-
-              </li>
-            </ul>
-          </div>
-        </ng-container>
+        <!-- ✅ Removed Skipped Edits Section -->
         
         <!-- Green State: All edits successful -->
         <ng-container *ngIf="visualEditorButtonColor === 'green'">

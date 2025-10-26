@@ -2826,7 +2826,6 @@
         
         mat-icon {
           color: white;
-          animation: pulse 1s infinite;
         }
       }
       
@@ -2930,13 +2929,60 @@
     }
     .stat-value { color: var(--warning-orange); }
   }
+}
+
+// ✅ Perfect Template Message (when total is 0)
+.perfect-template-message {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.08) 100%);
+  border: 2px solid rgba(16, 185, 129, 0.3);
+  border-radius: 12px;
+  text-align: center;
   
-  &.skipped {
-    .stat-icon {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-      svg { color: #6366f1; }
+  .perfect-icon {
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-radius: 50%;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+    animation: perfect-pulse 2s ease-in-out infinite;
+    
+    svg {
+      width: 32px;
+      height: 32px;
+      color: white;
+      stroke-width: 3;
     }
-    .stat-value { color: #6366f1; }
+  }
+  
+  h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #065f46;
+  }
+  
+  p {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: #047857;
+    font-weight: 500;
+  }
+}
+
+@keyframes perfect-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 12px 32px rgba(16, 185, 129, 0.4);
   }
 }
 
@@ -3280,6 +3326,28 @@
     flex-direction: column;
     align-items: flex-start !important;
   }
+  
+  .perfect-template-message {
+    padding: 1.25rem;
+    
+    .perfect-icon {
+      width: 50px;
+      height: 50px;
+      
+      svg {
+        width: 28px;
+        height: 28px;
+      }
+    }
+    
+    h4 {
+      font-size: 1.125rem;
+    }
+    
+    p {
+      font-size: 0.875rem;
+    }
+  }
 }
 
 @media (max-width: 480px) {
@@ -3289,6 +3357,59 @@
   
   .stat-card {
     padding: 0.875rem;
+  }
+  
+  .perfect-template-message {
+    padding: 1rem;
+    margin-top: 1rem;
+    
+    .perfect-icon {
+      width: 44px;
+      height: 44px;
+      margin-bottom: 0.75rem;
+      
+      svg {
+        width: 24px;
+        height: 24px;
+      }
+    }
+    
+    h4 {
+      font-size: 1rem;
+      margin-bottom: 0.375rem;
+    }
+    
+    p {
+      font-size: 0.8125rem;
+    }
+  }
+}
+
+// Landscape orientation adjustments
+@media (max-height: 600px) and (orientation: landscape) {
+  .perfect-template-message {
+    padding: 0.875rem;
+    margin-top: 1rem;
+    
+    .perfect-icon {
+      width: 40px;
+      height: 40px;
+      margin-bottom: 0.5rem;
+      
+      svg {
+        width: 22px;
+        height: 22px;
+      }
+    }
+    
+    h4 {
+      font-size: 0.9375rem;
+      margin-bottom: 0.25rem;
+    }
+    
+    p {
+      font-size: 0.8125rem;
+    }
   }
 }
 
@@ -3344,6 +3465,37 @@
   
   &:active:not(:disabled) {
     transform: translateY(0);
+  }
+}
+
+// ✅ Failed Edits Counter Badge
+.failed-edits-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 12px;
+  padding: 0 6px;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.5);
+  border: 2px solid white;
+  z-index: 10;
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
   }
 }
 

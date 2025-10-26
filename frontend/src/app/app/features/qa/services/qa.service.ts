@@ -13,7 +13,7 @@ export type GoldenEdit = {
 };
 
 // ✅ Add these types at the top of qa.service.ts (after imports)
-export type EditStatus = 'applied' | 'not_found' | 'blocked' | 'skipped' | 'context_mismatch' | 'boundary_issue' | 'already_correct';
+export type EditStatus = 'applied' | 'not_found' | 'blocked' | 'context_mismatch' | 'boundary_issue' | 'already_correct'; // ✅ Removed 'skipped'
 
 export interface EditDiagnostics {
   normalizedFind?: string;
@@ -74,7 +74,7 @@ export interface GoldenResult {
     applied: number;
     failed: number;
     blocked: number;
-    skipped: number;
+    // ✅ Removed skipped
   };
   timings?: {
     total: number;
