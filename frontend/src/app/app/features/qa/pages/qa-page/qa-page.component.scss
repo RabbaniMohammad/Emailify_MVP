@@ -1441,6 +1441,7 @@
   flex: 1 !important;
   overflow-y: auto !important;
   min-height: 0 !important;
+  scrollbar-gutter: stable;
 }
 
 // Force iframe containers to expand
@@ -3383,6 +3384,42 @@
       font-size: 0.8125rem;
     }
   }
+  
+  // Debug/Performance section responsive
+  .debug-section {
+    padding: 0.875rem;
+    
+    .debug-header {
+      font-size: 0.8125rem;
+      margin-bottom: 0.625rem;
+      
+      mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+      }
+    }
+    
+    .timings-grid {
+      gap: 0.375rem;
+      
+      .timing-item {
+        padding: 0.5rem 0.625rem;
+        font-size: 0.75rem;
+        min-width: 0;
+        
+        .timing-label {
+          font-size: 0.75rem;
+          white-space: nowrap;
+        }
+        
+        .timing-value {
+          font-size: 0.75rem;
+          white-space: nowrap;
+        }
+      }
+    }
+  }
 }
 
 // Landscape orientation adjustments
@@ -3409,6 +3446,36 @@
     
     p {
       font-size: 0.8125rem;
+    }
+  }
+  
+  // Debug/Performance section in landscape
+  .debug-section {
+    padding: 0.75rem;
+    
+    .debug-header {
+      font-size: 0.8125rem;
+      margin-bottom: 0.5rem;
+      
+      mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+      }
+    }
+    
+    .timings-grid {
+      gap: 0.375rem;
+      
+      .timing-item {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.75rem;
+        
+        .timing-label,
+        .timing-value {
+          font-size: 0.6875rem;
+        }
+      }
     }
   }
 }
@@ -3572,7 +3639,6 @@
     align-items: center;
     justify-content: space-between;
     padding: 1.5rem 2rem;
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, rgba(220, 38, 38, 0.05) 100%);
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     flex-shrink: 0;
     
@@ -3583,7 +3649,6 @@
       flex: 1;
       
       mat-icon {
-        color: var(--error-red);
         font-size: 28px;
         width: 28px;
         height: 28px;
@@ -3611,9 +3676,44 @@
       color: #6b7280;
       
       &:hover {
-        background: rgba(239, 68, 68, 0.1);
-        color: var(--error-red);
+        background: rgba(0, 0, 0, 0.05);
+        color: #1f2937;
       }
+    }
+  }
+  
+  // State-specific header colors
+  .modal-container:has(.info-state) .modal-header {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(251, 191, 36, 0.05) 100%);
+    
+    .modal-title mat-icon {
+      color: #f59e0b;
+    }
+  }
+  
+  .modal-container:has(.failed-edits-preview) .modal-header {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, rgba(220, 38, 38, 0.05) 100%);
+    
+    .modal-title mat-icon {
+      color: var(--error-red);
+    }
+    
+    .modal-close-btn:hover {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--error-red);
+    }
+  }
+  
+  .modal-container:has(.success-state) .modal-header {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(5, 150, 105, 0.05) 100%);
+    
+    .modal-title mat-icon {
+      color: var(--success-green);
+    }
+    
+    .modal-close-btn:hover {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success-green);
     }
   }
   
@@ -3888,9 +3988,10 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 2rem;
+      padding: 3rem 2rem;
       text-align: center;
-      min-height: auto;
+      min-height: 300px;
+      width: 100%;
       
       mat-icon {
         font-size: 72px;
@@ -4090,7 +4191,8 @@
       }
       
       .success-state {
-        padding: 1.5rem 1rem;
+        padding: 2rem 1rem;
+        min-height: 250px;
         
         mat-icon {
           font-size: 60px;
@@ -4197,7 +4299,8 @@
       }
       
       .success-state {
-        padding: 1rem;
+        padding: 1.5rem 1rem;
+        min-height: 200px;
         
         mat-icon {
           font-size: 48px;

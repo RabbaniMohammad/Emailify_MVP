@@ -179,12 +179,12 @@
                   <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                 </svg>
               </div>
-              <h4>Verification Summary</h4>
+              <h4>QA Statistics</h4>
               <button 
                 class="debug-toggle-btn"
                 (click)="toggleDebugInfo()"
                 [class.active]="showDebugInfo"
-                matTooltip="Toggle Debug Info">
+                matTooltip="Toggle Performance Info">
                 <mat-icon>info</mat-icon>
               </button>
             </div>
@@ -624,11 +624,11 @@
         </button>
       </div>
 
-      <!-- Header for Green State (All Success) -->
+      <!-- Header for Green State (All Success or Perfect Template) -->
       <div class="modal-header" *ngIf="visualEditorButtonColor === 'green'">
         <div class="modal-title">
           <mat-icon>check_circle</mat-icon>
-          <h3>All Edits Applied</h3>
+          <h3>{{ (golden$ | async)?.stats?.total === 0 ? 'Perfect Template' : 'All Edits Applied' }}</h3>
         </div>
         <button mat-icon-button (click)="closeVisualEditorModal()" class="modal-close-btn">
           <mat-icon>close</mat-icon>
@@ -733,12 +733,22 @@
 
         <!-- ✅ Removed Skipped Edits Section -->
         
-        <!-- Green State: All edits successful -->
+        <!-- Green State: All edits successful OR Perfect template -->
         <ng-container *ngIf="visualEditorButtonColor === 'green'">
           <div class="success-state">
             <mat-icon>check_circle</mat-icon>
-            <h4>All Edits Applied Successfully</h4>
-            <p>All automated edits have been applied successfully. You can use the Visual Editor for additional customizations if needed.</p>
+            
+            <!-- Perfect Template (0 edits needed) -->
+            <ng-container *ngIf="((golden$ | async)?.stats?.total || 0) === 0">
+              <h4>Perfect Template!</h4>
+              <p>Your template is already optimized and doesn't need any edits. You can still use the Visual Editor for additional customizations if needed.</p>
+            </ng-container>
+            
+            <!-- All Edits Applied Successfully -->
+            <ng-container *ngIf="((golden$ | async)?.stats?.total || 0) > 0">
+              <h4>All Edits Applied Successfully</h4>
+              <p>All automated edits have been applied successfully. You can use the Visual Editor for additional customizations if needed.</p>
+            </ng-container>
           </div>
         </ng-container>
       </div>
