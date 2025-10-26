@@ -19,8 +19,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # ---- Build outputs (Angular / Node) ----
-dist/
-**/dist/
+# dist/
+# **/dist/
 build/
 **/build/
 .tmp/
