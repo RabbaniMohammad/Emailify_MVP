@@ -835,6 +835,117 @@
     color: #6b7280;
     line-height: 1.6;
   }
+  
+  // ✅ Enhanced Golden Empty State
+  &.golden-empty {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.03) 0%, rgba(251, 191, 36, 0.05) 100%);
+    border-radius: 12px;
+    
+    .empty-icon-animated {
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--gradient-golden);
+      border-radius: 50%;
+      margin-bottom: 2rem;
+      box-shadow: 0 12px 32px rgba(245, 158, 11, 0.3);
+      animation: pulse-glow 2s ease-in-out infinite;
+      position: relative;
+      
+      &::before {
+        content: '';
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        background: var(--gradient-golden);
+        opacity: 0.3;
+        filter: blur(8px);
+        animation: pulse-ring 2s ease-in-out infinite;
+      }
+
+      svg {
+        width: 48px;
+        height: 48px;
+        color: white;
+        stroke-width: 2;
+        position: relative;
+        z-index: 1;
+        animation: sparkle-rotate 4s linear infinite;
+      }
+    }
+    
+    h4 {
+      font-size: 1.375rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    p {
+      max-width: 380px;
+      font-size: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .empty-hint {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem 1.5rem;
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      border-radius: 10px;
+      max-width: 420px;
+      
+      svg {
+        width: 20px;
+        height: 20px;
+        color: #f59e0b;
+        flex-shrink: 0;
+      }
+      
+      span {
+        font-size: 0.875rem;
+        color: #92400e;
+        text-align: left;
+        line-height: 1.5;
+      }
+    }
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 12px 32px rgba(245, 158, 11, 0.3);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 16px 40px rgba(245, 158, 11, 0.4);
+  }
+}
+
+@keyframes pulse-ring {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.1;
+  }
+}
+
+@keyframes sparkle-rotate {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-10deg);
+  }
+  75% {
+    transform: rotate(10deg);
+  }
 }
 
 // Variants Section
