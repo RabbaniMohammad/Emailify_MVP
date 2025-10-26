@@ -27,6 +27,9 @@ export interface CampaignFormData {
   testEmailSent: boolean;
   testEmailSentAt: string | null;
   
+  // Template HTML (persisted to avoid loss on refresh)
+  templateHtml?: string;
+  
   // Metadata
   templateId: string;
   runId: string;
@@ -72,8 +75,16 @@ export class CampaignStorageService {
       };
       
       localStorage.setItem(key, JSON.stringify(updatedData));
+      
+      console.log('✅ Data saved to localStorage:', {
+        key,
+        dataSize: JSON.stringify(updatedData).length,
+        hasSubject: !!updatedData.subject,
+        hasAudience: !!updatedData.selectedAudience,
+        hasMasterData: updatedData.masterData?.length || 0
+      });
     } catch (error) {
-      console.error('Error saving campaign data to localStorage:', error);
+      console.error('❌ Error saving campaign data to localStorage:', error);
     }
   }
 

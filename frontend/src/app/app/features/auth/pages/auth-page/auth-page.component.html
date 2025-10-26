@@ -17,10 +17,36 @@
       <div class="landscape-card">
         <!-- Logo and Title -->
         <div class="landscape-header">
-          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          <!-- EmailGen FUSION Logo - Brain merging with Envelope (WHITE) -->
+          <svg class="logo-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <clipPath id="left-half-mobile">
+                <rect x="0" y="0" width="24" height="48"/>
+              </clipPath>
+              <clipPath id="right-half-mobile">
+                <rect x="24" y="0" width="24" height="48"/>
+              </clipPath>
+            </defs>
+            <g clip-path="url(#left-half-mobile)">
+              <path d="M12 16 Q8 18 8 24 Q8 30 12 32" stroke="white" stroke-width="2" fill="none"/>
+              <circle cx="14" cy="20" r="1.2" fill="white"/>
+              <circle cx="12" cy="24" r="1.5" fill="white"/>
+              <circle cx="14" cy="28" r="1.2" fill="white"/>
+              <circle cx="18" cy="22" r="1" fill="white" opacity="0.7"/>
+              <circle cx="18" cy="26" r="1" fill="white" opacity="0.7"/>
+              <line x1="14" y1="20" x2="18" y2="22" stroke="white" stroke-width="0.8" opacity="0.5"/>
+              <line x1="12" y1="24" x2="18" y2="22" stroke="white" stroke-width="0.8" opacity="0.5"/>
+              <line x1="12" y1="24" x2="18" y2="26" stroke="white" stroke-width="0.8" opacity="0.5"/>
+              <line x1="14" y1="28" x2="18" y2="26" stroke="white" stroke-width="0.8" opacity="0.5"/>
+            </g>
+            <g clip-path="url(#right-half-mobile)">
+              <path d="M24 16 L40 16 L40 32 L24 32" stroke="white" stroke-width="2" fill="none"/>
+              <path d="M24 16 L32 23 L40 16" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </g>
+            <circle cx="24" cy="24" r="2" fill="white" opacity="0.3"/>
+            <circle cx="24" cy="24" r="1.2" fill="white"/>
           </svg>
-          <h1>Email Tool</h1>
+          <h1>EmailGen</h1>
         </div>
 
         <!-- Welcome Text -->
@@ -65,10 +91,36 @@
     <div class="auth-branding" *ngIf="!isLandscape">
       <div class="branding-content">
         <div class="logo-container">
-          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          <!-- EmailGen FUSION Logo - Brain merging with Envelope (WHITE) -->
+          <svg class="logo-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <clipPath id="left-half-desktop">
+                <rect x="0" y="0" width="24" height="48"/>
+              </clipPath>
+              <clipPath id="right-half-desktop">
+                <rect x="24" y="0" width="24" height="48"/>
+              </clipPath>
+            </defs>
+            <g clip-path="url(#left-half-desktop)">
+              <path d="M12 16 Q8 18 8 24 Q8 30 12 32" stroke="white" stroke-width="2" fill="none"/>
+              <circle cx="14" cy="20" r="1.2" fill="white"/>
+              <circle cx="12" cy="24" r="1.5" fill="white"/>
+              <circle cx="14" cy="28" r="1.2" fill="white"/>
+              <circle cx="18" cy="22" r="1" fill="white" opacity="0.7"/>
+              <circle cx="18" cy="26" r="1" fill="white" opacity="0.7"/>
+              <line x1="14" y1="20" x2="18" y2="22" stroke="white" stroke-width="0.8" opacity="0.5"/>
+              <line x1="12" y1="24" x2="18" y2="22" stroke="white" stroke-width="0.8" opacity="0.5"/>
+              <line x1="12" y1="24" x2="18" y2="26" stroke="white" stroke-width="0.8" opacity="0.5"/>
+              <line x1="14" y1="28" x2="18" y2="26" stroke="white" stroke-width="0.8" opacity="0.5"/>
+            </g>
+            <g clip-path="url(#right-half-desktop)">
+              <path d="M24 16 L40 16 L40 32 L24 32" stroke="white" stroke-width="2" fill="none"/>
+              <path d="M24 16 L32 23 L40 16" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </g>
+            <circle cx="24" cy="24" r="2" fill="white" opacity="0.3"/>
+            <circle cx="24" cy="24" r="1.2" fill="white"/>
           </svg>
-          <h1 class="logo-text">Email Tool</h1>
+          <h1 class="logo-text">EmailGen</h1>
         </div>
 
         <div class="branding-text">

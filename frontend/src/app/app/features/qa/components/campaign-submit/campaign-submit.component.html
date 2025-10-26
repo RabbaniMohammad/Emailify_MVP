@@ -248,7 +248,7 @@
     </div>
 
     <!-- ✅ Subject Line Generator Section -->
-<div class="subject-generator-section" @fadeInOut>
+<div class="subject-generator-section">
   <div class="generator-header">
     <div class="header-content">
       <div class="icon-wrapper">
@@ -488,12 +488,14 @@
     class="test-email-btn"
     (click)="sendTestEmail()"
     [disabled]="!canSendTest || (testEmailLoading$ | async) === 'loading'">
-    <mat-progress-spinner
-      *ngIf="(testEmailLoading$ | async) === 'loading'"
-      diameter="18"
-      mode="indeterminate">
-    </mat-progress-spinner>
-    <span>{{ (testEmailLoading$ | async) === 'loading' ? 'Sending...' : 'Send Test Email' }}</span>
+    <div class="button-content">
+      <mat-progress-spinner
+        *ngIf="(testEmailLoading$ | async) === 'loading'"
+        diameter="18"
+        mode="indeterminate">
+      </mat-progress-spinner>
+      <span>{{ (testEmailLoading$ | async) === 'loading' ? 'Sending...' : 'Send Test Email' }}</span>
+    </div>
   </button>
 </div>
 
@@ -513,10 +515,12 @@
       class="test-email-btn disabled"
       disabled
       matTooltip="No test emails found in uploaded file">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M18 6L6 18M6 6l12 12"/>
-      </svg>
-      <span>Test Email Unavailable</span>
+      <div class="button-content">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+        <span>Test Email Unavailable</span>
+      </div>
     </button>
   </div>
 </div>
@@ -525,6 +529,30 @@
 <!-- STEP 6: FINAL SUBMIT -->
 <!-- ============================================ -->
 <div class="submit-section">
+  
+  <!-- ============================================ -->
+  <!-- SUBMISSION SUMMARY BANNER -->
+  <!-- ============================================ -->
+  <div class="submission-summary-banner" *ngIf="getSubmissionSummary().length > 0">
+    <div class="summary-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      <h4>SUBMISSION SUMMARY:</h4>
+    </div>
+    
+    <ul class="summary-list">
+      <li *ngFor="let item of getSubmissionSummary(); let i = index" [class]="'summary-item-' + item.type">
+        <span class="item-icon">{{ item.icon }}</span>
+        <span class="item-text">{{ item.text }}</span>
+      </li>
+    </ul>
+    
+    <p class="summary-footer">
+      <strong>Proceed with submission?</strong>
+    </p>
+  </div>
+
   <!-- SUBMIT CAMPAIGN BUTTON WITH WRAPPER -->
 <div class="button-wrapper"
      [matTooltip]="getSubmitTooltip()"
@@ -536,12 +564,14 @@
     class="submit-btn"
     (click)="onSubmit()"
     [disabled]="!canSubmit || (submitLoading$ | async) === 'loading'">
-    <mat-progress-spinner
-      *ngIf="(submitLoading$ | async) === 'loading'"
-      diameter="20"
-      mode="indeterminate">
-    </mat-progress-spinner>
-    <span>{{ (submitLoading$ | async) === 'loading' ? 'Submitting...' : 'Submit Campaign' }}</span>
+    <div class="button-content">
+      <mat-progress-spinner
+        *ngIf="(submitLoading$ | async) === 'loading'"
+        diameter="20"
+        mode="indeterminate">
+      </mat-progress-spinner>
+      <span>{{ (submitLoading$ | async) === 'loading' ? 'Submitting...' : 'Submit Campaign' }}</span>
+    </div>
   </button>
 </div>
 

@@ -327,7 +327,7 @@ export class CampaignSubmitService {
   // FINAL CAMPAIGN SUBMISSION
   // ============================================
 
-  submitCampaign(submission: CampaignSubmission): Observable<{ campaignIds: string[]; success: boolean }> {
+  submitCampaign(submission: CampaignSubmission): Observable<{ campaignIds: string[]; success: boolean; message?: string }> {
     return this.http.post<{ campaignIds: string[]; success: boolean }>(
       '/api/campaign/submit',
       submission

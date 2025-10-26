@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, Input, Output, EventEmitter, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, Input, Output, EventEmitter, inject, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -40,8 +40,11 @@ type LoadingState = 'idle' | 'loading' | 'success' | 'error';
   styleUrls: ['./campaign-submit.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class CampaignSubmitComponent implements OnInit, OnDestroy {
+export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
   @Input() templateHtml: string = '';
+  @Input() templateId: string = '';
+  @Input() runId: string = '';
+  @Input() variantNo: string = '';
   @Output() closeRequested = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -50,10 +53,13 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
   private storageService = inject(CampaignStorageService);
   private currentSelectedSubject: string | null = null;
   
-  // Route params for storage key
-  private templateId: string = '';
-  private runId: string = '';
-  private variantNo: string = '';
+  // ✅ Flag to prevent saving during initial load
+  private isInitialized = false;
+  
+  // Route params for storage key - now also available as inputs
+  private _templateId: string = '';
+  private _runId: string = '';
+  private _variantNo: string = '';
 
   // Form Controls
   subjectControl = new FormControl<string>('', {
@@ -135,6 +141,26 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
     );
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    // Update internal params if inputs change
+    if (changes['templateId']) {
+      this._templateId = this.templateId;
+    }
+    if (changes['runId']) {
+      this._runId = this.runId;
+    }
+    if (changes['variantNo']) {
+      this._variantNo = this.variantNo;
+    }
+    
+    // Save template HTML when it changes (set from parent)
+    // Only save if we have valid storage keys
+    if (changes['templateHtml'] && changes['templateHtml'].currentValue && this._templateId && this._runId && this._variantNo) {
+      console.log('📝 Template HTML input changed, saving to storage');
+      this.saveCurrentState();
+    }
+  }
+
   constructor(
     private campaignService: CampaignSubmitService,
     private cdr: ChangeDetectorRef,
@@ -142,10 +168,17 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy {
   ) {}
 
 ngOnInit(): void {
-  // Get route params for storage key
-  this.templateId = this.ar.snapshot.paramMap.get('id') || '';
-  this.runId = this.ar.snapshot.paramMap.get('runId') || '';
-  this.variantNo = this.ar.snapshot.paramMap.get('no') || '';
+  // Get route params - prefer @Input over route params for child components
+  this._templateId = this.templateId || this.ar.snapshot.paramMap.get('id') || '';
+  this._runId = this.runId || this.ar.snapshot.paramMap.get('runId') || '';
+  this._variantNo = this.variantNo || this.ar.snapshot.paramMap.get('no') || '';
+  
+  console.log('🔑 Storage key params:', {
+    templateId: this._templateId,
+    runId: this._runId,
+    variantNo: this._variantNo,
+    source: this.templateId ? 'Input' : 'Route'
+  });
   
   // Load saved data if exists
   this.loadSavedData();
@@ -163,24 +196,33 @@ ngOnInit(): void {
   this.campaignService.selectedAudience$
     .pipe(takeUntil(this.destroy$))
     .subscribe(audience => {
-      this.selectedAudience = audience;
-      this.saveCurrentState();
+      // ✅ Only update if we have new data (don't overwrite restored data with null)
+      if (audience) {
+        this.selectedAudience = audience;
+        this.saveCurrentState();
+      }
       this.cdr.markForCheck();
     });
 
   this.campaignService.reconciliation$
     .pipe(takeUntil(this.destroy$))
     .subscribe(reconciliation => {
-      this.reconciliation = reconciliation;
-      this.saveCurrentState();
+      // ✅ Only update if we have new data (don't overwrite restored data with null)
+      if (reconciliation) {
+        this.reconciliation = reconciliation;
+        this.saveCurrentState();
+      }
       this.cdr.markForCheck();
     });
 
   this.campaignService.timezoneAnalysis$
     .pipe(takeUntil(this.destroy$))
     .subscribe(analysis => {
-      this.timezoneAnalysis = analysis;
-      this.saveCurrentState();
+      // ✅ Only update if we have new data (don't overwrite restored data with null)
+      if (analysis) {
+        this.timezoneAnalysis = analysis;
+        this.saveCurrentState();
+      }
       this.cdr.markForCheck();
     });
 
@@ -218,6 +260,15 @@ ngOnInit(): void {
     .subscribe(() => {
       this.saveCurrentState();
     });
+  
+  // ✅ Mark as initialized - allow saves from now on
+  // Small delay to ensure all observables have emitted initial values
+  setTimeout(() => {
+    this.isInitialized = true;
+    console.log('✅ Component initialized - auto-save enabled');
+    // Force change detection to update button state
+    this.cdr.markForCheck();
+  }, 100);
 }
 
   ngOnDestroy(): void {
@@ -240,15 +291,47 @@ ngOnInit(): void {
    * Load saved data from localStorage
    */
   private loadSavedData(): void {
-    if (!this.templateId || !this.runId || !this.variantNo) return;
+    if (!this._templateId || !this._runId || !this._variantNo) {
+      console.log('❌ Cannot load saved data - missing params:', {
+        templateId: this._templateId,
+        runId: this._runId,
+        variantNo: this._variantNo
+      });
+      return;
+    }
+    
+    console.log('🔍 Attempting to load data with key:', {
+      templateId: this._templateId,
+      runId: this._runId,
+      variantNo: this._variantNo,
+      storageKey: `campaign_form_${this._templateId}_${this._runId}_${this._variantNo}`
+    });
     
     const savedData = this.storageService.getCampaignData(
-      this.templateId,
-      this.runId,
-      this.variantNo
+      this._templateId,
+      this._runId,
+      this._variantNo
     );
     
-    if (!savedData) return;
+    if (!savedData || !savedData.savedAt) {
+      console.log('📭 No saved campaign data found or data is empty');
+      return;
+    }
+    
+    console.log('📦 Restoring saved campaign data:', {
+      hasSubject: !!savedData.subject,
+      hasAudience: !!savedData.selectedAudience,
+      hasMasterData: !!savedData.masterData?.length,
+      hasReconciliation: !!savedData.reconciliation,
+      reconciliationDetails: savedData.reconciliation ? {
+        existingCount: savedData.reconciliation.summary?.existingCount,
+        newCount: savedData.reconciliation.summary?.newCount,
+        ignoredCount: savedData.reconciliation.summary?.ignoredCount
+      } : null,
+      hasTestEmails: !!savedData.testEmails?.length,
+      hasScheduleGroups: !!savedData.scheduleGroups?.length,
+      savedAt: savedData.savedAt
+    });
     
     // Restore form controls
     if (savedData.subject) {
@@ -267,10 +350,24 @@ ngOnInit(): void {
     if (savedData.masterData && savedData.masterData.length > 0) {
       this.masterData = savedData.masterData;
       this.uploadedFileName = savedData.uploadedFileName || '';
+      
+      // Set upload state to success to show the upload status UI
+      this.uploadLoadingSubject.next('success');
+      
+      // Re-extract test emails and schedule groups if not already saved
+      if (!savedData.testEmails || savedData.testEmails.length === 0) {
+        this.testEmails = this.campaignService.extractTestEmails(savedData.masterData);
+      }
+      
+      if (!savedData.scheduleGroups || savedData.scheduleGroups.length === 0) {
+        this.scheduleGroups = this.campaignService.groupByScheduleTime(savedData.masterData);
+      }
     }
     
     if (savedData.reconciliation) {
       this.reconciliation = savedData.reconciliation;
+      // Set reconciliation state to success to show the reconciliation UI
+      this.reconcileLoadingSubject.next('success');
     }
     
     if (savedData.scheduleGroups && savedData.scheduleGroups.length > 0) {
@@ -294,40 +391,89 @@ ngOnInit(): void {
       this.testEmailSentAt = savedData.testEmailSentAt ? new Date(savedData.testEmailSentAt) : null;
     }
     
+    // ✅ Restore template HTML if available
+    if (savedData.templateHtml && !this.templateHtml) {
+      this.templateHtml = savedData.templateHtml;
+      console.log('✅ Template HTML restored from storage:', { length: this.templateHtml.length });
+    }
+    
     this.addNewMembersToAudience = savedData.addNewMembersToAudience || false;
     
+    // ✅ Log final state after restoration for debugging
+    console.log('🔍 Post-restoration state check:', {
+      hasReconciliation: this.reconciliation !== null,
+      hasScheduleGroups: this.scheduleGroups.length > 0,
+      subjectValid: this.subjectControl.valid,
+      subjectValue: this.subjectControl.value,
+      submitLoadingState: this.submitLoadingSubject.value,
+      canSubmit: this.canSubmit
+    });
+    
+    // Force change detection to ensure UI updates
     this.cdr.markForCheck();
+    
+    // Double-check after a small delay (ensure all async operations complete)
+    setTimeout(() => {
+      console.log('🔄 Final canSubmit check after delay:', this.canSubmit);
+      this.cdr.markForCheck();
+    }, 0);
   }
 
   /**
    * Save current state to localStorage
    */
   private saveCurrentState(): void {
-    if (!this.templateId || !this.runId || !this.variantNo) return;
+    // ✅ Don't save during initial load/restoration
+    if (!this.isInitialized) {
+      console.log('⏸️ Skipping save - component not fully initialized yet');
+      return;
+    }
+    
+    if (!this._templateId || !this._runId || !this._variantNo) {
+      console.warn('⚠️ Cannot save - missing storage keys:', {
+        templateId: this._templateId,
+        runId: this._runId,
+        variantNo: this._variantNo
+      });
+      return;
+    }
+    
+    const dataToSave = {
+      selectedAudience: this.selectedAudience,
+      masterData: this.masterData,
+      uploadedFileName: this.uploadedFileName,
+      reconciliation: this.reconciliation,
+      addNewMembersToAudience: this.addNewMembersToAudience,
+      scheduleGroups: this.scheduleGroups,
+      timezoneAnalysis: this.timezoneAnalysis,
+      subject: this.subjectControl.value,
+      bodyAddition: this.bodyAdditionControl.value,
+      generatedSubjects: this.subjectsSubject.value || [],
+      testEmails: this.testEmails,
+      testEmailSent: this.testEmailSent,
+      testEmailSentAt: this.testEmailSentAt?.toISOString() || null,
+      templateHtml: this.templateHtml,
+      templateId: this._templateId,
+      runId: this._runId,
+      variantNo: this._variantNo,
+      savedAt: new Date().toISOString()
+    };
+    
+    console.log('💾 Saving campaign data:', {
+      key: `campaign_form_${this._templateId}_${this._runId}_${this._variantNo}`,
+      hasSubject: !!dataToSave.subject,
+      hasAudience: !!dataToSave.selectedAudience,
+      hasMasterData: !!dataToSave.masterData?.length,
+      hasReconciliation: !!dataToSave.reconciliation,
+      hasTemplateHtml: !!dataToSave.templateHtml?.length,
+      timestamp: dataToSave.savedAt
+    });
     
     this.storageService.saveCampaignData(
-      this.templateId,
-      this.runId,
-      this.variantNo,
-      {
-        selectedAudience: this.selectedAudience,
-        masterData: this.masterData,
-        uploadedFileName: this.uploadedFileName,
-        reconciliation: this.reconciliation,
-        addNewMembersToAudience: this.addNewMembersToAudience,
-        scheduleGroups: this.scheduleGroups,
-        timezoneAnalysis: this.timezoneAnalysis,
-        subject: this.subjectControl.value,
-        bodyAddition: this.bodyAdditionControl.value,
-        generatedSubjects: this.subjectsSubject.value || [],
-        testEmails: this.testEmails,
-        testEmailSent: this.testEmailSent,
-        testEmailSentAt: this.testEmailSentAt?.toISOString() || null,
-        templateId: this.templateId,
-        runId: this.runId,
-        variantNo: this.variantNo,
-        savedAt: new Date().toISOString()
-      }
+      this._templateId,
+      this._runId,
+      this._variantNo,
+      dataToSave
     );
   }
 
@@ -335,12 +481,12 @@ ngOnInit(): void {
    * Clear saved data (call after successful submission)
    */
   clearSavedData(): void {
-    if (!this.templateId || !this.runId || !this.variantNo) return;
+    if (!this._templateId || !this._runId || !this._variantNo) return;
     
     this.storageService.clearCampaignData(
-      this.templateId,
-      this.runId,
-      this.variantNo
+      this._templateId,
+      this._runId,
+      this._variantNo
     );
   }
 
@@ -640,11 +786,17 @@ isSubjectSelected(subject: string): boolean {
     try {
       const emails = this.masterData.map(row => row.audiences_list?.trim()).filter(Boolean);
 
-      await firstValueFrom(
+      const result = await firstValueFrom(
         this.campaignService.reconcileAudiences(this.selectedAudience.id, emails)
       );
 
+      // ✅ Store the reconciliation result
+      this.reconciliation = result;
       this.reconcileLoadingSubject.next('success');
+      this.cdr.markForCheck(); // Trigger change detection
+      
+      // Save state after reconciliation
+      this.saveCurrentState();
     } catch (error) {
       console.error('❌ Reconciliation failed:', error);
       this.reconcileLoadingSubject.next('error');
@@ -673,6 +825,14 @@ isSubjectSelected(subject: string): boolean {
     try {
       const subject = this.subjectControl.value;
       let html = this.templateHtml;
+
+      console.log('📧 Sending test email with:', {
+        subject,
+        subjectLength: subject?.length,
+        htmlLength: html?.length,
+        testEmailsCount: this.testEmails.length,
+        bodyAddition: this.bodyAdditionControl.value?.length || 0
+      });
 
       // Append body addition if provided
       if (this.bodyAdditionControl.value.trim()) {
@@ -704,6 +864,60 @@ isSubjectSelected(subject: string): boolean {
   }
 
   // ============================================
+  // SUBMISSION SUMMARY
+  // ============================================
+  getSubmissionSummary(): { icon: string; text: string; type: 'immediate' | 'timezone' | 'member' | 'warning' }[] {
+    // Don't check canSubmit - show summary even during loading
+    if (!this.reconciliation || !this.subjectControl.valid || this.scheduleGroups.length === 0) {
+      return [];
+    }
+
+    const summary: { icon: string; text: string; type: 'immediate' | 'timezone' | 'member' | 'warning' }[] = [];
+    
+    const hasImmediate = this.hasImmediateSends();
+    const immediateCount = this.getImmediateSendCount();
+    const hasTimezoneIssues = this.shouldShowTimezoneWarning();
+    const hasNewMembers = this.reconciliation && this.reconciliation.summary.newCount > 0;
+
+    // Immediate sends
+    if (hasImmediate) {
+      summary.push({
+        icon: '⚡',
+        text: `${immediateCount} email(s) will be sent IMMEDIATELY`,
+        type: 'immediate'
+      });
+    }
+
+    // Timezone warning
+    if (hasTimezoneIssues) {
+      summary.push({
+        icon: '🌍',
+        text: this.getTimezoneWarningMessage(),
+        type: 'timezone'
+      });
+    }
+
+    // New members handling
+    if (hasNewMembers) {
+      if (this.addNewMembersToAudience) {
+        summary.push({
+          icon: '📋',
+          text: `${this.reconciliation!.summary.newCount} new member(s) will be archived after sending`,
+          type: 'member'
+        });
+      } else {
+        summary.push({
+          icon: '📋',
+          text: `${this.reconciliation!.summary.newCount} new member(s) will be archived after sending`,
+          type: 'member'
+        });
+      }
+    }
+
+    return summary;
+  }
+
+  // ============================================
   // FINAL SUBMISSION
   // ============================================
   async onSubmit(): Promise<void> {
@@ -712,9 +926,6 @@ isSubjectSelected(subject: string): boolean {
       return;
     }
 
-    const hasImmediate = this.hasImmediateSends();
-    const immediateCount = this.getImmediateSendCount();
-    const hasTimezoneIssues = this.shouldShowTimezoneWarning();
     const hasNoTestEmails = this.testEmails.length === 0;
     const hasNewMembers = this.reconciliation && this.reconciliation.summary.newCount > 0;
 
@@ -729,51 +940,10 @@ isSubjectSelected(subject: string): boolean {
       if (!noTestConfirm) return;
     }
 
-    // Build warnings
-    let warnings: string[] = [];
-
-    if (hasNoTestEmails) {
-      warnings.push('🚨 NO TEST EMAILS - Campaign is UNTESTED');
-    } else if (!this.testEmailSent) {
-      warnings.push('⚠️ Test email NOT sent');
-    }
-
-    if (hasImmediate) {
-      warnings.push(`⚡ ${immediateCount} email(s) will be sent IMMEDIATELY`);
-    }
-
-    if (hasTimezoneIssues) {
-      warnings.push(`🌍 ${this.getTimezoneWarningMessage()}`);
-    }
-
-    if (this.addNewMembersToAudience && hasNewMembers) {
-      warnings.push(`➕ ${this.reconciliation!.summary.newCount} new member(s) will be saved permanently`);
-    } else if (hasNewMembers) {
-      warnings.push(`🗄️ ${this.reconciliation!.summary.newCount} new member(s) will be archived after sending`);
-    }
-
-    // Standard warning confirmations
-    if (warnings.length > 0) {
-      const warning1 = '⚠️ SUBMISSION SUMMARY:\n\n' + 
-        warnings.map((w, i) => `${i + 1}. ${w}`).join('\n') + 
-        '\n\nProceed with submission?';
-      
-      if (!confirm(warning1)) return;
-
-      // Extra confirmation if test not sent (but test emails exist)
-      if (!hasNoTestEmails && !this.testEmailSent) {
-        const warning2 = 
-          '⚠️ FINAL WARNING ⚠️\n\n' +
-          'Test email available but NOT sent.\n' +
-          'Submitting untested campaign.\n\n' +
-          'Click OK to proceed.';
-        
-        if (!confirm(warning2)) return;
-      }
-    } else {
-      // Normal confirmation flow (all good)
-      if (!confirm(`📧 Send to ${this.reconciliation?.summary.existingCount || 0} recipients?\n\nContinue?`)) return;
-      if (!confirm('🚀 FINAL CONFIRMATION\n\nThis cannot be undone.\n\nProceed?')) return;
+    // Simple final confirmation
+    const totalRecipients = this.reconciliation?.summary.existingCount || 0;
+    if (!confirm(`🚀 Proceed with submission?\n\nThis will send to ${totalRecipients} recipient(s) and cannot be undone.`)) {
+      return;
     }
 
     this.submitLoadingSubject.next('loading');
@@ -825,15 +995,20 @@ isSubjectSelected(subject: string): boolean {
       // Clear saved data after successful submission
       this.clearSavedData();
       
-      const successMsg = this.addNewMembersToAudience 
-        ? `Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled.`
-        : `Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled. New members will be archived.`;
+      // Show appropriate success message
+      let successMsg = '';
+      if (result.message && result.message.includes('sent immediately')) {
+        successMsg = `⚠️ Campaign sent immediately! (Scheduling not available on your Mailchimp plan)`;
+      } else {
+        successMsg = this.addNewMembersToAudience 
+          ? `✅ Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled.`
+          : `✅ Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled. New members will be archived.`;
+      }
 
       this.showSuccess(successMsg);
 
-      setTimeout(() => {
-        this.closeRequested.emit();
-      }, 2000);
+      // Don't auto-close, let user stay on the page to see results
+      // User can manually go back if needed
 
     } catch (error) {
       console.error('❌ Submission failed:', error);

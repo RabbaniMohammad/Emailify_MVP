@@ -806,11 +806,24 @@ proceedToCampaignSubmit(): void {
   document.body.classList.remove('validation-modal-open');
   console.log('✅ [campaign] Closed modal but KEPT cached results for return');
   
-  // Navigate to campaign setup page
+  // Navigate to campaign setup page with HTML state
   const id = this.ar.snapshot.paramMap.get('id');
+  const currentHtml = this.htmlSubject.value;
   
   if (id && runId && no) {
-    this.router.navigate(['/qa', id, 'use', runId, no, 'campaign']);
+    console.log('🚀 Navigating to campaign with HTML:', { 
+      htmlLength: currentHtml?.length || 0,
+      runId, 
+      variantNo: no 
+    });
+    
+    this.router.navigate(['/qa', id, 'use', runId, no, 'campaign'], {
+      state: { 
+        templateHtml: currentHtml,
+        runId: runId,
+        variantNo: no
+      }
+    });
   }
 }
 

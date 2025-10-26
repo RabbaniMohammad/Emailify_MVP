@@ -37,8 +37,21 @@ export class CampaignSetupPageComponent implements OnInit, OnDestroy {
     this.runId = this.route.snapshot.paramMap.get('runId') || '';
     this.no = this.route.snapshot.paramMap.get('no') || '';
 
-    // Load the template HTML from the variant
-    this.loadTemplateHtml();
+    // Try to get HTML from navigation state first
+    const navigation = this.router.getCurrentNavigation();
+    const state = navigation?.extras?.state || (history.state as any);
+    
+    if (state?.templateHtml) {
+      this.templateHtml = state.templateHtml;
+      console.log('✅ Template HTML loaded from navigation state:', { 
+        length: this.templateHtml.length,
+        preview: this.templateHtml.substring(0, 100) + '...'
+      });
+    } else {
+      console.warn('⚠️ No HTML in navigation state, trying to load from cache...');
+      // Fallback: Load the template HTML from the variant cache
+      this.loadTemplateHtml();
+    }
   }
 
   ngOnDestroy(): void {
@@ -48,21 +61,35 @@ export class CampaignSetupPageComponent implements OnInit, OnDestroy {
 
   private loadTemplateHtml(): void {
     if (!this.runId || !this.no) {
-      console.error('❌ Missing runId or variant number');
+      console.error('❌ Missing runId or variant number', { runId: this.runId, no: this.no });
       return;
     }
 
+    console.log('📥 Loading template HTML for:', { runId: this.runId, variantNo: this.no });
+
     // Get the variant from QA service cache
     this.qa.getVariantsRunById(this.runId).then(run => {
+      console.log('📦 Received run data:', { 
+        hasRun: !!run, 
+        itemsCount: run?.items?.length || 0 
+      });
+
       if (run && run.items && run.items.length > 0) {
         const variantIndex = parseInt(this.no) - 1;
         if (variantIndex >= 0 && variantIndex < run.items.length) {
           this.templateHtml = run.items[variantIndex].html;
+          console.log('✅ Template HTML loaded:', { 
+            length: this.templateHtml?.length || 0,
+            preview: this.templateHtml?.substring(0, 100) + '...'
+          });
         } else {
-          console.error('❌ Variant index out of bounds');
+          console.error('❌ Variant index out of bounds', { 
+            variantIndex, 
+            maxIndex: run.items.length - 1 
+          });
         }
       } else {
-        console.error('❌ No variant items found in run');
+        console.error('❌ No variant items found in run', { run });
       }
     }).catch(error => {
       console.error('❌ Failed to load variant:', error);

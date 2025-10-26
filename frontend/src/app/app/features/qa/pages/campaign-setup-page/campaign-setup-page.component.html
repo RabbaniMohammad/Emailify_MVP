@@ -19,6 +19,9 @@
     <div class="campaign-container">
       <app-campaign-submit
         [templateHtml]="templateHtml"
+        [templateId]="templateId"
+        [runId]="runId"
+        [variantNo]="no"
         (closeRequested)="onCampaignClose()">
       </app-campaign-submit>
     </div>

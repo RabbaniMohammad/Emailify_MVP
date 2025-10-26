@@ -230,6 +230,7 @@
       class="message-input"
       [(ngModel)]="userInput"
       (keydown.enter)="onEnterKey($event)"
+      (paste)="onPaste($event)"
       rows="3">
     </textarea>
 

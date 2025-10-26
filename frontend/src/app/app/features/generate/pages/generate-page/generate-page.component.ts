@@ -249,11 +249,68 @@ canDeactivate(): boolean {
     }
   }
 
+  async onPaste(event: ClipboardEvent): Promise<void> {
+    // Get clipboard items
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return;
+
+    // Check for image files in clipboard
+    const items = Array.from(clipboardData.items);
+    const imageItems = items.filter(item => item.type.startsWith('image/'));
+
+    if (imageItems.length === 0) {
+      // No images in clipboard, let default paste behavior happen (text paste)
+      return;
+    }
+
+    // Prevent default paste behavior when we have images
+    event.preventDefault();
+
+    // Check if we've reached the max limit
+    if (this.selectedImages.length >= this.maxImages) {
+      this.snackBar.open(
+        `Maximum ${this.maxImages} images allowed. Remove existing images first.`,
+        'Close',
+        { duration: 4000, panelClass: ['error-snackbar'] }
+      );
+      return;
+    }
+
+    // Check how many we can add
+    const availableSlots = this.maxImages - this.selectedImages.length;
+    const itemsToProcess = imageItems.slice(0, availableSlots);
+
+    if (imageItems.length > availableSlots) {
+      this.snackBar.open(
+        `Only ${availableSlots} image${availableSlots === 1 ? '' : 's'} added. Maximum ${this.maxImages} images allowed.`,
+        'Close',
+        { duration: 4000, panelClass: ['info-snackbar'] }
+      );
+    }
+
+    // Process each pasted image
+    for (const item of itemsToProcess) {
+      const file = item.getAsFile();
+      if (file) {
+        await this.processImage(file);
+      }
+    }
+
+    // Show success message if images were added
+    if (itemsToProcess.length > 0) {
+      this.snackBar.open(
+        `${itemsToProcess.length} image${itemsToProcess.length === 1 ? '' : 's'} pasted successfully`,
+        'Close',
+        { duration: 2000, panelClass: ['success-snackbar'] }
+      );
+    }
+  }
+
   hasTemplate(): boolean {
     return !!(this.currentHtml$.value);
   }
 
-onSend(): void {
+async onSend(): Promise<void> {
   const message = this.userInput.trim();
   
   if (!message || this.isGenerating$.value) {
@@ -277,12 +334,25 @@ onSend(): void {
     return;
   }
   
-  // Add user message to UI immediately (before API call)
+  // Convert selected images to base64 FIRST (before adding user message)
+  const imageAttachments: ImageAttachment[] = await Promise.all(
+    this.selectedImages.map(async (file) => {
+      const base64 = await this.fileToBase64(file);
+      return {
+        data: base64,
+        mediaType: file.type,
+        fileName: file.name,
+      };
+    })
+  );
+  
+  // Add user message to UI immediately (before API call) WITH images
   const existingMessages = this.messages$.value;
   const userMessage: GenerationMessage = {
     role: 'user',
     content: message,
     timestamp: new Date(),
+    images: imageAttachments.length > 0 ? imageAttachments : undefined,
   };
   this.messages$.next([...existingMessages, userMessage]);
   
@@ -300,9 +370,9 @@ onSend(): void {
   setTimeout(() => this.scrollToBottom(), 50);
 
   if (!this.conversationId) {
-    this.startNewConversation(message);
+    this.startNewConversation(message, imageAttachments);
   } else {
-    this.continueConversation(message);
+    this.continueConversation(message, imageAttachments);
   }
 
   // Clear input and images AFTER storing metadata
@@ -311,21 +381,9 @@ onSend(): void {
   this.imagePreviewUrls = [];
 }
 
-private async startNewConversation(message: string): Promise<void> {
+private async startNewConversation(message: string, imageAttachments: ImageAttachment[]): Promise<void> {
 
-  // Convert selected images to base64
-  const imageAttachments: ImageAttachment[] = await Promise.all(
-    this.selectedImages.map(async (file, index) => {
-
-      const base64 = await this.fileToBase64(file);
-
-      return {
-        data: base64,
-        mediaType: file.type,
-        fileName: file.name,
-      };
-    })
-  );
+  // Images already converted in onSend(), just use them
   
 
   // ❌ REMOVED: Don't store here, already stored in onSend()
@@ -399,25 +457,14 @@ private async startNewConversation(message: string): Promise<void> {
     });
 }
 
-private async continueConversation(message: string): Promise<void> {
+private async continueConversation(message: string, imageAttachments: ImageAttachment[]): Promise<void> {
 
   if (!this.conversationId) {
 
     return;
   }
 
-  const imageAttachments: ImageAttachment[] = await Promise.all(
-    this.selectedImages.map(async (file, index) => {
-
-      const base64 = await this.fileToBase64(file);
-
-      return {
-        data: base64,
-        mediaType: file.type,
-        fileName: file.name,
-      };
-    })
-  );
+  // Images already converted in onSend(), just use them
   
 
   // ❌ REMOVED: Don't store here, already stored in onSend()
