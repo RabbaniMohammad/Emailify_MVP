@@ -51,8 +51,15 @@ function isGeneratedTemplate(id: string): boolean {
   return id.startsWith('gen_') || id.startsWith('Generated_');
 }
 
-async function getGeneratedTemplateFromDB(id: string): Promise<{ name: string; html: string; source: string }> {
-  const template = await GeneratedTemplate.findOne({ templateId: id });
+async function getGeneratedTemplateFromDB(id: string, organizationId?: any): Promise<{ name: string; html: string; source: string }> {
+  const query: any = { templateId: id };
+  
+  // Add organization filter if provided
+  if (organizationId) {
+    query.organizationId = organizationId;
+  }
+  
+  const template = await GeneratedTemplate.findOne(query);
   
   if (!template) {
     throw new Error(`Generated template not found: ${id}`);
@@ -104,9 +111,9 @@ async function renderViaTempCampaign(templateId: string): Promise<string> {
 }
 
 /** Build best-effort HTML for a template */
-async function getHtmlForTemplate(id: string): Promise<{ name: string; html: string; source: string }> {
+async function getHtmlForTemplate(id: string, organizationId?: any): Promise<{ name: string; html: string; source: string }> {
   if (isGeneratedTemplate(id)) {
-    return await getGeneratedTemplateFromDB(id);
+    return await getGeneratedTemplateFromDB(id, organizationId);
   }
 
   const sdk: any = mc;
@@ -170,7 +177,11 @@ router.get('/', authenticate, organizationContext, async (req: Request, res: Res
     const query  = String(req.query.query ?? '').trim().toLowerCase();
     
     const organization = (req as any).organization;
-    const isSuperAdmin = (req as any).isSuperAdmin;
+    
+    // All users must have organization context
+    if (!organization) {
+      return res.status(403).json({ error: 'Organization context required' });
+    }
     
     // ✅ Complete organization isolation - NO Mailchimp templates shown
     // Only show AI-generated templates specific to this organization
@@ -178,15 +189,10 @@ router.get('/', authenticate, organizationContext, async (req: Request, res: Res
     const templateQuery: any = {};
     
     // 🔍 DEBUG: Log filtering logic
-    logger.info(`🔍 [TEMPLATES] isSuperAdmin: ${isSuperAdmin}, organization: ${organization?.name || 'none'}`);
+    logger.info(`🔍 [TEMPLATES] Filtering by org: ${organization.name} (${organization._id})`);
     
-    // Super admin sees all, regular users see only their org
-    if (!isSuperAdmin && organization) {
-      templateQuery.organizationId = organization._id;
-      logger.info(`🔍 [TEMPLATES] Filtering by org: ${organization.name} (${organization._id})`);
-    } else {
-      logger.warn(`⚠️ [TEMPLATES] NO FILTERING - showing all templates`);
-    }
+    // Filter by organization - everyone only sees their org's templates
+    templateQuery.organizationId = organization._id;
     
     const generatedTemplates = await GeneratedTemplate.find(templateQuery)
       .sort({ createdAt: -1 })
@@ -340,17 +346,19 @@ router.get('/:id', authenticate, organizationContext, async (req: Request, res: 
 
   const id = String(req.params.id);
   const organization = (req as any).organization;
-  const isSuperAdmin = (req as any).isSuperAdmin;
+  
+  // All users must have organization context
+  if (!organization) {
+    return res.status(403).json({ error: 'Organization context required' });
+  }
   
   try {
     if (isGeneratedTemplate(id)) {
       // ✅ Fetch full template with all metadata (FILTERED BY ORGANIZATION)
-      const templateQuery: any = { templateId: id };
-      
-      // Super admin sees all, regular users see only their org
-      if (!isSuperAdmin && organization) {
-        templateQuery.organizationId = organization._id;
-      }
+      const templateQuery: any = { 
+        templateId: id,
+        organizationId: organization._id // Always filter by organization
+      };
       
       const template = await GeneratedTemplate.findOne(templateQuery);
       
@@ -385,7 +393,7 @@ router.get('/:id', authenticate, organizationContext, async (req: Request, res: 
     } else if (typeof sdk.templates?.getTemplate === 'function') {
       template = await sdk.templates.getTemplate(id);
     }
-    const { name, html, source } = await getHtmlForTemplate(id);
+    const { name, html, source } = await getHtmlForTemplate(id, organization._id);
     return res.status(200).json({ 
       id, 
       name, 
@@ -489,7 +497,13 @@ router.delete('/:id', authenticate, organizationContext, async (req: Request, re
 router.get('/:id/raw', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
-    const { name, html, source } = await getHtmlForTemplate(id);
+    const organization = (req as any).organization;
+    
+    if (!organization) {
+      return res.status(403).send('Organization context required');
+    }
+    
+    const { name, html, source } = await getHtmlForTemplate(id, organization._id);
 
     const hasDocShell = /<body[\s>]/i.test(html) || /<\/html>/i.test(html);
     const fullHtml = hasDocShell

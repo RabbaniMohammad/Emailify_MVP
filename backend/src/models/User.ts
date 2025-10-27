@@ -10,8 +10,6 @@ export interface IUser extends Document {
   organizationId?: Types.ObjectId; // Reference to Organization
   orgRole: 'super_admin' | 'admin' | 'member'; // Role within organization (super_admin = first user/creator)
   
-  // Global role (for super_admin only)
-  role: 'super_admin' | 'admin' | 'user';
   isActive: boolean;
   isApproved: boolean;
   approvedBy?: Types.ObjectId;
@@ -25,13 +23,11 @@ const UserSchema = new Schema<IUser>({
   googleId: {
     type: String,
     required: true,
-    unique: true,
     index: true,
   },
   email: {
     type: String,
     required: true,
-    unique: true,
     lowercase: true,
     trim: true,
     index: true,
@@ -58,12 +54,6 @@ const UserSchema = new Schema<IUser>({
     default: 'member',
   },
   
-  // Global role (for super_admin only)
-  role: {
-    type: String,
-    enum: ['super_admin', 'admin', 'user'],
-    default: 'user',
-  },
   isActive: {
     type: Boolean,
     default: true,
@@ -88,6 +78,9 @@ const UserSchema = new Schema<IUser>({
     default: Date.now,
   },
 });
+
+// Composite unique index: Same email can exist in different organizations
+UserSchema.index({ email: 1, organizationId: 1 }, { unique: true });
 
 UserSchema.methods.updateLastLogin = function() {
   this.lastLogin = new Date();

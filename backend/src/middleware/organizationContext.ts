@@ -20,19 +20,10 @@ export const organizationContext = async (
       return;
     }
 
-    const { organizationId, role } = tokenPayload;
+    const { organizationId, orgRole } = tokenPayload;
     
     // 🔍 DEBUG: Log token payload
-    logger.info(`🔍 [ORG_CONTEXT] User: ${tokenPayload.email}, OrgId: ${organizationId}, Role: ${role}`);
-
-    // Super admins can bypass org checks (for debugging/support)
-    if (role === 'super_admin') {
-      (req as any).organization = null; // Super admin sees all
-      (req as any).isSuperAdmin = true;
-      logger.info('🔍 [ORG_CONTEXT] Super admin - bypass org filtering');
-      next();
-      return;
-    }
+    logger.info(`🔍 [ORG_CONTEXT] User: ${tokenPayload.email}, OrgId: ${organizationId}, Role: ${orgRole}`);
 
     // Regular users must belong to an organization
     if (!organizationId) {

@@ -5,7 +5,6 @@ export function generateToken(user: IUser): string {
   const payload = {
     userId: user._id,
     email: user.email,
-    role: user.role,
     organizationId: user.organizationId,
     orgRole: user.orgRole
   };

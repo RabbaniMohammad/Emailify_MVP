@@ -18,8 +18,10 @@ passport.use(
       clientID: GOOGLE_CLIENT_ID,
       clientSecret: GOOGLE_CLIENT_SECRET,
       callbackURL: GOOGLE_CALLBACK_URL,
+      passReqToCallback: true, // Enable access to req object
     },
     async (
+      req: any,
       accessToken: string,
       refreshToken: string,
       profile: Profile,
@@ -37,27 +39,68 @@ passport.use(
           return done(new Error('No email provided by Google'), undefined);
         }
 
-        let user = await User.findOne({ googleId });
+        // Get organization slug from state parameter
+        const orgSlug = (req.query.state as string) || '';
+        
+        if (!orgSlug) {
+          // No org specified - this shouldn't happen with the new flow
+          logger.warn(`⚠️ No organization specified for login: ${email}`);
+          return done(new Error('Organization is required'), undefined);
+        }
+
+        // Find or create organization first
+        const Organization = (await import('@src/models/Organization')).default;
+        let organization = await Organization.findOne({ slug: orgSlug.toLowerCase() });
+        
+        if (!organization) {
+          // Create new organization (will be handled properly in callback)
+          // For now, just pass user data back
+          logger.info(`🏢 New organization will be created: ${orgSlug}`);
+        }
+
+        const organizationId = organization?._id;
+
+        // Look for existing user in THIS organization
+        let user = await User.findOne({ 
+          googleId,
+          organizationId: organizationId || null
+        });
 
         if (user) {
-          // Existing user - just update info and return
-          logger.info(`Existing user: ${email}`);
+          // Existing user in this org - update info
+          logger.info(`✅ Existing user in org ${orgSlug}: ${email}`);
           user.name = name;
           user.picture = picture;
           await user.updateLastLogin();
           return done(null, user);
         } else {
-          // New user - create with pending approval
-          logger.info(`Creating new user (pending approval): ${email}`);
-          user = await User.create({
-            googleId,
-            email,
-            name,
-            picture,
-            role: 'user',
-            isApproved: false,
-            isActive: true,
-          });
+          // New user in this org - create minimal record (org assignment happens in callback)
+          logger.info(`🆕 New user for org ${orgSlug}: ${email}`);
+          
+          // If org exists, create user in that org
+          if (organizationId) {
+            user = await User.create({
+              googleId,
+              email,
+              name,
+              picture,
+              organizationId,
+              orgRole: 'member', // Default role, will be updated in callback if first user
+              isApproved: false,
+              isActive: true,
+            });
+          } else {
+            // Org doesn't exist yet - create user without org (will be assigned in callback)
+            user = await User.create({
+              googleId,
+              email,
+              name,
+              picture,
+              orgRole: 'member',
+              isApproved: false,
+              isActive: true,
+            });
+          }
           
           return done(null, user);
         }

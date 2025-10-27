@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import Organization from '@src/models/Organization';
 import User from '@src/models/User';
+import GeneratedTemplate from '@src/models/GeneratedTemplate';
+import TemplateConversation from '@src/models/TemplateConversation';
 import { authenticate } from '@src/middleware/auth';
 import { requireRole } from '@src/middleware/roles';
 import logger from 'jet-logger';
@@ -245,6 +247,120 @@ router.get('/my/details', authenticate, async (req: Request, res: Response) => {
     res.status(500).json({ 
       error: 'Failed to fetch organization details',
       message: error.message 
+    });
+  }
+});
+
+/**
+ * DELETE /api/organizations/:slug
+ * Delete an organization (only accessible by Default Organization super_admin)
+ * Query param: deleteData (true/false) - whether to cascade delete all org data
+ */
+router.delete('/:slug', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const deleteData = req.query.deleteData !== 'false'; // Default to true
+    const userId = (req as any).tokenPayload?.userId;
+
+    // Get current user
+    const currentUser = await User.findById(userId).populate('organizationId');
+    if (!currentUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if user is in Default Organization (owner org)
+    const userOrg = currentUser.organizationId as any;
+    if (!userOrg || userOrg.slug !== 'default') {
+      return res.status(403).json({
+        error: 'Permission denied',
+        message: 'Only Default Organization can delete organizations'
+      });
+    }
+
+    // Check if user is super_admin
+    if (currentUser.orgRole !== 'super_admin') {
+      return res.status(403).json({
+        error: 'Permission denied',
+        message: 'Only super_admin can delete organizations'
+      });
+    }
+
+    // Find organization to delete
+    const orgToDelete = await Organization.findOne({ slug: slug.toLowerCase() });
+    if (!orgToDelete) {
+      return res.status(404).json({
+        error: 'Organization not found',
+        message: 'No organization found with this name'
+      });
+    }
+
+    // Prevent deleting the Default Organization itself
+    if (orgToDelete.slug === 'default') {
+      return res.status(403).json({
+        error: 'Cannot delete Default Organization',
+        message: 'The Default Organization cannot be deleted'
+      });
+    }
+
+    let deletionSummary = {
+      organization: orgToDelete.name,
+      templatesDeleted: 0,
+      conversationsDeleted: 0,
+      usersAffected: 0,
+    };
+
+    if (deleteData) {
+      // CASCADE DELETE: Remove all organization data
+      logger.info(`🗑️  Cascade deleting organization: ${orgToDelete.name}`);
+
+      // Delete templates
+      const templateResult = await GeneratedTemplate.deleteMany({ 
+        organizationId: orgToDelete._id 
+      });
+      deletionSummary.templatesDeleted = templateResult.deletedCount || 0;
+
+      // Delete conversations
+      const conversationResult = await TemplateConversation.deleteMany({ 
+        organizationId: orgToDelete._id 
+      });
+      deletionSummary.conversationsDeleted = conversationResult.deletedCount || 0;
+
+      // Remove organization from users
+      const userResult = await User.updateMany(
+        { organizationId: orgToDelete._id },
+        { 
+          $unset: { organizationId: "" }, 
+          $set: { orgRole: 'member', isApproved: false } 
+        }
+      );
+      deletionSummary.usersAffected = userResult.modifiedCount || 0;
+
+      logger.info(`  ✅ Deleted ${deletionSummary.templatesDeleted} templates`);
+      logger.info(`  ✅ Deleted ${deletionSummary.conversationsDeleted} conversations`);
+      logger.info(`  ✅ Removed organization from ${deletionSummary.usersAffected} users`);
+    } else {
+      // SOFT DELETE: Only delete org, leave data orphaned
+      logger.info(`🗑️  Soft deleting organization: ${orgToDelete.name} (data preserved)`);
+      
+      const userCount = await User.countDocuments({ organizationId: orgToDelete._id });
+      deletionSummary.usersAffected = userCount;
+    }
+
+    // Delete the organization
+    await Organization.deleteOne({ _id: orgToDelete._id });
+    logger.info(`  ✅ Organization deleted: ${orgToDelete.name}`);
+
+    res.json({
+      success: true,
+      message: `Organization "${orgToDelete.name}" deleted successfully`,
+      cascadeDelete: deleteData,
+      summary: deletionSummary,
+    });
+  } catch (error: any) {
+    logger.err('❌ Delete organization error:', error);
+    res.status(500).json({
+      error: 'Failed to delete organization',
+      message: error.message
     });
   }
 });

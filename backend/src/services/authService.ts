@@ -16,7 +16,6 @@ export interface TokenPayload {
   name: string;
   organizationId?: string; // Organization the user belongs to
   orgRole?: string; // Role within organization
-  role?: string; // Global role (super_admin, admin, user)
 }
 
 export const generateAccessToken = (user: IUser): string => {
@@ -26,7 +25,6 @@ export const generateAccessToken = (user: IUser): string => {
     name: user.name,
     organizationId: user.organizationId ? String(user.organizationId) : undefined,
     orgRole: user.orgRole,
-    role: user.role,
   };
 
   return jwt.sign(payload, JWT_SECRET, { 
@@ -41,7 +39,6 @@ export const generateRefreshToken = (user: IUser): string => {
     name: user.name,
     organizationId: user.organizationId ? String(user.organizationId) : undefined,
     orgRole: user.orgRole,
-    role: user.role,
   };
 
   return jwt.sign(payload, REFRESH_TOKEN_SECRET, { 

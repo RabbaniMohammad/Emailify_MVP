@@ -248,6 +248,7 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
     const conversation = await TemplateConversation.findOne({
       conversationId,
       userId,
+      organizationId: (req as any).organization?._id
     });
 
     if (!conversation) {
@@ -350,10 +351,12 @@ router.get('/conversation/:conversationId', authenticate, async (req: Request, r
   try {
     const { conversationId } = req.params;
     const userId = (req as any).tokenPayload?.userId;
+    const organization = (req as any).organization;
 
     const conversation = await TemplateConversation.findOne({
       conversationId,
       userId,
+      organizationId: organization?._id
     });
 
     if (!conversation) {
@@ -389,16 +392,23 @@ router.get('/conversation/:conversationId', authenticate, async (req: Request, r
 router.get('/history', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).tokenPayload?.userId;
+    const organization = (req as any).organization;
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
     const offset = parseInt(req.query.offset as string) || 0;
 
-    const conversations = await TemplateConversation.find({ userId })
+    const conversations = await TemplateConversation.find({
+      userId,
+      organizationId: organization?._id
+    })
       .sort({ updatedAt: -1 })
       .skip(offset)
       .limit(limit)
       .select('conversationId templateName status createdAt updatedAt messages');
 
-    const total = await TemplateConversation.countDocuments({ userId });
+    const total = await TemplateConversation.countDocuments({
+      userId,
+      organizationId: organization?._id
+    });
 
     const items = conversations.map((conv) => ({
       conversationId: conv.conversationId,
@@ -451,6 +461,7 @@ router.post('/save/:conversationId', authenticate, organizationContext, async (r
     const conversation = await TemplateConversation.findOne({
       conversationId,
       userId,
+      organizationId: organization?._id
     });
 
     if (!conversation) {

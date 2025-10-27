@@ -19,11 +19,10 @@ export const requireRole = (...allowedRoles: string[]) => {
         return;
       }
 
-      // Check both global role AND orgRole for admin access
-      const hasGlobalRole = allowedRoles.includes(user.role);
+      // Check orgRole for admin access
       const hasOrgRole = user.orgRole && allowedRoles.includes(user.orgRole);
       
-      if (!hasGlobalRole && !hasOrgRole) {
+      if (!hasOrgRole) {
         res.status(403).json({ error: 'Insufficient permissions' });
         return;
       }

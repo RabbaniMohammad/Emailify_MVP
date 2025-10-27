@@ -2,6 +2,9 @@ import { Router, Request, Response } from 'express';
 import { authenticate } from '@src/middleware/auth';
 import { requireAdmin, requireSuperAdmin } from '@src/middleware/roles';
 import User from '@src/models/User';
+import Organization from '@src/models/Organization';
+import GeneratedTemplate from '@src/models/GeneratedTemplate';
+import TemplateConversation from '@src/models/TemplateConversation';
 import logger from 'jet-logger';
 
 const router = Router();
@@ -119,15 +122,15 @@ router.post('/users/:userId/promote', authenticate, requireSuperAdmin, async (re
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (user.role === 'super_admin') {
+    if (user.orgRole === 'super_admin') {
       return res.status(400).json({ error: 'User is already super admin' });
     }
 
-    if (user.role === 'admin') {
+    if (user.orgRole === 'admin') {
       return res.status(400).json({ error: 'User is already an admin' });
     }
 
-    user.role = 'admin';
+    user.orgRole = 'admin';
     await user.save();
 
     logger.info(`⬆️ User promoted to admin: ${user.email} by ${currentUser.email}`);
@@ -149,7 +152,7 @@ router.delete('/users/:userId', authenticate, requireSuperAdmin, async (req: Req
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (user.role === 'super_admin') {
+    if (user.orgRole === 'super_admin') {
       return res.status(403).json({ error: 'Cannot delete super admin' });
     }
 
@@ -196,15 +199,15 @@ router.post('/users/:userId/demote', authenticate, requireSuperAdmin, async (req
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (user.role === 'super_admin') {
+    if (user.orgRole === 'super_admin') {
       return res.status(403).json({ error: 'Cannot demote super admin' });
     }
 
-    if (user.role === 'user') {
+    if (user.orgRole === 'member') {
       return res.status(400).json({ error: 'User is not an admin' });
     }
 
-    user.role = 'user';
+    user.orgRole = 'member';
     await user.save();
 
     logger.info(`⬇️ Admin demoted to user: ${user.email} by ${currentUser.email}`);
@@ -212,6 +215,97 @@ router.post('/users/:userId/demote', authenticate, requireSuperAdmin, async (req
   } catch (error) {
     logger.err('Demote user error:', error);
     res.status(500).json({ error: 'Failed to demote user' });
+  }
+});
+
+// ==================== ORGANIZATION MANAGEMENT (Super Admin Only) ====================
+
+// Get all organizations (super admin only)
+router.get('/organizations', authenticate, requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    const organizations = await Organization.find()
+      .select('-__v')
+      .sort({ createdAt: -1 })
+      .populate('owner', 'name email');
+
+    // Get user count for each organization
+    const orgsWithCounts = await Promise.all(
+      organizations.map(async (org) => {
+        const usersCount = await User.countDocuments({ organizationId: org._id });
+        return {
+          ...org.toObject(),
+          usersCount
+        };
+      })
+    );
+
+    logger.info(`🔍 [SUPER ADMIN] Fetching all organizations, found: ${organizations.length}`);
+    res.json({ organizations: orgsWithCounts });
+  } catch (error) {
+    logger.err('Get organizations error:', error);
+    res.status(500).json({ error: 'Failed to fetch organizations' });
+  }
+});
+
+// Delete organization (super admin only)
+router.delete('/organizations/:slug', authenticate, requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const { deleteData } = req.body; // boolean flag to also delete users
+    const currentUser = (req as any).currentUser;
+
+    const organization = await Organization.findOne({ slug: slug.toLowerCase() });
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    // Prevent deleting the super admin's own organization
+    if (currentUser.organizationId?.toString() === (organization._id as any).toString()) {
+      return res.status(403).json({ 
+        error: 'Cannot delete your own organization',
+        message: 'You cannot delete the organization you belong to.'
+      });
+    }
+
+    // Always delete templates and conversations
+    const deletedTemplates = await GeneratedTemplate.deleteMany({ organizationId: organization._id });
+    const deletedConversations = await TemplateConversation.deleteMany({ organizationId: organization._id });
+
+    let deletedUsers = 0;
+    if (deleteData) {
+      // Delete all users in the organization
+      const result = await User.deleteMany({ organizationId: organization._id });
+      deletedUsers = result.deletedCount || 0;
+    } else {
+      // Just remove organization reference from users
+      await User.updateMany(
+        { organizationId: organization._id },
+        { 
+          $unset: { organizationId: '' },
+          orgRole: 'user',
+          isApproved: false
+        }
+      );
+    }
+
+    // Delete the organization
+    await Organization.findByIdAndDelete(organization._id);
+
+    logger.info(`🗑️ [SUPER ADMIN] Organization deleted: ${organization.slug} by ${currentUser.email}`);
+    logger.info(`   - Users ${deleteData ? 'deleted' : 'unlinked'}: ${deleteData ? deletedUsers : 'N/A'}`);
+    logger.info(`   - Templates deleted: ${deletedTemplates.deletedCount}`);
+    logger.info(`   - Conversations deleted: ${deletedConversations.deletedCount}`);
+
+    res.json({ 
+      message: `Organization "${organization.name}" deleted successfully`,
+      deletedOrganization: organization.slug,
+      deletedUsers: deleteData ? deletedUsers : undefined,
+      deletedTemplates: deletedTemplates.deletedCount,
+      deletedConversations: deletedConversations.deletedCount
+    });
+  } catch (error) {
+    logger.err('Delete organization error:', error);
+    res.status(500).json({ error: 'Failed to delete organization' });
   }
 });
 

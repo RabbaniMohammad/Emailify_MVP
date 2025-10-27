@@ -73,42 +73,67 @@ router.get(
           const isCurrentOrg = user.organizationId?.toString() === String(organization._id);
           
           if (isCurrentOrg) {
-            // Already in this org, just continue
-            logger.info(`✅ User ${user.email} already in org: ${orgSlug}`);
-          } else {
-            // Switching to different org - check domain restriction
-            let canJoin = true;
-            
-            if (organization.domain) {
-              const domain = organization.domain.startsWith('@') 
-                ? organization.domain 
-                : `@${organization.domain}`;
-              canJoin = user.email.endsWith(domain);
-              
-              if (!canJoin) {
-                logger.warn(`⚠️ Email domain mismatch for ${user.email} in org ${orgSlug}`);
-              }
-            }
-            
-            if (canJoin) {
-              // Check user limit
-              const memberCount = await User.countDocuments({ organizationId: organization._id });
-              
-              if (memberCount >= organization.maxUsers) {
-                logger.warn(`⚠️ Organization ${orgSlug} is full (${memberCount}/${organization.maxUsers})`);
-                canJoin = false;
-              }
-            }
-            
-            if (canJoin) {
-              // Update user's organization
-              const oldOrgId = user.organizationId;
-              user.organizationId = organization._id as any;
-              user.orgRole = 'member';
-              user.isApproved = false; // Requires admin approval when joining new org
+            // Already in this org - ensure super_admin is always approved
+            if (user.orgRole === 'super_admin' && !user.isApproved) {
+              user.isApproved = true;
               await user.save();
+              logger.info(`✅ Auto-approved super_admin: ${user.email} in org: ${orgSlug}`);
+            } else {
+              logger.info(`✅ User ${user.email} already in org: ${orgSlug}`);
+            }
+          } else {
+            // User record exists but for wrong org (shouldn't happen with new passport logic)
+            // This means passport created user without org - update it now
+            if (!user.organizationId) {
+              // Check if this is the first user in this organization
+              const existingUserCount = await User.countDocuments({ organizationId: organization._id });
               
-              logger.info(`🔄 User ${user.email} switched from org ${oldOrgId} to ${orgSlug} (pending approval)`);
+              if (existingUserCount === 0) {
+                // First user in this org - make them super_admin
+                user.organizationId = organization._id as any;
+                user.orgRole = 'super_admin';
+                user.isApproved = true;
+                organization.owner = user._id as any; // Update org owner
+                await organization.save();
+                await user.save();
+                logger.info(`🏢 First user joins org ${orgSlug} as super_admin: ${user.email}`);
+              } else {
+                // Not first user - check domain restriction and join as member
+                let canJoin = true;
+                
+                if (organization.domain) {
+                  const domain = organization.domain.startsWith('@') 
+                    ? organization.domain 
+                    : `@${organization.domain}`;
+                  canJoin = user.email.endsWith(domain);
+                  
+                  if (!canJoin) {
+                    logger.warn(`⚠️ Email domain mismatch for ${user.email} in org ${orgSlug}`);
+                  }
+                }
+                
+                if (canJoin) {
+                  // Check user limit
+                  const memberCount = await User.countDocuments({ organizationId: organization._id });
+                  
+                  if (memberCount >= organization.maxUsers) {
+                    logger.warn(`⚠️ Organization ${orgSlug} is full (${memberCount}/${organization.maxUsers})`);
+                    canJoin = false;
+                  }
+                }
+                
+                if (canJoin) {
+                  // Update user's organization as member
+                  user.organizationId = organization._id as any;
+                  user.orgRole = 'member';
+                  user.isApproved = false; // Requires admin approval when joining new org
+                  await user.save();
+                  
+                  logger.info(`🔄 User ${user.email} joined ${orgSlug} as member (pending approval)`);
+                }
+              }
+            } else {
+              logger.warn(`⚠️ User ${user.email} is in different org, but trying to access ${orgSlug}`);
             }
           }
         }
@@ -330,7 +355,6 @@ router.get(
                 email: user.email,
                 name: user.name,
                 picture: user.picture,
-                role: user.role,
                 orgRole: user.orgRole,
                 organization: organizationData
               })}
@@ -361,14 +385,20 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
     
     const user = await User.findById(tokenPayload.userId)
       .select('-__v')
-      .populate('organizationId', 'name slug domain isActive');
+      .populate('organizationId', 'name slug domain isActive isOwner');
     
     if (!user) {
       return res.status(404).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
     }
 
+    // Add organizationIsOwner flag for easy frontend access
+    const userResponse: any = user.toObject();
+    if (user.organizationId && typeof user.organizationId === 'object') {
+      userResponse.organizationIsOwner = (user.organizationId as any).isOwner || false;
+    }
+
     // Return user info even if not approved - let frontend handle the pending state
-    res.json({ user });
+    res.json({ user: userResponse });
   } catch (error) {
     logger.err('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user', code: 'SERVER_ERROR' });
