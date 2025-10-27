@@ -2,7 +2,9 @@ import { Router, type Request, type Response } from 'express';
 import mailchimp from '@mailchimp/mailchimp_marketing';
 import GeneratedTemplate from '@src/models/GeneratedTemplate';
 import { authenticate } from '@src/middleware/auth';
+import { organizationContext } from '@src/middleware/organizationContext';
 import User from '@src/models/User';
+import logger from 'jet-logger';
 
 // ---------- Minimal types ----------
 type McTemplate = { 
@@ -163,66 +165,59 @@ async function getHtmlForTemplate(id: string): Promise<{ name: string; html: str
 // In templates.ts - REPLACE the GET / route with this:
 
 /** GET /api/templates?query=&limit=&offset= → { items:[{id,name,...metadata}], total } */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const query  = String(req.query.query ?? '').trim().toLowerCase();
-    const limit  = Math.min(Number(req.query.limit ?? 50), 250);
-    const offset = Number(req.query.offset ?? 0);
-    // ✅ Fetch Mailchimp templates
-    const resp: McTemplatesList = await mc.templates.list({ count: limit, offset, type: 'user' });
-
-    const source: McTemplate[] = Array.isArray(resp.templates) ? resp.templates : [];
-    const userOnly: McTemplate[] = source.filter((t) => {
-      const ty = (t.type ?? '').toString().toLowerCase();
-      return ty === 'user' || ty === 'saved' || ty === 'regular';
-    });
-
-    const seen = new Set<string>();
-    let mailchimpItems = (userOnly.length ? userOnly : source)
-      .map((t) => ({
-        id: String(t.id),
-        name: String(t.name ?? 'Untitled Template'),
-        type: t.type ?? null,
-        templateType: null, // ✅ Not applicable for Mailchimp templates
-        category: t.category ?? null,
-        thumbnail: t.thumbnail ?? null,
-        dateCreated: t.date_created ?? null,
-        dateEdited: t.date_edited ?? null,
-        createdBy: t.created_by ?? null,
-        active: t.active ?? true,
-        dragAndDrop: t.drag_and_drop ?? null,
-        responsive: t.responsive ?? null,
-        folderId: t.folder_id ?? null,
-        screenshotUrl: t.screenshot_url ?? null,
-        source: 'mailchimp', // ✅ NEW FIELD
-      }))
-      .filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
-    // ✅ Fetch Generated templates from MongoDB
-    const generatedTemplates = await GeneratedTemplate.find({})
+    
+    const organization = (req as any).organization;
+    const isSuperAdmin = (req as any).isSuperAdmin;
+    
+    // ✅ Complete organization isolation - NO Mailchimp templates shown
+    // Only show AI-generated templates specific to this organization
+    
+    const templateQuery: any = {};
+    
+    // 🔍 DEBUG: Log filtering logic
+    logger.info(`🔍 [TEMPLATES] isSuperAdmin: ${isSuperAdmin}, organization: ${organization?.name || 'none'}`);
+    
+    // Super admin sees all, regular users see only their org
+    if (!isSuperAdmin && organization) {
+      templateQuery.organizationId = organization._id;
+      logger.info(`🔍 [TEMPLATES] Filtering by org: ${organization.name} (${organization._id})`);
+    } else {
+      logger.warn(`⚠️ [TEMPLATES] NO FILTERING - showing all templates`);
+    }
+    
+    const generatedTemplates = await GeneratedTemplate.find(templateQuery)
       .sort({ createdAt: -1 })
       .limit(100) // Reasonable limit
       .lean();
+    
+    logger.info(`🔍 [TEMPLATES] Found ${generatedTemplates.length} AI-generated templates for this org`);
+    
     const generatedItems = generatedTemplates.map((t: any) => {
       return {
         id: t.templateId,
         name: t.name,
         type: t.type || 'generated',
-        templateType: t.templateType || 'AI Generated', // ✅ NEW FIELD
+        templateType: t.templateType || 'AI Generated',
         category: t.category || 'N/A',
         thumbnail: t.thumbnail || '',
         dateCreated: t.createdAt?.toISOString() ?? null,
         dateEdited: t.updatedAt?.toISOString() ?? null,
-        createdBy: t.createdBy || 'Unknown', // ✅ NEW FIELD (from DB)
+        createdBy: t.createdBy || 'Unknown',
         active: t.active || 'N/A',
         dragAndDrop: false,
         responsive: t.responsive || 'Yes',
         folderId: t.folderId || 'N/A',
         screenshotUrl: null,
-        source: t.source || 'AI Generated', // ✅ NEW FIELD
+        source: t.source || 'AI Generated',
       };
     });
-    // ✅ Merge both lists (generated templates first, then Mailchimp)
-    let items = [...generatedItems, ...mailchimpItems];
+    
+    // ✅ ONLY AI-generated templates (clean slate per org)
+    let items = generatedItems;
+    
     // ✅ Apply search filter if provided
     if (query) {
       items = items.filter((t) => t.name.toLowerCase().includes(query));
@@ -241,7 +236,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 /** POST /api/templates - Create a GeneratedTemplate from Visual Editor */
-router.post('/', authenticate, async (req: Request, res: Response) => {
+router.post('/', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const {
       name,
@@ -270,13 +265,27 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
     }
 
     const userId = (req as any).tokenPayload?.userId;
+    const organization = (req as any).organization;
+    
+    // Ensure user has an organization
+    if (!organization) {
+      return res.status(403).json({ 
+        code: 'NO_ORGANIZATION', 
+        message: 'You must belong to an organization to create templates' 
+      });
+    }
 
     // Find user for createdBy (frontend requested using Google sign-in name)
     const user = userId ? await User.findById(userId) : null;
     const createdBy = user ? (user.name || user.email || payloadCreatedBy || 'Unknown User') : (payloadCreatedBy || 'Unknown User');
 
-    // Check if the same template already exists (by exact html OR by name + user)
-    const existing = await GeneratedTemplate.findOne({ $or: [ { html: finalContent }, { name: finalName, userId } ] });
+    // Check if the same template already exists (by exact html OR by name + user + org)
+    const existing = await GeneratedTemplate.findOne({ 
+      $or: [ 
+        { html: finalContent, organizationId: organization._id }, 
+        { name: finalName, userId, organizationId: organization._id } 
+      ] 
+    });
     if (existing) {
       return res.json({ id: existing.templateId });
     }
@@ -288,6 +297,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       name: finalName,
       html: finalContent,
       userId: userId,
+      organizationId: organization._id, // ✅ ORGANIZATION ISOLATION
       conversationId: undefined,
       type: payloadType || 'Visual editor',
       templateType: 'AI Generated',
@@ -320,7 +330,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
 });
 
 /** GET /api/templates/:id → JSON: { id, name, html, ...metadata } (no-cache) */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authenticate, organizationContext, async (req: Request, res: Response) => {
   res.set({
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
     Pragma: 'no-cache',
@@ -329,10 +339,20 @@ router.get('/:id', async (req: Request, res: Response) => {
   });
 
   const id = String(req.params.id);
+  const organization = (req as any).organization;
+  const isSuperAdmin = (req as any).isSuperAdmin;
+  
   try {
     if (isGeneratedTemplate(id)) {
-      // ✅ Fetch full template with all metadata
-      const template = await GeneratedTemplate.findOne({ templateId: id });
+      // ✅ Fetch full template with all metadata (FILTERED BY ORGANIZATION)
+      const templateQuery: any = { templateId: id };
+      
+      // Super admin sees all, regular users see only their org
+      if (!isSuperAdmin && organization) {
+        templateQuery.organizationId = organization._id;
+      }
+      
+      const template = await GeneratedTemplate.findOne(templateQuery);
       
       if (!template) {
         console.error('❌ [GET_TEMPLATE] Generated template not found:', id);
@@ -342,7 +362,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         id, 
         name: template.name, 
         html: template.html,
-        type: template.type || 'generated',
+        type: template.type || 'Generated',
         templateType: template.templateType, // ✅ NEW FIELD
         source: template.source || 'AI Generated',
         active: template.active || 'N/A',
@@ -397,12 +417,22 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 /** DELETE /api/templates/:id - Delete template */
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
+    const organization = (req as any).organization;
+    const isSuperAdmin = (req as any).isSuperAdmin;
     
     if (isGeneratedTemplate(id)) {
-      const result = await GeneratedTemplate.deleteOne({ templateId: id });
+      // ✅ Delete with organization filtering
+      const deleteQuery: any = { templateId: id };
+      
+      // Super admin can delete any, regular users only their org
+      if (!isSuperAdmin && organization) {
+        deleteQuery.organizationId = organization._id;
+      }
+      
+      const result = await GeneratedTemplate.deleteOne(deleteQuery);
       
       if (result.deletedCount === 0) {
         return res.json({ 
@@ -456,7 +486,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 /** GET /api/templates/:id/raw → HTML (iframe-friendly), no-cache */
-router.get('/:id/raw', async (req: Request, res: Response) => {
+router.get('/:id/raw', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
     const { name, html, source } = await getHtmlForTemplate(id);

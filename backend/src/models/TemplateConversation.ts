@@ -2,6 +2,7 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
 
 export interface ITemplateConversation extends Document {
   userId: Types.ObjectId;
+  organizationId: Types.ObjectId; // Organization isolation
   conversationId: string;
   messages: Array<{
     role: 'user' | 'assistant';
@@ -29,6 +30,12 @@ const TemplateConversationSchema = new Schema<ITemplateConversation>(
       ref: 'User',
       required: true,
       index: true,
+    },
+    organizationId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Organization',
+      required: true,
+      index: true, // Organization isolation
     },
     conversationId: {
       type: String,
@@ -88,6 +95,7 @@ const TemplateConversationSchema = new Schema<ITemplateConversation>(
 );
 
 TemplateConversationSchema.index({ userId: 1, createdAt: -1 });
+TemplateConversationSchema.index({ organizationId: 1, createdAt: -1 }); // Org isolation
 TemplateConversationSchema.index({ conversationId: 1 });
 TemplateConversationSchema.index({ savedTemplateId: 1 });
 

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authenticate } from '@src/middleware/auth';
+import { organizationContext } from '@src/middleware/organizationContext';
 import TemplateConversation from '@src/models/TemplateConversation';
 import GeneratedTemplate from '@src/models/GeneratedTemplate';
 import User from '@src/models/User';
@@ -92,10 +93,18 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
  * Start a new template generation conversation
  * ✅ Returns MJML on first generation (frontend needs it for editor)
  */
-router.post('/start', authenticate, async (req: Request, res: Response) => {
+router.post('/start', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const { prompt, images } = req.body;
     const userId = (req as any).tokenPayload?.userId;
+    const organization = (req as any).organization;
+    
+    if (!organization) {
+      return res.status(403).json({ 
+        code: 'NO_ORGANIZATION', 
+        message: 'You must belong to an organization to generate templates' 
+      });
+    }
 
     logger.info(`🎨 Starting template generation for user ${userId}`);
     logger.info(`📝 Prompt length: ${prompt?.length || 0}`);
@@ -150,6 +159,7 @@ router.post('/start', authenticate, async (req: Request, res: Response) => {
     logger.info(`💾 Creating conversation in database...`);
     const conversation = await TemplateConversation.create({
       userId,
+      organizationId: organization._id, // ✅ ORGANIZATION ISOLATION
       conversationId,
       messages: [
         { 
@@ -419,11 +429,19 @@ router.get('/history', authenticate, async (req: Request, res: Response) => {
  * POST /api/generate/save/:conversationId
  * Save template to MongoDB
  */
-router.post('/save/:conversationId', authenticate, async (req: Request, res: Response) => {
+router.post('/save/:conversationId', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const { conversationId } = req.params;
     const { templateName } = req.body;
     const userId = (req as any).tokenPayload?.userId;
+    const organization = (req as any).organization;
+
+    if (!organization) {
+      return res.status(403).json({ 
+        code: 'NO_ORGANIZATION', 
+        message: 'You must belong to an organization to save templates' 
+      });
+    }
     if (!templateName || !templateName.trim()) {
       return res.status(400).json({
         code: 'INVALID_NAME',
@@ -464,6 +482,7 @@ router.post('/save/:conversationId', authenticate, async (req: Request, res: Res
       name: templateName.trim(),
       html: conversation.currentHtml,
       userId,
+      organizationId: organization._id, // ✅ ORGANIZATION ISOLATION
       conversationId,
       type: 'generated',
       templateType: 'AI Generated',

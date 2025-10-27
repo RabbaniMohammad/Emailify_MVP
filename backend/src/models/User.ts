@@ -5,6 +5,12 @@ export interface IUser extends Document {
   email: string;
   name: string;
   picture?: string;
+  
+  // Organization fields
+  organizationId?: Types.ObjectId; // Reference to Organization
+  orgRole: 'super_admin' | 'admin' | 'member'; // Role within organization (super_admin = first user/creator)
+  
+  // Global role (for super_admin only)
   role: 'super_admin' | 'admin' | 'user';
   isActive: boolean;
   isApproved: boolean;
@@ -39,6 +45,20 @@ const UserSchema = new Schema<IUser>({
     type: String,
     default: '',
   },
+  
+  // Organization fields
+  organizationId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Organization',
+    index: true,
+  },
+  orgRole: {
+    type: String,
+    enum: ['super_admin', 'admin', 'member'],
+    default: 'member',
+  },
+  
+  // Global role (for super_admin only)
   role: {
     type: String,
     enum: ['super_admin', 'admin', 'user'],

@@ -3,16 +3,29 @@ import passport from '@src/config/passport';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken, TokenPayload } from '@src/services/authService';
 import { authenticate } from '@src/middleware/auth';
 import User from '@src/models/User';
+import Organization from '@src/models/Organization';
 import logger from 'jet-logger';
 import { IUser } from '@src/models/User';
 
 const router = Router();
 
 // ==================== Google OAuth Initiation ====================
-router.get('/google', passport.authenticate('google', { 
-  scope: ['profile', 'email'],
-  session: false 
-}));
+// Accept organization slug as query parameter
+router.get('/google', (req: Request, res: Response, next: NextFunction) => {
+  const orgSlug = req.query.org as string;
+  
+  // Store org slug in session for callback
+  if (orgSlug) {
+    (req as any).session = (req as any).session || {};
+    (req as any).session.orgSlug = orgSlug;
+  }
+  
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    session: false,
+    state: orgSlug || '', // Pass org slug via state
+  })(req, res, next);
+});
 
 // ==================== Google OAuth Callback ====================
 router.get(
@@ -23,11 +36,88 @@ router.get(
   }),
   async (req: Request, res: Response) => {
     try {
-      const user = req.user as IUser;
+      let user = req.user as IUser;
+      const orgSlug = (req.query.state as string) || '';
 
       if (!user) {
         logger.warn('⚠️ No user found in callback');
         return res.redirect(`${process.env.FRONTEND_URL}/auth?error=no_user`);
+      }
+
+      // ==================== Handle Organization Assignment ====================
+      // Always process org slug if provided (allows switching organizations)
+      if (orgSlug) {
+        let organization = await Organization.findOne({ slug: orgSlug.toLowerCase() });
+        
+        // If organization doesn't exist, create it and make user the owner
+        if (!organization) {
+          organization = new Organization({
+            name: orgSlug.charAt(0).toUpperCase() + orgSlug.slice(1), // Capitalize first letter
+            slug: orgSlug.toLowerCase(),
+            owner: user._id, // Set the creator as owner (for org model requirement)
+            isActive: true,
+            maxUsers: 50,
+            maxTemplates: 1000,
+          });
+          await organization.save();
+          
+          // Make first user the super_admin of this org
+          user.organizationId = organization._id as any;
+          user.orgRole = 'super_admin'; // First user is super_admin
+          user.isApproved = true; // Super admin is auto-approved
+          await user.save();
+          
+          logger.info(`🏢 New organization created: ${orgSlug} (super_admin: ${user.email})`);
+        } else if (organization.isActive) {
+          // Organization exists - check if user is already in this org
+          const isCurrentOrg = user.organizationId?.toString() === String(organization._id);
+          
+          if (isCurrentOrg) {
+            // Already in this org, just continue
+            logger.info(`✅ User ${user.email} already in org: ${orgSlug}`);
+          } else {
+            // Switching to different org - check domain restriction
+            let canJoin = true;
+            
+            if (organization.domain) {
+              const domain = organization.domain.startsWith('@') 
+                ? organization.domain 
+                : `@${organization.domain}`;
+              canJoin = user.email.endsWith(domain);
+              
+              if (!canJoin) {
+                logger.warn(`⚠️ Email domain mismatch for ${user.email} in org ${orgSlug}`);
+              }
+            }
+            
+            if (canJoin) {
+              // Check user limit
+              const memberCount = await User.countDocuments({ organizationId: organization._id });
+              
+              if (memberCount >= organization.maxUsers) {
+                logger.warn(`⚠️ Organization ${orgSlug} is full (${memberCount}/${organization.maxUsers})`);
+                canJoin = false;
+              }
+            }
+            
+            if (canJoin) {
+              // Update user's organization
+              const oldOrgId = user.organizationId;
+              user.organizationId = organization._id as any;
+              user.orgRole = 'member';
+              user.isApproved = false; // Requires admin approval when joining new org
+              await user.save();
+              
+              logger.info(`🔄 User ${user.email} switched from org ${oldOrgId} to ${orgSlug} (pending approval)`);
+            }
+          }
+        }
+        
+        // ⭐ CRITICAL: Reload user from DB to get fresh organizationId for JWT
+        const freshUser = await User.findById(user._id);
+        if (freshUser) {
+          user = freshUser;
+        }
       }
 
       // ==================== Check if user is deactivated ====================
@@ -213,6 +303,19 @@ router.get(
 
       logger.info(`✅ User logged in: ${user.email}`);
 
+      // Fetch organization details if user has one
+      let organizationData = null;
+      if (user.organizationId) {
+        const org = await Organization.findById(user.organizationId);
+        if (org) {
+          organizationData = {
+            id: org._id,
+            name: org.name,
+            slug: org.slug,
+          };
+        }
+      }
+
       // Close popup and notify parent
       res.send(`
         <!DOCTYPE html>
@@ -227,7 +330,9 @@ router.get(
                 email: user.email,
                 name: user.name,
                 picture: user.picture,
-                role: user.role
+                role: user.role,
+                orgRole: user.orgRole,
+                organization: organizationData
               })}
             }, '${process.env.FRONTEND_URL}');
             setTimeout(() => window.close(), 500);
@@ -237,6 +342,9 @@ router.get(
       `);
     } catch (error) {
       logger.err('OAuth callback error:', error);
+      const err = error as Error;
+      if (err.message) logger.err('Error details: ' + err.message);
+      if (err.stack) logger.err('Error stack: ' + err.stack);
       res.redirect(`${process.env.FRONTEND_URL}/auth?error=callback_failed`);
     }
   }
@@ -251,7 +359,10 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Not authenticated', code: 'NOT_AUTHENTICATED' });
     }
     
-    const user = await User.findById(tokenPayload.userId).select('-__v');
+    const user = await User.findById(tokenPayload.userId)
+      .select('-__v')
+      .populate('organizationId', 'name slug domain isActive');
+    
     if (!user) {
       return res.status(404).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
     }

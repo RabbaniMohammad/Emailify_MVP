@@ -5,7 +5,9 @@ export function generateToken(user: IUser): string {
   const payload = {
     userId: user._id,
     email: user.email,
-    role: user.role
+    role: user.role,
+    organizationId: user.organizationId,
+    orgRole: user.orgRole
   };
 
   return jwt.sign(payload, process.env.JWT_SECRET || 'your-secret-key', {

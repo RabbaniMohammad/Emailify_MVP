@@ -5,6 +5,7 @@ import UserRoutes from './UserRoutes';
 
 import templatesRouter from './templates';
 import qaRouter from './qa';
+import organizationRouter from './organization.routes';
 
 /******************************************************************************
                                 Setup
@@ -22,8 +23,9 @@ userRouter.delete(Paths.Users.Delete, UserRoutes.delete);
 apiRouter.use(Paths.Users.Base, userRouter);
 
 /** Feature routers */
-apiRouter.use('/templates', templatesRouter); // → /api/templates/...
-apiRouter.use('/qa', qaRouter);               // → /api/qa/...
+apiRouter.use('/templates', templatesRouter);       // → /api/templates/...
+apiRouter.use('/qa', qaRouter);                      // → /api/qa/...
+apiRouter.use('/organizations', organizationRouter); // → /api/organizations/...
 
 /******************************************************************************
                                 Export default

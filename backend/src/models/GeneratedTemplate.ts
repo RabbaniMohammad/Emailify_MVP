@@ -5,6 +5,7 @@ export interface IGeneratedTemplate extends Document {
   name: string;
   html: string;
   userId: Types.ObjectId;
+  organizationId: Types.ObjectId; // Organization isolation
   conversationId?: string;
   type: string; // e.g. 'Visual editor' or 'generated'
   createdAt: Date;
@@ -44,6 +45,12 @@ const GeneratedTemplateSchema = new Schema<IGeneratedTemplate>(
       ref: 'User',
       required: true,
       index: true, // Fast lookups by userId
+    },
+    organizationId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Organization',
+      required: true,
+      index: true, // Fast lookups by organizationId (isolation)
     },
     conversationId: {
       type: String,
@@ -98,8 +105,10 @@ const GeneratedTemplateSchema = new Schema<IGeneratedTemplate>(
   }
 );
 
-// Compound index for user-specific queries
+// Compound indexes for efficient queries
 GeneratedTemplateSchema.index({ userId: 1, createdAt: -1 });
+GeneratedTemplateSchema.index({ organizationId: 1, createdAt: -1 }); // Org isolation
+GeneratedTemplateSchema.index({ organizationId: 1, userId: 1 }); // User within org
 
 // Index for finding templates by conversation
 GeneratedTemplateSchema.index({ conversationId: 1 });

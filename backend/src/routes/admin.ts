@@ -9,11 +9,15 @@ const router = Router();
 // Get all users (admin only)
 router.get('/users', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const users = await User.find()
+    const currentUser = (req as any).currentUser;
+    
+    // Only show users from the admin's organization
+    const users = await User.find({ organizationId: currentUser.organizationId })
       .select('-__v')
       .sort({ createdAt: -1 })
       .populate('approvedBy', 'name email');
 
+    logger.info(`🔍 [ADMIN] Fetching users for org: ${currentUser.organizationId}, found: ${users.length}`);
     res.json({ users });
   } catch (error) {
     logger.err('Get users error:', error);
@@ -24,10 +28,18 @@ router.get('/users', authenticate, requireAdmin, async (req: Request, res: Respo
 // Get pending users (admin only)
 router.get('/users/pending', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const users = await User.find({ isApproved: false, isActive: true })
+    const currentUser = (req as any).currentUser;
+    
+    // Only show pending users from the admin's organization
+    const users = await User.find({ 
+      organizationId: currentUser.organizationId,
+      isApproved: false, 
+      isActive: true 
+    })
       .select('-__v')
       .sort({ createdAt: -1 });
 
+    logger.info(`🔍 [ADMIN] Fetching pending users for org: ${currentUser.organizationId}, found: ${users.length}`);
     res.json({ users });
   } catch (error) {
     logger.err('Get pending users error:', error);
@@ -44,6 +56,11 @@ router.post('/users/:userId/approve', authenticate, requireAdmin, async (req: Re
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Security: Ensure user is in the same organization
+    if (user.organizationId?.toString() !== currentUser.organizationId?.toString()) {
+      return res.status(403).json({ error: 'Cannot approve user from different organization' });
     }
 
     user.isApproved = true;
@@ -70,8 +87,14 @@ router.post('/users/:userId/deactivate', authenticate, requireAdmin, async (req:
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (user.role === 'super_admin') {
-      return res.status(403).json({ error: 'Cannot deactivate super admin' });
+    // Security: Ensure user is in the same organization
+    if (user.organizationId?.toString() !== currentUser.organizationId?.toString()) {
+      return res.status(403).json({ error: 'Cannot deactivate user from different organization' });
+    }
+
+    // Prevent deactivating org super_admins
+    if (user.orgRole === 'super_admin') {
+      return res.status(403).json({ error: 'Cannot deactivate organization super admin' });
     }
 
     user.isActive = false;
