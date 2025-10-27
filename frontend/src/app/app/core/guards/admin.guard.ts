@@ -12,7 +12,7 @@ export const adminGuard: CanActivateFn = (route, state) => {
     filter((user): user is NonNullable<typeof user> => user !== null), // Type guard: ensures user is not null
     take(1), // Take only the first emitted value
     map(user => {
-      const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+      const isAdmin = user.orgRole === 'admin' || user.orgRole === 'super_admin';
       
       if (!isAdmin) {
         router.navigate(['/']);

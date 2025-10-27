@@ -1,0 +1,44 @@
+<div class="delete-org-dialog">
+  <div class="dialog-header">
+    <mat-icon class="warning-icon">warning</mat-icon>
+    <h2 mat-dialog-title>Delete Organization</h2>
+  </div>
+
+  <mat-dialog-content>
+    <div class="organization-info">
+      <p class="org-name">
+        <strong>{{ data.organization.name }}</strong>
+      </p>
+      <p class="org-slug">{{ data.organization.slug }}</p>
+    </div>
+
+    <div class="warning-message">
+      <p>
+        <mat-icon>info</mat-icon>
+        This action cannot be undone. This will permanently delete the organization.
+      </p>
+    </div>
+
+    <div class="delete-option">
+      <mat-checkbox [(ngModel)]="deleteData" color="warn">
+        Also delete all organization data (users, templates, conversations)
+      </mat-checkbox>
+      <p class="option-description">
+        If unchecked, users will be removed from the organization but their accounts will remain active.
+        All templates and conversations will still be deleted.
+      </p>
+    </div>
+
+    <div class="confirm-text">
+      <p>Are you sure you want to proceed?</p>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button (click)="onCancel()">Cancel</button>
+    <button mat-raised-button color="warn" (click)="onConfirm()">
+      <mat-icon>delete_forever</mat-icon>
+      Delete Organization
+    </button>
+  </mat-dialog-actions>
+</div>

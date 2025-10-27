@@ -300,6 +300,62 @@
     }
   }
 
+  // Organization Input Form
+  .form-group {
+    margin-bottom: 2rem;
+    width: 100%;
+
+    label {
+      display: none; // Hide label for cleaner look
+    }
+
+    .org-input {
+      width: 100%;
+      padding: 1.125rem 1.5rem;
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      font-size: 1rem;
+      color: #1e293b;
+      transition: all var(--animation-smooth);
+      box-sizing: border-box;
+      font-weight: 500;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+      &:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      &:focus {
+        outline: none;
+        border-color: #667eea;
+        background: white;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1), 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background: #f8fafc;
+      }
+
+      &::placeholder {
+        color: #94a3b8;
+        font-weight: 400;
+      }
+    }
+
+    .input-hint {
+      display: block;
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-top: 0.5rem;
+      text-align: left;
+      padding-left: 0.25rem;
+    }
+  }
+
   .google-btn {
   width: 100%;
   padding: 1.125rem 1.75rem;

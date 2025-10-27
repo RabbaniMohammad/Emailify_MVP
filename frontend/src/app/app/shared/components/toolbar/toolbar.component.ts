@@ -69,7 +69,11 @@ ngOnInit(): void {
   // ========================================
   // Load pending count immediately if user is available
   this.currentUser$.pipe(
-    filter(user => !!user && (user.role === 'admin' || user.role === 'super_admin')),
+    filter(user => {
+      if (!user) return false;
+      const isOrgAdmin = user.orgRole === 'admin' || user.orgRole === 'super_admin';
+      return isOrgAdmin;
+    }),
     takeUntil(this.destroy$)
   ).subscribe(() => {
     // Initial load
@@ -144,7 +148,9 @@ goForward(): void {
 
   isAdmin(): boolean {
     const user = this.authService.currentUserValue;
-    return user?.role === 'admin' || user?.role === 'super_admin';
+    // Check orgRole for admin access
+    const isOrgAdmin = user?.orgRole === 'admin' || user?.orgRole === 'super_admin';
+    return isOrgAdmin;
   }
 
   isActive(route: string): boolean {

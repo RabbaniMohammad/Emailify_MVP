@@ -8,7 +8,7 @@ export interface AdminUser {
   email: string;
   name: string;
   picture?: string;
-  role: 'super_admin' | 'admin' | 'user';
+  orgRole: 'super_admin' | 'admin' | 'member';
   isActive: boolean;
   isApproved: boolean;
   approvedBy?: {

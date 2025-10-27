@@ -1,0 +1,87 @@
+<div class="organization-management">
+  <div class="loading-state" *ngIf="loading">
+    <mat-spinner diameter="48"></mat-spinner>
+    <p>Loading organizations...</p>
+  </div>
+
+  <div class="organizations-container" *ngIf="!loading">
+    <table mat-table [dataSource]="(organizations$ | async) || []" class="organizations-table">
+      <!-- Name Column -->
+      <ng-container matColumnDef="name">
+        <th mat-header-cell *matHeaderCellDef>Name</th>
+        <td mat-cell *matCellDef="let org">
+          <div class="org-name">
+            <strong>{{ org.name }}</strong>
+            <span class="org-slug">{{ org.slug }}</span>
+          </div>
+        </td>
+      </ng-container>
+
+      <!-- Slug Column -->
+      <ng-container matColumnDef="slug">
+        <th mat-header-cell *matHeaderCellDef>Slug</th>
+        <td mat-cell *matCellDef="let org">
+          <code>{{ org.slug }}</code>
+        </td>
+      </ng-container>
+
+      <!-- Users Column -->
+      <ng-container matColumnDef="users">
+        <th mat-header-cell *matHeaderCellDef>Users</th>
+        <td mat-cell *matCellDef="let org">
+          <mat-chip class="user-count-chip">
+            <mat-icon>people</mat-icon>
+            {{ org.usersCount || 0 }}
+          </mat-chip>
+        </td>
+      </ng-container>
+
+      <!-- Status Column -->
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>Status</th>
+        <td mat-cell *matCellDef="let org">
+          <mat-chip [class.active]="org.isActive" [class.inactive]="!org.isActive">
+            {{ org.isActive ? 'Active' : 'Inactive' }}
+          </mat-chip>
+        </td>
+      </ng-container>
+
+      <!-- Created Column -->
+      <ng-container matColumnDef="created">
+        <th mat-header-cell *matHeaderCellDef>Created</th>
+        <td mat-cell *matCellDef="let org">
+          {{ org.createdAt | date:'short' }}
+        </td>
+      </ng-container>
+
+      <!-- Actions Column -->
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef>Actions</th>
+        <td mat-cell *matCellDef="let org">
+          <button 
+            mat-icon-button 
+            [matMenuTriggerFor]="menu" 
+            [disabled]="org.slug === 'default'"
+            class="action-button">
+            <mat-icon>more_vert</mat-icon>
+          </button>
+          <mat-menu #menu="matMenu">
+            <button mat-menu-item (click)="deleteOrganization(org)">
+              <mat-icon color="warn">delete</mat-icon>
+              <span>Delete Organization</span>
+            </button>
+          </mat-menu>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+
+    <div class="empty-state" *ngIf="(organizations$ | async)?.length === 0">
+      <mat-icon>business</mat-icon>
+      <h3>No Organizations Found</h3>
+      <p>There are no organizations in the system</p>
+    </div>
+  </div>
+</div>

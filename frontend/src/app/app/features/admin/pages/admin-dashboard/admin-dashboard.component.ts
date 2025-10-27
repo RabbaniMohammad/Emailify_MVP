@@ -16,6 +16,7 @@ import { BehaviorSubject, Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
 
 import { AdminEventService } from '../../../../core/services/admin-event.service';
+import { OrganizationManagementComponent } from '../../components/organization-management/organization-management.component';
 
 @Component({
   selector: 'app-admin-dashboard',
@@ -30,7 +31,8 @@ import { AdminEventService } from '../../../../core/services/admin-event.service
     MatProgressSpinnerModule,
     MatSnackBarModule,
     MatMenuModule,
-    MatDividerModule
+    MatDividerModule,
+    OrganizationManagementComponent
   ],
   templateUrl: './admin-dashboard.component.html',
   styleUrls: ['./admin-dashboard.component.scss'],
@@ -243,7 +245,14 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   }
 
   isSuperAdmin(currentUser: any): boolean {
-    return currentUser?.role === 'super_admin';
+    return currentUser?.orgRole === 'super_admin';
+  }
+
+  isOwnerOrgSuperAdmin(currentUser: any): boolean {
+    // Check if user is super_admin AND belongs to default organization
+    const isDefaultOrg = currentUser?.organizationId?.slug === 'default' || 
+                         currentUser?.organizationIsOwner === true;
+    return currentUser?.orgRole === 'super_admin' && isDefaultOrg;
   }
 
   isCurrentUser(user: AdminUser): boolean {

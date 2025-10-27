@@ -8,7 +8,7 @@
           <!-- Red Dot Notification for Pending Approvals -->
           <span class="notification-dot-header" *ngIf="(pendingCount$ | async) as count" [attr.data-count]="count"></span>
         </h1>
-        <p>Manage users, approvals, and permissions</p>
+        <p>Manage users and oversee system operations</p>
       </div>
       <div class="header-actions" *ngIf="currentUser$ | async as currentUser">
         <div class="current-user">
@@ -22,8 +22,8 @@
             class="user-avatar">
           <div class="user-info">
             <span class="user-name">{{ currentUser.name }}</span>
-            <span class="user-role" [ngClass]="getRoleBadgeClass(currentUser.role)">
-              {{ currentUser.role === 'super_admin' ? 'Super Admin' : 'Admin' }}
+            <span class="user-role" [ngClass]="getRoleBadgeClass(currentUser.orgRole)">
+              {{ currentUser.orgRole === 'super_admin' ? 'Super Admin' : currentUser.orgRole === 'admin' ? 'Admin' : 'Member' }}
             </span>
           </div>
         </div>
@@ -93,8 +93,8 @@
             <ng-container matColumnDef="role">
               <th mat-header-cell *matHeaderCellDef>Role</th>
               <td mat-cell *matCellDef="let user">
-                <mat-chip [ngClass]="getRoleBadgeClass(user.role)">
-                  {{ user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : 'User' }}
+                <mat-chip [ngClass]="getRoleBadgeClass(user.orgRole)">
+                  {{ user.orgRole === 'super_admin' ? 'Super Admin' : user.orgRole === 'admin' ? 'Admin' : 'Member' }}
                 </mat-chip>
               </td>
             </ng-container>
@@ -103,8 +103,8 @@
             <ng-container matColumnDef="status">
               <th mat-header-cell *matHeaderCellDef>Status</th>
               <td mat-cell *matCellDef="let user">
-                <mat-chip [ngClass]="getStatusBadgeClass(user)">
-                  {{ getStatusText(user) }}
+                <mat-chip class="status-chip pending">
+                  Pending Approval
                 </mat-chip>
               </td>
             </ng-container>
@@ -156,6 +156,10 @@
       </ng-template>
 
       <div class="tab-content">
+        <div class="tab-header">
+          <h2>Manage Users</h2>
+          <p>View and manage all users in your organization</p>
+        </div>
         <div *ngIf="loading" class="loading-state">
           <mat-spinner diameter="48"></mat-spinner>
           <p>Loading users...</p>
@@ -201,8 +205,8 @@
             <ng-container matColumnDef="role">
               <th mat-header-cell *matHeaderCellDef>Role</th>
               <td mat-cell *matCellDef="let user">
-                <mat-chip [ngClass]="getRoleBadgeClass(user.role)">
-                  {{ user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : 'User' }}
+                <mat-chip [ngClass]="getRoleBadgeClass(user.orgRole)">
+                  {{ user.orgRole === 'super_admin' ? 'Super Admin' : user.orgRole === 'admin' ? 'Admin' : 'Member' }}
                 </mat-chip>
               </td>
             </ng-container>
@@ -228,12 +232,12 @@
               <th mat-header-cell *matHeaderCellDef>Actions</th>
               <td mat-cell *matCellDef="let user">
                 <!-- For super admin - show dash only -->
-                <div class="action-menu" *ngIf="user.role === 'super_admin'">
+                <div class="action-menu" *ngIf="user.orgRole === 'super_admin'">
                   <span class="no-actions">—</span>
                 </div>
 
                 <!-- For all other users - show dropdown menu -->
-                <ng-container *ngIf="user.role !== 'super_admin'">
+                <ng-container *ngIf="user.orgRole !== 'super_admin'">
                   <div class="action-menu" *ngIf="currentUser$ | async as currentUser">
                     <button 
                       mat-icon-button 
@@ -255,7 +259,7 @@
                       <!-- Promote (super admin only) -->
                       <button 
                         mat-menu-item
-                        *ngIf="isSuperAdmin(currentUser) && user.role === 'user' && user.isApproved"
+                        *ngIf="isSuperAdmin(currentUser) && user.orgRole === 'member' && user.isApproved"
                         (click)="promoteToAdmin(user)">
                         <mat-icon class="menu-icon primary">arrow_upward</mat-icon>
                         <span>Promote to Admin</span>
@@ -264,10 +268,10 @@
                       <!-- Demote (super admin only) -->
                       <button 
                         mat-menu-item
-                        *ngIf="isSuperAdmin(currentUser) && user.role === 'admin'"
+                        *ngIf="isSuperAdmin(currentUser) && user.orgRole === 'admin'"
                         (click)="demoteAdmin(user)">
                         <mat-icon class="menu-icon secondary">arrow_downward</mat-icon>
-                        <span>Demote to User</span>
+                        <span>Demote to Member</span>
                       </button>
 
                       <!-- Reactivate (if inactive) -->
@@ -307,6 +311,18 @@
             <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
           </table>
         </div>
+      </div>
+    </mat-tab>
+
+    <!-- Organization Management Tab (Only for Default Organization Super Admin) -->
+    <mat-tab *ngIf="isOwnerOrgSuperAdmin(currentUser$ | async)">
+      <ng-template mat-tab-label>
+        <mat-icon>business</mat-icon>
+        <span>Organizations</span>
+      </ng-template>
+
+      <div class="tab-content org-management-tab">
+        <app-organization-management></app-organization-management>
       </div>
     </mat-tab>
   </mat-tab-group>

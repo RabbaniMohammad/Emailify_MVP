@@ -190,6 +190,23 @@
   @media (max-width: 480px) {
     padding: 1rem;
   }
+
+  .tab-header {
+    margin-bottom: 1.5rem;
+    
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin: 0 0 0.5rem 0;
+    }
+
+    p {
+      font-size: 0.9rem;
+      color: #64748b;
+      margin: 0;
+    }
+  }
 }
 
 .loading-state {
@@ -453,4 +470,9 @@
   color: #1e293b;
   font-weight: 600;
   margin-left: 0.5rem;
+}
+// Organization Management Tab
+.org-management-tab {
+  padding: 0 !important;
+  background: #f8fafc;
 }

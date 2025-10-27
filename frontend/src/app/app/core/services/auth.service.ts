@@ -13,7 +13,14 @@ export interface User {
   email: string;
   name: string;
   picture?: string;
-  role: 'super_admin' | 'admin' | 'user';  
+  orgRole: 'super_admin' | 'admin' | 'member'; // Organization role
+  organizationId?: {
+    _id: string;
+    name: string;
+    slug: string;
+    isOwner?: boolean; // Owner organization flag
+  }; // Populated organization data
+  organizationIsOwner?: boolean; // Flat field for easy access
   createdAt: string;
   lastLogin: string;
   isActive: boolean;
@@ -209,15 +216,21 @@ export class AuthService implements OnDestroy {
 
   /**
    * Initiate Google OAuth login (opens popup)
+   * @param orgSlug - Optional organization slug for multi-tenancy
    */
-  loginWithGoogle(): void {
+  loginWithGoogle(orgSlug?: string): void {
     const width = 500;
     const height = 600;
     const left = window.screen.width / 2 - width / 2;
     const top = window.screen.height / 2 - height / 2;
 
+    // Build URL with org parameter if provided
+    const url = orgSlug 
+      ? `/api/auth/google?org=${encodeURIComponent(orgSlug)}`
+      : '/api/auth/google';
+
     const popup = window.open(
-      '/api/auth/google',
+      url,
       'Google Login',
       `width=${width},height=${height},left=${left},top=${top}`
     );

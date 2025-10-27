@@ -1,12 +1,13 @@
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../../core/services/auth.service';
 
 @Component({
   selector: 'app-auth-page',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './auth-page.component.html',
   styleUrls: ['./auth-page.component.scss']
 })
@@ -15,9 +16,10 @@ export class AuthPageComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
 
-  isLoading = false;
-  errorMessage = '';
-  isLandscape = false;
+  isLoading: boolean = false;
+  errorMessage: string = '';
+  isLandscape: boolean = false;
+  organizationSlug: string = ''; // Organization name for multi-tenancy
 
   ngOnInit(): void {
     // Check for landscape mode
@@ -84,9 +86,22 @@ export class AuthPageComponent implements OnInit, OnDestroy {
     }
 
   onGoogleLogin(): void {
+    const slug = this.organizationSlug.trim().toLowerCase();
+    
+    if (!slug) {
+      this.errorMessage = 'Please enter an organization name';
+      return;
+    }
+    
+    // Validate slug format
+    if (!/^[a-z0-9-]+$/.test(slug)) {
+      this.errorMessage = 'Organization name can only contain lowercase letters, numbers, and hyphens';
+      return;
+    }
+    
     this.isLoading = true;
     this.errorMessage = '';
-    this.authService.loginWithGoogle();
+    this.authService.loginWithGoogle(slug);
     
     // Reset loading after popup opens
     setTimeout(() => {
