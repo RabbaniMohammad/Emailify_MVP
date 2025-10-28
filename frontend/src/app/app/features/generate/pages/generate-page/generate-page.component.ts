@@ -99,20 +99,32 @@ private sentImages: Array<{name: string, size: number}> = [];
 
 
     ngOnInit(): void {
+    console.log('🎬🎬🎬 [COMPONENT-INIT] ngOnInit called');
     this.templateName = 'Generated Template';
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
         const conversationId = params.get('conversationId');
+        console.log('🎬 [COMPONENT-INIT] Route param conversationId:', conversationId);
+        console.log('🎬 [COMPONENT-INIT] justCreatedConversationId:', this.justCreatedConversationId);
         
         if (conversationId && conversationId !== 'new') {
-          // Real conversation ID - always load it
-          this.loadConversation(conversationId);
+          // ✅ Only load if this is not the conversation we just created
+          if (conversationId !== this.justCreatedConversationId) {
+            console.log('📖 [COMPONENT-INIT] Loading existing conversation:', conversationId);
+            this.loadConversation(conversationId);
+          } else {
+            // This is the conversation we just created, skip loading
+            console.log('⏭️⏭️ [COMPONENT-INIT] Skipping load for newly created conversation:', conversationId);
+          }
         } else if (conversationId === 'new') {
           // Generate a new conversation ID immediately and navigate to it
           const newConversationId = this.generateUUID();
+          console.log('🆕🆕 [COMPONENT-INIT] Creating new conversation:', newConversationId);
           this.conversationId = newConversationId;
+          this.justCreatedConversationId = newConversationId; // ✅ Track it
           this.isRegenerating = false;
           this.initializeWelcome();
           // Replace URL with actual ID (no component recreation since it's same route)
+          console.log('🔀 [COMPONENT-INIT] Navigating to:', newConversationId);
           this.router.navigate(['/generate', newConversationId], { replaceUrl: true });
         }
     });
@@ -239,7 +251,7 @@ canDeactivate(): boolean {
 
 
   private loadConversation(conversationId: string): void {
-    console.log('🔄 [LOAD] Loading conversation:', conversationId);
+    console.log('🔄🔄🔄 [COMPONENT-LOAD] Loading conversation:', conversationId);
     this.conversationId = conversationId;
     this.isGenerating$.next(true);
 
@@ -248,11 +260,14 @@ canDeactivate(): boolean {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (conversation) => {
-          console.log('✅ [LOAD] Conversation loaded:', {
+          console.log('✅✅✅ [COMPONENT-LOAD] Conversation loaded successfully');
+          console.log('✅ [COMPONENT-LOAD] Data received:', {
             messageCount: conversation.messages.length,
             hasHtml: !!conversation.currentHtml,
+            htmlLength: conversation.currentHtml?.length || 0,
             templateName: conversation.templateName
           });
+          
           this.messages$.next(conversation.messages);
           this.currentHtml$.next(conversation.currentHtml);
           this.templateName = conversation.templateName || '';
@@ -261,17 +276,32 @@ canDeactivate(): boolean {
           // If HTML exists, next generation is a regeneration
           this.isRegenerating = !!conversation.currentHtml;
           
+          console.log('✅ [COMPONENT-LOAD] State updated, isRegenerating:', this.isRegenerating);
+          
           this.isGenerating$.next(false);
           this.scrollToBottom();
         },
         error: (error) => {
-          this.snackBar.open('Failed to load conversation', 'Close', {
-            duration: 5000,
-            panelClass: ['error-snackbar'],
-          });
+          console.error('❌❌ [COMPONENT-LOAD] Failed to load conversation:', error);
+          console.warn('⚠️ [COMPONENT-LOAD] Error status:', error.status);
+          
+          // ✅ Don't show error if it's a 404 - conversation might not be saved yet
+          if (error.status !== 404) {
+            this.snackBar.open('Failed to load conversation', 'Close', {
+              duration: 5000,
+              panelClass: ['error-snackbar'],
+            });
+          } else {
+            console.log('📭 [COMPONENT-LOAD] 404 error - conversation not on server yet (expected for new conversations)');
+          }
+          
           this.isGenerating$.next(false);
-          // Redirect to new conversation
-          this.router.navigate(['/generate/new'], { replaceUrl: true });
+          
+          // Only redirect on non-404 errors
+          if (error.status !== 404) {
+            console.log('🔀 [COMPONENT-LOAD] Redirecting to /generate/new due to error');
+            this.router.navigate(['/generate/new'], { replaceUrl: true });
+          }
         },
       });
   }
@@ -447,6 +477,15 @@ private async startNewConversation(message: string, imageAttachments: ImageAttac
 
         this.messages$.next(updatedMessages);
 
+        console.log('🚀🚀🚀 [COMPONENT] About to call updateConversationCache');
+        console.log('🚀 [COMPONENT] Cache update params:', {
+          conversationId: response.conversationId,
+          messageCount: updatedMessages.length,
+          htmlLength: response.html.length,
+          mjmlLength: response.mjml?.length || 0,
+          templateName: this.templateName
+        });
+
         // ✅ Save the complete conversation state back to cache
         this.generationService.updateConversationCache(
           response.conversationId,
@@ -455,6 +494,8 @@ private async startNewConversation(message: string, imageAttachments: ImageAttac
           response.mjml || '',
           this.templateName
         );
+        
+        console.log('✅✅✅ [COMPONENT] updateConversationCache call completed');
 
         this.isGenerating$.next(false);
         
@@ -527,6 +568,15 @@ private async continueConversation(message: string, imageAttachments: ImageAttac
 
         this.messages$.next([...updatedMessages]);
 
+        console.log('🚀🚀🚀 [COMPONENT-CONTINUE] About to call updateConversationCache');
+        console.log('🚀 [COMPONENT-CONTINUE] Cache update params:', {
+          conversationId: this.conversationId,
+          messageCount: updatedMessages.length,
+          htmlLength: response.html.length,
+          mjmlLength: response.mjml?.length || 0,
+          templateName: this.templateName
+        });
+
         // ✅ Save the complete conversation state back to cache
         this.generationService.updateConversationCache(
           this.conversationId!,
@@ -535,6 +585,8 @@ private async continueConversation(message: string, imageAttachments: ImageAttac
           response.mjml || '',
           this.templateName
         );
+        
+        console.log('✅✅✅ [COMPONENT-CONTINUE] updateConversationCache call completed');
 
         this.isGenerating$.next(false);
 
