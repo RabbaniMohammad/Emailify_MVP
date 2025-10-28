@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { OrganizationService, Organization } from '@app/app/core/services/organization.service';
 import { AuthService } from '@app/app/core/services/auth.service';
@@ -40,6 +40,7 @@ export class OrganizationManagementComponent implements OnInit {
   private authService = inject(AuthService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+  private cdr = inject(ChangeDetectorRef);
 
   private organizationsSubject = new BehaviorSubject<Organization[]>([]);
   readonly organizations$ = this.organizationsSubject.asObservable();
@@ -55,31 +56,44 @@ export class OrganizationManagementComponent implements OnInit {
 
   loadOrganizations(): void {
     this.loading = true;
+    this.cdr.markForCheck();
+    
     this.organizationService.getAllOrganizations().subscribe({
       next: (response: { organizations: Organization[] }) => {
+        console.log('✅ Organizations loaded:', response);
         this.organizationsSubject.next(response.organizations || []);
         this.loading = false;
+        this.cdr.markForCheck();
       },
       error: (error: any) => {
-        console.error('Failed to load organizations:', error);
-        this.snackBar.open('Failed to load organizations', 'Close', {
-          duration: 3000,
+        console.error('❌ Failed to load organizations:', error);
+        console.error('Error status:', error.status);
+        console.error('Error message:', error.message);
+        console.error('Error body:', error.error);
+        
+        const errorMessage = error.error?.error || error.error?.message || 'Failed to load organizations';
+        
+        this.snackBar.open(errorMessage, 'Close', {
+          duration: 5000,
           horizontalPosition: 'end',
-          verticalPosition: 'top'
+          verticalPosition: 'top',
+          panelClass: 'error-snackbar'
         });
         this.organizationsSubject.next([]);
         this.loading = false;
+        this.cdr.markForCheck();
       }
     });
   }
 
   deleteOrganization(org: Organization): void {
     const dialogRef = this.dialog.open(DeleteOrgDialogComponent, {
-      width: '500px',
-      maxWidth: '95vw',
+      width: '100%',
+      maxWidth: '600px',
       data: { organization: org },
       disableClose: true,
-      panelClass: 'delete-org-dialog'
+      panelClass: ['delete-org-dialog-container', 'modern-glass-dialog'],
+      backdropClass: 'modern-dialog-backdrop'
     });
 
     dialogRef.afterClosed().subscribe(result => {

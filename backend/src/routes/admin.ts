@@ -254,16 +254,25 @@ router.delete('/organizations/:slug', authenticate, requireSuperAdmin, async (re
     const { deleteData } = req.body; // boolean flag to also delete users
     const currentUser = (req as any).currentUser;
 
+    // Prevent deleting the default organization
+    if (slug.toLowerCase() === 'default') {
+      return res.status(403).json({ 
+        error: 'Cannot delete default organization',
+        message: 'The default organization cannot be deleted for system integrity.'
+      });
+    }
+
     const organization = await Organization.findOne({ slug: slug.toLowerCase() });
     if (!organization) {
       return res.status(404).json({ error: 'Organization not found' });
     }
 
-    // Prevent deleting the super admin's own organization
-    if (currentUser.organizationId?.toString() === (organization._id as any).toString()) {
+    // Only super admins from the default org can delete other organizations
+    const userOrg = await Organization.findById(currentUser.organizationId);
+    if (!userOrg || userOrg.slug !== 'default') {
       return res.status(403).json({ 
-        error: 'Cannot delete your own organization',
-        message: 'You cannot delete the organization you belong to.'
+        error: 'Insufficient permissions',
+        message: 'Only super admins from the default organization can delete organizations.'
       });
     }
 

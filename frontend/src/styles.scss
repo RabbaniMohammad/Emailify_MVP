@@ -81,6 +81,74 @@ body { margin: 0; font-family: Roboto, 'Helvetica Neue', sans-serif; }
 }
 
 // ============================================
+// MODERN GLASSY DIALOG STYLES
+// ============================================
+.modern-dialog-backdrop {
+  backdrop-filter: blur(8px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(180%) !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  animation: fadeInBackdrop 0.3s ease !important;
+}
+
+.modern-glass-dialog {
+  .mat-mdc-dialog-container {
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.5) !important;
+    padding: 0 !important;
+    max-width: 95vw !important;
+    max-height: 95vh !important;
+    animation: slideInDialog 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+
+    .mat-mdc-dialog-surface {
+      background: transparent !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .mat-mdc-dialog-container {
+      max-width: 96vw !important;
+      margin: 1rem !important;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .mat-mdc-dialog-container {
+      max-width: 98vw !important;
+      margin: 0.5rem !important;
+      border-radius: 12px !important;
+    }
+  }
+
+  @media (max-height: 600px) and (orientation: landscape) {
+    .mat-mdc-dialog-container {
+      max-height: 98vh !important;
+      margin: 0.25rem !important;
+    }
+  }
+}
+
+@keyframes fadeInBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInDialog {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+// ============================================
 // HIDE TOOLBAR WHEN MODAL IS OPEN
 // ============================================
 // ✅ HIDE TOOLBAR ONLY FOR VALIDATION MODAL (not all modals!)

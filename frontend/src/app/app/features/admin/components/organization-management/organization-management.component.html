@@ -4,7 +4,7 @@
     <p>Loading organizations...</p>
   </div>
 
-  <div class="organizations-container" *ngIf="!loading">
+  <div class="organizations-container" *ngIf="!loading && (organizations$ | async)">
     <table mat-table [dataSource]="(organizations$ | async) || []" class="organizations-table">
       <!-- Name Column -->
       <ng-container matColumnDef="name">
@@ -12,7 +12,6 @@
         <td mat-cell *matCellDef="let org">
           <div class="org-name">
             <strong>{{ org.name }}</strong>
-            <span class="org-slug">{{ org.slug }}</span>
           </div>
         </td>
       </ng-container>
@@ -58,19 +57,22 @@
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef>Actions</th>
         <td mat-cell *matCellDef="let org">
-          <button 
-            mat-icon-button 
-            [matMenuTriggerFor]="menu" 
-            [disabled]="org.slug === 'default'"
-            class="action-button">
-            <mat-icon>more_vert</mat-icon>
-          </button>
-          <mat-menu #menu="matMenu">
-            <button mat-menu-item (click)="deleteOrganization(org)">
-              <mat-icon color="warn">delete</mat-icon>
-              <span>Delete Organization</span>
+          <div class="action-menu">
+            <span *ngIf="org.slug === 'default'" style="color: #cbd5e1; font-weight: 400; font-size: 1.25rem;">—</span>
+            <button 
+              *ngIf="org.slug !== 'default'"
+              mat-icon-button 
+              [matMenuTriggerFor]="menu"
+              class="menu-trigger">
+              <mat-icon>more_vert</mat-icon>
             </button>
-          </mat-menu>
+            <mat-menu #menu="matMenu">
+              <button mat-menu-item (click)="deleteOrganization(org)">
+                <mat-icon color="warn">delete</mat-icon>
+                <span>Delete Organization</span>
+              </button>
+            </mat-menu>
+          </div>
         </td>
       </ng-container>
 

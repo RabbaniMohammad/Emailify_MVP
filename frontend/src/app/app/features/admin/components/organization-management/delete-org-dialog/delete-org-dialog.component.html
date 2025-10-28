@@ -1,67 +1,86 @@
 <div class="delete-org-dialog">
+  <!-- Dialog Header -->
   <div class="dialog-header">
-    <mat-icon class="warning-icon">warning</mat-icon>
-    <h2 mat-dialog-title>{{ confirmationStep === 1 ? 'Delete Organization' : 'Final Confirmation' }}</h2>
+    <div class="icon-wrapper">
+      <mat-icon class="warning-icon">warning</mat-icon>
+    </div>
+    <h2 class="dialog-title">{{ confirmationStep === 1 ? 'Delete Organization' : 'Final Confirmation' }}</h2>
   </div>
 
-  <mat-dialog-content>
+  <mat-dialog-content class="dialog-content">
     <!-- Step 1: Initial Delete Options -->
-    <div *ngIf="confirmationStep === 1">
+    <div *ngIf="confirmationStep === 1" class="step-content">
       <div class="organization-info">
         <p class="org-details">
-          You are about to delete <strong class="org-name-highlight">{{ data.organization.name }}</strong>
+          You are about to delete <span class="org-name-highlight">{{ data.organization.name }}</span>
         </p>
-        <p class="org-meta">
-          <span class="meta-item">
+        <div class="org-meta">
+          <div class="meta-item">
             <mat-icon>tag</mat-icon>
-            Slug: <code>{{ data.organization.slug }}</code>
-          </span>
-          <span class="meta-item">
+            <span>Slug: <code>{{ data.organization.slug }}</code></span>
+          </div>
+          <div class="meta-item">
             <mat-icon>people</mat-icon>
-            {{ data.organization.usersCount || 0 }} user(s)
-          </span>
-        </p>
+            <span>{{ data.organization.usersCount || 0 }} user(s)</span>
+          </div>
+        </div>
       </div>
 
-      <mat-divider></mat-divider>
+      <div class="divider"></div>
 
       <div class="delete-option">
-        <div class="option-header">
-          <mat-slide-toggle [(ngModel)]="deleteData" color="warn">
+        <div class="toggle-wrapper">
+          <mat-slide-toggle [(ngModel)]="deleteData" color="warn" class="custom-toggle">
             Delete all organization data
           </mat-slide-toggle>
         </div>
         
         <div class="option-description" [class.warning]="deleteData">
-          <mat-icon>{{ deleteData ? 'delete_forever' : 'info' }}</mat-icon>
+          <mat-icon class="info-icon">{{ deleteData ? 'delete_forever' : 'info' }}</mat-icon>
           <div class="description-text">
             <p *ngIf="!deleteData">
               <strong>Organization only:</strong> Users will be removed from this organization but their accounts remain. 
               All templates and conversations associated with this organization will be permanently deleted.
             </p>
-            <p *ngIf="deleteData" class="danger-text">
-              <strong>⚠️ Complete deletion:</strong> This will permanently delete:
-            </p>
-            <ul *ngIf="deleteData" class="deletion-list">
-              <li><mat-icon>business</mat-icon> The organization record</li>
-              <li><mat-icon>people</mat-icon> All user accounts in this organization</li>
-              <li><mat-icon>description</mat-icon> All templates</li>
-              <li><mat-icon>chat</mat-icon> All conversations and generated content</li>
-            </ul>
+            <div *ngIf="deleteData">
+              <p class="danger-text">
+                <strong>⚠️ Complete deletion:</strong> This will permanently delete:
+              </p>
+              <ul class="deletion-list">
+                <li>
+                  <mat-icon>business</mat-icon>
+                  <span>The organization record</span>
+                </li>
+                <li>
+                  <mat-icon>people</mat-icon>
+                  <span>All user accounts in this organization</span>
+                </li>
+                <li>
+                  <mat-icon>description</mat-icon>
+                  <span>All templates</span>
+                </li>
+                <li>
+                  <mat-icon>chat</mat-icon>
+                  <span>All conversations and generated content</span>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="warning-message">
         <mat-icon>error_outline</mat-icon>
-        <p><strong>This action cannot be undone!</strong></p>
+        <p>This action cannot be undone!</p>
       </div>
     </div>
 
     <!-- Step 2: Final Confirmation -->
-    <div *ngIf="confirmationStep === 2" class="final-confirmation">
+    <div *ngIf="confirmationStep === 2" class="step-content final-confirmation">
       <div class="confirmation-header">
-        <mat-icon class="danger-icon">report_problem</mat-icon>
+        <div class="danger-icon-wrapper">
+          <mat-icon class="danger-icon">report_problem</mat-icon>
+        </div>
         <h3>Are you absolutely sure?</h3>
       </div>
 
@@ -70,51 +89,57 @@
         <div class="summary-box">
           <div class="summary-item">
             <mat-icon>business</mat-icon>
-            <span><strong>Organization:</strong> {{ data.organization.name }} ({{ data.organization.slug }})</span>
+            <div>
+              <strong>Organization:</strong>
+              <span>{{ data.organization.name }} ({{ data.organization.slug }})</span>
+            </div>
           </div>
           <div class="summary-item">
             <mat-icon>people</mat-icon>
-            <span><strong>Users:</strong> {{ data.organization.usersCount || 0 }} account(s) {{ deleteData ? 'will be deleted' : 'will be removed from org' }}</span>
+            <div>
+              <strong>Users:</strong>
+              <span>{{ data.organization.usersCount || 0 }} account(s) {{ deleteData ? 'will be deleted' : 'will be removed from org' }}</span>
+            </div>
           </div>
-          <div class="summary-item" *ngIf="deleteData">
-            <mat-icon>delete_forever</mat-icon>
-            <span><strong>Data:</strong> All templates, conversations, and generated content</span>
-          </div>
-          <div class="summary-item" *ngIf="!deleteData">
-            <mat-icon>folder_delete</mat-icon>
-            <span><strong>Data:</strong> Organization templates and conversations only</span>
+          <div class="summary-item">
+            <mat-icon>{{ deleteData ? 'delete_forever' : 'folder_delete' }}</mat-icon>
+            <div>
+              <strong>Data:</strong>
+              <span>{{ deleteData ? 'All templates, conversations, and generated content' : 'Organization templates and conversations only' }}</span>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="final-warning">
         <mat-icon>warning</mat-icon>
-        <p><strong>This action is irreversible and will take effect immediately.</strong></p>
+        <p>This action is irreversible and will take effect immediately.</p>
       </div>
     </div>
   </mat-dialog-content>
 
-  <mat-dialog-actions align="end">
-    <button mat-button (click)="onCancel()">
+  <mat-dialog-actions class="dialog-actions">
+    <button mat-button (click)="onCancel()" class="cancel-btn">
       <mat-icon>close</mat-icon>
-      Cancel
+      <span>Cancel</span>
     </button>
     <button 
       *ngIf="confirmationStep === 1"
       mat-raised-button 
       color="warn" 
-      (click)="goToFinalConfirmation()">
+      (click)="goToFinalConfirmation()"
+      class="continue-btn">
+      <span>Continue to Confirm</span>
       <mat-icon>arrow_forward</mat-icon>
-      Continue to Confirm
     </button>
     <button 
       *ngIf="confirmationStep === 2"
       mat-raised-button 
       color="warn" 
       (click)="onConfirm()"
-      class="final-delete-btn">
+      class="delete-btn">
       <mat-icon>delete_forever</mat-icon>
-      Yes, Delete {{ deleteData ? 'Everything' : 'Organization' }}
+      <span>Yes, Delete {{ deleteData ? 'Everything' : 'Organization' }}</span>
     </button>
   </mat-dialog-actions>
 </div>
