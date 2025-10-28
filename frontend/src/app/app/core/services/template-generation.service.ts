@@ -396,7 +396,7 @@ updateConversationCache(
         });
       }
     } catch (err) {
-      console.error('Failed to clear old conversations:', err);
+      // Silent fail
     }
   }
 }
