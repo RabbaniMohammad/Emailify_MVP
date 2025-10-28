@@ -22,7 +22,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         if (req.url.includes('/api/auth/refresh') || 
             req.url.includes('/api/auth/logout') ||
             req.url.includes('/api/auth/google')) {
-          console.error('❌ Auth endpoint failed with 401:', req.url);
+
           return throwError(() => error);
         }
 
@@ -33,8 +33,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
             return next(authReq);
           }),
           catchError((refreshError) => {
-            console.error('❌ Token refresh failed in interceptor:', refreshError.status);
-            
+
             // Let auth service handle the logout and redirect
             // Don't do it here to avoid duplicate logout attempts
             return throwError(() => refreshError);
@@ -46,8 +45,6 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       if (error.status === 403) {
         const errorMessage = error.error?.error || '';
         const errorCode = error.error?.code || '';
-        
-        console.error('🚫 403 Forbidden:', errorMessage);
 
         // Check if it's an account-related issue (not just permission)
         const isAccountIssue = 
@@ -58,8 +55,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
           errorMessage.includes('Access denied');
 
         if (isAccountIssue && !router.url.startsWith('/auth')) {
-          console.error('❌ Account status issue detected - forcing logout');
-          
+
           // Force logout and redirect
           authService.logout().subscribe({
             next: () => {
@@ -76,7 +72,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
               });
             },
             error: (logoutError) => {
-              console.error('❌ Logout failed, forcing navigation:', logoutError);
+
               // Force navigation even if logout fails
               router.navigate(['/auth'], { 
                 queryParams: { error: 'access_denied' },
@@ -91,7 +87,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
       // ==================== Handle Other Errors ====================
       if (error.status >= 500) {
-        console.error('🔥 Server error:', error.status, error.message);
+
       }
 
       return throwError(() => error);

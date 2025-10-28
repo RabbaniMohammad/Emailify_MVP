@@ -19,17 +19,12 @@ export const routes: Routes = [
   { path: 'auth/pending', component: PendingApprovalComponent },
 
   // Generate Template routes (add after auth routes, before admin routes)
-{ 
-  path: 'generate', 
-  component: GeneratePageComponent,
-  canActivate: [authGuard],
-  canDeactivate: [CanDeactivateGuard]  // ← ADD this line
-},
+  // Single route with required conversationId parameter (use 'new' for fresh start)
 { 
   path: 'generate/:conversationId', 
   component: GeneratePageComponent,
   canActivate: [authGuard],
-  canDeactivate: [CanDeactivateGuard]  // ← ADD this line
+  canDeactivate: [CanDeactivateGuard]
 },
   
   // Admin routes (super_admin and admin only)

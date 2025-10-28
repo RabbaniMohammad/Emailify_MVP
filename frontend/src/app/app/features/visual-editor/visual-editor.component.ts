@@ -183,7 +183,7 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       
       // Clean up any leftover highlights after editor loads
       setTimeout(() => {
-        console.log('🧹 Running cleanup of highlights...');
+
         this.removeAllHighlights();
       }, 3000); // Increased to 3 seconds to ensure editor is fully loaded
       
@@ -208,7 +208,7 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       });
     } else {
-      console.error('❌ [visual-editor] GJS container NOT FOUND!');
+
       this.loading = false;
       this.cdr.markForCheck();
     }
@@ -404,7 +404,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     return response.id || response.templateId || response._id;
     
   } catch (error) {
-    console.error('❌ Failed to save template:', error);
+
     this.showToast('Failed to save template. Please try again.', 'error');
     return null;
   } finally {
@@ -427,14 +427,14 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         const variantHtml = localStorage.getItem(variantHtmlKey);
         
         if (variantHtml) {
-          console.log('✅ [Visual Editor] Loading VARIANT HTML for variant', no);
+
           this.originalGoldenHtml = variantHtml;
           return;
         } else {
-          console.warn('⚠️ [Visual Editor] Variant HTML not found, falling back to template state');
+
         }
       } catch (error) {
-        console.error('❌ [Visual Editor] Error loading variant HTML:', error);
+
       }
     }
     
@@ -510,7 +510,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
               this.autoSave();
             }, 500);
           } catch (error) {
-            console.error('Failed to load golden HTML:', error);
+
           }
         } 
         // ✅ CASE 3: Has template ID but no golden HTML and no progress - empty editor
@@ -551,7 +551,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       });
       
     } catch (error) {
-      console.error('Failed to initialize GrapesJS:', error);
+
       this.loading = false;
     }
   }
@@ -579,7 +579,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         }
       });
     } catch (error) {
-      console.error('Setup code editor failed:', error);
+
     }
   }
 
@@ -635,7 +635,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       }, 100);
       
     } catch (error) {
-      console.error('Open code editor error:', error);
+
     }
   }
 
@@ -719,15 +719,13 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         localStorage.removeItem(`visual_editor_${this.templateId}_editing_mode`);
         localStorage.removeItem(`visual_editor_${this.templateId}_variant_meta`);
         localStorage.removeItem(`visual_editor_${this.templateId}_failed_edits`);
-        
-        console.log('✅ [Visual Editor] Returning to variant page with edited HTML');
-        
+
         // Navigate back to use-variant page
         const templateId = this.templateId;
         this.router.navigate(['/qa', templateId, 'use', runId, no]);
         return;
       } catch (error) {
-        console.error('❌ [Visual Editor] Error returning to variant page:', error);
+
       }
     }
     
@@ -790,39 +788,36 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
   }
 
   private autoSave(immediate: boolean = false): void {
-    // console.log('🔄 [autoSave] Called - editor:', !!this.editor, 'templateId:', this.templateId, 'immediate:', immediate);
-    
+
     if (!this.editor || !this.templateId) {
       return;
     }
-    
-    // console.log('🔄 [autoSave] Triggered for templateId:', this.templateId);
-    
+
     // ✅ NEW: If immediate mode, save RIGHT NOW without delay
     if (immediate) {
-      // console.log('⚡ [autoSave] ========================================');
-      // console.log('⚡ [autoSave] IMMEDIATE MODE - SYNCHRONOUS SAVE');
-      // console.log('⚡ [autoSave] ========================================');
+
+
+
       try {
         if (!this.editor || typeof this.editor.getHtml !== 'function') {
-          // console.log('❌ [autoSave] Editor destroyed or invalid, skipping save');
+
           return;
         }
         
         // ✅ ADDITIONAL CHECK: Make sure editor wrapper is accessible
         if (typeof this.editor.getWrapper !== 'function') {
-          // console.log('❌ [autoSave] getWrapper function not available, skipping save');
+
           return;
         }
         
         try {
           const wrapper = this.editor.getWrapper();
           if (!wrapper) {
-            // console.log('❌ [autoSave] Editor wrapper not available, skipping save');
+
             return;
           }
         } catch (e) {
-          // console.log('❌ [autoSave] Error getting wrapper, skipping save');
+
           return;
         }
         
@@ -830,7 +825,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         const css = this.editor.getCss();
         
         if (!html || html.trim() === '') {
-          // console.log('❌ [autoSave] Skipping save - empty HTML');
+
           return;
         }
         
@@ -852,9 +847,9 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         localStorage.setItem(persistKey, JSON.stringify(editorState));
         
       } catch (error) {
-        console.error('❌ [autoSave] IMMEDIATE save FAILED:', error);
+
       }
-      // console.log('⚡ [autoSave] ========================================');
+
       return;
     }
     
@@ -868,24 +863,24 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       try {
         // ✅ CRITICAL: Check if editor still exists and is valid
         if (!this.editor || typeof this.editor.getHtml !== 'function') {
-          // console.log('⚠️ [autoSave] Editor destroyed or invalid, skipping save');
+
           return;
         }
         
         // ✅ ADDITIONAL CHECK: Make sure editor wrapper is accessible
         if (typeof this.editor.getWrapper !== 'function') {
-          // console.log('⚠️ [autoSave] getWrapper function not available, skipping save');
+
           return;
         }
         
         try {
           const wrapper = this.editor.getWrapper();
           if (!wrapper) {
-            // console.log('⚠️ [autoSave] Editor wrapper not available, skipping save');
+
             return;
           }
         } catch (e) {
-          // console.log('⚠️ [autoSave] Error getting wrapper, skipping save');
+
           return;
         }
         
@@ -893,7 +888,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         const css = this.editor.getCss();
         
         if (!html || html.trim() === '') {
-          // console.log('⚠️ [autoSave] Skipping save - empty HTML');
+
           return;
         }
         
@@ -914,10 +909,10 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         // ✅ PERSIST to localStorage so it survives refresh
         const persistKey = `visual_editor_${this.templateId}_progress`;
         localStorage.setItem(persistKey, JSON.stringify(editorState));
-        // console.log('✅ [autoSave] Saved to localStorage:', persistKey);
-        // console.log('✅ [autoSave] HTML length:', html.length);
+
+
       } catch (error) {
-        console.error('❌ [autoSave] Failed:', error);
+
       }
     }, this.AUTO_SAVE_DELAY);
   }
@@ -953,7 +948,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       } else {
       }
     } catch (error) {
-      console.error('❌ [restoreProgress] FAILED with error:', error);
+
     }
   }
 
@@ -1002,7 +997,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         this.showFloatingWidget = false;
       }
     } catch (error) {
-      console.error('❌ [loadFailedEdits] Error parsing failed edits:', error);
+
       this.showFloatingWidget = false;
     }
   }
@@ -1015,7 +1010,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         const position = JSON.parse(savedPosition);
         this.widgetPosition = position;
       } catch (error) {
-        console.error('❌ [RESTORE] Failed to restore widget position');
+
         this.widgetPosition = { x: 20, y: 100 }; // Default pixel position
       }
     } else {
@@ -1194,7 +1189,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       const modalElement = (event.target as HTMLElement).closest('.widget-dropdown') as HTMLElement;
       
       if (!modalElement) {
-        console.error('❌ Modal element not found!');
+
         return;
       }
       
@@ -1489,7 +1484,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 // ============================================
 async onCheckPreview(): Promise<void> {
   if (!this.editor || !this.templateId) {
-    console.error('❌ [Check Preview] Aborted - no editor or templateId');
+
     return;
   }
 
@@ -1529,7 +1524,7 @@ async onCheckPreview(): Promise<void> {
     const newTemplateId = await this.saveNewTemplate(templateName, fullHtml);
     
     if (!newTemplateId) {
-      console.error('❌ [Check Preview] Failed to save template');
+
       return;
     }
     // Update templateId to the real database ID
@@ -1549,28 +1544,14 @@ async onCheckPreview(): Promise<void> {
   try {
     let html = this.editor.getHtml();
     const css = this.editor.getCss();
-    
-    console.log('🔍 [Check Preview] HTML BEFORE cleanHtmlFromOverlays:', {
-      length: html.length,
-      hasOverlayContainer: html.includes('ai-overlay-container'),
-      hasHighlightSpan: html.includes('data-ai-highlight'),
-      first500: html.substring(0, 500)
-    });
-    
+
     // ✅ CRITICAL: Clean HTML from any overlay artifacts
     html = this.cleanHtmlFromOverlays(html);
-    
-    console.log('🔍 [Check Preview] HTML AFTER cleanHtmlFromOverlays:', {
-      length: html.length,
-      hasOverlayContainer: html.includes('ai-overlay-container'),
-      hasHighlightSpan: html.includes('data-ai-highlight'),
-      first500: html.substring(0, 500)
-    });
-    
+
     if (html && html.trim()) {
       // Save immediately (synchronous)
       this.templateState.saveEditorProgress(this.templateId, html, css);
-      console.log('✅ [Check Preview] Saved cleaned HTML to localStorage');
+
       // Also save to visual_editor progress key
       const editorState = {
         html,
@@ -1582,7 +1563,7 @@ async onCheckPreview(): Promise<void> {
     } else {
     }
   } catch (error) {
-    console.error('❌ [Check Preview] Save failed:', error);
+
   }
 
   // 2. ✅ SMART NAVIGATION: Check where user came from and set correct return flags
@@ -1610,17 +1591,14 @@ async onCheckPreview(): Promise<void> {
       sessionStorage.setItem('visual_editor_edited_html', fullHtml);
       // ✅ CRITICAL: Set return flag Use Variants page expects
       sessionStorage.setItem('visual_editor_return_use_variant', 'true');
-      
-      console.log('✅ [Check Preview] Returning to use-variant page:', { runId, no, templateId: this.templateId });
-      
+
       // Navigate back to use-variant page with proper state management
       await this.router.navigate(['/qa', this.templateId, 'use', runId, no], {
         replaceUrl: false,
         skipLocationChange: false
       });
     } catch (error) {
-      console.error('❌ [Check Preview] Failed to parse variant metadata, falling back to QA page:', error);
-      
+
       // Fallback to QA page if parsing fails
       const returnKey = `visual_editor_${this.templateId}_return_flag`;
       localStorage.setItem(returnKey, 'true');
@@ -1653,7 +1631,7 @@ async onCheckPreview(): Promise<void> {
           localStorage.setItem(`template_state_${this.templateId}_edited`, fullHtml);
         }
       } catch (e) {
-        console.error('❌ Failed to parse editing context:', e);
+
       }
     }
     
@@ -1675,7 +1653,7 @@ async onCheckPreview(): Promise<void> {
     navigator.clipboard.writeText(text).then(() => {
       this.showToast(`Copied: "${this.truncateText(text, 30)}"`, 'success');
     }).catch(err => {
-      console.error('Copy failed:', err);
+
       this.showToast('Copy failed. Please try again.', 'error');
     });
   }
@@ -1704,14 +1682,14 @@ async onCheckPreview(): Promise<void> {
         // ✅ CRITICAL FIX: Remove overlay container FIRST (yellow boxes with borders)
         const existingOverlayContainer = doc.getElementById('ai-overlay-container');
         if (existingOverlayContainer) {
-          console.log('🧹 Removing overlay container with', existingOverlayContainer.children.length, 'children');
+
           existingOverlayContainer.remove();
         }
         
         // ✅ Remove inline text highlights (span elements)
         const existingHighlights = doc.querySelectorAll('span[data-ai-highlight="true"]');
         if (existingHighlights.length > 0) {
-          console.log('🧹 Removing', existingHighlights.length, 'inline highlight spans');
+
           existingHighlights.forEach(highlight => {
             const textNode = doc.createTextNode(highlight.textContent || '');
             highlight.parentNode?.replaceChild(textNode, highlight);
@@ -1724,11 +1702,10 @@ async onCheckPreview(): Promise<void> {
         // ✅ Clear overlay references
         this.overlays = [];
         this.overlayContainer = null;
-        
-        console.log('✅ All highlights removed successfully');
+
       }
     } catch (error) {
-      console.error('Error removing highlights:', error);
+
     }
   }
 
@@ -1829,7 +1806,7 @@ async onCheckPreview(): Promise<void> {
       }
       
     } catch (error) {
-      console.error('[SEARCH] Error:', error);
+
     }
   }
 
@@ -1936,7 +1913,7 @@ async onCheckPreview(): Promise<void> {
         });
       }
     } catch (error) {
-      console.error('[SEARCH] Error:', error);
+
       this.showToast('Press Ctrl+F to search', 'info');
     }
   }

@@ -123,7 +123,7 @@ toggleFullscreen(): void {
   const element = document.querySelector('.preview-root') as HTMLElement;
   
   if (!element) {
-    console.error('❌ [Preview Panel] .preview-root not found');
+
     return;
   }
 

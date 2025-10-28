@@ -127,7 +127,7 @@ export class DatabaseService extends Dexie {
       await this.templates.put(template);
       
     } catch (error) {
-      console.error('❌ [DB] Failed to cache template:', error);
+
     }
   }
 
@@ -147,7 +147,7 @@ export class DatabaseService extends Dexie {
 
       return template;
     } catch (error) {
-      console.error('❌ [DB] Failed to get template:', error);
+
       return null;
     }
   }
@@ -156,7 +156,7 @@ export class DatabaseService extends Dexie {
     try {
       await this.templates.delete(id);
     } catch (error) {
-      console.error('❌ [DB] Failed to invalidate template:', error);
+
     }
   }
 
@@ -177,7 +177,7 @@ export class DatabaseService extends Dexie {
       await this.conversations.put(conversation);
       
     } catch (error) {
-      console.error('❌ [DB] Failed to cache conversation:', error);
+
     }
   }
 
@@ -197,7 +197,7 @@ export class DatabaseService extends Dexie {
 
       return conversation;
     } catch (error) {
-      console.error('❌ [DB] Failed to get conversation:', error);
+
       return null;
     }
   }
@@ -206,7 +206,7 @@ export class DatabaseService extends Dexie {
     try {
       await this.conversations.delete(runId);
     } catch (error) {
-      console.error('❌ [DB] Failed to invalidate conversation:', error);
+
     }
   }
 
@@ -222,7 +222,7 @@ export class DatabaseService extends Dexie {
         timestamp: Date.now()
       });
     } catch (error) {
-      console.error('❌ [DB] Failed to cache valid links:', error);
+
     }
   }
 
@@ -242,7 +242,7 @@ export class DatabaseService extends Dexie {
 
       return cached.links;
     } catch (error) {
-      console.error('❌ [DB] Failed to get valid links:', error);
+
       return null;
     }
   }
@@ -251,7 +251,7 @@ export class DatabaseService extends Dexie {
     try {
       await this.validLinks.delete(runId);
     } catch (error) {
-      console.error('❌ [DB] Failed to invalidate valid links:', error);
+
     }
   }
 
@@ -271,7 +271,7 @@ export class DatabaseService extends Dexie {
       }
 
     } catch (error) {
-      console.error('❌ [DB] Failed to clean templates:', error);
+
     }
   }
 
@@ -287,7 +287,7 @@ export class DatabaseService extends Dexie {
       }
 
     } catch (error) {
-      console.error('❌ [DB] Failed to clean conversations:', error);
+
     }
   }
 
@@ -324,7 +324,7 @@ export class DatabaseService extends Dexie {
       if (total > 0) {
       }
     } catch (error) {
-      console.error('❌ [DB] Failed to clean expired data:', error);
+
     }
   }
 
@@ -345,7 +345,7 @@ export class DatabaseService extends Dexie {
       // Log counts AFTER clearing
       const afterStats = await this.getCacheStats();
     } catch (error) {
-      console.error('❌ [DB] Failed to clear cache:', error);
+
     }
   }
 
@@ -394,7 +394,7 @@ export class DatabaseService extends Dexie {
         estimatedSizeMB
       };
     } catch (error) {
-      console.error('❌ [DB] Failed to get cache stats:', error);
+
       return {
         templateCount: 0,
         conversationCount: 0,
@@ -430,7 +430,7 @@ export class DatabaseService extends Dexie {
       // Clean old screenshots if needed
       await this.cleanOldestScreenshots();
     } catch (error) {
-      console.error('❌ [DB] Failed to cache screenshot:', error);
+
     }
   }
 
@@ -439,7 +439,7 @@ export class DatabaseService extends Dexie {
       const cached = await this.screenshots.get(url);
       return cached?.dataUrl || null;
     } catch (error) {
-      console.error('❌ [DB] Failed to get screenshot:', error);
+
       return null;
     }
   }
@@ -451,7 +451,7 @@ export class DatabaseService extends Dexie {
       screenshots.forEach(s => map.set(s.url, s.dataUrl));
       return map;
     } catch (error) {
-      console.error('❌ [DB] Failed to get screenshots by run:', error);
+
       return new Map();
     }
   }
@@ -469,7 +469,7 @@ export class DatabaseService extends Dexie {
         await this.screenshots.bulkDelete(oldest.map(s => s.url));
       }
     } catch (error) {
-      console.error('❌ [DB] Failed to clean old screenshots:', error);
+
     }
   }
 
@@ -488,7 +488,7 @@ export class DatabaseService extends Dexie {
       golden.timestamp = Date.now();
       await this.goldenTemplates.put(golden);
     } catch (error) {
-      console.error('❌ [DB] Failed to cache golden template:', error);
+
     }
   }
 
@@ -511,7 +511,7 @@ export class DatabaseService extends Dexie {
 
       return golden;
     } catch (error) {
-      console.error('❌ [DB] Failed to get golden template:', error);
+
       return null;
     }
   }
@@ -520,7 +520,7 @@ export class DatabaseService extends Dexie {
     try {
       await this.goldenTemplates.delete(templateId);
     } catch (error) {
-      console.error('❌ [DB] Failed to invalidate golden template:', error);
+
     }
   }
 
@@ -533,7 +533,7 @@ export class DatabaseService extends Dexie {
       
       await this.goldenTemplates.bulkDelete(oldest.map(g => g.templateId));
     } catch (error) {
-      console.error('❌ [DB] Failed to clean old golden templates:', error);
+
     }
   }
 
@@ -552,7 +552,7 @@ export class DatabaseService extends Dexie {
       suggestions.timestamp = Date.now();
       await this.suggestions.put(suggestions);
     } catch (error) {
-      console.error('❌ [DB] Failed to cache suggestions:', error);
+
     }
   }
 
@@ -575,7 +575,7 @@ export class DatabaseService extends Dexie {
 
       return suggestions;
     } catch (error) {
-      console.error('❌ [DB] Failed to get suggestions:', error);
+
       return null;
     }
   }
@@ -584,7 +584,7 @@ export class DatabaseService extends Dexie {
     try {
       await this.suggestions.delete(templateId);
     } catch (error) {
-      console.error('❌ [DB] Failed to invalidate suggestions:', error);
+
     }
   }
 
@@ -597,7 +597,7 @@ export class DatabaseService extends Dexie {
       
       await this.suggestions.bulkDelete(oldest.map(s => s.templateId));
     } catch (error) {
-      console.error('❌ [DB] Failed to clean old suggestions:', error);
+
     }
   }
 
@@ -616,7 +616,7 @@ export class DatabaseService extends Dexie {
       variantsRun.timestamp = Date.now();
       await this.variantsRuns.put(variantsRun);
     } catch (error) {
-      console.error('❌ [DB] Failed to cache variants run:', error);
+
     }
   }
 
@@ -639,7 +639,7 @@ export class DatabaseService extends Dexie {
 
       return variantsRun;
     } catch (error) {
-      console.error('❌ [DB] Failed to get variants run:', error);
+
       return null;
     }
   }
@@ -648,7 +648,7 @@ export class DatabaseService extends Dexie {
     try {
       await this.variantsRuns.delete(templateId);
     } catch (error) {
-      console.error('❌ [DB] Failed to invalidate variants run:', error);
+
     }
   }
 
@@ -661,7 +661,7 @@ export class DatabaseService extends Dexie {
       
       await this.variantsRuns.bulkDelete(oldest.map(v => v.templateId));
     } catch (error) {
-      console.error('❌ [DB] Failed to clean old variants runs:', error);
+
     }
   }
 }

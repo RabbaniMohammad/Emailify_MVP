@@ -269,7 +269,7 @@ export class CacheService {
         storage.removeItem(key);
       });
     } catch (error) {
-      console.error('❌ Error clearing storage by prefix:', error);
+
     }
   }
 

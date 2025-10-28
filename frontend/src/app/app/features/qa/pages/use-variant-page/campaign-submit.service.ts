@@ -94,7 +94,7 @@ export class CampaignSubmitService {
         return audiences;
       }),
       catchError(err => {
-        console.error('Failed to fetch Mailchimp audiences:', err);
+
         return throwError(() => new Error('Failed to load Mailchimp audiences'));
       })
     );
@@ -123,7 +123,7 @@ export class CampaignSubmitService {
         return data;
       }),
       catchError(err => {
-        console.error('Failed to parse master document:', err);
+
         return throwError(() => new Error('Failed to parse master document'));
       })
     );
@@ -187,7 +187,7 @@ export class CampaignSubmitService {
         this.reconciliationSubject.next(result);
       }),
       catchError(err => {
-        console.error('Failed to reconcile audiences:', err);
+
         return throwError(() => new Error('Failed to reconcile audiences'));
       })
     );
@@ -204,7 +204,7 @@ export class CampaignSubmitService {
       html
     }).pipe(
       catchError(err => {
-        console.error('Failed to send test emails:', err);
+
         return throwError(() => new Error('Failed to send test emails'));
       })
     );
@@ -333,7 +333,7 @@ export class CampaignSubmitService {
       submission
     ).pipe(
       catchError(err => {
-        console.error('Failed to submit campaign:', err);
+
         return throwError(() => new Error('Campaign submission failed'));
       })
     );
@@ -422,7 +422,7 @@ addNewMembersToAudience(audienceId: string, newEmails: string[]): Observable<{ s
     { audienceId, emails: newEmails }
   ).pipe(
     catchError(err => {
-      console.error('Failed to add members:', err);
+
       return throwError(() => new Error('Failed to add members to audience'));
     })
   );

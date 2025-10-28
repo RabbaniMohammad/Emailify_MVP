@@ -339,7 +339,7 @@ constructor() {
         const verifyThread = this.qa.getChatCached(runId, no);
         if (verifyThread?.html === editedHtml) {
         } else {
-          console.error('❌ [RETURN FROM EDITOR] FAILED: Cache verification failed!');
+
         }
         
         // ✅ Restore messages to UI
@@ -453,7 +453,7 @@ constructor() {
           return;
         }
       } catch (error) {
-        console.error('❌ Error loading synthetic run:', error);
+
         // Fall through to normal loading
       }
     }
@@ -556,7 +556,7 @@ constructor() {
         this.snapsSubject.next(await this.qa.getSnapsCached(runId));
         this.validLinksSubject.next(this.qa.getValidLinks(runId));
       } catch (apiError) {
-        console.error('❌ Failed to load from API:', apiError);
+
         const intro: ChatTurn = {
           role: 'assistant',
           text: "I couldn't restore this variant from the server. If you go back and reopen it from the Variants list, I'll pick it up.",
@@ -569,7 +569,7 @@ constructor() {
       }
 
     } catch (error) {
-      console.error('❌ Error during component initialization:', error);
+
       const errorMessage: ChatTurn = {
         role: 'assistant',
         text: 'An error occurred while loading this variant. Please try refreshing the page.',
@@ -885,8 +885,7 @@ async checkTemplateGrammar(): Promise<void> {
     this.qa.saveGrammarCheck(runId, no, result);
 
   } catch (error) {
-    console.error('❌ Grammar check failed:', error);
-    
+
     this.grammarCheckResultSubject.next({
       hasErrors: false,
       mistakes: [],
@@ -1076,7 +1075,7 @@ private restoreTemplateModalState(): boolean {
         this.checkAndReopenModalAfterCampaign();
         
       } catch (error) {
-        console.error('Error in ngAfterViewInit:', error);
+
       }
     }, 0);
   }
@@ -1181,7 +1180,7 @@ private restoreTemplateModalState(): boolean {
       
       setTimeout(() => this.scrollToBottom(), 50);
     } catch (e) {
-      console.error('chat send error', e);
+
     } finally {
       this.sending = false;
     }
@@ -1256,7 +1255,7 @@ async onFinalize() {
           fulfilled++;
         } else {
           rejected++;
-          console.error(`  ❌ [${urlIndex + 1}] Failed:`, urls[urlIndex], result.reason);
+
         }
       });
       
@@ -1270,11 +1269,10 @@ async onFinalize() {
     this.cdr.markForCheck();
     
   } catch (error) {
-    console.error('\n❌ FINALIZE ERROR:');
-    console.error('  - Error:', error);
-    console.error('  - Error message:', error instanceof Error ? error.message : 'Unknown error');
-    console.error('  - Error stack:', error instanceof Error ? error.stack : 'No stack');
-    
+
+
+
+
     this.finalizingSubject.next(false);
     this.cdr.markForCheck();
     
@@ -1412,9 +1410,7 @@ navigateToVisualEditorWithGrammar(): void {
   // This ensures Visual Editor loads the VARIANT HTML, not old saved progress
   const progressKey = `visual_editor_${templateId}_progress`;
   localStorage.removeItem(progressKey);
-  
-  console.log('✅ [Navigate to Visual Editor] Cleared old progress, will load variant HTML');
-  
+
   // ✅ CLEANUP: Remove validation-modal-open class before navigating
   document.body.classList.remove('validation-modal-open');
   document.body.style.overflow = 'auto';
@@ -1718,7 +1714,7 @@ private extractAllLinks(html: string): string[] {
         this.cdr.markForCheck();
       },
       error: (err) => {
-        console.error('snapshot error', err);
+
         const errorSnap: SnapResult = {
           url,
           ok: false,
@@ -1752,7 +1748,7 @@ private extractAllLinks(html: string): string[] {
           resolve();
         },
         error: (err) => {
-          console.error('snapshot error', err);
+
           const errorSnap: SnapResult = {
             url,
             ok: false,
@@ -1933,9 +1929,9 @@ private replaceUrlInHtml(oldUrl: string, newUrl: string, snap: SnapResult): void
   
   // Error if URL not found
   if (!html.includes(fullOldUrl)) {
-    console.error('\n❌ CRITICAL ERROR: URL NOT FOUND IN HTML!');
-    console.error('  - Searched for:', fullOldUrl);
-    console.error('  - HTML length:', html.length);
+
+
+
     alert('URL not found in HTML. The link might have already been changed.');
     throw new Error('URL not found in HTML');
   }
@@ -1976,10 +1972,10 @@ private replaceUrlInHtml(oldUrl: string, newUrl: string, snap: SnapResult): void
   const newUrlInHtml = replaced.includes(fullNewUrl);
   
   if (html === replaced) {
-    console.error('\n❌ CRITICAL ERROR: NO REPLACEMENT WAS MADE!');
-    console.error('  - New URL:', fullNewUrl);
-    console.error('  - Total occurrences found:', totalOccurrences);
-    console.error('  - Target occurrence index:', occurrenceIndex);
+
+
+
+
     alert('Replacement failed. No changes were made to the HTML.');
     throw new Error('No replacement was made');
   }
@@ -2006,10 +2002,8 @@ private replaceUrlInHtml(oldUrl: string, newUrl: string, snap: SnapResult): void
   };
   this.qa.saveChat(runId, no, thread);
   // ✅ SAVE TO IndexedDB (non-blocking)
-  this.qa.saveChatThreadToCache(runId, no, thread).catch(err => 
-    console.error('Failed to cache to IndexedDB:', err)
-  );
-  
+  this.qa.saveChatThreadToCache(runId, no, thread).catch(err => {});
+
   this.qa.saveSnaps(runId, updatedSnaps);
   this.cdr.markForCheck();
 }

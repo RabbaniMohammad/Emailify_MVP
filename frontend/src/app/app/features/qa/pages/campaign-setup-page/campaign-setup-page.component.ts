@@ -56,7 +56,7 @@ export class CampaignSetupPageComponent implements OnInit, OnDestroy {
 
   private loadTemplateHtml(): void {
     if (!this.runId || !this.no) {
-      console.error('❌ Missing runId or variant number', { runId: this.runId, no: this.no });
+
       return;
     }
     // Get the variant from QA service cache
@@ -66,16 +66,13 @@ export class CampaignSetupPageComponent implements OnInit, OnDestroy {
         if (variantIndex >= 0 && variantIndex < run.items.length) {
           this.templateHtml = run.items[variantIndex].html;
         } else {
-          console.error('❌ Variant index out of bounds', { 
-            variantIndex, 
-            maxIndex: run.items.length - 1 
-          });
+
         }
       } else {
-        console.error('❌ No variant items found in run', { run });
+
       }
     }).catch(error => {
-      console.error('❌ Failed to load variant:', error);
+
     });
   }
 

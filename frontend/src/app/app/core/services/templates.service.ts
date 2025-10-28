@@ -183,8 +183,7 @@ export class TemplatesService {
           });
         }),
         catchError(error => {
-          console.error('❌ Smart refresh failed:', error);
-          
+
           // Try to use stale cache
           const stale = this.cache.getStale<TemplateItem[]>(CACHE_KEYS.TEMPLATES_LIST);
           
@@ -316,8 +315,7 @@ export class TemplatesService {
           this.updateState({ items: reordered, status: 'success', error: null });
         }),
         catchError(error => {
-          console.error('❌ Failed to fetch templates:', error);
-          
+
           const stale = this.cache.getStale<TemplateItem[]>(cacheKey);
           
           if (stale && stale.length > 0) {

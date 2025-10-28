@@ -40,8 +40,7 @@ export class AppComponent implements OnInit {
     
     if (this.showToolbar !== shouldShow) {
       this.showToolbar = shouldShow;
-      console.log('🧭 [APP] Toolbar visibility changed:', { url, showToolbar: this.showToolbar });
-      
+
       // ✅ Force change detection in next tick to ensure UI updates
       setTimeout(() => this.cdr.detectChanges(), 0);
     }
@@ -50,7 +49,7 @@ export class AppComponent implements OnInit {
   ngOnInit(): void {
     // Initialize cache monitoring (non-blocking, runs in background)
     this.cacheMonitor.startMonitoring().catch(error => {
-      console.error('❌ [APP] Cache monitoring failed to start:', error);
+
     });
   }
 }

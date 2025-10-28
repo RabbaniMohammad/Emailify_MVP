@@ -564,7 +564,7 @@ onSelectSubject(selectedSubject: string): void {
   const clickedIndex = subjects.indexOf(selectedSubject);
   
   if (clickedIndex === -1) {
-    console.error('❌ Subject not found in list');
+
     return;
   }
   
@@ -647,7 +647,7 @@ isSubjectSelected(subject: string): boolean {
       await firstValueFrom(this.campaignService.fetchMailchimpAudiences());
       this.audiencesLoadingSubject.next('success');
     } catch (error) {
-      console.error('❌ Failed to load audiences:', error);
+
       this.audiencesLoadingSubject.next('error');
       this.showError('Failed to load Mailchimp audiences');
     }
@@ -695,7 +695,7 @@ isSubjectSelected(subject: string): boolean {
       }
 
     } catch (error) {
-      console.error('❌ Upload failed:', error);
+
       this.uploadLoadingSubject.next('error');
       this.showError('Failed to upload file. Check format.');
     } finally {
@@ -730,7 +730,7 @@ isSubjectSelected(subject: string): boolean {
       // Save state after reconciliation
       this.saveCurrentState();
     } catch (error) {
-      console.error('❌ Reconciliation failed:', error);
+
       this.reconcileLoadingSubject.next('error');
       this.showError('Failed to reconcile audiences');
     }
@@ -780,7 +780,7 @@ isSubjectSelected(subject: string): boolean {
       }
 
     } catch (error) {
-      console.error('❌ Test email failed:', error);
+
       this.testEmailLoadingSubject.next('error');
       this.showError('Failed to send test emails');
     }
@@ -934,7 +934,7 @@ isSubjectSelected(subject: string): boolean {
       // User can manually go back if needed
 
     } catch (error) {
-      console.error('❌ Submission failed:', error);
+
       this.submitLoadingSubject.next('error');
       this.showError('Campaign submission failed. Please try again.');
     }

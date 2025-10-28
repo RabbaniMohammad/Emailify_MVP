@@ -65,7 +65,7 @@ async function getMonacoInstance(): Promise<typeof Monaco> {
       globalMonaco = monacoInstance;
       return monacoInstance;
     } catch (err) {
-      console.error('❌ [monaco-singleton] Failed to load Monaco:', err);
+
       globalMonacoLoading = null; // Reset so we can retry
       throw err;
     }
@@ -163,7 +163,7 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
     try {
       // Check if container exists
       if (!this._editorContainer?.nativeElement) {
-        console.error('❌ [html-editor] Editor container not found');
+
         this.isLoading = false;
         this.showError('Editor container not ready');
         this.cdr.markForCheck();
@@ -173,7 +173,7 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
       this.monaco = await getMonacoInstance();
       // ✅ CRITICAL NULL CHECK before using monaco.editor
       if (!this.monaco || !this.monaco.editor) {
-        console.error('❌ [html-editor] Monaco or monaco.editor is null/undefined!');
+
         throw new Error('Monaco editor failed to initialize properly');
       }
 
@@ -233,16 +233,8 @@ export class HtmlEditorComponent implements AfterViewInit, OnDestroy, OnChanges 
         this.showInfo('Restored auto-saved changes');
       }
     } catch (error) {
-      console.error('❌ [html-editor] Failed to initialize Monaco Editor:', error);
-      console.error('❌ [html-editor] Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        monaco: !!this.monaco,
-        hasEditor: !!this.monaco?.editor,
-        container: !!this._editorContainer?.nativeElement,
-        windowMonaco: !!(window as any).monaco
-      });
-      
+
+
       // ✅ RESET FLAGS so user can retry
       this.isLoading = false;
       this.isInitializing = false;

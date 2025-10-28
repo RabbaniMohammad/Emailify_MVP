@@ -336,14 +336,13 @@ export class QaService {
     // Create new observable with shareReplay
     const golden$ = this.getTemplateHtml(id).pipe(
       switchMap(html => {
-        console.log('🔍 [QA Service] Template HTML being sent to backend for Run Tests:');
-        console.log('📊 Template ID:', id);
-        console.log('📏 HTML Length:', html.length);
-        console.log('📄 First 500 chars:', html.substring(0, 500));
-        console.log('📄 Last 500 chars:', html.substring(html.length - 500));
-        console.log('🔎 Search for "box-sizing" (edited version):', html.includes('box-sizing') ? '✅ FOUND (EDITED)' : '❌ NOT FOUND (ORIGINAL)');
-        console.log('🔎 Search for "<!doctype html>" (original version):', html.startsWith('<!doctype html>') ? '✅ FOUND (ORIGINAL)' : '❌ NOT FOUND (EDITED)');
-        
+
+
+
+
+
+
+
         return this.http.post<GoldenResult>(
           `/api/qa/${id}/golden`,
           { html }
@@ -375,7 +374,7 @@ export class QaService {
             localStorage.setItem(this.kAtomicResults(id), JSON.stringify(res.atomicResults));
           }
         } catch (e) {
-          console.error('Failed to cache golden template:', e);
+
         }
       }),
       shareReplay(1), // ✅ Cache the result for late subscribers
@@ -467,7 +466,7 @@ export class QaService {
             timestamp: Date.now()
           });
         } catch (e) {
-          console.error('Failed to cache suggestions:', e);
+
         }
       }),
       shareReplay(1),
@@ -484,28 +483,27 @@ export class QaService {
    * ✅ Get template HTML - ONLY from cache, no API call
    */
   private getTemplateHtml(templateId: string): Observable<string> {
-    console.log('🔍 [getTemplateHtml] Called for template:', templateId);
-    
+
     // ✅ First check PreviewCacheService (sessionStorage)
     const cachedHtml = this.previewCache.get(templateId);
     if (cachedHtml) {
-      console.log('✅ [getTemplateHtml] Found in PreviewCache (sessionStorage)');
-      console.log('📏 Length:', cachedHtml.length);
+
+
       return of(cachedHtml);
     }
 
     // ✅ Second check TemplateStateService (localStorage - original template)
     const originalHtml = this.templateState.getOriginalTemplate(templateId);
     if (originalHtml) {
-      console.log('✅ [getTemplateHtml] Found in TemplateStateService (localStorage)');
-      console.log('📏 Length:', originalHtml.length);
+
+
       // Cache it in PreviewCacheService for next time
       this.previewCache.set(templateId, originalHtml);
       return of(originalHtml);
     }
 
     // ✅ No cache found - throw error (DO NOT fetch from API)
-    console.error('❌ [getTemplateHtml] Template HTML not found in any cache!');
+
     return throwError(() => new Error('Template HTML not found in cache. Please load the template first.'));
   }
 
@@ -556,7 +554,7 @@ export class QaService {
       this.subjectsCache$.clear();
       this.suggestionsCache$.clear();
     } catch (e) {
-      console.error('❌ [qa.service] Failed to clear QA data:', e);
+
     }
   }
 
@@ -568,7 +566,7 @@ export class QaService {
       const key = this.kChat(runId, no);
       localStorage.removeItem(key);
     } catch (e) {
-      console.error('Failed to clear chat:', e);
+
     }
   }
 
@@ -637,7 +635,7 @@ export class QaService {
       const key = this.kSnaps(runId);
       localStorage.removeItem(key);
     } catch (e) {
-      console.error('Failed to clear snaps:', e);
+
     }
   }
 
@@ -798,7 +796,7 @@ export class QaService {
     try {
       localStorage.setItem(this.kChat(runId, no), JSON.stringify(thread));
     } catch (e) {
-      console.error('❌ [qa.service] Failed to save chat to localStorage:', e);
+
     }
   }
 
@@ -851,7 +849,7 @@ export class QaService {
     try {
       localStorage.setItem(this.kSnaps(runId), JSON.stringify(snaps));
     } catch (err) {
-      console.error('❌ [qa.service] Failed to save snaps to localStorage:', err);
+
     }
   }
 
@@ -919,7 +917,7 @@ export class QaService {
       timestamp: Date.now()
     }).then(() => {
     }).catch((err) => {
-      console.error('❌ [qa.service] Failed to save golden template to IndexedDB:', err);
+
     });
     
     // ✅ CRITICAL: Save stats to localStorage for persistence across refresh
@@ -927,7 +925,7 @@ export class QaService {
       try {
         localStorage.setItem(this.kStats(templateId), JSON.stringify(golden.stats));
       } catch (e) {
-        console.error('❌ [qa.service] Failed to save stats to localStorage:', e);
+
       }
     }
     
@@ -936,7 +934,7 @@ export class QaService {
       try {
         localStorage.setItem(this.kTimings(templateId), JSON.stringify(golden.timings));
       } catch (e) {
-        console.error('❌ [qa.service] Failed to save timings to localStorage:', e);
+
       }
     }
     
@@ -945,7 +943,7 @@ export class QaService {
       try {
         localStorage.setItem(this.kAtomicResults(templateId), JSON.stringify(golden.atomicResults));
       } catch (e) {
-        console.error('❌ [qa.service] Failed to save atomicResults to localStorage:', e);
+
       }
     }
   }
@@ -962,7 +960,7 @@ export class QaService {
       
       localStorage.setItem(this.kValidLinks(runId), JSON.stringify(clean));
     } catch (err) {
-      console.error('❌ [qa.service] Failed to save valid links to localStorage:', err);
+
     }
   }
 
@@ -978,7 +976,7 @@ export class QaService {
       const key = this.kValidLinks(runId);
       localStorage.removeItem(key);
     } catch (e) {
-      console.error('Failed to clear valid links:', e);
+
     }
   }
 

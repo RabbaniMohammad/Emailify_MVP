@@ -60,17 +60,16 @@ export class OrganizationManagementComponent implements OnInit {
     
     this.organizationService.getAllOrganizations().subscribe({
       next: (response: { organizations: Organization[] }) => {
-        console.log('✅ Organizations loaded:', response);
+
         this.organizationsSubject.next(response.organizations || []);
         this.loading = false;
         this.cdr.markForCheck();
       },
       error: (error: any) => {
-        console.error('❌ Failed to load organizations:', error);
-        console.error('Error status:', error.status);
-        console.error('Error message:', error.message);
-        console.error('Error body:', error.error);
-        
+
+
+
+
         const errorMessage = error.error?.error || error.error?.message || 'Failed to load organizations';
         
         this.snackBar.open(errorMessage, 'Close', {
@@ -122,7 +121,7 @@ export class OrganizationManagementComponent implements OnInit {
         this.loading = false;
       },
       error: (error: any) => {
-        console.error('Failed to delete organization:', error);
+
         this.snackBar.open(
           error.error?.message || 'Failed to delete organization',
           'Close',

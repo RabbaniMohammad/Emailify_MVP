@@ -532,7 +532,7 @@
                     <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                   </svg>
                 </div>
-                <h4>Perfect! No content issues found</h4>
+                <h4>Perfect! No grammar issues found</h4>
                 <p>Your template is ready to launch 🎉</p>
               </div>
 
@@ -545,7 +545,7 @@
                     </svg>
                   </div>
                   <div class="error-text">
-                    <h4>Found {{ result.count }} content issue{{ result.count > 1 ? 's' : '' }}</h4>
+                    <h4>Found {{ result.count }} grammar issue{{ result.count > 1 ? 's' : '' }}</h4>
                     <p class="error-message">Please use the chatbot or editor to fix these issues</p>
                   </div>
                 </div>
@@ -639,7 +639,7 @@
       <ng-container *ngIf="grammarCheckLoading$ | async">Validating content...</ng-container>
       <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === false">Content validated</ng-container>
       <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === true">
-        Content issues ({{ (grammarCheckResult$ | async)!.count }})
+        Grammar issues ({{ (grammarCheckResult$ | async)!.count }})
       </ng-container>
       <ng-container *ngIf="!(grammarCheckLoading$ | async) && !(grammarCheckResult$ | async)">Validation pending</ng-container>
     </span>

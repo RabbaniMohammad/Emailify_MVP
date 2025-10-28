@@ -178,8 +178,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   private inflightRequests = new Map<string, Subscription>();
 
   ngOnInit(): void {
-    console.log('🔄 [TemplatesPage] ngOnInit called - Component initialized');
-    
+
     // Subscribe to selected item changes to load content
     this.selectedId$
       .pipe(
@@ -187,7 +186,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
         distinctUntilChanged()
       )
       .subscribe(id => {
-        console.log('📌 [TemplatesPage] Selected ID changed:', id);
+
         if (id) {
           this.loadTemplateContent(id);
         } else {
@@ -217,7 +216,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    console.log('💀 [TemplatesPage] ngOnDestroy called - Component destroyed');
+
     this.destroy$.next();
     this.destroy$.complete();
     this.fetchSub?.unsubscribe();
@@ -284,8 +283,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
   // Template list methods with double-click prevention
   onSelect(item: TemplateItem): void {
-    console.log('👆 [TemplatesPage] Template selected:', item.id, item.name);
-    
+
     // Only hide button if switching to a different template
     const currentSelected = this.svc.snapshot.selectedId;
     if (currentSelected && currentSelected !== item.id) {
@@ -334,7 +332,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
                 this.router.navigate(['/qa', id]);
               },
               error: (error) => {
-                console.error('❌ [templates-page] Failed to fetch template:', error);
+
                 this.snackBar.open('Failed to load template', 'Close', {
                   duration: 3000,
                   panelClass: ['error-snackbar'],
@@ -474,8 +472,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
         );
       },
       error: (error) => {
-        console.error('❌ Failed to delete template:', error);
-        
+
         this.isDeleting = false;
         
         this.snackBar.open(
@@ -531,8 +528,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
   // Optimized template loading with metadata caching
   private loadTemplateContent(id: string): void {
-    console.log('⏳ [TemplatesPage] Loading template content:', id);
-    
+
     // Clear previous state
     this.previewError = undefined;
     this.runButtonItemId = undefined;
@@ -666,8 +662,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           this.cdr.markForCheck();
         },
         error: (e) => {
-          console.error('❌ API error for:', id, e);
-          
+
           // Remove from in-flight requests
           this.inflightRequests.delete(id);
           

@@ -288,7 +288,7 @@ export class PerformanceProfilerService {
   if (profiler) {
     profiler.displayReport();
   } else {
-    console.error('Performance profiler not available');
+
   }
 };
 

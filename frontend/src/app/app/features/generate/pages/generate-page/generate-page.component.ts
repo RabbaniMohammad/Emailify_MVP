@@ -77,6 +77,8 @@ private sentImages: Array<{name: string, size: number}> = [];
   messages$ = new BehaviorSubject<GenerationMessage[]>([]);
   currentHtml$ = new BehaviorSubject<string>('');
   isGenerating$ = new BehaviorSubject<boolean>(false);
+  isRegenerating = false; // Track if it's a regeneration
+  private justCreatedConversationId: string | null = null; // Track conversation we just created
   userInput = '';
   templateName = 'Generated Template';
 
@@ -98,18 +100,34 @@ private sentImages: Array<{name: string, size: number}> = [];
     this.templateName = 'Generated Template';
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
         const conversationId = params.get('conversationId');
-        if (conversationId) {
-        // Only load conversation if it's different from current one
-        // (Avoid reloading when we just navigated after creating it)
-        if (this.conversationId !== conversationId) {
-          this.loadConversation(conversationId);
-        }
-        } else {
-        // ✅ FIX: Don't auto-redirect, just show welcome
-        this.initializeWelcome();
+        
+        if (conversationId && conversationId !== 'new') {
+          // Real conversation ID
+          if (this.conversationId !== conversationId) {
+            // Only load if we didn't just set this conversationId ourselves
+            if (this.conversationId === null) {
+              this.loadConversation(conversationId);
+            }
+          }
+        } else if (conversationId === 'new') {
+          // Generate a new conversation ID immediately and navigate to it
+          const newConversationId = this.generateUUID();
+          this.conversationId = newConversationId;
+          this.isRegenerating = false;
+          this.initializeWelcome();
+          // Replace URL with actual ID (no component recreation since it's same route)
+          this.router.navigate(['/generate', newConversationId], { replaceUrl: true });
         }
     });
     }
+
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
 
   changeViewMode(mode: 'desktop' | 'tablet' | 'mobile'): void {
     this.viewMode = mode;
@@ -137,7 +155,7 @@ private sentImages: Array<{name: string, size: number}> = [];
       window.scrollTo(0, 0);
       this.positionChatAtBottom();
     } catch (error) {
-      console.error('Error in ngAfterViewInit:', error);
+
     }
   }, 0);
 }
@@ -214,6 +232,7 @@ canDeactivate(): boolean {
 
   private loadConversation(conversationId: string): void {
     this.conversationId = conversationId;
+    this.isRegenerating = true; // It's already an existing conversation
     this.isGenerating$.next(true);
 
     this.generationService
@@ -228,14 +247,13 @@ canDeactivate(): boolean {
           this.scrollToBottom();
         },
         error: (error) => {
-          console.error('Failed to load conversation:', error);
           this.snackBar.open('Failed to load conversation', 'Close', {
             duration: 5000,
             panelClass: ['error-snackbar'],
           });
           this.isGenerating$.next(false);
           // Redirect to new conversation
-          this.router.navigate(['/generate'], { replaceUrl: true });
+          this.router.navigate(['/generate/new'], { replaceUrl: true });
         },
       });
   }
@@ -369,11 +387,8 @@ async onSend(): Promise<void> {
   // Scroll to show the new user message
   setTimeout(() => this.scrollToBottom(), 50);
 
-  if (!this.conversationId) {
-    this.startNewConversation(message, imageAttachments);
-  } else {
-    this.continueConversation(message, imageAttachments);
-  }
+  // Always use startGeneration with the conversationId (which is pre-generated)
+  this.startNewConversation(message, imageAttachments);
 
   // Clear input and images AFTER storing metadata
   this.userInput = '';
@@ -383,21 +398,13 @@ async onSend(): Promise<void> {
 
 private async startNewConversation(message: string, imageAttachments: ImageAttachment[]): Promise<void> {
 
-  // Images already converted in onSend(), just use them
-  
-
-  // ❌ REMOVED: Don't store here, already stored in onSend()
-  // this.selectedImages.forEach(file => {
-  //   this.sentImages.push({ name: file.name, size: file.size });
-  // });
-  
-
   this.generationService
-    .startGeneration(message, imageAttachments)
+    .startGeneration(message, imageAttachments, this.conversationId || undefined)
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (response) => {
 
+        // Update conversationId (should match what we sent, but backend might change it)
         this.conversationId = response.conversationId;
         this.generationService.setCurrentConversationId(response.conversationId);
         this.currentHtml$.next(response.html);
@@ -415,18 +422,13 @@ private async startNewConversation(message: string, imageAttachments: ImageAttac
 
         this.isGenerating$.next(false);
         
-        // Navigate to conversation URL to preserve state
-        // Use replaceUrl so back button skips /generate and goes to previous page
-        this.router.navigate(['/generate', response.conversationId], {
-          replaceUrl: true
-        }).then(() => {
-          // Scroll after navigation completes
-
-          this.shouldAutoScroll = true; // Ensure auto-scroll is enabled
-          setTimeout(() => {
-            this.scrollToBottom();
-          }, 100);
-        });
+        // Set regenerating flag AFTER first successful generation
+        this.isRegenerating = true;
+        
+        this.shouldAutoScroll = true;
+        setTimeout(() => {
+          this.scrollToBottom();
+        }, 100);
 
         if (response.hasErrors) {
 
@@ -445,8 +447,7 @@ private async startNewConversation(message: string, imageAttachments: ImageAttac
         }
       },
       error: (error) => {
-        console.error('❌ Generation failed:', error);
-        console.error('Error details:', error.error);
+        this.isGenerating$.next(false);
         this.snackBar.open(
           error.error?.message || 'Failed to generate template',
           'Close',
@@ -515,8 +516,8 @@ private async continueConversation(message: string, imageAttachments: ImageAttac
         }
       },
       error: (error) => {
-        console.error('❌ Continue conversation failed:', error);
-        console.error('Error details:', error.error);
+
+
         this.snackBar.open(
           error.error?.message || 'Failed to update template',
           'Close',
@@ -582,11 +583,10 @@ onRunTests(): void {
 
       },
       error: (error) => {
-        console.error('❌ [RUN_TESTS] Save failed:', error);
-        console.error('❌ [RUN_TESTS] Error details:', error.error);
-        console.error('❌ [RUN_TESTS] Error message:', error.error?.message);
-        console.error('❌ [RUN_TESTS] Error code:', error.error?.code);
-        
+
+
+
+
         this.snackBar.open('Failed to save template', 'Close', {
           duration: 5000,
           panelClass: ['error-snackbar'],
@@ -646,11 +646,10 @@ onSaveTemplate(): void {
 
       },
       error: (error) => {
-        console.error('❌ [SAVE_TEMPLATE] Save failed:', error);
-        console.error('❌ [SAVE_TEMPLATE] Error details:', error.error);
-        console.error('❌ [SAVE_TEMPLATE] Error message:', error.error?.message);
-        console.error('❌ [SAVE_TEMPLATE] Error code:', error.error?.code);
-        
+
+
+
+
         this.snackBar.open(
           error.error?.message || 'Failed to save template',
           'Close',
@@ -701,7 +700,7 @@ private clearAndStartNew(): void {
   this.sentImages = [];
 
   // Navigate to new conversation
-  this.router.navigate(['/generate'], { replaceUrl: true });
+  this.router.navigate(['/generate/new'], { replaceUrl: true });
   this.initializeWelcome();
 }
 
@@ -967,12 +966,12 @@ async processImage(file: File): Promise<void> {
       setTimeout(() => this.scrollToBottom(), 100);
     };
     reader.onerror = (error) => {
-      console.error('❌ FileReader error:', error);
+
     };
     reader.readAsDataURL(processedFile);
 
   } catch (error) {
-    console.error('❌ Image processing failed:', error);
+
     this.snackBar.open(
       `Failed to process ${file.name}. Please try another image.`,
       'Close',
@@ -1048,7 +1047,7 @@ async compressImage(file: File): Promise<File> {
     };
     
     reader.onerror = () => {
-      console.error('❌ FileReader failed');
+
       reject(new Error('Failed to read file'));
     };
     
@@ -1089,7 +1088,7 @@ private fileToBase64(file: File): Promise<string> {
       resolve(base64);
     };
     reader.onerror = (error) => {
-      console.error('❌ FileReader error:', error);
+
       reject(error);
     };
     reader.readAsDataURL(file);

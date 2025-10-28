@@ -93,12 +93,13 @@ export class TemplateGenerationService {
 
 startGeneration(
   prompt: string,
-  images?: Array<{ data: string; mediaType: string; fileName: string }>
+  images?: Array<{ data: string; mediaType: string; fileName: string }>,
+  conversationId?: string
 ): Observable<StartGenerationResponse> {
   if (images && images.length > 0) {
   }
 
-  const payload = { prompt, images };
+  const payload = { prompt, images, conversationId };
   return this.http.post<StartGenerationResponse>(
     '/api/generate/start',
     payload,
@@ -296,7 +297,7 @@ getConversationCached(conversationId: string): ConversationState | null {
     
     return parsed as ConversationState;
   } catch (error) {
-    console.error('❌ Error getting cached conversation:', error);
+
     return null;
   }
 }
@@ -305,7 +306,7 @@ cacheConversation(conversationId: string, state: ConversationState): void {
   try {
     localStorage.setItem(this.kConversation(conversationId), JSON.stringify(state));
   } catch (err) {
-    console.error('❌ Failed to cache conversation to localStorage:', err);
+
   }
 }
 
@@ -321,7 +322,7 @@ cacheConversation(conversationId: string, state: ConversationState): void {
     try {
       localStorage.setItem(this.kCurrentConversationId(), conversationId);
     } catch (err) {
-      console.error('Failed to set current conversation ID:', err);
+
     }
   }
 
@@ -329,7 +330,7 @@ cacheConversation(conversationId: string, state: ConversationState): void {
     try {
       localStorage.removeItem(this.kCurrentConversationId());
     } catch (err) {
-      console.error('Failed to clear current conversation ID:', err);
+
     }
   }
 
@@ -337,7 +338,7 @@ cacheConversation(conversationId: string, state: ConversationState): void {
     try {
       localStorage.removeItem(this.kConversation(conversationId));
     } catch (err) {
-      console.error('Failed to clear conversation cache:', err);
+
     }
   }
 }

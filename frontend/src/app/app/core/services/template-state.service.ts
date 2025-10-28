@@ -188,7 +188,7 @@ export class TemplateStateService {
       try {
         return JSON.parse(contextJson);
       } catch (e) {
-        console.error('❌ [TemplateState] Failed to parse editing context:', e);
+
         return null;
       }
     }
@@ -221,22 +221,11 @@ export class TemplateStateService {
     const context = this.getEditingContext(templateId);
     // ✅ FIX: Also check editing mode flag (for backwards compatibility)
     const editingMode = localStorage.getItem(`visual_editor_${templateId}_editing_mode`);
-    
-    console.log('📖 [getCurrentTemplate] Loading template...', {
-      templateId,
-      contextType: context?.type,
-      editingMode
-    });
-    
+
     // If editing golden template, get from golden key (check both context and mode)
     if (context?.type === 'golden' || editingMode === 'golden') {
       const goldenHtml = localStorage.getItem(`visual_editor_${templateId}_golden_html`);
-      console.log('📖 [getCurrentTemplate] Loading GOLDEN template:', {
-        key: `visual_editor_${templateId}_golden_html`,
-        found: !!goldenHtml,
-        length: goldenHtml?.length,
-        hasHighlights: goldenHtml?.includes('data-ai-highlight')
-      });
+
       if (goldenHtml) {
         return goldenHtml;
       } else {
@@ -246,14 +235,7 @@ export class TemplateStateService {
     // For original/variant editing, check edited version
     const edited = localStorage.getItem(this.EDITED_KEY(templateId));
     const original = localStorage.getItem(this.ORIGINAL_KEY(templateId));
-    
-    console.log('📖 [getCurrentTemplate] Checking edited/original keys:', {
-      editedKey: this.EDITED_KEY(templateId),
-      hasEdited: !!edited,
-      editedLength: edited?.length,
-      hasOriginal: !!original
-    });
-    
+
     // If edited exists, return it (temp_edit)
     if (edited) {
       return edited;
@@ -299,7 +281,7 @@ export class TemplateStateService {
         });
         return goldenHtml;
       } else {
-        console.error('❌ [TemplateState] Editing mode/context is "golden" but no golden_html found in localStorage!');
+
         this.debugLogger.error('TEMPLATE_STATE', 'Golden mode but no golden HTML!', { templateId, editingMode, editingContext });
       }
     }
@@ -320,7 +302,7 @@ export class TemplateStateService {
           return `<style>${parsed.css || ''}</style>${parsed.html}`;
         }
       } catch (e) {
-        console.error('❌ [TemplateState] Failed to parse editor progress:', e);
+
         this.debugLogger.error('TEMPLATE_STATE', 'Failed to parse editor progress', { templateId, error: e });
       }
     }
@@ -338,8 +320,7 @@ export class TemplateStateService {
     if (original) {
       return original;
     }
-    
-    console.error('❌ [TemplateState] No template found anywhere!');
+
     return null;
   }
   
@@ -367,34 +348,19 @@ export class TemplateStateService {
     // ✅ CRITICAL: Check BOTH editing context AND mode flag to route to correct storage
     const editingContext = this.getEditingContext(templateId);
     const editingMode = localStorage.getItem(`visual_editor_${templateId}_editing_mode`);
-    
-    console.log('💾 [saveEditorProgress] Saving...', {
-      templateId,
-      editingContextType: editingContext?.type,
-      editingMode,
-      htmlLength: html.length,
-      hasHighlights: html.includes('data-ai-highlight')
-    });
-    
+
     // Check BOTH for maximum reliability (context is more reliable than flag)
     if (editingContext?.type === 'golden' || editingMode === 'golden') {
       // ✅ GOLDEN TEMPLATE: Save to golden-specific keys
       const fullHtml = css ? `<style>${css}</style>${html}` : html;
-      
-      console.log('💾 [saveEditorProgress] Saving as GOLDEN template to keys:', {
-        key1: `visual_editor_${templateId}_golden_html`,
-        key2: `visual_editor_${templateId}_edited_html`,
-        fullHtmlLength: fullHtml.length,
-        hasHighlights: fullHtml.includes('data-ai-highlight')
-      });
-      
+
       // Save to golden key (used by getCurrentTemplate)
       localStorage.setItem(`visual_editor_${templateId}_golden_html`, fullHtml);
       // Also save to edited_html key (used by check preview flow)
       localStorage.setItem(`visual_editor_${templateId}_edited_html`, fullHtml);
     } else {
       // ✅ ORIGINAL/VARIANT TEMPLATE: Save to standard keys
-      console.log('💾 [saveEditorProgress] Saving as ORIGINAL template');
+
       const editorState = {
         html,
         css,

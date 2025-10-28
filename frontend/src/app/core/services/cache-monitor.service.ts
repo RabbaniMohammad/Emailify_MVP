@@ -46,7 +46,7 @@ export class CacheMonitorService {
 
       return { used: 0, total: 0, percentage: 0, status: 'healthy' };
     } catch (error) {
-      console.error('❌ [MONITOR] Failed to check storage quota:', error);
+
       return { used: 0, total: 0, percentage: 0, status: 'healthy' };
     }
   }
@@ -86,7 +86,7 @@ export class CacheMonitorService {
 
       return { stats, isHealthy, warnings };
     } catch (error) {
-      console.error('❌ [MONITOR] Failed to check cache health:', error);
+
       return {
         stats: null,
         isHealthy: false,
@@ -126,7 +126,7 @@ export class CacheMonitorService {
       await this.db.cleanExpiredData();
 
     } catch (error) {
-      console.error('❌ [MONITOR] Emergency cleanup failed:', error);
+
     }
   }
 
@@ -147,7 +147,7 @@ export class CacheMonitorService {
         await this.db.cleanOldestConversations(20);
       }
     } catch (error) {
-      console.error('❌ [MONITOR] Periodic cleanup failed:', error);
+
     }
   }
 

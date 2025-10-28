@@ -113,7 +113,7 @@ ngOnInit(): void {
           this.pendingCount$.next(response.users.length);
         },
         error: (err) => {
-          console.error('❌ Toolbar: Failed to load pending count:', err);
+
         }
       });
   }
@@ -235,7 +235,7 @@ navigateToHome(): void {
     try {
       this.svc.smartRefresh();
     } catch (error) {
-      console.error('❌ [navigateToHome] smartRefresh failed:', error);
+
     }
   } else {
     this.router.navigate(['/'])
@@ -244,7 +244,7 @@ navigateToHome(): void {
         }
       })
       .catch((error) => {
-        console.error('❌ [navigateToHome] Navigation failed:', error?.message);
+
       });
   }
 }
@@ -262,7 +262,7 @@ navigateToHome(): void {
     if (activeConversationId) {
       this.router.navigate(['/generate', activeConversationId]);
     } else {
-      this.router.navigate(['/generate']);
+      this.router.navigate(['/generate/new']);
     }
   }
 

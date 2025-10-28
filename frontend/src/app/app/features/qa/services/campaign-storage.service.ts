@@ -76,7 +76,7 @@ export class CampaignStorageService {
       
       localStorage.setItem(key, JSON.stringify(updatedData));
     } catch (error) {
-      console.error('❌ Error saving campaign data to localStorage:', error);
+
     }
   }
 
@@ -96,7 +96,7 @@ export class CampaignStorageService {
         return JSON.parse(data) as CampaignFormData;
       }
     } catch (error) {
-      console.error('Error loading campaign data from localStorage:', error);
+
     }
     
     // Return empty state
@@ -123,7 +123,7 @@ export class CampaignStorageService {
       const key = this.getStorageKey(templateId, runId, variantNo);
       localStorage.removeItem(key);
     } catch (error) {
-      console.error('Error clearing campaign data from localStorage:', error);
+
     }
   }
 
@@ -143,7 +143,7 @@ export class CampaignStorageService {
       
       keysToRemove.forEach(key => localStorage.removeItem(key));
     } catch (error) {
-      console.error('Error clearing all campaign data:', error);
+
     }
   }
 

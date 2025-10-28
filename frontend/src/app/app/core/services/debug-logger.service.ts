@@ -52,7 +52,7 @@ export class DebugLoggerService {
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     localStorage.setItem('debug_logging_enabled', enabled ? 'true' : 'false');
-    console.log(`🔧 [DebugLogger] Logging ${enabled ? 'enabled' : 'disabled'}`);
+
   }
 
   /**
@@ -71,7 +71,6 @@ export class DebugLoggerService {
     };
 
     // Also log to console for immediate visibility
-    console.log(`📝 [${category}] ${message}`, data || '');
 
     // Add to buffer
     this.logBuffer.push(logEntry);
@@ -101,8 +100,6 @@ export class DebugLoggerService {
         ...error
       } : undefined
     };
-
-    console.error(`❌ [${category}] ${message}`, error || '');
 
     this.logBuffer.push(logEntry);
 
@@ -158,14 +155,14 @@ export class DebugLoggerService {
         const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
         navigator.sendBeacon('/api/debug-logs', blob);
       } catch (e) {
-        console.error('Failed to send logs via beacon:', e);
+
       }
     } else {
       // Async request
       this.http.post('/api/debug-logs', payload)
         .pipe(
           catchError(err => {
-            console.error('Failed to send logs to backend:', err);
+
             return of(null);
           })
         )
@@ -192,12 +189,12 @@ export class DebugLoggerService {
     this.http.post('/api/debug-logs/clear', { sessionId: this.sessionId })
       .pipe(
         catchError(err => {
-          console.error('Failed to clear logs:', err);
+
           return of(null);
         })
       )
       .subscribe(() => {
-        console.log('✅ Debug logs cleared');
+
       });
   }
 

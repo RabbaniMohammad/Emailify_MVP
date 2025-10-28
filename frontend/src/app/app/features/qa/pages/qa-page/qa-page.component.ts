@@ -261,9 +261,9 @@ export class QaPageComponent implements OnDestroy {
             this.cdr.markForCheck();
         } 
         else if (editingContext?.type === 'original' && editedTemplate) {
-            console.log('🔄 [Visual Editor Return] Original template was edited');
-            console.log('📏 Edited template length:', editedTemplate.length);
-            console.log('📄 First 200 chars of edited template:', editedTemplate.substring(0, 200));
+
+
+
             this.templateHtml = editedTemplate;
             this.templateLoading = false;
             
@@ -484,7 +484,7 @@ export class QaPageComponent implements OnDestroy {
       const thread = { html: golden.html, messages: [intro] };
       this.qa.saveChat(syntheticRun.runId, 1, thread);
     } catch (e) {
-      console.error('Failed to store synthetic run:', e);
+
     }
 
     this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
@@ -534,7 +534,7 @@ export class QaPageComponent implements OnDestroy {
       const thread = { html: this.templateHtml, messages: [intro] };
       this.qa.saveChat(syntheticRun.runId, 1, thread);
     } catch (e) {
-      console.error('Failed to store synthetic run:', e);
+
     }
 
     this.router.navigate(['/qa', this.templateId, 'use', syntheticRun.runId, 1]);
@@ -1150,7 +1150,7 @@ export class QaPageComponent implements OnDestroy {
       } else {
       }
     } catch (error) {
-      console.error('❌ [onUseVariant] Error pre-saving variant:', error);
+
       // Continue with navigation anyway - use-variant-page will try to load from API
     }
     
@@ -1240,7 +1240,7 @@ export class QaPageComponent implements OnDestroy {
       const text = tempDiv.textContent || tempDiv.innerText || '';
       return text;
     } catch (error) {
-      console.error('❌ [extractVisibleText] Failed to extract text:', error);
+
       // Fallback to original HTML if extraction fails
       return html;
     }
@@ -1294,13 +1294,13 @@ export class QaPageComponent implements OnDestroy {
 
 navigateToVisualEditor(): void {
   if (!this.templateId) {
-    console.error('❌ [GOLDEN EDIT] No templateId found');
+
     this.showError('Template ID not found');
     return;
   }
   const golden = this.goldenSubject.value;
   if (!golden?.html) {
-    console.error('❌ [GOLDEN EDIT] No golden HTML found in goldenSubject');
+
     this.showError('Golden template not found. Please generate golden template first.');
     return;
   }
@@ -1383,7 +1383,7 @@ private async handleVisualEditorReturn(
     try {
       failedEdits = JSON.parse(failedEditsJson);
     } catch (e) {
-      console.error('Failed to parse failedEdits JSON:', e);
+
     }
   }
   
@@ -1396,7 +1396,7 @@ private async handleVisualEditorReturn(
     try {
       originalStats = JSON.parse(originalStatsJson);
     } catch (e) {
-      console.error('Failed to parse originalStats JSON:', e);
+
     }
   }
   
@@ -1499,10 +1499,10 @@ private async handleVisualEditorReturn(
         this.qa.saveVariantsRun(this.templateId!, updatedRun); // Persist the change
         this.cdr.markForCheck();
       } else {
-        console.error(`❌ [qa-page] Could not find variant number ${variantNo} in the current run to update.`);
+
       }
     } else {
-            console.error(`❌ [qa-page] Could not find matching run ID ${runId} to update variant.`);
+
     }
   }
 
@@ -1512,7 +1512,7 @@ private async handleVisualEditorReturn(
    */
   onEditOriginalTemplate(): void {
     if (!this.templateId || !this.templateHtml || this.templateLoading) {
-      console.error('❌ [EDIT] Cannot start editing, missing data.');
+
       return;
     }
 
@@ -1533,10 +1533,10 @@ private async handleVisualEditorReturn(
     const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
     localStorage.setItem(editingModeKey, 'original');
     // Initialize the state with the current template on the screen.
-    console.log('📝 [onEditOriginalTemplate] Initializing template state');
-    console.log('📊 Template ID:', this.templateId);
-    console.log('📏 this.templateHtml length:', this.templateHtml.length);
-    console.log('📄 First 200 chars of this.templateHtml:', this.templateHtml.substring(0, 200));
+
+
+
+
     this.templateState.initializeOriginalTemplate(this.templateId, this.templateHtml);
     
     // ✅ CRITICAL FIX: Clear use-variant metadata to prevent wrong navigation on Check Preview
@@ -1550,7 +1550,7 @@ private async handleVisualEditorReturn(
    */
   onEditVariant(runId: string, variantNo: number, variant: any): void {
     if (!this.templateId || !variant?.html) {
-      console.error('❌ [EDIT VARIANT] Aborted - missing templateId or variant HTML.');
+
       return;
     }
 
@@ -1600,7 +1600,7 @@ private async handleVisualEditorReturn(
     const goldenHtml = this.goldenSubject.value?.html;
     
     if (!this.templateId || !goldenHtml) {
-      console.error('❌ [EDIT GOLDEN] Aborted - missing templateId or golden HTML.');
+
       return;
     }
 

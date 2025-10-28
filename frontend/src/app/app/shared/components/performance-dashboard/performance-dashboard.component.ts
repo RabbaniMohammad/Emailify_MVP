@@ -98,7 +98,7 @@ export class PerformanceDashboardComponent implements OnInit, OnDestroy {
       
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Failed to load stats:', error);
+
     }
   }
 
@@ -182,7 +182,7 @@ export class PerformanceDashboardComponent implements OnInit, OnDestroy {
       
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('❌ Failed to clear cache:', error);
+
       this.isClearing = false;
       this.cdr.markForCheck();
     }

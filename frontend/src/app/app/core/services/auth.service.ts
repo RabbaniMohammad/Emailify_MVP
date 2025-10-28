@@ -81,7 +81,7 @@ export class AuthService implements OnDestroy {
           next: () => {
           },
           error: (err) => {
-            console.error('❌ Proactive refresh failed:', err);
+
             this.handleRefreshFailure(err);
           }
         });
@@ -132,13 +132,13 @@ export class AuthService implements OnDestroy {
                 this.checkUserStatus();
               },
               error: (refreshError) => {
-                console.error('❌ Token refresh failed during status check');
+
                 this.handleRefreshFailure(refreshError);
               }
             });
           } else if (error.status === 403) {
             // ✅ Access forbidden
-            console.error('🚫 Access forbidden during status check');
+
             this.handleForceLogout('access_denied');
           }
         }
@@ -207,7 +207,7 @@ export class AuthService implements OnDestroy {
       .then(() => {
       })
       .catch((err: any) => {
-        console.error('❌ Failed to clean cache:', err);
+
       });
     
     // ✅ Start monitoring
@@ -263,7 +263,7 @@ export class AuthService implements OnDestroy {
       tap(() => {
       }),
       catchError((error) => {
-        console.error('❌ Token refresh error:', error.status, error.error);
+
         return throwError(() => error);
       })
     );
@@ -277,8 +277,6 @@ export class AuthService implements OnDestroy {
     const errorMessage = error.error?.error || '';
     const errorCode = error.error?.code || '';
 
-    console.error('❌ Refresh failed:', { status, errorCode, errorMessage });
-
     // ✅ Determine the specific reason for failure
     let redirectError = 'session_expired';
 
@@ -286,34 +284,34 @@ export class AuthService implements OnDestroy {
       switch (errorCode) {
         case 'NO_REFRESH_TOKEN':
           redirectError = 'session_expired';
-          console.error('❌ Refresh token missing (cookies cleared or expired)');
+
           break;
         case 'INVALID_REFRESH_TOKEN':
           redirectError = 'session_expired';
-          console.error('❌ Refresh token invalid (malformed or secret changed)');
+
           break;
         case 'USER_NOT_FOUND':
           redirectError = 'session_expired';
-          console.error('❌ User account deleted');
+
           break;
         case 'USER_INACTIVE':
           redirectError = 'account_deactivated';
-          console.error('❌ Account deactivated');
+
           break;
         case 'USER_NOT_APPROVED':
           redirectError = 'pending_approval';
-          console.error('❌ Account not approved');
+
           break;
         default:
           redirectError = 'session_expired';
-          console.error('❌ Refresh token expired (7 days passed)');
+
       }
     } else if (status === 403) {
       redirectError = 'access_denied';
-      console.error('❌ Access forbidden');
+
     } else {
       redirectError = 'authentication_failed';
-      console.error('❌ Unknown refresh error:', error);
+
     }
 
     // ✅ Force logout and redirect
@@ -334,7 +332,7 @@ export class AuthService implements OnDestroy {
         });
       },
       error: (logoutError) => {
-        console.error('❌ Logout failed, forcing navigation:', logoutError);
+
         // Force navigation even if logout fails
         this.clearAuthState();
         this.router.navigate(['/auth'], {
@@ -360,7 +358,7 @@ export class AuthService implements OnDestroy {
           this.clearAuthState();
         },
         error: (error) => {
-          console.error('❌ Logout error:', error);
+
           // Clear state even on error
           this.clearAuthState();
         }
@@ -391,7 +389,7 @@ export class AuthService implements OnDestroy {
       localStorage.removeItem('lastTemplateId');
       localStorage.removeItem('lastTemplateName');
     } catch (error) {
-      console.error('❌ Error clearing legacy keys:', error);
+
     }
 
     // ✅ Clear IndexedDB cache (non-blocking)
@@ -399,7 +397,7 @@ export class AuthService implements OnDestroy {
       .then(() => {
       })
       .catch((err: any) => {
-        console.error('❌ Failed to clear IndexedDB cache:', err);
+
       });
 
     // ✅ NEW: Clear TemplatesService in-memory state
