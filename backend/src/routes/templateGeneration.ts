@@ -347,11 +347,13 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
  * GET /api/generate/conversation/:conversationId
  * Get conversation history
  */
-router.get('/conversation/:conversationId', authenticate, async (req: Request, res: Response) => {
+router.get('/conversation/:conversationId', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const { conversationId } = req.params;
     const userId = (req as any).tokenPayload?.userId;
     const organization = (req as any).organization;
+
+    logger.info(`📖 Getting conversation: ${conversationId} for user: ${userId}`);
 
     const conversation = await TemplateConversation.findOne({
       conversationId,
@@ -360,11 +362,14 @@ router.get('/conversation/:conversationId', authenticate, async (req: Request, r
     });
 
     if (!conversation) {
+      logger.warn(`⚠️ Conversation not found: ${conversationId} for user: ${userId}`);
       return res.status(404).json({
         code: 'CONVERSATION_NOT_FOUND',
         message: 'Conversation not found',
       });
     }
+
+    logger.info(`✅ Conversation found with ${conversation.messages.length} messages`);
 
     res.json({
       conversationId: conversation.conversationId,

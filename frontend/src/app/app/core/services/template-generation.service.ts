@@ -187,15 +187,24 @@ continueConversation(
     // Check cache first
     const cached = this.getConversationCached(conversationId);
     if (cached) {
-      return of(cached);
+      console.log('✅ Using cached conversation:', conversationId);
+      // Validate cached data has required fields
+      if (cached.messages && cached.currentHtml !== undefined) {
+        return of(cached);
+      } else {
+        console.warn('⚠️ Cached conversation is incomplete, fetching from server');
+        this.clearConversationCache(conversationId);
+      }
     }
 
     // Fetch from backend
+    console.log('📡 Fetching conversation from backend:', conversationId);
     return this.http.get<ConversationState>(
       `/api/generate/conversation/${conversationId}`,
       { withCredentials: true }
     ).pipe(
       tap((conversation) => {
+        console.log('✅ Conversation fetched successfully, caching...');
         this.cacheConversation(conversationId, conversation);
       })
     );
@@ -286,6 +295,14 @@ getConversationCached(conversationId: string): ConversationState | null {
     }
     
     const parsed = JSON.parse(raw);
+    
+    // Validate required fields
+    if (!parsed.conversationId || !Array.isArray(parsed.messages)) {
+      console.warn('⚠️ Invalid cached conversation data, clearing cache');
+      this.clearConversationCache(conversationId);
+      return null;
+    }
+    
     // Convert date strings back to Date objects
     parsed.createdAt = new Date(parsed.createdAt);
     parsed.updatedAt = new Date(parsed.updatedAt);
@@ -297,7 +314,13 @@ getConversationCached(conversationId: string): ConversationState | null {
     
     return parsed as ConversationState;
   } catch (error) {
-
+    console.error('❌ Error parsing cached conversation:', error);
+    // Clear corrupted cache
+    try {
+      this.clearConversationCache(conversationId);
+    } catch (e) {
+      // Ignore cleanup errors
+    }
     return null;
   }
 }
