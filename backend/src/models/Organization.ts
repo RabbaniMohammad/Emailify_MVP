@@ -9,6 +9,7 @@ export interface IOrganization extends Document {
   mailchimpApiKey?: string;
   mailchimpServerPrefix?: string;
   mailchimpAudienceId?: string;
+  mailchimpTemplateFolderId?: string; // Mailchimp template folder ID for organization isolation
   
   // Settings
   maxUsers: number; // Maximum users allowed
@@ -72,6 +73,11 @@ const OrganizationSchema = new Schema<IOrganization>(
     mailchimpAudienceId: {
       type: String,
       default: '',
+    },
+    mailchimpTemplateFolderId: {
+      type: String,
+      default: '',
+      sparse: true, // Allow multiple null/empty values
     },
     
     // Limits

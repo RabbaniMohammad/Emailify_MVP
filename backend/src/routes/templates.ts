@@ -169,12 +169,11 @@ async function getHtmlForTemplate(id: string, organizationId?: any): Promise<{ n
 // ---------- Routes ----------
 
 /** GET /api/templates?query=&limit=&offset= → { items:[{id,name,...metadata}], total } */
-// In templates.ts - REPLACE the GET / route with this:
-
-/** GET /api/templates?query=&limit=&offset= → { items:[{id,name,...metadata}], total } */
 router.get('/', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const query  = String(req.query.query ?? '').trim().toLowerCase();
+    const limit  = Math.min(Number(req.query.limit ?? 50), 250);
+    const offset = Number(req.query.offset ?? 0);
     
     const organization = (req as any).organization;
     
@@ -183,20 +182,66 @@ router.get('/', authenticate, organizationContext, async (req: Request, res: Res
       return res.status(403).json({ error: 'Organization context required' });
     }
     
-    // ✅ Complete organization isolation - NO Mailchimp templates shown
-    // Only show AI-generated templates specific to this organization
-    
-    const templateQuery: any = {};
-    
-    // 🔍 DEBUG: Log filtering logic
     logger.info(`🔍 [TEMPLATES] Filtering by org: ${organization.name} (${organization._id})`);
     
-    // Filter by organization - everyone only sees their org's templates
-    templateQuery.organizationId = organization._id;
+    // ✅ Fetch Mailchimp templates (filtered by org's folder if configured)
+    let mailchimpItems: any[] = [];
+    
+    try {
+      const mailchimpParams: any = { count: limit, offset, type: 'user' };
+      
+      // ✅ Filter by organization's Mailchimp folder if configured
+      if (organization.mailchimpTemplateFolderId) {
+        mailchimpParams.folder_id = organization.mailchimpTemplateFolderId;
+        logger.info(`🔍 [TEMPLATES] Filtering Mailchimp templates by folder: ${organization.mailchimpTemplateFolderId}`);
+      } else {
+        logger.warn(`⚠️ [TEMPLATES] No Mailchimp folder configured for org: ${organization.name} - Skipping Mailchimp templates`);
+      }
+      
+      // Only fetch if folder is configured
+      if (organization.mailchimpTemplateFolderId) {
+        const resp: McTemplatesList = await mc.templates.list(mailchimpParams);
+
+        const source: McTemplate[] = Array.isArray(resp.templates) ? resp.templates : [];
+        const userOnly: McTemplate[] = source.filter((t) => {
+          const ty = (t.type ?? '').toString().toLowerCase();
+          return ty === 'user' || ty === 'saved' || ty === 'regular';
+        });
+
+        const seen = new Set<string>();
+        mailchimpItems = (userOnly.length ? userOnly : source)
+          .map((t) => ({
+            id: String(t.id),
+            name: String(t.name ?? 'Untitled Template'),
+            type: t.type ?? null,
+            templateType: null,
+            category: t.category ?? null,
+            thumbnail: t.thumbnail ?? null,
+            dateCreated: t.date_created ?? null,
+            dateEdited: t.date_edited ?? null,
+            createdBy: t.created_by ?? null,
+            active: t.active ?? true,
+            dragAndDrop: t.drag_and_drop ?? null,
+            responsive: t.responsive ?? null,
+            folderId: t.folder_id ?? null,
+            screenshotUrl: t.screenshot_url ?? null,
+            source: 'mailchimp',
+          }))
+          .filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
+        
+        logger.info(`🔍 [TEMPLATES] Found ${mailchimpItems.length} Mailchimp templates for this org's folder`);
+      }
+    } catch (mailchimpError: any) {
+      logger.error(`❌ [TEMPLATES] Mailchimp API error:`, mailchimpError?.message || mailchimpError);
+      // Continue without Mailchimp templates instead of failing entire request
+    }
+    
+    // ✅ Fetch Generated templates from MongoDB (filtered by organization)
+    const templateQuery: any = { organizationId: organization._id };
     
     const generatedTemplates = await GeneratedTemplate.find(templateQuery)
       .sort({ createdAt: -1 })
-      .limit(100) // Reasonable limit
+      .limit(100)
       .lean();
     
     logger.info(`🔍 [TEMPLATES] Found ${generatedTemplates.length} AI-generated templates for this org`);
@@ -221,8 +266,8 @@ router.get('/', authenticate, organizationContext, async (req: Request, res: Res
       };
     });
     
-    // ✅ ONLY AI-generated templates (clean slate per org)
-    let items = generatedItems;
+    // ✅ Merge both lists (generated templates first, then Mailchimp)
+    let items = [...generatedItems, ...mailchimpItems];
     
     // ✅ Apply search filter if provided
     if (query) {
@@ -230,6 +275,8 @@ router.get('/', authenticate, organizationContext, async (req: Request, res: Res
     }
 
     const total = items.length;
+    logger.info(`✅ [TEMPLATES] Returning ${total} templates total for org: ${organization.name}`);
+    
     res.json({ items, total });
   } catch (err: unknown) {
     const e = err as any;

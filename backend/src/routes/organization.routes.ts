@@ -6,6 +6,7 @@ import TemplateConversation from '@src/models/TemplateConversation';
 import { authenticate } from '@src/middleware/auth';
 import { requireRole } from '@src/middleware/roles';
 import logger from 'jet-logger';
+import mailchimp from '@mailchimp/mailchimp_marketing';
 
 const router = Router();
 
@@ -56,6 +57,25 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       isActive: true,
     });
 
+    // ✅ Auto-create Mailchimp folder for the organization
+    try {
+      const MC: any = mailchimp as any;
+      const folderName = `${organization.name} Templates`;
+      
+      const folder = await MC.templateFolders.create({ name: folderName });
+      const folderId = String(folder.id || folder.folder_id);
+      
+      // Save folder ID to organization
+      organization.mailchimpTemplateFolderId = folderId;
+      await organization.save();
+      
+      logger.info(`✅ Created Mailchimp folder "${folderName}" (ID: ${folderId}) for org: ${organization.name}`);
+    } catch (folderError: any) {
+      // Don't fail organization creation if folder creation fails
+      logger.warn(`⚠️  Failed to create Mailchimp folder for ${organization.name}:`, folderError?.message);
+      logger.warn(`   Organization created successfully, but folder must be created manually.`);
+    }
+
     // Update user to be the super_admin
     user.organizationId = organization._id as any;
     user.orgRole = 'super_admin';
@@ -71,6 +91,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
         name: organization.name,
         slug: organization.slug,
         domain: organization.domain,
+        mailchimpFolderId: organization.mailchimpTemplateFolderId || null,
       },
       message: 'Organization created successfully. You are now the owner.'
     });
@@ -361,6 +382,171 @@ router.delete('/:slug', authenticate, async (req: Request, res: Response) => {
     res.status(500).json({
       error: 'Failed to delete organization',
       message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/organizations/:id/mailchimp-folder
+ * Create and assign a Mailchimp template folder to an organization
+ */
+router.post('/:id/mailchimp-folder', authenticate, requireRole(['owner', 'admin']), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { folderName } = req.body;
+    const userId = (req as any).tokenPayload?.userId;
+
+    const organization = await Organization.findById(id);
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    // Verify user has permission (owner or admin)
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ error: 'Not a member of this organization' });
+    }
+
+    const MC: any = mailchimp as any;
+    
+    // Create folder in Mailchimp
+    const folderNameToUse = folderName || `${organization.name} Templates`;
+    
+    try {
+      const folder = await MC.templateFolders.create({ name: folderNameToUse });
+      const folderId = folder.id || folder.folder_id;
+
+      // Save folder ID to organization
+      organization.mailchimpTemplateFolderId = String(folderId);
+      await organization.save();
+
+      logger.info(`✅ Created Mailchimp folder "${folderNameToUse}" (ID: ${folderId}) for org: ${organization.name}`);
+
+      res.json({
+        success: true,
+        message: 'Mailchimp folder created and assigned successfully',
+        folderId: String(folderId),
+        folderName: folderNameToUse,
+      });
+    } catch (mcError: any) {
+      logger.error(`❌ Mailchimp folder creation error:`, mcError);
+      res.status(500).json({
+        error: 'Failed to create Mailchimp folder',
+        message: mcError?.message || 'Mailchimp API error',
+      });
+    }
+  } catch (error: any) {
+    logger.err('❌ Create Mailchimp folder error:', error);
+    res.status(500).json({
+      error: 'Failed to create Mailchimp folder',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/organizations/:id/mailchimp-folder
+ * Assign an existing Mailchimp folder to an organization
+ */
+router.put('/:id/mailchimp-folder', authenticate, requireRole(['owner', 'admin']), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { folderId } = req.body;
+    const userId = (req as any).tokenPayload?.userId;
+
+    if (!folderId) {
+      return res.status(400).json({ error: 'Folder ID is required' });
+    }
+
+    const organization = await Organization.findById(id);
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    // Verify user has permission
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ error: 'Not a member of this organization' });
+    }
+
+    // Update organization
+    organization.mailchimpTemplateFolderId = String(folderId);
+    await organization.save();
+
+    logger.info(`✅ Assigned Mailchimp folder ${folderId} to org: ${organization.name}`);
+
+    res.json({
+      success: true,
+      message: 'Mailchimp folder assigned successfully',
+      folderId: String(folderId),
+    });
+  } catch (error: any) {
+    logger.err('❌ Assign Mailchimp folder error:', error);
+    res.status(500).json({
+      error: 'Failed to assign Mailchimp folder',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/organizations/:id/mailchimp-folder
+ * Get current Mailchimp folder for an organization
+ */
+router.get('/:id/mailchimp-folder', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+
+    const organization = await Organization.findById(id);
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    // Verify user has permission
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ error: 'Not a member of this organization' });
+    }
+
+    res.json({
+      folderId: organization.mailchimpTemplateFolderId || null,
+      hasFolder: !!organization.mailchimpTemplateFolderId,
+    });
+  } catch (error: any) {
+    logger.err('❌ Get Mailchimp folder error:', error);
+    res.status(500).json({
+      error: 'Failed to get Mailchimp folder',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/organizations/mailchimp-folders/list
+ * List all available Mailchimp template folders
+ */
+router.get('/mailchimp-folders/list', authenticate, requireRole(['owner', 'admin']), async (req: Request, res: Response) => {
+  try {
+    const MC: any = mailchimp as any;
+    
+    const folders = await MC.templateFolders.list({ count: 1000 });
+    
+    const folderList = (folders.folders || []).map((f: any) => ({
+      id: String(f.id || f.folder_id),
+      name: f.name,
+      count: f.count || 0,
+    }));
+
+    res.json({
+      folders: folderList,
+      total: folderList.length,
+    });
+  } catch (error: any) {
+    logger.err('❌ List Mailchimp folders error:', error);
+    res.status(500).json({
+      error: 'Failed to list Mailchimp folders',
+      message: error?.message || 'Mailchimp API error'
     });
   }
 });
