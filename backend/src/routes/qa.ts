@@ -1150,25 +1150,33 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
     }
     
     const visible = extractVisibleText(html);
-    const chunks = chunkText(visible, 3500);
-    let allEdits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string }> = [];
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
+    const chunks = chunkText(visible, 700);
+    
+    console.log('🔍 [GOLDEN CHECK] Template ID:', id);
+    console.log('📏 [GOLDEN CHECK] Total visible text length:', visible.length, 'characters');
+    console.log('✂️ [GOLDEN CHECK] Number of chunks created:', chunks.length);
+    console.log('📦 [GOLDEN CHECK] Chunk sizes:', chunks.map((c, i) => `Chunk ${i + 1}: ${c.length} chars`).join(', '));
+    console.log('🚀 [GOLDEN CHECK] Processing all chunks in parallel...\n');
+    
+    // ✅ Process all chunks in parallel
+    const chunkPromises = chunks.map(async (chunk, i) => {
+      console.log(`🚀 [GOLDEN CHECK] Starting chunk ${i + 1}/${chunks.length} (${chunk.length} characters)...`);
       
-      const completion = await openai.chat.completions.create({
-        model: OPENAI_MODEL,
-        temperature: 0,  // ✅ Changed from 0.2 to 0 for maximum determinism
-        seed: 42,        // ✅ Added seed for reproducible results
-        messages: [
-          { role: 'system', content: grammarSystemPrompt() },
-          { role: 'user', content: `Visible email text:\n\n${chunk || 'No text.'}` }
-        ],
-        response_format: { type: 'json_object' as const }
-      });
-
       try {
+        const completion = await openai.chat.completions.create({
+          model: OPENAI_MODEL,
+          temperature: 0,  // ✅ Changed from 0.2 to 0 for maximum determinism
+          seed: 42,        // ✅ Added seed for reproducible results
+          messages: [
+            { role: 'system', content: grammarSystemPrompt() },
+            { role: 'user', content: `Visible email text:\n\n${chunk || 'No text.'}` }
+          ],
+          response_format: { type: 'json_object' as const }
+        });
+
         const raw = completion.choices[0]?.message?.content || '{"edits":[]}';
         const parsed: unknown = JSON.parse(raw);
+        
         if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).edits)) {
           const edits = (parsed as any).edits.map((e: any) => ({
             find: String(e?.find || ''),
@@ -1177,15 +1185,25 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
             after_context: String(e?.after_context || ''),
             reason: e?.reason ? String(e.reason) : undefined,
           })).filter((e: any) => e.find && e.replace);
-          allEdits = allEdits.concat(edits);
-          if (allEdits.length >= 60) {
-            break;
-          }
+          
+          console.log(`✅ [GOLDEN CHECK] Chunk ${i + 1} completed with ${edits.length} edits`);
+          return edits;
         }
+        
+        return [];
       } catch (e) {
-        console.error('❌ Failed to parse GPT response for chunk', i + 1, ':', e);
+        console.error(`❌ [GOLDEN CHECK] Failed to process chunk ${i + 1}:`, e);
+        return [];
       }
-    }
+    });
+    
+    // ✅ Wait for all chunks to complete
+    const allChunkResults = await Promise.all(chunkPromises);
+    const allEdits = allChunkResults.flat().slice(0, 60); // Limit to 60 edits total
+    
+    console.log(`\n🎯 [GOLDEN CHECK] Finished processing all chunks`);
+    console.log(`📝 [GOLDEN CHECK] Total edits collected: ${allEdits.length}`);
+    
     const atomicResult = applyContextEdits(html, allEdits);
     
     const doc = ensureFullDocShell(name, atomicResult.html);
@@ -1193,6 +1211,10 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
     const appliedEdits = atomicResult.results.filter(r => r.status === 'applied');
     const failedEdits = atomicResult.results.filter(r => r.status !== 'applied' && r.status !== 'skipped');
     const changes = appliedEdits.map(r => r.change!).filter(Boolean);
+    
+    console.log(`✅ [GOLDEN CHECK] Applied: ${appliedEdits.length}, Failed: ${failedEdits.length}, Changes: ${changes.length}`);
+    console.log(`⏱️ [GOLDEN CHECK] Total time: ${Date.now() - requestStart}ms\n`);
+    
     res.json({
       html: doc,
       edits: allEdits,
