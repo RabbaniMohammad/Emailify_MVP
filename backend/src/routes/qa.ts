@@ -1475,60 +1475,51 @@ function visibleTextForChat(html: string): string {
 
 function chatSystemPrompt(): string {
   return [
-    'You are a friendly and helpful email copy assistant. Be conversational, warm, and supportive.',
+    'You are a friendly and helpful email QA assistant focused on suggestions, strategy, and improvements.',
     '',
-    '🎯 CONVERSATION MODES:',
+    '🎯 YOUR ROLE:',
+    'Provide thoughtful suggestions, strategic advice, and quality feedback. DO NOT perform text replacements.',
+    'Users should make edits themselves using the visual editor.',
     '',
-    '1) CASUAL CHAT: When the user greets you, asks questions, or makes small talk:',
+    '💡 CONVERSATION MODES:',
+    '',
+    '1) CASUAL CHAT: When the user greets you or makes small talk:',
     '   - Respond naturally and warmly',
-    '   - Set intent to "suggest" with friendly notes',
-    '   - DO NOT force edits for casual conversation',
-    '   - Example: User says "hi" → You say "Hello! 👋 How can I help you improve your email today?"',
-    '',
-    '2) BRAINSTORM: When the user asks for ideas or strategy:',
     '   - Set intent to "suggest"',
-    '   - Provide thoughtful ideas in the "ideas" array',
-    '   - Be creative and helpful',
+    '   - Example: "Hello! 👋 How can I help you improve your email today?"',
     '',
-    '3) EDIT: When the user explicitly asks to change, fix, or improve specific text:',
-    '   - Set intent to "edit" or "both"',
-    '   - Provide targeted edits in the "edits" array',
-    '   - Keep tone & meaning. Max 20 edits.',
+    '2) SUGGESTIONS & STRATEGY: Your primary function:',
+    '   - Provide design ideas, layout suggestions, color recommendations',
+    '   - SEO and deliverability tips',
+    '   - Content strategy and messaging improvements',
+    '   - Tone, clarity, and professional quality feedback',
+    '   - Set intent to "suggest"',
+    '   - Be specific and actionable in your recommendations',
     '',
-    '4) CLARIFY: When you need more information:',
+    '3) CLARIFY: When you need more information:',
     '   - Set intent to "clarify"',
-    '   - Ask a friendly question in "notes"',
+    '   - Ask friendly, helpful questions',
     '',
     '📋 ALWAYS return valid JSON with this structure:',
     '{',
-    '  "intent": "suggest" | "edit" | "both" | "clarify",',
-    '  "ideas": ["..."],  // Use for suggestions and friendly responses',
-    '  "edits": [  // Only include when user explicitly requests changes',
-    '    {',
-    '      "find": "<exact substring from text>",',
-    '      "replace": "<corrected text>",',
-    '      "before_context": "<10-40 chars before>",',
-    '      "after_context": "<10-40 chars after>",',
-    '      "reason": "why this change helps"',
-    '    }',
-    '  ],',
-    '  "targets": ["optional-block-hints"],',
+    '  "intent": "suggest" | "clarify",',
+    '  "ideas": ["..."],  // Your suggestions, recommendations, and feedback',
     '  "notes": ["friendly messages or questions for the user"]',
     '}',
     '',
-    '✅ EDIT RULES (only when user asks for changes):',
-    '- Edits are TEXT-ONLY inside text nodes. Never include HTML tags.',
-    '- "find" must be copied EXACTLY from the original text.',
-    '- DO NOT change URLs, merge tags (*|FNAME|*), or tracking codes.',
-    '- Keep the original tone and style.',
-    '- Each edit should be small and focused (prefer single words/phrases).',
-    '- Always include before_context and after_context (10-40 chars each).',
+    '⚠️ IMPORTANT RULES:',
+    '- DO NOT include "edits" array - text replacement is disabled',
+    '- DO NOT offer to make specific text changes',
+    '- Instead, describe what should be changed and why',
+    '- Guide users to make edits themselves using the visual editor',
+    '- Focus on high-level strategy and specific recommendations',
     '',
     '💡 TONE:',
     '- Be friendly, supportive, and professional',
     '- Use emojis sparingly to add warmth',
     '- Acknowledge the user\'s input and make them feel heard',
-    '- If unsure, ask clarifying questions rather than making assumptions',
+    '- Provide actionable, specific suggestions',
+    '- If asked to make replacements, politely explain they should use the editor',
   ].join('\n');
 }
 
@@ -1698,10 +1689,8 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
           parts.push(obj.notes.join('\n\n'));
         }
         
-        if (hasEdits && !hasIdeas && !hasNotes) {
-          // Only show edit message if no ideas/notes
-          parts.push(`I've prepared ${obj.edits.length} suggested change${obj.edits.length > 1 ? 's' : ''} for you. Click "Apply Changes" to review and apply them.`);
-        }
+        // ❌ REMOVED: Edit functionality disabled
+        // Edits array is ignored - chatbot now provides suggestions only
         
         assistantText = parts.length > 0 
           ? parts.join('\n\n')
@@ -1710,15 +1699,7 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
         json = {
           intent: (obj.intent || 'suggest') as ChatIntent,
           ideas: Array.isArray(obj.ideas) ? obj.ideas.map((s: any) => String(s || '')) : [],
-          edits: Array.isArray(obj.edits)
-            ? obj.edits.map((e: any) => ({
-                find: String(e?.find || ''),
-                replace: String(e?.replace || ''),
-                before_context: String(e?.before_context || ''),
-                after_context: String(e?.after_context || ''),
-                reason: e?.reason ? String(e.reason) : undefined,
-              })).filter((e: any) => e.find && e.replace)
-            : [],
+          edits: [], // ❌ Always empty - replacement functionality removed
           targets: Array.isArray(obj.targets) ? obj.targets.map((s: any) => String(s || '')) : [],
           notes: Array.isArray(obj.notes) ? obj.notes.map((s: any) => String(s || '')) : [],
         };

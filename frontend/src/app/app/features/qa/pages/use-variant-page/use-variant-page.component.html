@@ -36,7 +36,7 @@
       <ng-container *ngIf="!editorOpenSync">
         <div class="chat-section" @fadeInOut>
           <div class="section-header">
-            <h3>AI Assistant</h3>
+            <h3>QA Assistant</h3>
             <button
               mat-raised-button
               class="finalize-btn"
@@ -58,75 +58,8 @@
                 class="chat-msg"
                 *ngFor="let m of (messages$ | async) ?? []; let i = index; trackBy: trackByMsg">
                 <div class="bubble" [class.me]="m.role === 'user'">
-                  <div class="who">{{ m.role === 'user' ? 'YOU' : 'AI ASSISTANT' }}</div>
+                  <div class="who">{{ m.role === 'user' ? 'YOU' : 'QA ASSISTANT' }}</div>
                   <div class="text" [innerText]="m.text"></div>
-
-                  <ng-container *ngIf="m.role === 'assistant' && m.json?.edits?.length">
-                    <div class="apply-panel">
-                      <div class="apply-header">
-                        <h4>Suggested Changes ({{ m.json?.edits?.length || 0 }})</h4>
-                        <div class="actions-row">
-                          <button
-                            mat-button
-                            class="clear-btn"
-                            (click)="onClearEdits(i)"
-                            [disabled]="applyingIndex === i">
-                            Clear
-                          </button>
-                          <button
-                            mat-raised-button
-                            class="apply-all-btn"
-                            [disabled]="applyingIndex === i"
-                            (click)="onApplyEdits(i)">
-                            <mat-progress-spinner
-                              *ngIf="applyingIndex === i"
-                              diameter="16"
-                              mode="indeterminate">
-                            </mat-progress-spinner>
-                            <span>{{ applyingIndex === i ? 'Applying...' : 'Apply All' }}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div class="apply-list">
-                        <div class="apply-item"
-                             *ngFor="let e of m.json!.edits; let j = index">
-                          <div class="edit-row">
-                            <div class="edit-col">
-                              <div class="label">Original</div>
-                              <div class="orig">{{ e.find }}</div>
-                            </div>
-                            <div class="arrow-col">→</div>
-                            <div class="edit-col">
-                              <div class="label">Replacement</div>
-                              <input
-                                type="text"
-                                class="replacement-input"
-                                [value]="e.replace"
-                                #repInput />
-                            </div>
-                          </div>
-
-                          <div class="edit-actions">
-                            <button
-                              mat-stroked-button
-                              class="apply-single-btn"
-                              (click)="onApplySingle(i, e, repInput.value)"
-                              [disabled]="applyingIndex === i">
-                              Apply
-                            </button>
-                            <button
-                              mat-button
-                              class="skip-btn"
-                              (click)="onSkipSingle(i, j)"
-                              [disabled]="applyingIndex === i">
-                              Skip
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </ng-container>
                 </div>
               </div>
             </div>

@@ -461,6 +461,7 @@ export class QaPageComponent implements OnDestroy {
     this.qa.clearSnapsForRun(syntheticRun.runId);
     this.qa.clearValidLinks(syntheticRun.runId);
     this.qa.clearGrammarCheck(syntheticRun.runId, 1);
+    sessionStorage.removeItem(`template_modal_${syntheticRun.runId}_1`);
     
     try {
       // ✅ Save to sessionStorage for immediate navigation
@@ -469,7 +470,7 @@ export class QaPageComponent implements OnDestroy {
       // ✅ PERSIST to localStorage so it survives refresh/navigation
       const intro = {
         role: 'assistant' as const,
-        text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor if replacement didn't happen\n\nWhat would you like to improve?",
+        text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• QA Review – Get feedback on tone, clarity, and professional quality\n\n• Content Strategy – Discuss improvements to structure and messaging\n\nWhat would you like to improve?",
         json: null,
         ts: Date.now(),
       };
@@ -510,6 +511,7 @@ export class QaPageComponent implements OnDestroy {
     this.qa.clearSnapsForRun(syntheticRun.runId);
     this.qa.clearValidLinks(syntheticRun.runId);
     this.qa.clearGrammarCheck(syntheticRun.runId, 1);
+    sessionStorage.removeItem(`template_modal_${syntheticRun.runId}_1`);
     
     try {
       // ✅ Save to sessionStorage for immediate navigation
@@ -518,7 +520,7 @@ export class QaPageComponent implements OnDestroy {
       // ✅ PERSIST to localStorage so it survives refresh/navigation
       const intro = {
         role: 'assistant' as const,
-        text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor if replacement didn't happen\n\nWhat would you like to improve?",
+        text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• QA Review – Get feedback on tone, clarity, and professional quality\n\n• Content Strategy – Discuss improvements to structure and messaging\n\nWhat would you like to improve?",
         json: null,
         ts: Date.now(),
       };
@@ -1118,6 +1120,9 @@ export class QaPageComponent implements OnDestroy {
     this.qa.clearSnapsForRun(runId);
     this.qa.clearValidLinks(runId);
     this.qa.clearGrammarCheck(runId, no);
+    
+    // ✅ Clear template modal state (whether grammar modal was open)
+    sessionStorage.removeItem(`template_modal_${runId}_${no}`);
     try {
       // Get the variant run from memory cache
       const run = await this.qa.getVariantsRunById(runId);
@@ -1127,7 +1132,7 @@ export class QaPageComponent implements OnDestroy {
         // Create intro message (same as Golden/Original)
         const intro = {
           role: 'assistant' as const,
-          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor if replacement didn't happen\n\nWhat would you like to improve?",
+          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• QA Review – Get feedback on tone, clarity, and professional quality\n\n• Content Strategy – Discuss improvements to structure and messaging\n\nWhat would you like to improve?",
           json: null,
           ts: Date.now(),
         };

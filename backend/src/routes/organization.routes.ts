@@ -390,7 +390,7 @@ router.delete('/:slug', authenticate, async (req: Request, res: Response) => {
  * POST /api/organizations/:id/mailchimp-folder
  * Create and assign a Mailchimp template folder to an organization
  */
-router.post('/:id/mailchimp-folder', authenticate, requireRole(['owner', 'admin']), async (req: Request, res: Response) => {
+router.post('/:id/mailchimp-folder', authenticate, requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { folderName } = req.body;
@@ -429,7 +429,7 @@ router.post('/:id/mailchimp-folder', authenticate, requireRole(['owner', 'admin'
         folderName: folderNameToUse,
       });
     } catch (mcError: any) {
-      logger.error(`❌ Mailchimp folder creation error:`, mcError);
+      logger.err(`❌ Mailchimp folder creation error:`, mcError);
       res.status(500).json({
         error: 'Failed to create Mailchimp folder',
         message: mcError?.message || 'Mailchimp API error',
@@ -448,7 +448,7 @@ router.post('/:id/mailchimp-folder', authenticate, requireRole(['owner', 'admin'
  * PUT /api/organizations/:id/mailchimp-folder
  * Assign an existing Mailchimp folder to an organization
  */
-router.put('/:id/mailchimp-folder', authenticate, requireRole(['owner', 'admin']), async (req: Request, res: Response) => {
+router.put('/:id/mailchimp-folder', authenticate, requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { folderId } = req.body;
@@ -526,7 +526,7 @@ router.get('/:id/mailchimp-folder', authenticate, async (req: Request, res: Resp
  * GET /api/organizations/mailchimp-folders/list
  * List all available Mailchimp template folders
  */
-router.get('/mailchimp-folders/list', authenticate, requireRole(['owner', 'admin']), async (req: Request, res: Response) => {
+router.get('/mailchimp-folders/list', authenticate, requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const MC: any = mailchimp as any;
     

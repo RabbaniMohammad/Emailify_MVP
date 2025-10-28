@@ -460,19 +460,19 @@ router.post('/campaign/submit', async (req: Request, res: Response) => {
     for (const group of scheduleGroups) {
       const scheduledTime = new Date(group.scheduledTime);
 
-      // Create campaign
+      // Create campaign with multiple email conditions (one per email address)
       const campaign = await MC.campaigns.create({
         type: 'regular',
         recipients: {
           list_id: listId,
           segment_opts: {
-            match: 'any',
-            conditions: [{
+            match: 'any', // Any of these conditions = OR logic
+            conditions: group.emails.map((email: string) => ({
               condition_type: 'EmailAddress',
               op: 'is',
               field: 'EMAIL',
-              value: group.emails
-            }]
+              value: email // Single email per condition
+            }))
           }
         },
         settings: {
@@ -488,10 +488,16 @@ router.post('/campaign/submit', async (req: Request, res: Response) => {
       // Set content
       await MC.campaigns.setContent(campaignId, { html: templateHtml });
 
-      // Schedule campaign
-      await MC.campaigns.schedule(campaignId, {
-        schedule_time: scheduledTime.toISOString()
-      });
+      // Check if this group is marked for immediate send
+      if (group.isImmediate) {
+        // Send immediately (works on free plan)
+        await MC.campaigns.send(campaignId);
+      } else {
+        // Schedule for later (requires paid plan)
+        await MC.campaigns.schedule(campaignId, {
+          schedule_time: scheduledTime.toISOString()
+        });
+      }
 
       campaignIds.push(campaignId);
     }

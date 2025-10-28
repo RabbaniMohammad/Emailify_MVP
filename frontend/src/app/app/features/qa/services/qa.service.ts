@@ -2,6 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, map, of, tap, throwError, switchMap, mergeMap, from, Observable, shareReplay, finalize } from 'rxjs';
 import { DatabaseService } from '../../../../core/services/db.service';
+import { PreviewCacheService } from '../../templates/components/template-preview/preview-cache.service';
+import { TemplateStateService } from '../../../core/services/template-state.service';
 
 /* ----------------------------- Types (keep existing) ----------------------------- */
 export type GoldenEdit = {
@@ -153,6 +155,8 @@ export type SuggestionResult = {
 export class QaService {
   private http = inject(HttpClient);
   private db = inject(DatabaseService);
+  private previewCache = inject(PreviewCacheService);
+  private templateState = inject(TemplateStateService);
 
   /* ---------- localStorage keys ---------- */
   private kGolden(id: string)      { return `qa:golden:${id}`; }
@@ -469,12 +473,31 @@ export class QaService {
   }
 
   /**
-   * ✅ NEW: Get template HTML from API
+   * ✅ UPDATED: Get template HTML - checks cache before API call
    */
   private getTemplateHtml(templateId: string): Observable<string> {
+    // ✅ First check PreviewCacheService (sessionStorage)
+    const cachedHtml = this.previewCache.get(templateId);
+    if (cachedHtml) {
+      return of(cachedHtml);
+    }
+
+    // ✅ Second check TemplateStateService (localStorage - original template)
+    const originalHtml = this.templateState.getOriginalTemplate(templateId);
+    if (originalHtml) {
+      // Cache it in PreviewCacheService for next time
+      this.previewCache.set(templateId, originalHtml);
+      return of(originalHtml);
+    }
+
+    // ✅ No cache found - fetch from API
     return this.http.get(`/api/templates/${templateId}/raw`, { 
       responseType: 'text' 
     }).pipe(
+      tap(html => {
+        // ✅ Cache the fetched HTML
+        this.previewCache.set(templateId, html);
+      }),
       catchError(error => {
         console.error('Failed to fetch template HTML:', error);
         return throwError(() => new Error('Failed to fetch template HTML'));

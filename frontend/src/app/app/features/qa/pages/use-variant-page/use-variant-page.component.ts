@@ -413,7 +413,7 @@ constructor() {
             // First time loading synthetic run - create intro message
             const intro: ChatTurn = {
               role: 'assistant',
-              text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor if replacement didn't happen\n\nWhat would you like to improve?",
+              text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• QA Review – Get feedback on tone, clarity, and professional quality\n\n• Content Strategy – Discuss improvements to structure and messaging\n\nWhat would you like to improve?",
               json: null,
               ts: Date.now(),
             };
@@ -498,7 +498,7 @@ constructor() {
 
         const intro: ChatTurn = {
           role: 'assistant',
-          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n•Please use editor is replacement won't happen\n\nWhat would you like to improve?",
+          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• QA Review – Get feedback on tone, clarity, and professional quality\n\n• Content Strategy – Discuss improvements to structure and messaging\n\nWhat would you like to improve?",
           json: null,
           ts: Date.now(),
         };
@@ -543,7 +543,7 @@ constructor() {
 
         const intro: ChatTurn = {
           role: 'assistant',
-          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• Targeted Replacements – Request specific text changes (e.g., \"Replace 'technology' with 'innovation'\")\n\n• Please use editor is replacement didn't happen\n\nWhat would you like to improve?",
+          text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• QA Review – Get feedback on tone, clarity, and professional quality\n\n• Content Strategy – Discuss improvements to structure and messaging\n\nWhat would you like to improve?",
           json: null,
           ts: Date.now(),
         };
@@ -1187,42 +1187,7 @@ private restoreTemplateModalState(): boolean {
     }
   }
 
-  async onApplyEdits(turnIndex: number) {
-    if (this.applyingIndex !== null) return;
-    this.applyingIndex = turnIndex;
-
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
-
-    const turn = this.messagesSubject.value[turnIndex];
-    const edits = (turn?.json?.edits || []).slice();
-    if (!edits.length) { this.applyingIndex = null; return; }
-
-    try {
-      const currentHtml = this.htmlSubject.value;
-      const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, edits));
-      const newHtml = resp?.html || currentHtml;
-      const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
-
-      this.htmlSubject.next(newHtml);
-      this.updateMessageEdits(turnIndex, []);
-
-      const noteText = numChanges > 0
-        ? `Applied ${numChanges} change(s).`
-        : `No matching text found.`;
-
-      const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
-      const msgs = [...this.messagesSubject.value, appliedNote];
-      this.messagesSubject.next(msgs);
-      this.persistThread(runId, no, newHtml, msgs);
-      
-      setTimeout(() => this.scrollToBottom(), 50);
-    } catch (e) {
-      console.error('apply edits error', e);
-    } finally {
-      this.applyingIndex = null;
-    }
-  }
+  // ❌ REMOVED: Text replacement functionality - chatbot now focuses on suggestions only
 
 
   handleEnterKey(event: KeyboardEvent): void {
@@ -1805,63 +1770,7 @@ private extractAllLinks(html: string): string[] {
     });
   }
 
-  async onApplySingle(turnIndex: number, edit: GoldenEdit, replacement: string) {
-    if (this.applyingIndex !== null) return;
-    this.applyingIndex = turnIndex;
-
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
-
-    const patch: GoldenEdit = {
-      ...edit,
-      replace: (replacement ?? '').trim() || edit.replace,
-    };
-
-    try {
-      const currentHtml = this.htmlSubject.value;
-      const resp = await firstValueFrom(this.qa.applyChatEdits(runId, currentHtml, [patch]));
-      const newHtml = resp?.html || currentHtml;
-      const numChanges = Array.isArray((resp as any)?.changes) ? (resp as any).changes.length : 0;
-
-      this.htmlSubject.next(newHtml);
-
-      if (numChanges > 0) {
-        this.removeSingleEdit(turnIndex, edit);
-      }
-
-      const noteText = numChanges > 0
-        ? `Applied: "${patch.find}" → "${patch.replace}".`
-        : `No matching text found.`;
-
-      const appliedNote: ChatTurn = { role: 'assistant', text: noteText, json: null, ts: Date.now() };
-      const msgs = [...this.messagesSubject.value, appliedNote];
-      this.messagesSubject.next(msgs);
-      this.persistThread(runId, no, newHtml, msgs);
-    } catch (e) {
-      console.error('apply single edit error', e);
-    } finally {
-      this.applyingIndex = null;
-    }
-  }
-
-  onSkipSingle(turnIndex: number, editIndex: number) {
-    const turn = this.messagesSubject.value[turnIndex];
-    const edits = (turn?.json?.edits || []).slice();
-    if (!edits.length) return;
-
-    edits.splice(editIndex, 1);
-    this.updateMessageEdits(turnIndex, edits);
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
-    this.persistThread(runId, no, this.htmlSubject.value, this.messagesSubject.value);
-  }
-
-  onClearEdits(turnIndex: number) {
-    this.updateMessageEdits(turnIndex, []);
-    const runId = this.ar.snapshot.paramMap.get('runId')!;
-    const no = Number(this.ar.snapshot.paramMap.get('no')!);
-    this.persistThread(runId, no, this.htmlSubject.value, this.messagesSubject.value);
-  }
+  // ❌ REMOVED: onApplySingle, onSkipSingle, onClearEdits - text replacement functionality removed
 
   private showSuccess(message: string): void {
     this.snackBar.open(message, 'Close', {
