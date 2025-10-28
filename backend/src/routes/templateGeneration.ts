@@ -182,16 +182,23 @@ router.post('/start', authenticate, organizationContext, async (req: Request, re
     logger.info(`✅ Conversation created: ${conversationId}`);
 
     // ✅ First generation: Return MJML (frontend needs it for editor)
-    res.json({
+    // ⭐ Note: message is omitted - frontend will generate dynamic message based on isRegenerating flag
+    const responseData = {
       conversationId,
       html: conversion.html,
       mjml: result.mjmlCode,
-      message: result.assistantMessage,
+      // message: result.assistantMessage, // ❌ Removed - frontend handles this dynamically
       hasErrors: conversion.errors.length > 0,
       errors: conversion.errors,
       attemptsUsed: result.attemptsUsed,
       hadErrors: result.hadErrors,
-    });
+    };
+    
+    console.log('🔍 START ENDPOINT - Response keys:', Object.keys(responseData));
+    console.log('🔍 START ENDPOINT - Has message?:', 'message' in responseData);
+    console.log('🔍 START ENDPOINT - result.assistantMessage was:', result.assistantMessage);
+    
+    res.json(responseData);
   } catch (error: any) {
     logger.err('❌ Start generation error:', error);
     logger.err('Error stack:', error.stack);
@@ -323,16 +330,20 @@ router.post('/continue/:conversationId', authenticate, async (req: Request, res:
     logger.info(`📊 Total messages now: ${conversation.messages.length}`);
 
     // ✅ Return both HTML and MJML
-    res.json({
+    // ⭐ Note: message is omitted - frontend will generate dynamic message based on isRegenerating flag
+    const responsePayload = {
       conversationId,
       html: conversion.html,           // ✅ HTML for preview
       mjml: result.mjmlCode,           // ✅ MJML for editor (YOU NEED THIS!)
-      message: result.assistantMessage, // ✅ AI's response message
+      // message: result.assistantMessage, // ❌ Removed - frontend handles this dynamically
       hasErrors: conversion.errors.length > 0,
       errors: conversion.errors,
       attemptsUsed: result.attemptsUsed,
       hadErrors: result.hadErrors,
-    });
+    };
+    console.log('🔍 CONTINUE ENDPOINT - Response keys:', Object.keys(responsePayload));
+    console.log('🔍 CONTINUE ENDPOINT - Has message?:', 'message' in responsePayload);
+    res.json(responsePayload);
   } catch (error: any) {
     logger.err('❌ Continue conversation error:', error);
     logger.err('Error stack:', error.stack);

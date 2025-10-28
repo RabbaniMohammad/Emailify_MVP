@@ -107,6 +107,8 @@ startGeneration(
   ).pipe(
     tap((response) => {
       // Cache the conversation
+      // ⭐ Note: We don't cache assistant message here anymore
+      // The component handles the dynamic message based on isRegenerating flag
       const conversationState = {
         conversationId: response.conversationId,
         messages: [
@@ -115,12 +117,8 @@ startGeneration(
             content: prompt, 
             timestamp: new Date(),
             images: images || undefined
-          },
-          { 
-            role: 'assistant' as const, 
-            content: response.message, 
-            timestamp: new Date() 
           }
+          // ❌ Assistant message removed - component will add it with dynamic text
         ],
         currentHtml: response.html,
         currentMjml: response.mjml,

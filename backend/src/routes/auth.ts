@@ -14,16 +14,26 @@ const router = Router();
 router.get('/google', (req: Request, res: Response, next: NextFunction) => {
   const orgSlug = req.query.org as string;
   
-  // Store org slug in session for callback
-  if (orgSlug) {
-    (req as any).session = (req as any).session || {};
-    (req as any).session.orgSlug = orgSlug;
+  // 🔒 SECURITY: Organization slug is mandatory
+  if (!orgSlug || orgSlug.trim() === '') {
+    logger.warn('🚫 SECURITY: Login attempt without organization slug');
+    return res.redirect(`${process.env.FRONTEND_URL}/auth?error=org_required`);
   }
+  
+  // Validate slug format
+  if (!/^[a-z0-9-]+$/.test(orgSlug)) {
+    logger.warn(`🚫 SECURITY: Invalid organization slug format: ${orgSlug}`);
+    return res.redirect(`${process.env.FRONTEND_URL}/auth?error=invalid_org`);
+  }
+  
+  // Store org slug in session for callback
+  (req as any).session = (req as any).session || {};
+  (req as any).session.orgSlug = orgSlug;
   
   passport.authenticate('google', { 
     scope: ['profile', 'email'],
     session: false,
-    state: orgSlug || '', // Pass org slug via state
+    state: orgSlug, // Pass org slug via state
   })(req, res, next);
 });
 
@@ -42,6 +52,12 @@ router.get(
       if (!user) {
         logger.warn('⚠️ No user found in callback');
         return res.redirect(`${process.env.FRONTEND_URL}/auth?error=no_user`);
+      }
+
+      // 🔒 SECURITY: Organization slug is mandatory
+      if (!orgSlug || orgSlug.trim() === '') {
+        logger.warn(`🚫 SECURITY: Callback without organization slug for user: ${user.email}`);
+        return res.redirect(`${process.env.FRONTEND_URL}/auth?error=org_required`);
       }
 
       // ==================== Handle Organization Assignment ====================

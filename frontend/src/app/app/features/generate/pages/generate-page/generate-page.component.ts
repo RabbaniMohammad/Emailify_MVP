@@ -389,6 +389,11 @@ async onSend(): Promise<void> {
   // Scroll to show the new user message
   setTimeout(() => this.scrollToBottom(), 50);
 
+  // ✅ Set isRegenerating to true if we already have a conversation
+  if (this.conversationId && this.currentHtml$.value) {
+    this.isRegenerating = true;
+  }
+
   // Always use startGeneration with the conversationId (which is pre-generated)
   this.startNewConversation(message, imageAttachments);
 
@@ -411,10 +416,14 @@ private async startNewConversation(message: string, imageAttachments: ImageAttac
         this.generationService.setCurrentConversationId(response.conversationId);
         this.currentHtml$.next(response.html);
 
-        // Add assistant response to existing messages
+        // Add assistant response to existing messages with dynamic message
+        const defaultMessage = this.isRegenerating 
+          ? "✅ Template regenerated successfully!"
+          : "✅ Template generated successfully!";
+        
         const assistantMessage: GenerationMessage = {
           role: 'assistant',
-          content: response.message || '✅ Template generated successfully',
+          content: response.message || defaultMessage,
           timestamp: new Date(),
         };
         
@@ -424,8 +433,10 @@ private async startNewConversation(message: string, imageAttachments: ImageAttac
 
         this.isGenerating$.next(false);
         
-        // Set regenerating flag AFTER first successful generation
-        this.isRegenerating = true;
+        // Set regenerating flag for NEXT generation in this conversation
+        if (!this.isRegenerating) {
+          this.isRegenerating = true;
+        }
         
         this.shouldAutoScroll = true;
         setTimeout(() => {
@@ -440,12 +451,6 @@ private async startNewConversation(message: string, imageAttachments: ImageAttac
             { duration: 5000, panelClass: ['info-snackbar'] }
           );
 
-        } else {
-
-          this.snackBar.open('Template generated successfully!', 'Close', {
-            duration: 3000,
-            panelClass: ['success-snackbar'],
-          });
         }
       },
       error: (error) => {
@@ -630,11 +635,6 @@ onSaveTemplate(): void {
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (response) => {
-
-        this.snackBar.open('Template saved successfully!', 'Close', {
-          duration: 3000,
-          panelClass: ['success-snackbar'],
-        });
 
         // ✅ Select the saved template so it appears first when we navigate
         this.templatesService.select(response.templateId, response.templateName || name);

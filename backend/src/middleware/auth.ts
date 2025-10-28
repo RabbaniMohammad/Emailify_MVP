@@ -31,6 +31,16 @@ export const authenticate = async (
     const isAuthMeRoute = req.path === '/me' && req.baseUrl === '/api/auth';
     
     if (!isAuthMeRoute) {
+      // 🔒 SECURITY: User must belong to an organization
+      if (!user.organizationId) {
+        logger.warn(`🚫 SECURITY: User ${user.email} has no organization - access denied`);
+        res.status(403).json({ 
+          error: 'No organization assigned',
+          message: 'You must belong to an organization to access this resource.'
+        });
+        return;
+      }
+      
       // For all other routes, check approval and active status
       if (!user.isApproved) {
         res.status(403).json({ error: 'Account pending approval' });
