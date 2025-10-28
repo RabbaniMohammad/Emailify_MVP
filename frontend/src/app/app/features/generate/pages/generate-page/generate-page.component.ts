@@ -104,13 +104,8 @@ private sentImages: Array<{name: string, size: number}> = [];
         const conversationId = params.get('conversationId');
         
         if (conversationId && conversationId !== 'new') {
-          // Real conversation ID
-          if (this.conversationId !== conversationId) {
-            // Only load if we didn't just set this conversationId ourselves
-            if (this.conversationId === null) {
-              this.loadConversation(conversationId);
-            }
-          }
+          // Real conversation ID - always load it
+          this.loadConversation(conversationId);
         } else if (conversationId === 'new') {
           // Generate a new conversation ID immediately and navigate to it
           const newConversationId = this.generateUUID();
@@ -229,12 +224,23 @@ canDeactivate(): boolean {
       timestamp: new Date(),
     };
     this.messages$.next([welcomeMessage]);
+    
+    // ✅ Save welcome message to cache for new conversations
+    if (this.conversationId) {
+      this.generationService.updateConversationCache(
+        this.conversationId,
+        [welcomeMessage],
+        '',
+        '',
+        this.templateName
+      );
+    }
   }
 
 
   private loadConversation(conversationId: string): void {
+    console.log('🔄 [LOAD] Loading conversation:', conversationId);
     this.conversationId = conversationId;
-    this.isRegenerating = true; // It's already an existing conversation
     this.isGenerating$.next(true);
 
     this.generationService
@@ -242,9 +248,19 @@ canDeactivate(): boolean {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (conversation) => {
+          console.log('✅ [LOAD] Conversation loaded:', {
+            messageCount: conversation.messages.length,
+            hasHtml: !!conversation.currentHtml,
+            templateName: conversation.templateName
+          });
           this.messages$.next(conversation.messages);
           this.currentHtml$.next(conversation.currentHtml);
           this.templateName = conversation.templateName || '';
+          
+          // ✅ Set isRegenerating based on whether there's already generated HTML
+          // If HTML exists, next generation is a regeneration
+          this.isRegenerating = !!conversation.currentHtml;
+          
           this.isGenerating$.next(false);
           this.scrollToBottom();
         },
@@ -431,6 +447,15 @@ private async startNewConversation(message: string, imageAttachments: ImageAttac
 
         this.messages$.next(updatedMessages);
 
+        // ✅ Save the complete conversation state back to cache
+        this.generationService.updateConversationCache(
+          response.conversationId,
+          updatedMessages,
+          response.html,
+          response.mjml || '',
+          this.templateName
+        );
+
         this.isGenerating$.next(false);
         
         // Set regenerating flag for NEXT generation in this conversation
@@ -501,6 +526,15 @@ private async continueConversation(message: string, imageAttachments: ImageAttac
         
 
         this.messages$.next([...updatedMessages]);
+
+        // ✅ Save the complete conversation state back to cache
+        this.generationService.updateConversationCache(
+          this.conversationId!,
+          updatedMessages,
+          response.html,
+          response.mjml || '',
+          this.templateName
+        );
 
         this.isGenerating$.next(false);
 
@@ -604,6 +638,17 @@ onRunTests(): void {
 
 onTemplateNameChange(newName: string): void {
   this.templateName = newName;
+  
+  // ✅ Save template name to cache whenever it changes
+  if (this.conversationId) {
+    this.generationService.updateConversationCache(
+      this.conversationId,
+      this.messages$.value,
+      this.currentHtml$.value,
+      '', // mjml not needed for name update
+      newName
+    );
+  }
 }
 onSaveTemplate(): void {
 

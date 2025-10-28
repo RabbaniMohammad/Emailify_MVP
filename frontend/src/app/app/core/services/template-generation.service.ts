@@ -289,9 +289,11 @@ getConversationCached(conversationId: string): ConversationState | null {
   try {
     const raw = localStorage.getItem(this.kConversation(conversationId));
     if (!raw) {
+      console.log('📭 [CACHE] No cached conversation found for:', conversationId);
       return null;
     }
     
+    console.log('📦 [CACHE] Found cached conversation:', conversationId);
     const parsed = JSON.parse(raw);
     
     // Validate required fields
@@ -300,6 +302,12 @@ getConversationCached(conversationId: string): ConversationState | null {
       this.clearConversationCache(conversationId);
       return null;
     }
+    
+    console.log('✅ [CACHE] Cached conversation valid:', {
+      messageCount: parsed.messages.length,
+      hasHtml: !!parsed.currentHtml,
+      templateName: parsed.templateName
+    });
     
     // Convert date strings back to Date objects
     parsed.createdAt = new Date(parsed.createdAt);
@@ -325,9 +333,59 @@ getConversationCached(conversationId: string): ConversationState | null {
 
 cacheConversation(conversationId: string, state: ConversationState): void {
   try {
+    console.log('💾 [CACHE] Saving conversation:', conversationId, {
+      messageCount: state.messages.length,
+      hasHtml: !!state.currentHtml,
+      templateName: state.templateName
+    });
     localStorage.setItem(this.kConversation(conversationId), JSON.stringify(state));
+    console.log('✅ [CACHE] Successfully saved to localStorage');
   } catch (err) {
+    console.error('❌ [CACHE] Failed to save:', err);
+  }
+}
 
+updateConversationCache(
+  conversationId: string,
+  messages: GenerationMessage[],
+  currentHtml: string,
+  currentMjml: string,
+  templateName?: string
+): void {
+  try {
+    console.log('🔄 [UPDATE CACHE] Updating conversation:', conversationId, {
+      messageCount: messages.length,
+      htmlLength: currentHtml.length,
+      templateName
+    });
+    
+    const cached = this.getConversationCached(conversationId);
+    if (cached) {
+      cached.messages = messages;
+      cached.currentHtml = currentHtml;
+      cached.currentMjml = currentMjml;
+      if (templateName !== undefined) {
+        cached.templateName = templateName;
+      }
+      cached.updatedAt = new Date();
+      this.cacheConversation(conversationId, cached);
+    } else {
+      console.log('📦 [UPDATE CACHE] No existing cache, creating new entry');
+      // Create new cache entry
+      const newState: ConversationState = {
+        conversationId,
+        messages,
+        currentHtml,
+        currentMjml,
+        templateName,
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      this.cacheConversation(conversationId, newState);
+    }
+  } catch (err) {
+    console.error('❌ [UPDATE CACHE] Failed to update conversation cache:', err);
   }
 }
 
