@@ -735,8 +735,12 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     // Wait for DOM to update
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    const html = this.editor.getHtml();
+    let html = this.editor.getHtml();
     const css = this.editor.getCss();
+    
+    // ✅ CRITICAL: Clean HTML from any overlay artifacts
+    html = this.cleanHtmlFromOverlays(html);
+    
     const fullHtml = `<style>${css}</style>${html}`;
   }
 
@@ -749,8 +753,12 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     // Wait for DOM to update
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    const html = this.editor.getHtml();
+    let html = this.editor.getHtml();
     const css = this.editor.getCss();
+    
+    // ✅ CRITICAL: Clean HTML from any overlay artifacts
+    html = this.cleanHtmlFromOverlays(html);
+    
     const fullHtml = `<!DOCTYPE html>
 <html>
 <head>
@@ -1286,6 +1294,14 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     // Create overlay container
     this.overlayContainer = doc.createElement('div');
     this.overlayContainer.id = 'ai-overlay-container';
+    // ✅ CRITICAL: Mark this element to be ignored by GrapesJS
+    this.overlayContainer.setAttribute('data-gjs-type', 'temporary-overlay');
+    this.overlayContainer.setAttribute('data-gjs-removable', 'false');
+    this.overlayContainer.setAttribute('data-gjs-draggable', 'false');
+    this.overlayContainer.setAttribute('data-gjs-editable', 'false');
+    this.overlayContainer.setAttribute('data-gjs-selectable', 'false');
+    this.overlayContainer.setAttribute('data-gjs-hoverable', 'false');
+    this.overlayContainer.setAttribute('data-gjs-copyable', 'false');
     this.overlayContainer.style.cssText = `
       position: absolute;
       top: 0;
@@ -1465,14 +1481,26 @@ async onCheckPreview(): Promise<void> {
   // ✅ CRITICAL: Remove all AI highlights before saving/preview
   this.removeAllHighlights();
   
-  // Wait a bit for DOM to update
-  await new Promise(resolve => setTimeout(resolve, 100));
+  // ✅ CRITICAL FIX: Force GrapesJS to refresh from the cleaned DOM
+  // This ensures the editor picks up the highlight-free HTML
+  const iframe = this.editor.Canvas.getFrameEl();
+  if (iframe && iframe.contentDocument) {
+    // Trigger a repaint/reflow to ensure DOM is updated
+    void iframe.contentDocument.body.offsetHeight;
+  }
+  
+  // Wait longer for DOM to fully update and repaint
+  await new Promise(resolve => setTimeout(resolve, 300));
 
   // ✅ CRITICAL FIX: If temp ID, prompt for name and save to database first
   if (this.templateId.startsWith('temp_')) {
-    // Get current HTML
-    const html = this.editor.getHtml();
+    // Get current HTML and clean it
+    let html = this.editor.getHtml();
     const css = this.editor.getCss();
+    
+    // ✅ CRITICAL: Clean HTML from any overlay artifacts
+    html = this.cleanHtmlFromOverlays(html);
+    
     const fullHtml = `<style>${css}</style>${html}`;
     
     // Prompt for template name
@@ -1497,10 +1525,18 @@ async onCheckPreview(): Promise<void> {
     
     // Continue with normal flow using the new template ID
   }
+  
+  // ✅ CRITICAL: Double-check highlights are removed before getting HTML
+  this.removeAllHighlights();
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
   // ✅ CRITICAL: Perform SYNCHRONOUS save to ensure data is written BEFORE navigation
   try {
-    const html = this.editor.getHtml();
+    let html = this.editor.getHtml();
     const css = this.editor.getCss();
+    
+    // ✅ CRITICAL: Clean HTML from any overlay artifacts
+    html = this.cleanHtmlFromOverlays(html);
     
     if (html && html.trim()) {
       // Save immediately (synchronous)
@@ -1531,9 +1567,13 @@ async onCheckPreview(): Promise<void> {
       const meta = JSON.parse(variantMeta);
       const { runId, no } = meta;
       
-      // ✅ CRITICAL: Get HTML and CSS, then combine them into full HTML document
-      const html = this.editor.getHtml();
+      // ✅ CRITICAL: Get HTML and CSS, clean them, then combine into full HTML document
+      let html = this.editor.getHtml();
       const css = this.editor.getCss();
+      
+      // ✅ CRITICAL: Clean HTML from any overlay artifacts
+      html = this.cleanHtmlFromOverlays(html);
+      
       const fullHtml = `<style>${css}</style>${html}`;
       
       // ✅ Save FULL HTML (with embedded CSS) to the key Use Variants page expects
@@ -1597,27 +1637,59 @@ async onCheckPreview(): Promise<void> {
       if (iframe && iframe.contentDocument) {
         const doc = iframe.contentDocument;
         
-        // ✅ Remove inline text highlights (span elements)
-        const existingHighlights = doc.querySelectorAll('span[data-ai-highlight="true"]');
-        existingHighlights.forEach(highlight => {
-          const textNode = doc.createTextNode(highlight.textContent || '');
-          highlight.parentNode?.replaceChild(textNode, highlight);
-        });
-        
-        // ✅ CRITICAL FIX: Also remove overlay container (yellow boxes)
+        // ✅ CRITICAL FIX: Remove overlay container FIRST (yellow boxes with borders)
         const existingOverlayContainer = doc.getElementById('ai-overlay-container');
         if (existingOverlayContainer) {
+          console.log('🧹 Removing overlay container with', existingOverlayContainer.children.length, 'children');
           existingOverlayContainer.remove();
+        }
+        
+        // ✅ Remove inline text highlights (span elements)
+        const existingHighlights = doc.querySelectorAll('span[data-ai-highlight="true"]');
+        if (existingHighlights.length > 0) {
+          console.log('🧹 Removing', existingHighlights.length, 'inline highlight spans');
+          existingHighlights.forEach(highlight => {
+            const textNode = doc.createTextNode(highlight.textContent || '');
+            highlight.parentNode?.replaceChild(textNode, highlight);
+          });
+          
+          // ✅ CRITICAL: Normalize text nodes to merge adjacent text nodes
+          doc.body.normalize();
         }
         
         // ✅ Clear overlay references
         this.overlays = [];
         this.overlayContainer = null;
+        
+        console.log('✅ All highlights removed successfully');
       }
     } catch (error) {
       console.error('Error removing highlights:', error);
     }
   }
+
+  /**
+   * Clean HTML string by removing any AI overlay artifacts
+   */
+  private cleanHtmlFromOverlays(html: string): string {
+    if (!html) return html;
+    
+    // Remove any ai-overlay-container divs and their children
+    let cleanHtml = html.replace(/<div[^>]*id=["']ai-overlay-container["'][^>]*>[\s\S]*?<\/div>/gi, '');
+    
+    // Remove any span elements with data-ai-highlight attribute
+    cleanHtml = cleanHtml.replace(/<span[^>]*data-ai-highlight=["']true["'][^>]*>(.*?)<\/span>/gi, '$1');
+    
+    // Remove any inline styles with yellow background (rgba(255, 235, 59, 0.4))
+    cleanHtml = cleanHtml.replace(/background:\s*rgba\(255,\s*235,\s*59,\s*0\.4\);?/gi, '');
+    cleanHtml = cleanHtml.replace(/background-color:\s*rgba\(255,\s*235,\s*59,\s*0\.4\);?/gi, '');
+    
+    // Remove any elements with data-gjs-type="temporary-overlay"
+    cleanHtml = cleanHtml.replace(/<[^>]*data-gjs-type=["']temporary-overlay["'][^>]*>[\s\S]*?<\/[^>]+>/gi, '');
+    
+    return cleanHtml;
+  }
+
 
   searchAndReplaceText(findText: string, replaceText: string, event?: MouseEvent): void {
     if (event) {
