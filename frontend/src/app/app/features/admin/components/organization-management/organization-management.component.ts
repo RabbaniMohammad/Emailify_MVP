@@ -109,8 +109,8 @@ export class OrganizationManagementComponent implements OnInit {
       next: (response: { message: string }) => {
         this.snackBar.open(response.message, 'Close', {
           duration: 5000,
-          horizontalPosition: 'end',
-          verticalPosition: 'top',
+          horizontalPosition: 'center',
+          verticalPosition: 'bottom',
           panelClass: 'success-snackbar'
         });
         
@@ -127,8 +127,8 @@ export class OrganizationManagementComponent implements OnInit {
           'Close',
           {
             duration: 5000,
-            horizontalPosition: 'end',
-            verticalPosition: 'top',
+            horizontalPosition: 'center',
+            verticalPosition: 'bottom',
             panelClass: 'error-snackbar'
           }
         );

@@ -15,6 +15,7 @@ import { TemplatePreviewPanelComponent } from '../../../../shared/components/tem
 import { MatMenuModule } from '@angular/material/menu';
 
 import { TemplateGenerationService, GenerationMessage } from '../../../../core/services/template-generation.service';
+import { TemplatesService } from '../../../../core/services/templates.service';
 
 import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
 
@@ -53,6 +54,7 @@ interface ImageAttachment {
 })
 export class GeneratePageComponent implements OnInit, OnDestroy, AfterViewInit, CanComponentDeactivate {
   private generationService = inject(TemplateGenerationService);
+  private templatesService = inject(TemplatesService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private location = inject(Location);
@@ -634,14 +636,14 @@ onSaveTemplate(): void {
           panelClass: ['success-snackbar'],
         });
 
-        // Navigate to templates page and highlight the new template
+        // ✅ Select the saved template so it appears first when we navigate
+        this.templatesService.select(response.templateId, response.templateName || name);
+        
+        // ✅ Trigger a smart refresh to fetch the latest templates (including our new one)
+        this.templatesService.smartRefresh();
 
-        this.router.navigate(['/'], {
-          queryParams: {
-            newTemplateId: response.templateId,
-            highlight: 'true',
-          },
-        });
+        // Navigate to templates page without query parameters
+        this.router.navigate(['/']);
         
 
       },

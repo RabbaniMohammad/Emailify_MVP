@@ -91,8 +91,15 @@ export class AuthPageComponent implements OnInit, OnDestroy {
   onGoogleLogin(): void {
     const slug = this.organizationSlug.trim().toLowerCase();
     
-    if (!slug) {
+    // 🔒 SECURITY: Organization name is mandatory
+    if (!slug || slug === '') {
       this.errorMessage = 'Please enter an organization name';
+      return;
+    }
+    
+    // Validate minimum length
+    if (slug.length < 2) {
+      this.errorMessage = 'Organization name must be at least 2 characters';
       return;
     }
     
@@ -120,8 +127,10 @@ export class AuthPageComponent implements OnInit, OnDestroy {
       'pending_approval': 'Your account is pending admin approval.',
       'account_deactivated': 'Your account has been deactivated. Contact your administrator.',
       'authentication_failed': 'Authentication failed. Please try again.',
-      'session_expired': 'Your session has expired. Please sign in again.', // ✅ NEW
-      'access_denied': 'Access denied. Contact your administrator.', // ✅ NEW
+      'session_expired': 'Your session has expired. Please sign in again.',
+      'access_denied': 'Access denied. Contact your administrator.',
+      'org_required': 'Organization name is required. Please enter your organization name.',
+      'invalid_org': 'Invalid organization name format. Use only lowercase letters, numbers, and hyphens.',
     };
     return messages[error] || 'An error occurred during authentication. Please try again.';
   }
