@@ -59,7 +59,10 @@ export class AuthPageComponent implements OnInit, OnDestroy {
   }
 
   private checkLandscape(): void {
-    this.isLandscape = window.innerHeight <= 600 && window.matchMedia('(orientation: landscape)').matches;
+    // Only use compact landscape mode for narrow screens (width < 1024px)
+    this.isLandscape = window.innerHeight <= 600 && 
+                       window.innerWidth < 1024 && 
+                       window.matchMedia('(orientation: landscape)').matches;
   }
 
     private handleAuthMessage(event: MessageEvent): void {
