@@ -232,7 +232,7 @@ router.get('/', authenticate, organizationContext, async (req: Request, res: Res
         logger.info(`🔍 [TEMPLATES] Found ${mailchimpItems.length} Mailchimp templates for this org's folder`);
       }
     } catch (mailchimpError: any) {
-      logger.error(`❌ [TEMPLATES] Mailchimp API error:`, mailchimpError?.message || mailchimpError);
+      logger.err(`❌ [TEMPLATES] Mailchimp API error:`, mailchimpError?.message || mailchimpError);
       // Continue without Mailchimp templates instead of failing entire request
     }
     

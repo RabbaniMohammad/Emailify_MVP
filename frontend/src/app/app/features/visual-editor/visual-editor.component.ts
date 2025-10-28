@@ -181,6 +181,12 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (container) {
       this.initGrapesJS();
       
+      // Clean up any leftover highlights after editor loads
+      setTimeout(() => {
+        console.log('🧹 Running cleanup of highlights...');
+        this.removeAllHighlights();
+      }, 3000); // Increased to 3 seconds to ensure editor is fully loaded
+      
       // ✅ CRITICAL: Periodic auto-save every 10 seconds as backup
       this.periodicSaveInterval = setInterval(() => {
         if (this.editor && this.templateId) {
@@ -402,7 +408,32 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
 }
 
   private loadGoldenHtml(templateId: string): void {
-    // Get template from state service
+    // ✅ PRIORITY 1: Check if editing a VARIANT (from use-variant page)
+    const editingMode = localStorage.getItem(`visual_editor_${templateId}_editing_mode`);
+    const variantMeta = localStorage.getItem(`visual_editor_${templateId}_variant_meta`);
+    
+    if (editingMode === 'variant' && variantMeta) {
+      try {
+        const meta = JSON.parse(variantMeta);
+        const { runId, no } = meta;
+        
+        // Load variant HTML from variant-specific key
+        const variantHtmlKey = `visual_editor_variant_${runId}_${no}_html`;
+        const variantHtml = localStorage.getItem(variantHtmlKey);
+        
+        if (variantHtml) {
+          console.log('✅ [Visual Editor] Loading VARIANT HTML for variant', no);
+          this.originalGoldenHtml = variantHtml;
+          return;
+        } else {
+          console.warn('⚠️ [Visual Editor] Variant HTML not found, falling back to template state');
+        }
+      } catch (error) {
+        console.error('❌ [Visual Editor] Error loading variant HTML:', error);
+      }
+    }
+    
+    // ✅ PRIORITY 2: Get template from state service (golden/original templates)
     const templateForEditor = this.templateState.getTemplateForEditor(templateId);
     
     if (templateForEditor) {
@@ -655,18 +686,68 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
   }
 
   goBack(): void {
+    // ✅ Check if we're editing a VARIANT
+    const editingMode = localStorage.getItem(`visual_editor_${this.templateId}_editing_mode`);
+    const variantMeta = localStorage.getItem(`visual_editor_${this.templateId}_variant_meta`);
+    
+    if (editingMode === 'variant' && variantMeta) {
+      try {
+        const meta = JSON.parse(variantMeta);
+        const { runId, no } = meta;
+        
+        // Get edited HTML from editor
+        const html = this.editor?.getHtml() || '';
+        const css = this.editor?.getCss() || '';
+        const fullHtml = `<style>${css}</style>${html}`;
+        
+        // Save edited HTML to sessionStorage for use-variant page to pickup
+        sessionStorage.setItem('visual_editor_edited_html', fullHtml);
+        sessionStorage.setItem('visual_editor_return_use_variant', 'true');
+        
+        // Clean up variant-specific keys
+        localStorage.removeItem(`visual_editor_variant_${runId}_${no}_html`);
+        localStorage.removeItem(`visual_editor_variant_${runId}_${no}_snapshot`);
+        localStorage.removeItem(`visual_editor_${this.templateId}_editing_mode`);
+        localStorage.removeItem(`visual_editor_${this.templateId}_variant_meta`);
+        localStorage.removeItem(`visual_editor_${this.templateId}_failed_edits`);
+        
+        console.log('✅ [Visual Editor] Returning to variant page with edited HTML');
+        
+        // Navigate back to use-variant page
+        const templateId = this.templateId;
+        this.router.navigate(['/qa', templateId, 'use', runId, no]);
+        return;
+      } catch (error) {
+        console.error('❌ [Visual Editor] Error returning to variant page:', error);
+      }
+    }
+    
+    // ✅ Default: Navigate to dashboard (for golden/original templates)
     this.router.navigate(['/']);
   }
 
-  saveTemplate(): void {
+  async saveTemplate(): Promise<void> {
     if (!this.editor) return;
+    
+    // Remove all AI highlights before saving
+    this.removeAllHighlights();
+    
+    // Wait for DOM to update
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     const html = this.editor.getHtml();
     const css = this.editor.getCss();
     const fullHtml = `<style>${css}</style>${html}`;
   }
 
-  exportHTML(): void {
+  async exportHTML(): Promise<void> {
     if (!this.editor) return;
+    
+    // Remove all AI highlights before exporting
+    this.removeAllHighlights();
+    
+    // Wait for DOM to update
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     const html = this.editor.getHtml();
     const css = this.editor.getCss();
@@ -1381,6 +1462,12 @@ async onCheckPreview(): Promise<void> {
     return;
   }
 
+  // ✅ CRITICAL: Remove all AI highlights before saving/preview
+  this.removeAllHighlights();
+  
+  // Wait a bit for DOM to update
+  await new Promise(resolve => setTimeout(resolve, 100));
+
   // ✅ CRITICAL FIX: If temp ID, prompt for name and save to database first
   if (this.templateId.startsWith('temp_')) {
     // Get current HTML
@@ -1433,14 +1520,17 @@ async onCheckPreview(): Promise<void> {
   }
 
   // 2. ✅ SMART NAVIGATION: Check where user came from and set correct return flags
-  const metaKey = `visual_editor_${this.templateId}_use_variant_meta`;
-  const useVariantMeta = sessionStorage.getItem(metaKey);
+  // ✅ CRITICAL FIX: Check editing mode to determine if this is a variant
+  const editingMode = localStorage.getItem(`visual_editor_${this.templateId}_editing_mode`);
+  const variantMetaKey = `visual_editor_${this.templateId}_variant_meta`;
+  const variantMeta = localStorage.getItem(variantMetaKey);
   
-  if (useVariantMeta) {
-    // ✅ User came from Use Variants page - save with Use Variants keys
+  if (editingMode === 'variant' && variantMeta) {
+    // ✅ User came from Use Variants page - return to use-variant page
     try {
-      const meta = JSON.parse(useVariantMeta);
+      const meta = JSON.parse(variantMeta);
       const { runId, no } = meta;
+      
       // ✅ CRITICAL: Get HTML and CSS, then combine them into full HTML document
       const html = this.editor.getHtml();
       const css = this.editor.getCss();
@@ -1450,9 +1540,13 @@ async onCheckPreview(): Promise<void> {
       sessionStorage.setItem('visual_editor_edited_html', fullHtml);
       // ✅ CRITICAL: Set return flag Use Variants page expects
       sessionStorage.setItem('visual_editor_return_use_variant', 'true');
+      
+      console.log('✅ [Check Preview] Returning to use-variant page:', { runId, no, templateId: this.templateId });
+      
+      // Navigate back to use-variant page
       this.router.navigate(['/qa', this.templateId, 'use', runId, no]);
     } catch (error) {
-      console.error('❌ [Check Preview] Failed to parse use-variant metadata, falling back to QA page:', error);
+      console.error('❌ [Check Preview] Failed to parse variant metadata, falling back to QA page:', error);
       
       // Fallback to QA page if parsing fails
       const returnKey = `visual_editor_${this.templateId}_return_flag`;
@@ -1460,7 +1554,7 @@ async onCheckPreview(): Promise<void> {
       this.router.navigate(['/qa', this.templateId]);
     }
   } else {
-    // ✅ User came from QA page - use QA page keys
+    // ✅ User came from QA page (golden/original templates) - use QA page keys
     const returnKey = `visual_editor_${this.templateId}_return_flag`;
     localStorage.setItem(returnKey, 'true');
     this.router.navigate(['/qa', this.templateId]);
@@ -1485,12 +1579,11 @@ async onCheckPreview(): Promise<void> {
   /**
    * Trigger browser's native find (Ctrl+F) and show helpful message
    */
-  searchTextInPage(text: string, event?: MouseEvent): void {
-    if (event) {
-      event.stopPropagation();
-    }
+  /**
+   * Remove all AI highlights from the editor
+   */
+  private removeAllHighlights(): void {
     try {
-      // Find the GrapesJS iframe
       let iframe = document.querySelector('iframe#gjs') as HTMLIFrameElement;
       
       if (!iframe) {
@@ -1501,33 +1594,214 @@ async onCheckPreview(): Promise<void> {
         iframe = document.querySelector('iframe') as HTMLIFrameElement;
       }
       
-      if (iframe && iframe.contentWindow) {
-        // Focus the iframe so Ctrl+F works there
-        iframe.contentWindow.focus();
+      if (iframe && iframe.contentDocument) {
+        const doc = iframe.contentDocument;
         
-        // Copy text to clipboard for easy pasting
-        navigator.clipboard.writeText(text).then(() => {
-          // Show helpful message
-          this.showToast(
-            `Text copied! Press Ctrl+F to search manually (text may span HTML boundaries)`,
-            'info'
-          );
-        }).catch(() => {
-          // Fallback if clipboard fails
-          this.showToast(
-            `Press Ctrl+F to search for: "${this.truncateText(text, 30)}"`,
-            'info'
-          );
+        // ✅ Remove inline text highlights (span elements)
+        const existingHighlights = doc.querySelectorAll('span[data-ai-highlight="true"]');
+        existingHighlights.forEach(highlight => {
+          const textNode = doc.createTextNode(highlight.textContent || '');
+          highlight.parentNode?.replaceChild(textNode, highlight);
         });
-      } else {
-        this.showToast('Editor not ready. Please wait and try again.', 'warning');
+        
+        // ✅ CRITICAL FIX: Also remove overlay container (yellow boxes)
+        const existingOverlayContainer = doc.getElementById('ai-overlay-container');
+        if (existingOverlayContainer) {
+          existingOverlayContainer.remove();
+        }
+        
+        // ✅ Clear overlay references
+        this.overlays = [];
+        this.overlayContainer = null;
       }
     } catch (error) {
-      console.error('❌ [SEARCH] Error during search:', error);
-      this.showToast(
-        `Press Ctrl+F to search for: "${this.truncateText(text, 30)}"`,
-        'info'
-      );
+      console.error('Error removing highlights:', error);
+    }
+  }
+
+  searchAndReplaceText(findText: string, replaceText: string, event?: MouseEvent): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    
+    try {
+      let iframe = document.querySelector('iframe#gjs') as HTMLIFrameElement;
+      
+      if (!iframe) {
+        iframe = document.querySelector('.gjs-frame') as HTMLIFrameElement;
+      }
+      
+      if (!iframe) {
+        iframe = document.querySelector('iframe') as HTMLIFrameElement;
+      }
+      
+      if (!iframe || !iframe.contentDocument) {
+        this.showToast('Editor not ready', 'warning');
+        return;
+      }
+      
+      const doc = iframe.contentDocument;
+      const body = doc.body;
+      
+      // Remove any existing highlights
+      const existingHighlights = doc.querySelectorAll('span[data-ai-highlight="true"]');
+      existingHighlights.forEach(highlight => {
+        const textNode = doc.createTextNode(highlight.textContent || '');
+        highlight.parentNode?.replaceChild(textNode, highlight);
+      });
+      
+      // Search for text
+      const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT, null);
+      
+      let node;
+      let found = false;
+      
+      while (node = walker.nextNode()) {
+        const nodeText = node.textContent || '';
+        const searchLower = findText.toLowerCase();
+        
+        if (nodeText.toLowerCase().includes(searchLower)) {
+          const parent = node.parentElement;
+          if (parent) {
+            // Scroll to it
+            parent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Highlight it
+            const range = doc.createRange();
+            const startIndex = nodeText.toLowerCase().indexOf(searchLower);
+            range.setStart(node, startIndex);
+            range.setEnd(node, startIndex + findText.length);
+            
+            const highlight = doc.createElement('span');
+            highlight.setAttribute('data-ai-highlight', 'true');
+            highlight.style.cssText = 'background-color: yellow !important; color: black !important; padding: 2px;';
+            
+            try {
+              range.surroundContents(highlight);
+              found = true;
+              this.showToast(`Found "${this.truncateText(findText, 25)}"`, 'success');
+              break;
+            } catch (e) {
+              // Can't highlight - just scroll
+            }
+          }
+        }
+      }
+      
+      if (!found) {
+        this.showToast('Not found', 'warning');
+      }
+      
+    } catch (error) {
+      console.error('[SEARCH] Error:', error);
+    }
+  }
+
+  searchTextInPage(text: string, event?: MouseEvent): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    
+    try {
+      let iframe = document.querySelector('iframe#gjs') as HTMLIFrameElement;
+      
+      if (!iframe) {
+        iframe = document.querySelector('.gjs-frame') as HTMLIFrameElement;
+      }
+      
+      if (!iframe) {
+        iframe = document.querySelector('iframe') as HTMLIFrameElement;
+      }
+      
+      if (!iframe || !iframe.contentWindow || !iframe.contentDocument) {
+        this.showToast('Editor not ready', 'warning');
+        return;
+      }
+      
+      const doc = iframe.contentDocument;
+      const body = doc.body;
+      
+      // Search for text in the body
+      const textContent = body.innerText || body.textContent || '';
+      const lowerText = textContent.toLowerCase();
+      const searchLower = text.toLowerCase();
+      
+      if (lowerText.includes(searchLower)) {
+        // Found! Now find the actual element
+        const walker = doc.createTreeWalker(
+          body,
+          NodeFilter.SHOW_TEXT,
+          null
+        );
+        
+        let node;
+        let found = false;
+        
+        while (node = walker.nextNode()) {
+          const nodeText = node.textContent || '';
+          if (nodeText.toLowerCase().includes(searchLower)) {
+            // Found the text node! Scroll its parent into view
+            const parent = node.parentElement;
+            if (parent) {
+              parent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              
+              // Create a highlight element instead of just selecting
+              const range = doc.createRange();
+              const startIndex = nodeText.toLowerCase().indexOf(searchLower);
+              range.setStart(node, startIndex);
+              range.setEnd(node, startIndex + text.length);
+              
+              // Create a bright highlight span
+              const highlight = doc.createElement('span');
+              highlight.style.cssText = `
+                background-color: yellow !important;
+                color: black !important;
+                padding: 2px 4px;
+                border-radius: 3px;
+                box-shadow: 0 0 0 3px rgba(255, 235, 59, 0.5);
+                font-weight: bold;
+              `;
+              
+              try {
+                range.surroundContents(highlight);
+                
+                // Remove highlight after 5 seconds
+                setTimeout(() => {
+                  if (highlight.parentNode) {
+                    const textNode = doc.createTextNode(highlight.textContent || '');
+                    highlight.parentNode.replaceChild(textNode, highlight);
+                  }
+                }, 5000);
+              } catch (e) {
+                // If surroundContents fails, just select the text
+                const selection = doc.getSelection();
+                if (selection) {
+                  selection.removeAllRanges();
+                  selection.addRange(range);
+                }
+              }
+              
+              found = true;
+              this.showToast(`Found "${this.truncateText(text, 30)}"`, 'success');
+              break;
+            }
+          }
+        }
+        
+        if (!found) {
+          this.showToast('Found in content but could not highlight', 'warning');
+        }
+      } else {
+        // Not found - copy to clipboard
+        navigator.clipboard.writeText(text).then(() => {
+          this.showToast(`Not found. Copied - try Ctrl+F`, 'warning');
+        }).catch(() => {
+          this.showToast('Not found', 'warning');
+        });
+      }
+    } catch (error) {
+      console.error('[SEARCH] Error:', error);
+      this.showToast('Press Ctrl+F to search', 'info');
     }
   }
 

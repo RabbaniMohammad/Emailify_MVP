@@ -123,11 +123,8 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
               return itemSource === 'visual editor' || itemSource === 'visual-editor';
               
             case 'esp':
-              // ESP is anything that's NOT AI Generated or Visual Editor
-              return itemSource !== 'ai generated' && 
-                     itemSource !== 'ai-generated' && 
-                     itemSource !== 'visual editor' && 
-                     itemSource !== 'visual-editor';
+              // ESP templates have source === 'mailchimp'
+              return itemSource === 'mailchimp';
               
             default:
               return true;

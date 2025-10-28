@@ -210,8 +210,8 @@
   <span class="label">Find:</span>
   <code 
     class="searchable"
-    (click)="searchTextInPage(edit.find || '', $event)"
-    title="Click to search in page">
+    (click)="searchAndReplaceText(edit.find || '', edit.replace || '', $event)"
+    title="Click to find and replace">
     {{ edit.find }}
   </code>
 </div>

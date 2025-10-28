@@ -1399,20 +1399,23 @@ navigateToVisualEditorWithGrammar(): void {
     alert('No grammar errors to fix');
     return;
   }
-  // ✅ Save template HTML for editing
-  const htmlKey = `visual_editor_${templateId}_golden_html`;
-  sessionStorage.setItem(htmlKey, html);
-  // ✅ Save snapshot for comparison
-  const snapshotKey = `visual_editor_${templateId}_snapshot_html`;
-  sessionStorage.setItem(snapshotKey, html);
   
-  // ✅ Set editing mode to "use-variant"
+  // ✅ CRITICAL FIX: Use VARIANT-specific keys and localStorage (not golden keys!)
+  // Save to localStorage for visual editor to find
+  const variantHtmlKey = `visual_editor_variant_${runId}_${no}_html`;
+  localStorage.setItem(variantHtmlKey, html);
+  
+  // Save snapshot for comparison
+  const snapshotKey = `visual_editor_variant_${runId}_${no}_snapshot`;
+  localStorage.setItem(snapshotKey, html);
+  
+  // ✅ Set editing mode to "variant" (not "use-variant")
   const modeKey = `visual_editor_${templateId}_editing_mode`;
-  sessionStorage.setItem(modeKey, 'use-variant');
+  localStorage.setItem(modeKey, 'variant');
   
-  // ✅ Save use-variant metadata for return
-  const metaKey = `visual_editor_${templateId}_use_variant_meta`;
-  sessionStorage.setItem(metaKey, JSON.stringify({ runId, no }));
+  // ✅ Save variant metadata (runId and no)
+  const metaKey = `visual_editor_${templateId}_variant_meta`;
+  localStorage.setItem(metaKey, JSON.stringify({ runId, no }));
   
   // ✅ Convert grammar mistakes to failed edits format
   const failedEdits = grammarResult.mistakes.map(mistake => ({
@@ -1427,11 +1430,23 @@ navigateToVisualEditorWithGrammar(): void {
   
   // ✅ Save as failed edits for widget
   const failedKey = `visual_editor_${templateId}_failed_edits`;
-  sessionStorage.setItem(failedKey, JSON.stringify(failedEdits));
+  localStorage.setItem(failedKey, JSON.stringify(failedEdits));
+  
+  // ✅ Set return flag so use-variant page knows to restore data
+  const returnKey = `visual_editor_return_use_variant`;
+  sessionStorage.setItem(returnKey, 'true');
+  
+  // ✅ CRITICAL FIX: Clear any existing progress for this templateId
+  // This ensures Visual Editor loads the VARIANT HTML, not old saved progress
+  const progressKey = `visual_editor_${templateId}_progress`;
+  localStorage.removeItem(progressKey);
+  
+  console.log('✅ [Navigate to Visual Editor] Cleared old progress, will load variant HTML');
   
   // ✅ CLEANUP: Remove validation-modal-open class before navigating
   document.body.classList.remove('validation-modal-open');
   document.body.style.overflow = 'auto';
+  
   // Navigate
   this.router.navigate(['/visual-editor', templateId]);
 }
