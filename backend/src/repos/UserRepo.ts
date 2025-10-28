@@ -59,12 +59,7 @@ async function update(user: IUser): Promise<void> {
   const db = await orm.openDb();
   for (let i = 0; i < db.users.length; i++) {
     if (db.users[i].id === user.id) {
-      const dbUser = db.users[i];
-      db.users[i] = {
-        ...dbUser,
-        name: user.name,
-        email: user.email,
-      };
+      db.users[i] = user as any; // Type assertion for mock repo
       return orm.saveDb(db);
     }
   }
@@ -106,7 +101,7 @@ async function insertMult(
     usersF = [ ...users ];
   for (const user of usersF) {
     user.id = getRandomInt();
-    user.created = new Date();
+    user.createdAt = new Date(); // Fixed: changed 'created' to 'createdAt'
   }
   db.users = [ ...db.users, ...users ];
   await orm.saveDb(db);
