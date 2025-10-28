@@ -227,6 +227,11 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       clearTimeout(this.autoSaveTimer);
     }
     
+    // ✅ CLEANUP: Remove validation-modal-open class to restore navbar
+    // This class may have been added by use-variant page before navigation
+    document.body.classList.remove('validation-modal-open');
+    document.body.style.overflow = 'auto';
+    
     if (this.editor) {
       this.editor.destroy();
     }
@@ -1583,8 +1588,11 @@ async onCheckPreview(): Promise<void> {
       
       console.log('✅ [Check Preview] Returning to use-variant page:', { runId, no, templateId: this.templateId });
       
-      // Navigate back to use-variant page
-      this.router.navigate(['/qa', this.templateId, 'use', runId, no]);
+      // Navigate back to use-variant page with proper state management
+      await this.router.navigate(['/qa', this.templateId, 'use', runId, no], {
+        replaceUrl: false,
+        skipLocationChange: false
+      });
     } catch (error) {
       console.error('❌ [Check Preview] Failed to parse variant metadata, falling back to QA page:', error);
       

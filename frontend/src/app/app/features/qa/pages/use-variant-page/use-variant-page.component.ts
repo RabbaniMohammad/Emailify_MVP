@@ -229,6 +229,10 @@ ngOnDestroy(): void {
   if (this.loadingTimeout) {
     clearTimeout(this.loadingTimeout);
   }
+  
+  // ✅ CLEANUP: Remove validation-modal-open class to restore navbar
+  document.body.classList.remove('validation-modal-open');
+  document.body.style.overflow = 'auto';
 }
 
 constructor() {
@@ -369,6 +373,9 @@ constructor() {
         this.templateModalOpenSubject.next(false);
         this.saveTemplateModalState(false);
         document.body.style.overflow = 'auto';
+        
+        // ✅ CLEANUP: Ensure navbar is visible when returning from visual editor
+        document.body.classList.remove('validation-modal-open');
         
         // Cleanup
         sessionStorage.removeItem(returnKey);
