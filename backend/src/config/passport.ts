@@ -60,7 +60,8 @@ passport.use(
 
         const organizationId = organization?._id;
 
-        // Look for existing user in THIS organization
+        // Look for existing user with this googleId in THIS organization
+        // First check if user exists in this specific org
         let user = await User.findOne({ 
           googleId,
           organizationId: organizationId || null
@@ -73,9 +74,42 @@ passport.use(
           user.picture = picture;
           await user.updateLastLogin();
           return done(null, user);
+        }
+
+        // Check if user exists with this googleId but in a different org or no org
+        const existingUser = await User.findOne({ googleId });
+        
+        if (existingUser && !existingUser.organizationId && organizationId) {
+          // User exists without org, and now joining an org - update in callback
+          logger.info(`🔄 User ${email} exists without org, will be assigned to ${orgSlug} in callback`);
+          return done(null, existingUser);
+        } else if (existingUser && existingUser.organizationId && organizationId) {
+          // User exists in different org - create new user record for this org
+          const existingOrgId = String(existingUser.organizationId);
+          const requestedOrgId = String(organizationId);
+          
+          if (existingOrgId !== requestedOrgId) {
+            logger.info(`� User ${email} exists in different org, creating new record for ${orgSlug}`);
+            // Create new user record for this organization
+            user = await User.create({
+              googleId,
+              email,
+              name,
+              picture,
+              organizationId,
+              orgRole: 'member',
+              isApproved: false,
+              isActive: true,
+            });
+            return done(null, user);
+          }
+          
+          // Same org but shouldn't reach here (covered above) - safety fallback
+          logger.info(`⚠️ Fallback: User ${email} in correct org ${orgSlug}`);
+          return done(null, existingUser);
         } else {
-          // New user in this org - create minimal record (org assignment happens in callback)
-          logger.info(`🆕 New user for org ${orgSlug}: ${email}`);
+          // New user - create minimal record (org assignment happens in callback)
+          logger.info(`🆕 Creating new user for org ${orgSlug}: ${email}`);
           
           // If org exists, create user in that org
           if (organizationId) {

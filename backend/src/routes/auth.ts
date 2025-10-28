@@ -385,20 +385,14 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
     
     const user = await User.findById(tokenPayload.userId)
       .select('-__v')
-      .populate('organizationId', 'name slug domain isActive isOwner');
+      .populate('organizationId', 'name slug domain isActive');
     
     if (!user) {
       return res.status(404).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
     }
 
-    // Add organizationIsOwner flag for easy frontend access
-    const userResponse: any = user.toObject();
-    if (user.organizationId && typeof user.organizationId === 'object') {
-      userResponse.organizationIsOwner = (user.organizationId as any).isOwner || false;
-    }
-
     // Return user info even if not approved - let frontend handle the pending state
-    res.json({ user: userResponse });
+    res.json({ user: user.toObject() });
   } catch (error) {
     logger.err('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user', code: 'SERVER_ERROR' });
