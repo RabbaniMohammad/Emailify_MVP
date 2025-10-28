@@ -3,43 +3,150 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
 
     .warning-icon {
-      font-size: 32px;
-      width: 32px;
-      height: 32px;
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
       color: #f44336;
+    }
+
+    .danger-icon {
+      font-size: 36px;
+      width: 36px;
+      height: 36px;
+      color: #d32f2f;
     }
 
     h2 {
       margin: 0;
       font-size: 24px;
-      font-weight: 500;
+      font-weight: 600;
     }
   }
 
   mat-dialog-content {
     padding: 16px 0;
-    min-width: 400px;
+    min-width: 500px;
+    max-width: 600px;
 
     .organization-info {
-      background: #f5f5f5;
-      padding: 16px;
-      border-radius: 8px;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
 
-      .org-name {
-        margin: 0 0 4px 0;
+      .org-details {
+        margin: 0 0 12px 0;
         font-size: 16px;
         color: #333;
+
+        .org-name-highlight {
+          color: #d32f2f;
+          font-size: 18px;
+        }
       }
 
-      .org-slug {
-        margin: 0;
-        font-size: 14px;
-        color: #666;
-        font-family: monospace;
+      .org-meta {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+
+        .meta-item {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 14px;
+          color: #666;
+
+          mat-icon {
+            font-size: 18px;
+            width: 18px;
+            height: 18px;
+            color: #999;
+          }
+
+          code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+          }
+        }
+      }
+    }
+
+    mat-divider {
+      margin: 20px 0;
+    }
+
+    .delete-option {
+      margin-bottom: 20px;
+
+      .option-header {
+        margin-bottom: 12px;
+      }
+
+      .option-description {
+        background: #f5f5f5;
+        border-left: 4px solid #2196f3;
+        padding: 12px;
+        margin-top: 12px;
+        border-radius: 4px;
+        display: flex;
+        gap: 12px;
+        transition: all 0.3s ease;
+
+        &.warning {
+          background: #ffebee;
+          border-left-color: #f44336;
+
+          mat-icon {
+            color: #f44336;
+          }
+
+          .danger-text {
+            color: #d32f2f;
+            font-weight: 500;
+          }
+        }
+
+        mat-icon {
+          font-size: 20px;
+          width: 20px;
+          height: 20px;
+          color: #2196f3;
+          flex-shrink: 0;
+        }
+
+        .description-text {
+          flex: 1;
+
+          p {
+            margin: 0 0 8px 0;
+            line-height: 1.5;
+            color: #555;
+          }
+
+          .deletion-list {
+            margin: 8px 0 0 0;
+            padding: 0;
+            list-style: none;
+
+            li {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              padding: 4px 0;
+              color: #d32f2f;
+              font-size: 14px;
+
+              mat-icon {
+                font-size: 18px;
+                width: 18px;
+                height: 18px;
+              }
+            }
+          }
+        }
       }
     }
 
@@ -47,51 +154,128 @@
       background: #fff3e0;
       border-left: 4px solid #ff9800;
       padding: 12px 16px;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
       border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      mat-icon {
+        font-size: 24px;
+        width: 24px;
+        height: 24px;
+        color: #e65100;
+      }
 
       p {
         margin: 0;
-        display: flex;
-        align-items: center;
-        gap: 8px;
         color: #e65100;
+        font-weight: 500;
+      }
+    }
 
-        mat-icon {
-          font-size: 20px;
-          width: 20px;
-          height: 20px;
+    // Final Confirmation Step
+    .final-confirmation {
+      .confirmation-header {
+        text-align: center;
+        margin-bottom: 24px;
+
+        .danger-icon {
+          font-size: 48px;
+          width: 48px;
+          height: 48px;
+          color: #d32f2f;
+          margin-bottom: 12px;
+        }
+
+        h3 {
+          margin: 0;
+          font-size: 22px;
+          font-weight: 600;
+          color: #d32f2f;
         }
       }
-    }
 
-    .delete-option {
-      margin-bottom: 16px;
+      .deletion-summary {
+        margin-bottom: 20px;
 
-      .option-description {
-        margin: 8px 0 0 32px;
-        font-size: 12px;
-        color: #666;
-        line-height: 1.5;
+        .summary-title {
+          font-size: 15px;
+          font-weight: 500;
+          margin-bottom: 12px;
+          color: #333;
+        }
+
+        .summary-box {
+          background: #ffebee;
+          border: 2px solid #f44336;
+          border-radius: 8px;
+          padding: 16px;
+
+          .summary-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 8px 0;
+
+            &:not(:last-child) {
+              border-bottom: 1px solid #ffcdd2;
+            }
+
+            mat-icon {
+              font-size: 22px;
+              width: 22px;
+              height: 22px;
+              color: #d32f2f;
+              flex-shrink: 0;
+              margin-top: 2px;
+            }
+
+            span {
+              flex: 1;
+              color: #333;
+              line-height: 1.6;
+
+              strong {
+                color: #d32f2f;
+              }
+            }
+          }
+        }
       }
-    }
 
-    .confirm-text {
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid #e0e0e0;
+      .final-warning {
+        background: #ffebee;
+        border: 2px dashed #f44336;
+        padding: 16px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-align: center;
 
-      p {
-        margin: 0;
-        font-weight: 500;
-        color: #333;
+        mat-icon {
+          font-size: 28px;
+          width: 28px;
+          height: 28px;
+          color: #d32f2f;
+        }
+
+        p {
+          margin: 0;
+          color: #d32f2f;
+          font-weight: 600;
+          font-size: 15px;
+          flex: 1;
+        }
       }
     }
   }
 
   mat-dialog-actions {
-    padding: 16px 0 0 0;
+    padding: 20px 0 0 0;
     margin: 0;
+    border-top: 1px solid #e0e0e0;
 
     button {
       margin-left: 8px;
@@ -101,6 +285,16 @@
         width: 18px;
         height: 18px;
         margin-right: 4px;
+      }
+    }
+
+    .final-delete-btn {
+      background-color: #d32f2f;
+      color: white;
+      font-weight: 600;
+
+      &:hover {
+        background-color: #b71c1c;
       }
     }
   }
