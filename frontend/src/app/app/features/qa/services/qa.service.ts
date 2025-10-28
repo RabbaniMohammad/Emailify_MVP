@@ -336,6 +336,14 @@ export class QaService {
     // Create new observable with shareReplay
     const golden$ = this.getTemplateHtml(id).pipe(
       switchMap(html => {
+        console.log('🔍 [QA Service] Template HTML being sent to backend for Run Tests:');
+        console.log('📊 Template ID:', id);
+        console.log('📏 HTML Length:', html.length);
+        console.log('📄 First 500 chars:', html.substring(0, 500));
+        console.log('📄 Last 500 chars:', html.substring(html.length - 500));
+        console.log('🔎 Search for "box-sizing" (edited version):', html.includes('box-sizing') ? '✅ FOUND (EDITED)' : '❌ NOT FOUND (ORIGINAL)');
+        console.log('🔎 Search for "<!doctype html>" (original version):', html.startsWith('<!doctype html>') ? '✅ FOUND (ORIGINAL)' : '❌ NOT FOUND (EDITED)');
+        
         return this.http.post<GoldenResult>(
           `/api/qa/${id}/golden`,
           { html }
@@ -473,36 +481,32 @@ export class QaService {
   }
 
   /**
-   * ✅ UPDATED: Get template HTML - checks cache before API call
+   * ✅ Get template HTML - ONLY from cache, no API call
    */
   private getTemplateHtml(templateId: string): Observable<string> {
+    console.log('🔍 [getTemplateHtml] Called for template:', templateId);
+    
     // ✅ First check PreviewCacheService (sessionStorage)
     const cachedHtml = this.previewCache.get(templateId);
     if (cachedHtml) {
+      console.log('✅ [getTemplateHtml] Found in PreviewCache (sessionStorage)');
+      console.log('📏 Length:', cachedHtml.length);
       return of(cachedHtml);
     }
 
     // ✅ Second check TemplateStateService (localStorage - original template)
     const originalHtml = this.templateState.getOriginalTemplate(templateId);
     if (originalHtml) {
+      console.log('✅ [getTemplateHtml] Found in TemplateStateService (localStorage)');
+      console.log('📏 Length:', originalHtml.length);
       // Cache it in PreviewCacheService for next time
       this.previewCache.set(templateId, originalHtml);
       return of(originalHtml);
     }
 
-    // ✅ No cache found - fetch from API
-    return this.http.get(`/api/templates/${templateId}/raw`, { 
-      responseType: 'text' 
-    }).pipe(
-      tap(html => {
-        // ✅ Cache the fetched HTML
-        this.previewCache.set(templateId, html);
-      }),
-      catchError(error => {
-        console.error('Failed to fetch template HTML:', error);
-        return throwError(() => new Error('Failed to fetch template HTML'));
-      })
-    );
+    // ✅ No cache found - throw error (DO NOT fetch from API)
+    console.error('❌ [getTemplateHtml] Template HTML not found in any cache!');
+    return throwError(() => new Error('Template HTML not found in cache. Please load the template first.'));
   }
 
   /**

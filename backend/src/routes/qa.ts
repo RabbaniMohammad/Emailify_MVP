@@ -1137,7 +1137,18 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
   const requestStart = Date.now();
   try {
     const id = String(req.params.id);
-    const { name, html } = await getRobustTemplateHtml(id);
+    
+    // ✅ USE REQUEST BODY HTML if provided (cache-first approach)
+    let html = String(req.body?.html || '').trim();
+    let name = `Template ${id}`;
+    
+    // If no HTML provided in body, fetch it (fallback for backward compatibility)
+    if (!html) {
+      const fetched = await getRobustTemplateHtml(id);
+      html = fetched.html;
+      name = fetched.name;
+    }
+    
     const visible = extractVisibleText(html);
     const chunks = chunkText(visible, 3500);
     let allEdits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string }> = [];

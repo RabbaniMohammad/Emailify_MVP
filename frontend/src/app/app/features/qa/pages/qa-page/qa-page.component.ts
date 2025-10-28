@@ -261,8 +261,15 @@ export class QaPageComponent implements OnDestroy {
             this.cdr.markForCheck();
         } 
         else if (editingContext?.type === 'original' && editedTemplate) {
+            console.log('🔄 [Visual Editor Return] Original template was edited');
+            console.log('📏 Edited template length:', editedTemplate.length);
+            console.log('📄 First 200 chars of edited template:', editedTemplate.substring(0, 200));
             this.templateHtml = editedTemplate;
             this.templateLoading = false;
+            
+            // ✅ CRITICAL: Update PreviewCache so Run Tests uses edited template
+            this.previewCache.set(id, editedTemplate);
+            
             // Call handleVisualEditorReturn ONLY for original template editing
             await this.handleVisualEditorReturn(id, editedTemplate);
             localStorage.removeItem(returnKey);
@@ -1526,6 +1533,10 @@ private async handleVisualEditorReturn(
     const editingModeKey = `visual_editor_${this.templateId}_editing_mode`;
     localStorage.setItem(editingModeKey, 'original');
     // Initialize the state with the current template on the screen.
+    console.log('📝 [onEditOriginalTemplate] Initializing template state');
+    console.log('📊 Template ID:', this.templateId);
+    console.log('📏 this.templateHtml length:', this.templateHtml.length);
+    console.log('📄 First 200 chars of this.templateHtml:', this.templateHtml.substring(0, 200));
     this.templateState.initializeOriginalTemplate(this.templateId, this.templateHtml);
     
     // ✅ CRITICAL FIX: Clear use-variant metadata to prevent wrong navigation on Check Preview
