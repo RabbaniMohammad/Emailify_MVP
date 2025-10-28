@@ -48,7 +48,7 @@ async function addCompositeIndex() {
 
     // Drop old unique indexes if they exist
     logger.info('🗑️  Dropping old unique indexes...');
-    
+    // hai
     try {
       await collection.dropIndex('email_1');
       logger.info('✅ Dropped email_1 index');

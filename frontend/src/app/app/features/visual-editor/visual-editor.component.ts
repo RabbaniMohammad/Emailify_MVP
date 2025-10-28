@@ -701,8 +701,12 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         const { runId, no } = meta;
         
         // Get edited HTML from editor
-        const html = this.editor?.getHtml() || '';
+        let html = this.editor?.getHtml() || '';
         const css = this.editor?.getCss() || '';
+        
+        // ✅ CRITICAL FIX: Clean HTML from any highlight overlays
+        html = this.cleanHtmlFromOverlays(html);
+        
         const fullHtml = `<style>${css}</style>${html}`;
         
         // Save edited HTML to sessionStorage for use-variant page to pickup
