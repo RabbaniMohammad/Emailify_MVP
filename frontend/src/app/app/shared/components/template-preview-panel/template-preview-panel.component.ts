@@ -73,13 +73,16 @@ export class TemplatePreviewPanelComponent implements OnChanges {
   @Input() templateName?: string;
   @Input() templateId?: string;
   @Input() showHeader = true;
-  @Input() loading = false;
+  @Input() loading = false; // ✅ Parent controls loading state (e.g., isGenerating$)
   @Input() hideHeader: boolean = false;
   @Input() allowRefresh = true;
   @Input() allowFullscreen = true;
   @Input() allowViewModes = true;
   @Input() showGenerateActions = false;  
-  @Input() isGeneratePage = false; 
+  @Input() isGeneratePage = false;
+  
+  // Internal loading state (only used when parent doesn't control loading)
+  private internalLoading = false; 
 
   @Output() saveTemplate = new EventEmitter<void>();
   @Output() runTests = new EventEmitter<void>();
@@ -166,7 +169,8 @@ toggleFullscreen(): void {
   }
 
   onIframeLoad(): void {
-    this.loading = false;
+    // ✅ Only update internal loading, don't override parent's loading input
+    this.internalLoading = false;
     this.cdr.markForCheck();
   }
 
@@ -174,12 +178,14 @@ toggleFullscreen(): void {
     const wrapped = this.ensureDoc(rawHtml);
     const cleaned = this.stripDangerousBits(wrapped);
     this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
-    this.loading = true;
     
-    // Fallback timeout
+    // ✅ Set internal loading only (parent's @Input loading takes precedence in template)
+    this.internalLoading = true;
+    
+    // ✅ Fallback timeout for internal loading only
     setTimeout(() => {
-      if (this.loading) {
-        this.loading = false;
+      if (this.internalLoading) {
+        this.internalLoading = false;
         this.cdr.markForCheck();
       }
     }, 3000);
