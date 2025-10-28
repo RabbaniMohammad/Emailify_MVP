@@ -822,13 +822,16 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
           return;
         }
         
-        const html = this.editor.getHtml();
+        let html = this.editor.getHtml();
         const css = this.editor.getCss();
         
         if (!html || html.trim() === '') {
           // console.log('❌ [autoSave] Skipping save - empty HTML');
           return;
         }
+        
+        // ✅ CRITICAL FIX: Clean HTML from any highlight overlays before saving
+        html = this.cleanHtmlFromOverlays(html);
         
         // ✅ Save using TemplateStateService
         this.templateState.saveEditorProgress(this.templateId, html, css);
@@ -882,13 +885,16 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
           return;
         }
         
-        const html = this.editor.getHtml();
+        let html = this.editor.getHtml();
         const css = this.editor.getCss();
         
         if (!html || html.trim() === '') {
           // console.log('⚠️ [autoSave] Skipping save - empty HTML');
           return;
         }
+        
+        // ✅ CRITICAL FIX: Clean HTML from any highlight overlays before saving
+        html = this.cleanHtmlFromOverlays(html);
         
         // ✅ Save using TemplateStateService
         this.templateState.saveEditorProgress(this.templateId!, html, css);
@@ -1540,12 +1546,27 @@ async onCheckPreview(): Promise<void> {
     let html = this.editor.getHtml();
     const css = this.editor.getCss();
     
+    console.log('🔍 [Check Preview] HTML BEFORE cleanHtmlFromOverlays:', {
+      length: html.length,
+      hasOverlayContainer: html.includes('ai-overlay-container'),
+      hasHighlightSpan: html.includes('data-ai-highlight'),
+      first500: html.substring(0, 500)
+    });
+    
     // ✅ CRITICAL: Clean HTML from any overlay artifacts
     html = this.cleanHtmlFromOverlays(html);
+    
+    console.log('🔍 [Check Preview] HTML AFTER cleanHtmlFromOverlays:', {
+      length: html.length,
+      hasOverlayContainer: html.includes('ai-overlay-container'),
+      hasHighlightSpan: html.includes('data-ai-highlight'),
+      first500: html.substring(0, 500)
+    });
     
     if (html && html.trim()) {
       // Save immediately (synchronous)
       this.templateState.saveEditorProgress(this.templateId, html, css);
+      console.log('✅ [Check Preview] Saved cleaned HTML to localStorage');
       // Also save to visual_editor progress key
       const editorState = {
         html,
@@ -1603,8 +1624,39 @@ async onCheckPreview(): Promise<void> {
     }
   } else {
     // ✅ User came from QA page (golden/original templates) - use QA page keys
+    
+    // ✅ CRITICAL FIX: Get cleaned HTML and save it (just like for variants)
+    let html = this.editor.getHtml();
+    const css = this.editor.getCss();
+    
+    // ✅ CRITICAL: Clean HTML from any overlay artifacts (removes highlights)
+    html = this.cleanHtmlFromOverlays(html);
+    
+    const fullHtml = `<style>${css}</style>${html}`;
+    
+    // ✅ Check editing context to determine the correct save key
+    const editingContext = localStorage.getItem(`template_state_${this.templateId}_editing_context`);
+    
+    if (editingContext) {
+      try {
+        const context = JSON.parse(editingContext);
+        
+        if (context.type === 'golden') {
+          // ✅ Save to golden template key
+          localStorage.setItem(`visual_editor_${this.templateId}_golden_html`, fullHtml);
+        } else if (context.type === 'original') {
+          // ✅ Save to edited key for original template
+          localStorage.setItem(`template_state_${this.templateId}_edited`, fullHtml);
+        }
+      } catch (e) {
+        console.error('❌ Failed to parse editing context:', e);
+      }
+    }
+    
+    // ✅ Set return flag for QA page to detect
     const returnKey = `visual_editor_${this.templateId}_return_flag`;
     localStorage.setItem(returnKey, 'true');
+    
     this.router.navigate(['/qa', this.templateId]);
   }
 }  /**
