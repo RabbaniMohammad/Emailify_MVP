@@ -9,19 +9,24 @@ const User_1 = __importDefault(require("@src/models/User"));
 const jet_logger_1 = __importDefault(require("jet-logger"));
 const authenticate = async (req, res, next) => {
     try {
+        // Get token from cookie or Authorization header
         const token = req.cookies?.accessToken || req.headers.authorization?.replace('Bearer ', '');
         if (!token) {
             res.status(401).json({ error: 'No token provided' });
             return;
         }
+        // Verify token
         const payload = (0, authService_1.verifyAccessToken)(token);
+        // Verify user exists
         const user = await User_1.default.findById(payload.userId);
         if (!user) {
             res.status(401).json({ error: 'User not found' });
             return;
         }
+        // Allow /auth/me to return user status even if not approved/active
         const isAuthMeRoute = req.path === '/me' && req.baseUrl === '/api/auth';
         if (!isAuthMeRoute) {
+            // 🔒 SECURITY: User must belong to an organization
             if (!user.organizationId) {
                 jet_logger_1.default.warn(`🚫 SECURITY: User ${user.email} has no organization - access denied`);
                 res.status(403).json({
@@ -30,6 +35,7 @@ const authenticate = async (req, res, next) => {
                 });
                 return;
             }
+            // For all other routes, check approval and active status
             if (!user.isApproved) {
                 res.status(403).json({ error: 'Account pending approval' });
                 return;
@@ -39,6 +45,7 @@ const authenticate = async (req, res, next) => {
                 return;
             }
         }
+        // Attach payload to request
         req.tokenPayload = payload;
         next();
     }
@@ -61,6 +68,7 @@ const optionalAuth = async (req, res, next) => {
         next();
     }
     catch (error) {
+        // Silently continue without auth
         next();
     }
 };

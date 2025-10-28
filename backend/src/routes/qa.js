@@ -49,6 +49,9 @@ const MC = mailchimp_marketing_1.default;
 const openai = new openai_1.default({ apiKey: process.env.OPENAI_API_KEY });
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+/* ------------------------------------------------------------------ */
+/*                       Helpers & safe typings                        */
+/* ------------------------------------------------------------------ */
 function isGeneratedTemplate(id) {
     return id.startsWith('gen_') || id.startsWith('Generated_');
 }
@@ -95,6 +98,9 @@ function ensureFullDocShell(name, bodyOrDocHtml) {
         '</body></html>',
     ].join('');
 }
+/* ------------------------------------------------------------------ */
+/*                      Mailchimp HTML retrieval                       */
+/* ------------------------------------------------------------------ */
 async function getTemplateHtmlDirect(id) {
     const t = (MC.templates.getTemplate ? await MC.templates.getTemplate(id) : await MC.templates.get(id));
     const name = t?.name || `Template ${id}`;
@@ -143,7 +149,7 @@ async function getTemplateHtmlViaCampaign(id) {
             else if (typeof campaigns.delete === 'function')
                 await campaigns.delete(campaignId);
         }
-        catch (_e) { }
+        catch (_e) { /* ignore cleanup */ }
     }
 }
 async function getRobustTemplateHtml(id) {
@@ -158,6 +164,9 @@ async function getRobustTemplateHtml(id) {
         html = await getTemplateHtmlFromDefaultContent(id);
     return { name, html: ensureFullDocShell(name, html) };
 }
+/* ------------------------------------------------------------------ */
+/*                  Visible text + chunking for GPT                    */
+/* ------------------------------------------------------------------ */
 function extractVisibleText(html) {
     const $ = cheerio.load(html);
     $('script, style, noscript').remove();
@@ -217,6 +226,9 @@ function grammarSystemPrompt() {
         "- Editing URLs or email addresses",
     ].join("\n");
 }
+/* ------------------------------------------------------------------ */
+/*             Entity-aware, context-aware text patching               */
+/* ------------------------------------------------------------------ */
 const ZWS = /[\u200B\u200C\u200D\uFEFF]/;
 const NAMED_ENT = {
     nbsp: '\u00A0', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
@@ -488,6 +500,9 @@ function applyReplacementToNodes(nodeMap, matchStart, matchEnd, replacement) {
         return false;
     }
 }
+/* ------------------------------------------------------------------ */
+/*         ✅ NEW: Helper Functions for Enhanced Diagnostics          */
+/* ------------------------------------------------------------------ */
 function findAffectedNodes(nodeMap, matchStart, matchEnd) {
     const affectedNodes = [];
     for (const mapping of nodeMap) {
@@ -517,6 +532,9 @@ function generateXPath($, element) {
 function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+/* ------------------------------------------------------------------ */
+/*         ✅ ENHANCED: Atomic Verification with Full Diagnostics      */
+/* ------------------------------------------------------------------ */
 function applyContextEdits(html, edits) {
     const startTime = Date.now();
     const parseStart = Date.now();
@@ -635,7 +653,9 @@ function applyContextEdits(html, edits) {
             const span = findWithContextSpan(fullText, edit.find, edit.before, edit.after);
             if (span) {
                 diagnostics.contextMatched = true;
+                // ✅ NEW: Find affected nodes and save their original state BEFORE applying
                 const affectedNodes = findAffectedNodes(nodeMap, span.start, span.end);
+                // ✅ NEW: Save original state for rollback
                 const originalNodeStates = [];
                 affectedNodes.forEach(n => {
                     originalNodeStates.push({
@@ -643,6 +663,7 @@ function applyContextEdits(html, edits) {
                         originalData: String(n.node.data || '')
                     });
                 });
+                // Detect boundary issues
                 if (affectedNodes.length > 1) {
                     const spanningElements = affectedNodes.map(n => {
                         let parent = n.node.parent;
@@ -664,10 +685,12 @@ function applyContextEdits(html, edits) {
                         xpath
                     });
                 }
+                // Try to apply the replacement
                 const applyStart = Date.now();
                 const applySuccess = applyReplacementToNodes(nodeMap, span.start, span.end, edit.replace);
                 diagnostics.timings.apply = Date.now() - applyStart;
                 if (applySuccess) {
+                    // ✅ Verify the changes
                     const verifyStart = Date.now();
                     const { fullText: newFullText } = consolidateTextNodesRecursive($, el);
                     const oldTextGone = !newFullText.includes(edit.find);
@@ -679,18 +702,21 @@ function applyContextEdits(html, edits) {
                     if (verificationPassed) {
                         applied = true;
                         appliedTag = tag;
-                        return false;
+                        return false; // Stop iteration
                     }
                     else {
+                        // ✅ NEW: ROLLBACK on verification failure
                         originalNodeStates.forEach(({ node, originalData }) => {
                             node.data = originalData;
                         });
+                        // ✅ Verify rollback worked
                         const { fullText: rolledBackText } = consolidateTextNodesRecursive($, el);
                         const rollbackVerified = rolledBackText === fullText;
                         diagnostics.crossesBoundary = true;
                     }
                 }
                 else {
+                    // ✅ NEW: ROLLBACK on apply failure
                     originalNodeStates.forEach(({ node, originalData }) => {
                         node.data = originalData;
                     });
@@ -815,15 +841,16 @@ function applyContextEdits(html, edits) {
     });
     const processingTime = Date.now() - processingStart;
     const totalTime = Date.now() - startTime;
-    const filteredResults = results.filter(r => r.status !== 'skipped');
+    const filteredResults = results.filter(r => r.status !== 'skipped'); // ✅ Remove skipped from results
     return {
         html: $.html(),
         results: filteredResults,
         stats: {
-            total: filteredResults.length,
+            total: filteredResults.length, // ✅ Only count non-skipped edits
             applied: appliedCount,
             failed: failedCount,
             blocked: blockedCount,
+            // ✅ Removed skipped from stats
         },
         timings: {
             total: totalTime,
@@ -833,6 +860,9 @@ function applyContextEdits(html, edits) {
         },
     };
 }
+/* ------------------------------------------------------------------ */
+/*                      Loose word fallback (safe)                     */
+/* ------------------------------------------------------------------ */
 function applyLooseWordFallback(html, edits) {
     const $ = cheerio.load(html, { decodeEntities: false });
     $('script,style,noscript').remove();
@@ -865,6 +895,9 @@ function applyLooseWordFallback(html, edits) {
     });
     return { html: $.html(), changes };
 }
+/* ------------------------------------------------------------------ */
+/*                           Suggestions                               */
+/* ------------------------------------------------------------------ */
 async function getSuggestionsFromHtml(html) {
     const $ = cheerio.load(html);
     $('script, style, noscript').remove();
@@ -907,15 +940,20 @@ async function getSuggestionsFromHtml(html) {
                 suggestions = s.map((x) => String(x ?? ''));
         }
     }
-    catch (_e) { }
+    catch (_e) { /* ignore */ }
     return { gibberish, suggestions };
 }
+/* ------------------------------------------------------------------ */
+/*                               Routes                                */
+/* ------------------------------------------------------------------ */
 router.post('/:id/golden', async (req, res) => {
     const requestStart = Date.now();
     try {
         const id = String(req.params.id);
+        // ✅ USE REQUEST BODY HTML if provided (cache-first approach)
         let html = String(req.body?.html || '').trim();
         let name = `Template ${id}`;
+        // If no HTML provided in body, fetch it (fallback for backward compatibility)
         if (!html) {
             const fetched = await getRobustTemplateHtml(id);
             html = fetched.html;
@@ -928,13 +966,14 @@ router.post('/:id/golden', async (req, res) => {
         console.log('✂️ [GOLDEN CHECK] Number of chunks created:', chunks.length);
         console.log('📦 [GOLDEN CHECK] Chunk sizes:', chunks.map((c, i) => `Chunk ${i + 1}: ${c.length} chars`).join(', '));
         console.log('🚀 [GOLDEN CHECK] Processing all chunks in parallel...\n');
+        // ✅ Process all chunks in parallel
         const chunkPromises = chunks.map(async (chunk, i) => {
             console.log(`🚀 [GOLDEN CHECK] Starting chunk ${i + 1}/${chunks.length} (${chunk.length} characters)...`);
             try {
                 const completion = await openai.chat.completions.create({
                     model: OPENAI_MODEL,
-                    temperature: 0,
-                    seed: 42,
+                    temperature: 0, // ✅ Changed from 0.2 to 0 for maximum determinism
+                    seed: 42, // ✅ Added seed for reproducible results
                     messages: [
                         { role: 'system', content: grammarSystemPrompt() },
                         { role: 'user', content: `Visible email text:\n\n${chunk || 'No text.'}` }
@@ -961,8 +1000,9 @@ router.post('/:id/golden', async (req, res) => {
                 return [];
             }
         });
+        // ✅ Wait for all chunks to complete
         const allChunkResults = await Promise.all(chunkPromises);
-        const allEdits = allChunkResults.flat().slice(0, 60);
+        const allEdits = allChunkResults.flat().slice(0, 60); // Limit to 60 edits total
         console.log(`\n🎯 [GOLDEN CHECK] Finished processing all chunks`);
         console.log(`📝 [GOLDEN CHECK] Total edits collected: ${allEdits.length}`);
         const atomicResult = applyContextEdits(html, allEdits);
@@ -995,8 +1035,10 @@ router.post('/:id/golden', async (req, res) => {
 router.post('/:id/subjects', async (req, res) => {
     try {
         const id = String(req.params.id);
+        // ✅ USE REQUEST BODY HTML (fast path)
         let html = String(req.body?.html || '').trim();
         let name = `Template ${id}`;
+        // If no HTML provided, fetch it (fallback)
         if (!html) {
             const fetched = await getRobustTemplateHtml(id);
             html = fetched.html;
@@ -1091,7 +1133,7 @@ async function getVariantEditsAndWhy(sourceHtml, usedIdeas) {
                 why = w.map((s) => String(s || '')).filter(Boolean);
         }
     }
-    catch (_e) { }
+    catch (_e) { /* ignore */ }
     return { edits, why };
 }
 router.post('/:id/variants/start', async (req, res) => {
@@ -1129,12 +1171,15 @@ router.post('/variants/:runId/next', async (req, res) => {
         if (run.variants.length >= run.target) {
             return res.status(200).json({ done: true, message: 'All variants generated', no: run.variants.length });
         }
+        // ✅ FIXED: Always generate variants from the golden template, not from previous variants
+        // This prevents drift and ensures each variant is independent
         const sourceHtml = run.goldenHtml;
         const { edits, why } = await getVariantEditsAndWhy(sourceHtml, run.usedIdeas);
         const atomicResult = applyContextEdits(sourceHtml, edits);
         const variantNo = run.variants.length + 1;
         const ideas = Array.from(new Set((edits || []).map((e) => e.idea).filter(Boolean)));
         ideas.forEach((i) => run.usedIdeas.add(i));
+        // ✅ Extract applied changes
         const appliedEdits = atomicResult.results.filter(r => r.status === 'applied');
         const failedEdits = atomicResult.results.filter(r => r.status !== 'applied' && r.status !== 'skipped');
         const changes = appliedEdits.map(r => r.change).filter(Boolean);
@@ -1144,6 +1189,7 @@ router.post('/variants/:runId/next', async (req, res) => {
             changes: changes,
             why: (why && why.length) ? why : ['Small clarity and deliverability improvements.'],
             artifacts: { usedIdeas: ideas },
+            // ✅ NEW: Add failed edits and stats
             failedEdits: failedEdits.map(r => ({
                 ...r.edit,
                 status: r.status,
@@ -1152,6 +1198,8 @@ router.post('/variants/:runId/next', async (req, res) => {
             })),
             stats: atomicResult.stats,
         };
+        // ✅ FIXED: Do NOT update currentHtml to chain variants
+        // Each variant is independent from the golden template
         run.variants.push(item);
         res.json(item);
     }
@@ -1349,11 +1397,14 @@ router.post('/variants/:runId/chat/message', async (req, res) => {
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object') {
                 const obj = parsed;
+                // ✅ IMPROVED: Better formatting for different intents
                 const hasIdeas = Array.isArray(obj.ideas) && obj.ideas.length > 0;
                 const hasNotes = Array.isArray(obj.notes) && obj.notes.length > 0;
                 const hasEdits = Array.isArray(obj.edits) && obj.edits.length > 0;
+                // Build friendly assistant text - COMBINE notes and ideas when both exist
                 const parts = [];
                 if (hasIdeas) {
+                    // Format ideas nicely
                     if (obj.ideas.length === 1) {
                         parts.push(obj.ideas[0]);
                     }
@@ -1362,21 +1413,24 @@ router.post('/variants/:runId/chat/message', async (req, res) => {
                     }
                 }
                 if (hasNotes) {
+                    // Add notes (questions, friendly messages) - can appear with or without ideas
                     parts.push(obj.notes.join('\n\n'));
                 }
+                // ❌ REMOVED: Edit functionality disabled
+                // Edits array is ignored - chatbot now provides suggestions only
                 assistantText = parts.length > 0
                     ? parts.join('\n\n')
                     : 'Got it! Let me know if you need anything else.';
                 json = {
                     intent: (obj.intent || 'suggest'),
                     ideas: Array.isArray(obj.ideas) ? obj.ideas.map((s) => String(s || '')) : [],
-                    edits: [],
+                    edits: [], // ❌ Always empty - replacement functionality removed
                     targets: Array.isArray(obj.targets) ? obj.targets.map((s) => String(s || '')) : [],
                     notes: Array.isArray(obj.notes) ? obj.notes.map((s) => String(s || '')) : [],
                 };
             }
         }
-        catch (_e) { }
+        catch (_e) { /* ignore parse error; return default */ }
         return res.json({ assistantText, json });
     }
     catch (err) {
@@ -1390,6 +1444,7 @@ router.post('/variants/:runId/chat/apply', async (req, res) => {
         if (!html)
             return res.status(400).json({ code: 'CHAT_APPLY_BAD_REQUEST', message: 'html is required' });
         const atomicResult = applyContextEdits(html, edits);
+        // ✅ Extract results
         const appliedEdits = atomicResult.results.filter(r => r.status === 'applied');
         const failedEdits = atomicResult.results.filter(r => r.status !== 'applied' && r.status !== 'skipped');
         const changes = appliedEdits.map(r => r.change).filter(Boolean);
@@ -1397,6 +1452,7 @@ router.post('/variants/:runId/chat/apply', async (req, res) => {
         return res.json({
             html: doc,
             changes: changes,
+            // ✅ NEW: Return failed edits and stats
             failedEdits: failedEdits.map(r => ({
                 ...r.edit,
                 status: r.status,

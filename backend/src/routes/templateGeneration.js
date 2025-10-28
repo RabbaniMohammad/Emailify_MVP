@@ -14,6 +14,10 @@ const mjmlConversionService_1 = require("@src/services/mjmlConversionService");
 const jet_logger_1 = __importDefault(require("jet-logger"));
 const crypto_1 = require("crypto");
 const router = (0, express_1.Router)();
+/**
+ * POST /api/generate
+ * Simple one-shot template generation (no conversation)
+ */
 router.post('/', auth_1.authenticate, async (req, res) => {
     try {
         const { prompt } = req.body;
@@ -77,6 +81,11 @@ router.post('/', auth_1.authenticate, async (req, res) => {
         });
     }
 });
+/**
+ * POST /api/generate/start
+ * Start a new template generation conversation
+ * ✅ Returns MJML on first generation (frontend needs it for editor)
+ */
 router.post('/start', auth_1.authenticate, organizationContext_1.organizationContext, async (req, res) => {
     try {
         const { prompt, images } = req.body;
@@ -132,7 +141,7 @@ router.post('/start', auth_1.authenticate, organizationContext_1.organizationCon
         jet_logger_1.default.info(`💾 Creating conversation in database...`);
         const conversation = await TemplateConversation_1.default.create({
             userId,
-            organizationId: organization._id,
+            organizationId: organization._id, // ✅ ORGANIZATION ISOLATION
             conversationId,
             messages: [
                 {
@@ -152,10 +161,13 @@ router.post('/start', auth_1.authenticate, organizationContext_1.organizationCon
             status: 'active',
         });
         jet_logger_1.default.info(`✅ Conversation created: ${conversationId}`);
+        // ✅ First generation: Return MJML (frontend needs it for editor)
+        // ⭐ Note: message is omitted - frontend will generate dynamic message based on isRegenerating flag
         const responseData = {
             conversationId,
             html: conversion.html,
             mjml: result.mjmlCode,
+            // message: result.assistantMessage, // ❌ Removed - frontend handles this dynamically
             hasErrors: conversion.errors.length > 0,
             errors: conversion.errors,
             attemptsUsed: result.attemptsUsed,
@@ -182,6 +194,13 @@ router.post('/start', auth_1.authenticate, organizationContext_1.organizationCon
         });
     }
 });
+/**
+ * POST /api/generate/continue/:conversationId
+ * Continue an existing conversation
+ * ✅ STATELESS: Only current MJML + new request (no conversation history)
+ * ✅ Returns MJML + HTML in response
+ * ✅ NO image deduplication (handled by frontend)
+ */
 router.post('/continue/:conversationId', auth_1.authenticate, async (req, res) => {
     try {
         const { conversationId } = req.params;
@@ -219,12 +238,19 @@ router.post('/continue/:conversationId', auth_1.authenticate, async (req, res) =
         }
         jet_logger_1.default.info(`✅ Conversation found`);
         jet_logger_1.default.info(`📊 Current messages count: ${conversation.messages.length}`);
+        // ✅ STATELESS APPROACH: No conversation history sent to AI
+        // Send: Current MJML state + New user request only
+        // Image deduplication: Handled by frontend warnings
         jet_logger_1.default.info(`💰 Cost optimization: Stateless mode activated`);
         jet_logger_1.default.info(`   - Conversation history: ${conversation.messages.length} messages stored in DB (NOT sent to AI)`);
         jet_logger_1.default.info(`   - Sending to AI: Current MJML + new request only`);
         jet_logger_1.default.info(`   - Image deduplication: Handled by frontend`);
         jet_logger_1.default.info(`📡 Calling refineTemplate service...`);
-        const result = await (0, templateGenerationService_1.refineTemplate)(conversation.currentMjml, message.trim(), [], userId, images || undefined);
+        const result = await (0, templateGenerationService_1.refineTemplate)(conversation.currentMjml, // ✅ Current template state (contains all previous changes)
+        message.trim(), // ✅ New user request
+        [], // ✅ Empty history (stateless - huge cost savings!)
+        userId, images || undefined // ✅ Images as-is (no backend deduplication)
+        );
         jet_logger_1.default.info(`✅ Template refined successfully`);
         jet_logger_1.default.info(`📄 New MJML length: ${result.mjmlCode?.length}`);
         jet_logger_1.default.info(`🔄 Attempts used: ${result.attemptsUsed}`);
@@ -240,6 +266,7 @@ router.post('/continue/:conversationId', auth_1.authenticate, async (req, res) =
             });
         }
         jet_logger_1.default.info(`✅ MJML converted, HTML length: ${conversion.html?.length}`);
+        // ✅ Store messages in DB for audit/history (not sent to AI)
         jet_logger_1.default.info(`💾 Adding messages to conversation history (DB only)...`);
         conversation.messages.push({
             role: 'user',
@@ -257,10 +284,13 @@ router.post('/continue/:conversationId', auth_1.authenticate, async (req, res) =
         await conversation.save();
         jet_logger_1.default.info(`✅ Conversation updated: ${conversationId}`);
         jet_logger_1.default.info(`📊 Total messages now: ${conversation.messages.length}`);
+        // ✅ Return both HTML and MJML
+        // ⭐ Note: message is omitted - frontend will generate dynamic message based on isRegenerating flag
         const responsePayload = {
             conversationId,
-            html: conversion.html,
-            mjml: result.mjmlCode,
+            html: conversion.html, // ✅ HTML for preview
+            mjml: result.mjmlCode, // ✅ MJML for editor (YOU NEED THIS!)
+            // message: result.assistantMessage, // ❌ Removed - frontend handles this dynamically
             hasErrors: conversion.errors.length > 0,
             errors: conversion.errors,
             attemptsUsed: result.attemptsUsed,
@@ -279,6 +309,10 @@ router.post('/continue/:conversationId', auth_1.authenticate, async (req, res) =
         });
     }
 });
+/**
+ * GET /api/generate/conversation/:conversationId
+ * Get conversation history
+ */
 router.get('/conversation/:conversationId', auth_1.authenticate, organizationContext_1.organizationContext, async (req, res) => {
     try {
         const { conversationId } = req.params;
@@ -317,6 +351,10 @@ router.get('/conversation/:conversationId', auth_1.authenticate, organizationCon
         });
     }
 });
+/**
+ * GET /api/generate/history
+ * Get user's conversation history
+ */
 router.get('/history', auth_1.authenticate, async (req, res) => {
     try {
         const userId = req.tokenPayload?.userId;
@@ -359,6 +397,10 @@ router.get('/history', auth_1.authenticate, async (req, res) => {
         });
     }
 });
+/**
+ * POST /api/generate/save/:conversationId
+ * Save template to MongoDB
+ */
 router.post('/save/:conversationId', auth_1.authenticate, organizationContext_1.organizationContext, async (req, res) => {
     try {
         const { conversationId } = req.params;
@@ -410,7 +452,7 @@ router.post('/save/:conversationId', auth_1.authenticate, organizationContext_1.
             name: templateName.trim(),
             html: conversation.currentHtml,
             userId,
-            organizationId: organization._id,
+            organizationId: organization._id, // ✅ ORGANIZATION ISOLATION
             conversationId,
             type: 'generated',
             templateType: 'AI Generated',
@@ -443,6 +485,10 @@ router.post('/save/:conversationId', auth_1.authenticate, organizationContext_1.
         });
     }
 });
+/**
+ * POST /api/generate/preview
+ * Quick preview without saving to database
+ */
 router.post('/preview', auth_1.authenticate, async (req, res) => {
     try {
         const { mjml } = req.body;
@@ -475,6 +521,10 @@ router.post('/preview', auth_1.authenticate, async (req, res) => {
         });
     }
 });
+/**
+ * GET /api/generate/starter
+ * Get MJML starter template
+ */
 router.get('/starter', auth_1.authenticate, async (req, res) => {
     try {
         const mjml = (0, mjmlConversionService_1.getMjmlStarter)();

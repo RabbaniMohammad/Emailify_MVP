@@ -11,24 +11,30 @@ const User_1 = __importDefault(require("@src/models/User"));
 const Organization_1 = __importDefault(require("@src/models/Organization"));
 const jet_logger_1 = __importDefault(require("jet-logger"));
 const router = (0, express_1.Router)();
+// ==================== Google OAuth Initiation ====================
+// Accept organization slug as query parameter
 router.get('/google', (req, res, next) => {
     const orgSlug = req.query.org;
+    // 🔒 SECURITY: Organization slug is mandatory
     if (!orgSlug || orgSlug.trim() === '') {
         jet_logger_1.default.warn('🚫 SECURITY: Login attempt without organization slug');
         return res.redirect(`${process.env.FRONTEND_URL}/auth?error=org_required`);
     }
+    // Validate slug format
     if (!/^[a-z0-9-]+$/.test(orgSlug)) {
         jet_logger_1.default.warn(`🚫 SECURITY: Invalid organization slug format: ${orgSlug}`);
         return res.redirect(`${process.env.FRONTEND_URL}/auth?error=invalid_org`);
     }
+    // Store org slug in session for callback
     req.session = req.session || {};
     req.session.orgSlug = orgSlug;
     passport_1.default.authenticate('google', {
         scope: ['profile', 'email'],
         session: false,
-        state: orgSlug,
+        state: orgSlug, // Pass org slug via state
     })(req, res, next);
 });
+// ==================== Google OAuth Callback ====================
 router.get('/google/callback', passport_1.default.authenticate('google', {
     failureRedirect: `${process.env.FRONTEND_URL}/auth?error=auth_failed`,
     session: false
@@ -40,31 +46,38 @@ router.get('/google/callback', passport_1.default.authenticate('google', {
             jet_logger_1.default.warn('⚠️ No user found in callback');
             return res.redirect(`${process.env.FRONTEND_URL}/auth?error=no_user`);
         }
+        // 🔒 SECURITY: Organization slug is mandatory
         if (!orgSlug || orgSlug.trim() === '') {
             jet_logger_1.default.warn(`🚫 SECURITY: Callback without organization slug for user: ${user.email}`);
             return res.redirect(`${process.env.FRONTEND_URL}/auth?error=org_required`);
         }
+        // ==================== Handle Organization Assignment ====================
+        // Always process org slug if provided (allows switching organizations)
         if (orgSlug) {
             let organization = await Organization_1.default.findOne({ slug: orgSlug.toLowerCase() });
+            // If organization doesn't exist, create it and make user the owner
             if (!organization) {
                 organization = new Organization_1.default({
-                    name: orgSlug.charAt(0).toUpperCase() + orgSlug.slice(1),
+                    name: orgSlug.charAt(0).toUpperCase() + orgSlug.slice(1), // Capitalize first letter
                     slug: orgSlug.toLowerCase(),
-                    owner: user._id,
+                    owner: user._id, // Set the creator as owner (for org model requirement)
                     isActive: true,
                     maxUsers: 50,
                     maxTemplates: 1000,
                 });
                 await organization.save();
+                // Make first user the super_admin of this org
                 user.organizationId = organization._id;
-                user.orgRole = 'super_admin';
-                user.isApproved = true;
+                user.orgRole = 'super_admin'; // First user is super_admin
+                user.isApproved = true; // Super admin is auto-approved
                 await user.save();
                 jet_logger_1.default.info(`🏢 New organization created: ${orgSlug} (super_admin: ${user.email})`);
             }
             else if (organization.isActive) {
+                // Organization exists - check if user is already in this org
                 const isCurrentOrg = user.organizationId?.toString() === String(organization._id);
                 if (isCurrentOrg) {
+                    // Already in this org - ensure super_admin is always approved
                     if (user.orgRole === 'super_admin' && !user.isApproved) {
                         user.isApproved = true;
                         await user.save();
@@ -75,18 +88,23 @@ router.get('/google/callback', passport_1.default.authenticate('google', {
                     }
                 }
                 else {
+                    // User record exists but for wrong org (shouldn't happen with new passport logic)
+                    // This means passport created user without org - update it now
                     if (!user.organizationId) {
+                        // Check if this is the first user in this organization
                         const existingUserCount = await User_1.default.countDocuments({ organizationId: organization._id });
                         if (existingUserCount === 0) {
+                            // First user in this org - make them super_admin
                             user.organizationId = organization._id;
                             user.orgRole = 'super_admin';
                             user.isApproved = true;
-                            organization.owner = user._id;
+                            organization.owner = user._id; // Update org owner
                             await organization.save();
                             await user.save();
                             jet_logger_1.default.info(`🏢 First user joins org ${orgSlug} as super_admin: ${user.email}`);
                         }
                         else {
+                            // Not first user - check domain restriction and join as member
                             let canJoin = true;
                             if (organization.domain) {
                                 const domain = organization.domain.startsWith('@')
@@ -98,6 +116,7 @@ router.get('/google/callback', passport_1.default.authenticate('google', {
                                 }
                             }
                             if (canJoin) {
+                                // Check user limit
                                 const memberCount = await User_1.default.countDocuments({ organizationId: organization._id });
                                 if (memberCount >= organization.maxUsers) {
                                     jet_logger_1.default.warn(`⚠️ Organization ${orgSlug} is full (${memberCount}/${organization.maxUsers})`);
@@ -105,9 +124,10 @@ router.get('/google/callback', passport_1.default.authenticate('google', {
                                 }
                             }
                             if (canJoin) {
+                                // Update user's organization as member
                                 user.organizationId = organization._id;
                                 user.orgRole = 'member';
-                                user.isApproved = false;
+                                user.isApproved = false; // Requires admin approval when joining new org
                                 await user.save();
                                 jet_logger_1.default.info(`🔄 User ${user.email} joined ${orgSlug} as member (pending approval)`);
                             }
@@ -118,11 +138,13 @@ router.get('/google/callback', passport_1.default.authenticate('google', {
                     }
                 }
             }
+            // ⭐ CRITICAL: Reload user from DB to get fresh organizationId for JWT
             const freshUser = await User_1.default.findById(user._id);
             if (freshUser) {
                 user = freshUser;
             }
         }
+        // ==================== Check if user is deactivated ====================
         if (!user.isActive) {
             jet_logger_1.default.warn(`🚫 Deactivated user login attempt: ${user.email}`);
             return res.send(`
@@ -202,6 +224,7 @@ router.get('/google/callback', passport_1.default.authenticate('google', {
           </html>
         `);
         }
+        // ==================== Check approval status ====================
         if (!user.isApproved) {
             jet_logger_1.default.warn(`⏳ Unapproved user login attempt: ${user.email}`);
             return res.send(`
@@ -281,21 +304,24 @@ router.get('/google/callback', passport_1.default.authenticate('google', {
           </html>
         `);
         }
+        // ==================== User is approved and active - generate tokens ====================
         const accessToken = (0, authService_1.generateAccessToken)(user);
         const refreshToken = (0, authService_1.generateRefreshToken)(user);
+        // Set cookies
         res.cookie('accessToken', accessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 60 * 60 * 1000,
+            maxAge: 60 * 60 * 1000, // 1 hour
         });
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         });
         jet_logger_1.default.info(`✅ User logged in: ${user.email}`);
+        // Fetch organization details if user has one
         let organizationData = null;
         if (user.organizationId) {
             const org = await Organization_1.default.findById(user.organizationId);
@@ -307,6 +333,7 @@ router.get('/google/callback', passport_1.default.authenticate('google', {
                 };
             }
         }
+        // Close popup and notify parent
         res.send(`
         <!DOCTYPE html>
         <html>
@@ -340,6 +367,7 @@ router.get('/google/callback', passport_1.default.authenticate('google', {
         res.redirect(`${process.env.FRONTEND_URL}/auth?error=callback_failed`);
     }
 });
+// ==================== Get Current User ====================
 router.get('/me', auth_1.authenticate, async (req, res) => {
     try {
         const tokenPayload = req.tokenPayload;
@@ -352,6 +380,7 @@ router.get('/me', auth_1.authenticate, async (req, res) => {
         if (!user) {
             return res.status(404).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
         }
+        // Return user info even if not approved - let frontend handle the pending state
         res.json({ user: user.toObject() });
     }
     catch (error) {
@@ -359,9 +388,11 @@ router.get('/me', auth_1.authenticate, async (req, res) => {
         res.status(500).json({ error: 'Failed to get user', code: 'SERVER_ERROR' });
     }
 });
+// ==================== Refresh Access Token ====================
 router.post('/refresh', async (req, res) => {
     try {
         const refreshToken = req.cookies?.refreshToken;
+        // ✅ Check if refresh token exists
         if (!refreshToken) {
             jet_logger_1.default.warn('🚫 Refresh attempt with no token');
             return res.status(401).json({
@@ -369,6 +400,7 @@ router.post('/refresh', async (req, res) => {
                 code: 'NO_REFRESH_TOKEN'
             });
         }
+        // ✅ Verify refresh token signature
         let payload;
         try {
             payload = (0, authService_1.verifyRefreshToken)(refreshToken);
@@ -380,6 +412,7 @@ router.post('/refresh', async (req, res) => {
                 code: 'INVALID_REFRESH_TOKEN'
             });
         }
+        // ✅ Get user from database
         const user = await User_1.default.findById(payload.userId);
         if (!user) {
             jet_logger_1.default.warn(`🚫 User not found during refresh: ${payload.userId}`);
@@ -388,6 +421,7 @@ router.post('/refresh', async (req, res) => {
                 code: 'USER_NOT_FOUND'
             });
         }
+        // ✅ Check if user is active
         if (!user.isActive) {
             jet_logger_1.default.warn(`🚫 Inactive user refresh attempt: ${user.email}`);
             return res.status(401).json({
@@ -395,6 +429,7 @@ router.post('/refresh', async (req, res) => {
                 code: 'USER_INACTIVE'
             });
         }
+        // ✅ Check if user is approved
         if (!user.isApproved) {
             jet_logger_1.default.warn(`🚫 Unapproved user refresh attempt: ${user.email}`);
             return res.status(401).json({
@@ -402,19 +437,23 @@ router.post('/refresh', async (req, res) => {
                 code: 'USER_NOT_APPROVED'
             });
         }
+        // ✅ Generate new access token
         const newAccessToken = (0, authService_1.generateAccessToken)(user);
+        // ✅ Generate new refresh token (token rotation for better security)
         const newRefreshToken = (0, authService_1.generateRefreshToken)(user);
+        // ✅ Set new access token cookie
         res.cookie('accessToken', newAccessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 60 * 60 * 1000,
+            maxAge: 60 * 60 * 1000, // 1 hour
         });
+        // ✅ Set new refresh token cookie (token rotation)
         res.cookie('refreshToken', newRefreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         });
         jet_logger_1.default.info(`✅ Token refreshed successfully for: ${user.email}`);
         res.json({ message: 'Token refreshed successfully' });
@@ -427,6 +466,7 @@ router.post('/refresh', async (req, res) => {
         });
     }
 });
+// ==================== Logout ====================
 router.post('/logout', (req, res) => {
     try {
         res.clearCookie('accessToken');

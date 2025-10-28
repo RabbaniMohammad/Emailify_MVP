@@ -51,7 +51,7 @@ passport_1.default.use(new passport_google_oauth20_1.Strategy({
     clientID: GOOGLE_CLIENT_ID,
     clientSecret: GOOGLE_CLIENT_SECRET,
     callbackURL: GOOGLE_CALLBACK_URL,
-    passReqToCallback: true,
+    passReqToCallback: true, // Enable access to req object
 }, async (req, accessToken, refreshToken, profile, done) => {
     try {
         jet_logger_1.default.info(`Google OAuth callback for: ${profile.emails?.[0]?.value}`);
@@ -62,38 +62,50 @@ passport_1.default.use(new passport_google_oauth20_1.Strategy({
         if (!email) {
             return done(new Error('No email provided by Google'), undefined);
         }
+        // Get organization slug from state parameter
         const orgSlug = req.query.state || '';
         if (!orgSlug) {
+            // No org specified - this shouldn't happen with the new flow
             jet_logger_1.default.warn(`⚠️ No organization specified for login: ${email}`);
             return done(new Error('Organization is required'), undefined);
         }
+        // Find or create organization first
         const Organization = (await Promise.resolve().then(() => __importStar(require('@src/models/Organization')))).default;
         let organization = await Organization.findOne({ slug: orgSlug.toLowerCase() });
         if (!organization) {
+            // Create new organization (will be handled properly in callback)
+            // For now, just pass user data back
             jet_logger_1.default.info(`🏢 New organization will be created: ${orgSlug}`);
         }
         const organizationId = organization?._id;
+        // Look for existing user with this googleId in THIS organization
+        // First check if user exists in this specific org
         let user = await User_1.default.findOne({
             googleId,
             organizationId: organizationId || null
         });
         if (user) {
+            // Existing user in this org - update info
             jet_logger_1.default.info(`✅ Existing user in org ${orgSlug}: ${email}`);
             user.name = name;
             user.picture = picture;
             await user.updateLastLogin();
             return done(null, user);
         }
+        // Check if user exists with this googleId but in a different org or no org
         const existingUser = await User_1.default.findOne({ googleId });
         if (existingUser && !existingUser.organizationId && organizationId) {
+            // User exists without org, and now joining an org - update in callback
             jet_logger_1.default.info(`🔄 User ${email} exists without org, will be assigned to ${orgSlug} in callback`);
             return done(null, existingUser);
         }
         else if (existingUser && existingUser.organizationId && organizationId) {
+            // User exists in different org - create new user record for this org
             const existingOrgId = String(existingUser.organizationId);
             const requestedOrgId = String(organizationId);
             if (existingOrgId !== requestedOrgId) {
                 jet_logger_1.default.info(`� User ${email} exists in different org, creating new record for ${orgSlug}`);
+                // Create new user record for this organization
                 user = await User_1.default.create({
                     googleId,
                     email,
@@ -106,11 +118,14 @@ passport_1.default.use(new passport_google_oauth20_1.Strategy({
                 });
                 return done(null, user);
             }
+            // Same org but shouldn't reach here (covered above) - safety fallback
             jet_logger_1.default.info(`⚠️ Fallback: User ${email} in correct org ${orgSlug}`);
             return done(null, existingUser);
         }
         else {
+            // New user - create minimal record (org assignment happens in callback)
             jet_logger_1.default.info(`🆕 Creating new user for org ${orgSlug}: ${email}`);
+            // If org exists, create user in that org
             if (organizationId) {
                 user = await User_1.default.create({
                     googleId,
@@ -118,12 +133,13 @@ passport_1.default.use(new passport_google_oauth20_1.Strategy({
                     name,
                     picture,
                     organizationId,
-                    orgRole: 'member',
+                    orgRole: 'member', // Default role, will be updated in callback if first user
                     isApproved: false,
                     isActive: true,
                 });
             }
             else {
+                // Org doesn't exist yet - create user without org (will be assigned in callback)
                 user = await User_1.default.create({
                     googleId,
                     email,
