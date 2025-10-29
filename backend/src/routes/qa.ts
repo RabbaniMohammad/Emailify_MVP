@@ -577,7 +577,6 @@ function applyReplacementToNodes(
       return true;
     }
   } catch (error) {
-    console.error('❌ Error in applyReplacementToNodes:', error);
     return false;
   }
 }
@@ -1152,15 +1151,8 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
     const visible = extractVisibleText(html);
     const chunks = chunkText(visible, 700);
     
-    console.log('🔍 [GOLDEN CHECK] Template ID:', id);
-    console.log('📏 [GOLDEN CHECK] Total visible text length:', visible.length, 'characters');
-    console.log('✂️ [GOLDEN CHECK] Number of chunks created:', chunks.length);
-    console.log('📦 [GOLDEN CHECK] Chunk sizes:', chunks.map((c, i) => `Chunk ${i + 1}: ${c.length} chars`).join(', '));
-    console.log('🚀 [GOLDEN CHECK] Processing all chunks in parallel...\n');
-    
     // ✅ Process all chunks in parallel
     const chunkPromises = chunks.map(async (chunk, i) => {
-      console.log(`🚀 [GOLDEN CHECK] Starting chunk ${i + 1}/${chunks.length} (${chunk.length} characters)...`);
       
       try {
         const completion = await openai.chat.completions.create({
@@ -1186,13 +1178,11 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
             reason: e?.reason ? String(e.reason) : undefined,
           })).filter((e: any) => e.find && e.replace);
           
-          console.log(`✅ [GOLDEN CHECK] Chunk ${i + 1} completed with ${edits.length} edits`);
           return edits;
         }
         
         return [];
       } catch (e) {
-        console.error(`❌ [GOLDEN CHECK] Failed to process chunk ${i + 1}:`, e);
         return [];
       }
     });
@@ -1201,9 +1191,6 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
     const allChunkResults = await Promise.all(chunkPromises);
     const allEdits = allChunkResults.flat().slice(0, 60); // Limit to 60 edits total
     
-    console.log(`\n🎯 [GOLDEN CHECK] Finished processing all chunks`);
-    console.log(`📝 [GOLDEN CHECK] Total edits collected: ${allEdits.length}`);
-    
     const atomicResult = applyContextEdits(html, allEdits);
     
     const doc = ensureFullDocShell(name, atomicResult.html);
@@ -1211,9 +1198,6 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
     const appliedEdits = atomicResult.results.filter(r => r.status === 'applied');
     const failedEdits = atomicResult.results.filter(r => r.status !== 'applied' && r.status !== 'skipped');
     const changes = appliedEdits.map(r => r.change!).filter(Boolean);
-    
-    console.log(`✅ [GOLDEN CHECK] Applied: ${appliedEdits.length}, Failed: ${failedEdits.length}, Changes: ${changes.length}`);
-    console.log(`⏱️ [GOLDEN CHECK] Total time: ${Date.now() - requestStart}ms\n`);
     
     res.json({
       html: doc,
@@ -1231,7 +1215,6 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
     });
     
   } catch (err: unknown) {
-    console.error('❌ GOLDEN ERROR:', err);
     res.status(500).json({ code: 'QA_GOLDEN_ERROR', message: errMsg(err) });
   }
 });
