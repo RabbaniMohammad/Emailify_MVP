@@ -134,7 +134,14 @@ app.use('/api/debug-logs', debugLogsRouter);
 app.use('/api/admin', adminRouter);
 
 // Template Generation Routes ✅ NEW
-app.use('/api/generate', templateGenerationRouter);
+console.log('🔵 [SERVER] About to mount templateGenerationRouter');
+console.log('🔵 [SERVER] Router type:', typeof templateGenerationRouter);
+console.log('🔵 [SERVER] Router is:', templateGenerationRouter);
+app.use('/api/generate', (req, res, next) => {
+  console.log('🔵 [SERVER] Request to /api/generate:', req.method, req.path);
+  next();
+}, templateGenerationRouter);
+console.log('🔵 [SERVER] templateGenerationRouter mounted at /api/generate');
 
 // Core API routers
 app.use('/api/templates', templatesRouter);

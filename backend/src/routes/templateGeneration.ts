@@ -11,11 +11,22 @@ import { randomUUID } from 'crypto';
 
 const router = Router();
 
+console.log('🟢 [ROUTES] templateGeneration.ts - Router created');
+
+// Test route to verify router is working
+router.get('/test', (req: Request, res: Response) => {
+  console.log('🟢 [ROUTES] /test route hit!');
+  res.json({ message: 'Template generation router is working!' });
+});
+
+console.log('🟢 [ROUTES] /test route registered');
+
 /**
  * POST /api/generate
  * Simple one-shot template generation (no conversation)
  */
 router.post('/', authenticate, async (req: Request, res: Response) => {
+  console.log('🟢 [ROUTES] POST / route hit!');
   try {
     const { prompt } = req.body;
     const userId = (req as any).tokenPayload?.userId;
@@ -89,15 +100,28 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/generate/start
- * Start a new template generation conversation
- * ✅ Returns MJML on first generation (frontend needs it for editor)
+ * POST /api/generate/chat
+ * Single unified endpoint for template generation chat
+ * ✅ Stateless: Frontend sends full conversation history
+ * ✅ No database: Everything managed in frontend cache
+ * ✅ Simple: One endpoint for all messages
  */
-router.post('/start', authenticate, organizationContext, async (req: Request, res: Response) => {
+console.log('🟢 [ROUTES] Registering POST /chat route');
+router.post('/chat', authenticate, organizationContext, async (req: Request, res: Response) => {
+  console.log('🟢 [ROUTES] POST /chat route hit!');
   try {
-    const { prompt, images } = req.body;
+    const { message, conversationHistory = [], currentMjml, images } = req.body;
     const userId = (req as any).tokenPayload?.userId;
     const organization = (req as any).organization;
+
+    console.log('🟢 [BACKEND /chat] Request received:', {
+      userId,
+      organizationId: organization?._id,
+      messageLength: message?.length || 0,
+      historyLength: conversationHistory.length,
+      hasCurrentMjml: !!currentMjml,
+      imageCount: images?.length || 0
+    });
     
     if (!organization) {
       return res.status(403).json({ 
@@ -106,17 +130,19 @@ router.post('/start', authenticate, organizationContext, async (req: Request, re
       });
     }
 
-    logger.info(`🎨 Starting template generation for user ${userId}`);
-    logger.info(`📝 Prompt length: ${prompt?.length || 0}`);
-    logger.info(`🖼️ Images received: ${images?.length || 0}`);
-
-    if (!prompt || !prompt.trim()) {
-      logger.warn('⚠️ Invalid prompt - empty or missing');
+    if (!message || !message.trim()) {
+      logger.warn('⚠️ Invalid message - empty or missing');
       return res.status(400).json({ 
-        code: 'INVALID_PROMPT', 
-        message: 'Prompt is required' 
+        code: 'INVALID_MESSAGE', 
+        message: 'Message is required' 
       });
     }
+
+    logger.info(`💬 Chat request from user ${userId}`);
+    logger.info(`📝 Message length: ${message.length}`);
+    logger.info(`📋 Conversation history: ${conversationHistory.length} messages`);
+    logger.info(`🖼️ Images: ${images?.length || 0}`);
+    logger.info(`📄 Current MJML: ${currentMjml ? 'Yes' : 'No'}`);
 
     if (images && images.length > 0) {
       logger.info(`📊 Image details:`, images.map((img: any) => ({
@@ -126,18 +152,34 @@ router.post('/start', authenticate, organizationContext, async (req: Request, re
       })));
     }
 
-    logger.info(`📡 Calling generateTemplate service...`);
-    const result = await generateTemplate({
-      prompt: prompt.trim(),
-      conversationHistory: [],
-      userId,
-      images: images || undefined,
-    });
+    // Determine if this is a new template or refinement
+    let result;
+    if (currentMjml) {
+      // Refinement - use existing MJML + new request
+      logger.info(`� Refining existing template...`);
+      result = await refineTemplate(
+        currentMjml,
+        message.trim(),
+        conversationHistory,  // ✅ Full history from frontend
+        userId,
+        images || undefined
+      );
+    } else {
+      // New template - generate from scratch
+      logger.info(`🎨 Generating new template...`);
+      result = await generateTemplate({
+        prompt: message.trim(),
+        conversationHistory,  // ✅ Full history from frontend
+        userId,
+        images: images || undefined,
+      });
+    }
 
-    logger.info(`✅ Template generated successfully`);
+    logger.info(`✅ Template ${currentMjml ? 'refined' : 'generated'} successfully`);
     logger.info(`📄 MJML length: ${result.mjmlCode?.length}`);
     logger.info(`🔄 Attempts used: ${result.attemptsUsed}`);
 
+    // Convert MJML to HTML
     logger.info(`📄 Converting MJML to HTML...`);
     const conversion = convertMjmlToHtml(result.mjmlCode);
 
@@ -153,54 +195,26 @@ router.post('/start', authenticate, organizationContext, async (req: Request, re
 
     logger.info(`✅ MJML converted, HTML length: ${conversion.html?.length}`);
 
-    const conversationId = randomUUID();
-    logger.info(`🆔 Generated conversation ID: ${conversationId}`);
-
-    logger.info(`💾 Creating conversation in database...`);
-    const conversation = await TemplateConversation.create({
-      userId,
-      organizationId: organization._id, // ✅ ORGANIZATION ISOLATION
-      conversationId,
-      messages: [
-        { 
-          role: 'user', 
-          content: prompt, 
-          timestamp: new Date(),
-          images: images || undefined
-        },
-        { 
-          role: 'assistant', 
-          content: result.assistantMessage, 
-          timestamp: new Date() 
-        },
-      ],
-      currentMjml: result.mjmlCode,
-      currentHtml: conversion.html,
-      status: 'active',
-    });
-
-    logger.info(`✅ Conversation created: ${conversationId}`);
-
-    // ✅ First generation: Return MJML (frontend needs it for editor)
-    // ⭐ Note: message is omitted - frontend will generate dynamic message based on isRegenerating flag
+    // ✅ Simple response - no database, no conversationId tracking
     const responseData = {
-      conversationId,
       html: conversion.html,
       mjml: result.mjmlCode,
-      // message: result.assistantMessage, // ❌ Removed - frontend handles this dynamically
+      message: result.assistantMessage,
       hasErrors: conversion.errors.length > 0,
       errors: conversion.errors,
       attemptsUsed: result.attemptsUsed,
       hadErrors: result.hadErrors,
     };
     
-    console.log('🔍 START ENDPOINT - Response keys:', Object.keys(responseData));
-    console.log('🔍 START ENDPOINT - Has message?:', 'message' in responseData);
-    console.log('🔍 START ENDPOINT - result.assistantMessage was:', result.assistantMessage);
+    console.log('� [BACKEND /chat] Response ready:', {
+      hasHtml: !!responseData.html,
+      hasMjml: !!responseData.mjml,
+      hasErrors: responseData.hasErrors
+    });
     
     res.json(responseData);
   } catch (error: any) {
-    logger.err('❌ Start generation error:', error);
+    logger.err('❌ Chat error:', error);
     logger.err('Error stack:', error.stack);
     
     if (error.message?.includes('overloaded') || error.status === 529) {
@@ -214,142 +228,6 @@ router.post('/start', authenticate, organizationContext, async (req: Request, re
     res.status(500).json({
       code: 'GENERATION_ERROR',
       message: error.message || 'Failed to generate template',
-    });
-  }
-});
-
-/**
- * POST /api/generate/continue/:conversationId
- * Continue an existing conversation
- * ✅ STATELESS: Only current MJML + new request (no conversation history)
- * ✅ Returns MJML + HTML in response
- * ✅ NO image deduplication (handled by frontend)
- */
-router.post('/continue/:conversationId', authenticate, async (req: Request, res: Response) => {
-  try {
-    const { conversationId } = req.params;
-    const { message, images } = req.body;
-    const userId = (req as any).tokenPayload?.userId;
-
-    logger.info(`🔧 Continuing conversation: ${conversationId}`);
-    logger.info(`📝 Message length: ${message?.length || 0}`);
-    logger.info(`🖼️ Images received: ${images?.length || 0}`);
-
-    if (!message || !message.trim()) {
-      logger.warn('⚠️ Invalid message - empty or missing');
-      return res.status(400).json({
-        code: 'INVALID_MESSAGE',
-        message: 'Message is required',
-      });
-    }
-
-    if (images && images.length > 0) {
-      logger.info(`📊 Image details:`, images.map((img: any) => ({
-        fileName: img.fileName,
-        mediaType: img.mediaType,
-        dataLength: img.data?.length
-      })));
-    }
-
-    logger.info(`🔍 Finding conversation in database...`);
-    const conversation = await TemplateConversation.findOne({
-      conversationId,
-      userId,
-      organizationId: (req as any).organization?._id
-    });
-
-    if (!conversation) {
-      logger.err(`❌ Conversation not found: ${conversationId}`);
-      return res.status(404).json({
-        code: 'CONVERSATION_NOT_FOUND',
-        message: 'Conversation not found',
-      });
-    }
-
-    logger.info(`✅ Conversation found`);
-    logger.info(`📊 Current messages count: ${conversation.messages.length}`);
-
-    // ✅ STATELESS APPROACH: No conversation history sent to AI
-    // Send: Current MJML state + New user request only
-    // Image deduplication: Handled by frontend warnings
-    logger.info(`💰 Cost optimization: Stateless mode activated`);
-    logger.info(`   - Conversation history: ${conversation.messages.length} messages stored in DB (NOT sent to AI)`);
-    logger.info(`   - Sending to AI: Current MJML + new request only`);
-    logger.info(`   - Image deduplication: Handled by frontend`);
-
-    logger.info(`📡 Calling refineTemplate service...`);
-    const result = await refineTemplate(
-      conversation.currentMjml,  // ✅ Current template state (contains all previous changes)
-      message.trim(),             // ✅ New user request
-      [],                         // ✅ Empty history (stateless - huge cost savings!)
-      userId,
-      images || undefined         // ✅ Images as-is (no backend deduplication)
-    );
-
-    logger.info(`✅ Template refined successfully`);
-    logger.info(`📄 New MJML length: ${result.mjmlCode?.length}`);
-    logger.info(`🔄 Attempts used: ${result.attemptsUsed}`);
-
-    logger.info(`📄 Converting MJML to HTML...`);
-    const conversion = convertMjmlToHtml(result.mjmlCode);
-
-    if (conversion.errors.length > 0 && !conversion.html) {
-      logger.err(`❌ MJML conversion failed: ${JSON.stringify(conversion.errors)}`);
-      return res.status(400).json({
-        code: 'MJML_CONVERSION_ERROR',
-        message: 'Failed to convert MJML to HTML',
-        errors: conversion.errors,
-        mjml: result.mjmlCode,
-      });
-    }
-
-    logger.info(`✅ MJML converted, HTML length: ${conversion.html?.length}`);
-
-    // ✅ Store messages in DB for audit/history (not sent to AI)
-    logger.info(`💾 Adding messages to conversation history (DB only)...`);
-    conversation.messages.push(
-      { 
-        role: 'user', 
-        content: message, 
-        timestamp: new Date(),
-        images: images || undefined
-      },
-      { 
-        role: 'assistant', 
-        content: result.assistantMessage, 
-        timestamp: new Date() 
-      }
-    );
-    conversation.currentMjml = result.mjmlCode;
-    conversation.currentHtml = conversion.html;
-    
-    logger.info(`💾 Saving conversation...`);
-    await conversation.save();
-
-    logger.info(`✅ Conversation updated: ${conversationId}`);
-    logger.info(`📊 Total messages now: ${conversation.messages.length}`);
-
-    // ✅ Return both HTML and MJML
-    // ⭐ Note: message is omitted - frontend will generate dynamic message based on isRegenerating flag
-    const responsePayload = {
-      conversationId,
-      html: conversion.html,           // ✅ HTML for preview
-      mjml: result.mjmlCode,           // ✅ MJML for editor (YOU NEED THIS!)
-      // message: result.assistantMessage, // ❌ Removed - frontend handles this dynamically
-      hasErrors: conversion.errors.length > 0,
-      errors: conversion.errors,
-      attemptsUsed: result.attemptsUsed,
-      hadErrors: result.hadErrors,
-    };
-    console.log('🔍 CONTINUE ENDPOINT - Response keys:', Object.keys(responsePayload));
-    console.log('🔍 CONTINUE ENDPOINT - Has message?:', 'message' in responsePayload);
-    res.json(responsePayload);
-  } catch (error: any) {
-    logger.err('❌ Continue conversation error:', error);
-    logger.err('Error stack:', error.stack);
-    res.status(500).json({
-      code: 'GENERATION_ERROR',
-      message: error.message || 'Failed to continue conversation',
     });
   }
 });
@@ -454,13 +332,23 @@ router.get('/history', authenticate, async (req: Request, res: Response) => {
 /**
  * POST /api/generate/save/:conversationId
  * Save template to MongoDB
+ * ✅ Cache-only mode: Frontend sends HTML/MJML directly
  */
 router.post('/save/:conversationId', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const { conversationId } = req.params;
-    const { templateName } = req.body;
+    const { templateName, html, mjml } = req.body;
     const userId = (req as any).tokenPayload?.userId;
     const organization = (req as any).organization;
+
+    console.log('💾 [SAVE] Save request:', {
+      conversationId,
+      templateName,
+      hasHtml: !!html,
+      hasMjml: !!mjml,
+      userId,
+      organizationId: organization?._id
+    });
 
     if (!organization) {
       return res.status(403).json({ 
@@ -474,21 +362,10 @@ router.post('/save/:conversationId', authenticate, organizationContext, async (r
         message: 'Template name is required',
       });
     }
-    const conversation = await TemplateConversation.findOne({
-      conversationId,
-      userId,
-      organizationId: organization?._id
-    });
-
-    if (!conversation) {
-      console.error('❌ [SAVE] Conversation not found:', conversationId);
-      return res.status(404).json({
-        code: 'CONVERSATION_NOT_FOUND',
-        message: 'Conversation not found',
-      });
-    }
-    if (!conversation.currentHtml) {
-      console.error('❌ [SAVE] No HTML content to save');
+    
+    // ✅ Accept HTML from frontend (cache-only mode)
+    if (!html) {
+      console.error('❌ [SAVE] No HTML content provided');
       return res.status(400).json({
         code: 'NO_TEMPLATE',
         message: 'No template to save',
@@ -504,10 +381,12 @@ router.post('/save/:conversationId', authenticate, organizationContext, async (r
       });
     }
     const templateId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    
+    // ✅ Save using HTML from frontend (no conversation lookup needed)
     const generatedTemplate = await GeneratedTemplate.create({
       templateId,
       name: templateName.trim(),
-      html: conversation.currentHtml,
+      html: html, // ✅ From frontend cache
       userId,
       organizationId: organization._id, // ✅ ORGANIZATION ISOLATION
       conversationId,
@@ -521,10 +400,7 @@ router.post('/save/:conversationId', authenticate, organizationContext, async (r
       folderId: 'N/A',
       thumbnail: '',
     });
-    conversation.templateName = templateName.trim();
-    conversation.status = 'saved';
-    conversation.savedTemplateId = templateId;
-    await conversation.save();
+    
     logger.info(`✅ Template saved to MongoDB: ${templateId}`);
 
     res.json({

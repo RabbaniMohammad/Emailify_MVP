@@ -100,6 +100,11 @@ startGeneration(
   images?: Array<{ data: string; mediaType: string; fileName: string }>,
   conversationId?: string
 ): Observable<StartGenerationResponse> {
+  console.log('🔵 [SERVICE] startGeneration called:', {
+    promptLength: prompt.length,
+    imageCount: images?.length || 0,
+    conversationId
+  });
   const payload = { prompt, images, conversationId };
   return this.http.post<StartGenerationResponse>(
     '/api/generate/start',
@@ -107,6 +112,11 @@ startGeneration(
     { withCredentials: true }
   ).pipe(
     tap((response) => {
+      console.log('🔵 [SERVICE] startGeneration response:', {
+        conversationId: response.conversationId,
+        hasHtml: !!response.html,
+        hasMjml: !!response.mjml
+      });
       // Set as current conversation
       this.setCurrentConversationId(response.conversationId);
     })
@@ -120,32 +130,105 @@ continueConversation(
   message: string,
   images?: Array<{ data: string; mediaType: string; fileName: string }>
 ): Observable<ContinueGenerationResponse> {
+  console.log('🔵 [SERVICE] continueConversation called:', {
+    conversationId,
+    messageLength: message.length,
+    imageCount: images?.length || 0
+  });
   const payload = { message, images };
   return this.http.post<ContinueGenerationResponse>(
     `/api/generate/continue/${conversationId}`,
     payload,
     { withCredentials: true }
+  ).pipe(
+    tap((response) => {
+      console.log('🔵 [SERVICE] continueConversation response:', {
+        conversationId: response.conversationId,
+        hasHtml: !!response.html,
+        hasMjml: !!response.mjml
+      });
+    })
   );
 }
+
+  /* --------------------------- Chat (Unified Endpoint) -------------------------- */
+
+  chat(
+    message: string,
+    conversationHistory: GenerationMessage[],
+    currentMjml?: string,
+    images?: Array<{ data: string; mediaType: string; fileName: string }>
+  ): Observable<{
+    html: string;
+    mjml: string;
+    message: string;
+    hasErrors: boolean;
+    errors: Array<{ line: number; message: string; tagName: string }>;
+  }> {
+    console.log('🔵 [SERVICE] chat called:', {
+      messageLength: message.length,
+      historyLength: conversationHistory.length,
+      hasCurrentMjml: !!currentMjml,
+      imageCount: images?.length || 0
+    });
+    
+    const payload = {
+      message,
+      conversationHistory,
+      currentMjml,
+      images
+    };
+    
+    return this.http.post<{
+      html: string;
+      mjml: string;
+      message: string;
+      hasErrors: boolean;
+      errors: Array<{ line: number; message: string; tagName: string }>;
+    }>(
+      '/api/generate/chat',
+      payload,
+      { withCredentials: true }
+    ).pipe(
+      tap((response) => {
+        console.log('🔵 [SERVICE] chat response:', {
+          hasHtml: !!response.html,
+          hasMjml: !!response.mjml,
+          message: response.message
+        });
+      })
+    );
+  }
 
   /* --------------------------- Get Conversation -------------------------- */
 
   getConversation(conversationId: string): Observable<ConversationState> {
-    // ✅ MATCH QA PAGE PATTERN: Always check cache first for instant load
+    // ✅ CACHE ONLY: No database storage, everything in IndexedDB
     const cached = this.getConversationCached(conversationId);
+    console.log('🔵 [SERVICE] getConversation called:', {
+      conversationId,
+      hasCachedData: !!cached,
+      cachedMessagesCount: cached?.messages?.length || 0
+    });
+    
     if (cached && cached.messages && cached.messages.length > 0) {
+      console.log('🔵 [SERVICE] Returning cached conversation');
       return of(cached);
     }
 
-    // No cache or incomplete cache - fetch from server
-    return this.http.get<ConversationState>(
-      `/api/generate/conversation/${conversationId}`,
-      { withCredentials: true }
-    ).pipe(
-      tap((conversation) => {
-        this.cacheConversation(conversationId, conversation);
-      })
-    );
+    // ✅ No database call - return empty conversation if not in cache
+    console.log('🔵 [SERVICE] No cache found, returning empty conversation');
+    const emptyConversation: ConversationState = {
+      conversationId,
+      messages: [],
+      currentHtml: '',
+      currentMjml: '',
+      templateName: 'Generated Template',
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    return of(emptyConversation);
   }
 
   /* --------------------------- Get History -------------------------- */
@@ -171,15 +254,31 @@ saveTemplate(
   conversationId: string,
   templateName: string
 ): Observable<SaveTemplateResponse> {
+  // ✅ Get HTML and MJML from cache to send to backend
+  const cached = this.getConversationCached(conversationId);
+  
+  if (!cached || !cached.currentHtml) {
+    throw new Error('No template to save');
+  }
+  
+  console.log('💾 [SERVICE] Saving template:', {
+    conversationId,
+    templateName,
+    hasHtml: !!cached.currentHtml,
+    hasMjml: !!cached.currentMjml
+  });
+
   return this.http.post<SaveTemplateResponse>(
     `/api/generate/save/${conversationId}`,
-    { templateName },
+    { 
+      templateName,
+      html: cached.currentHtml,  // ✅ Send HTML from cache
+      mjml: cached.currentMjml   // ✅ Send MJML from cache
+    },
     { withCredentials: true }
   ).pipe(
     tap((response) => {
       // Update cached conversation
-      const cached = this.getConversationCached(conversationId);
-      
       if (cached) {
         cached.templateName = templateName;
         cached.status = 'saved';
@@ -308,9 +407,18 @@ updateConversationCache(
   currentMjml: string,
   templateName?: string
 ): void {
+  console.log('🔵 [SERVICE] updateConversationCache called:', {
+    conversationId,
+    messagesCount: messages.length,
+    hasHtml: !!currentHtml,
+    hasMjml: !!currentMjml,
+    templateName
+  });
+  
   try {
     const cached = this.getConversationCached(conversationId);
     if (cached) {
+      console.log('🔵 [SERVICE] Updating existing cache entry');
       cached.messages = messages;
       cached.currentHtml = currentHtml;
       cached.currentMjml = currentMjml;
@@ -320,6 +428,7 @@ updateConversationCache(
       cached.updatedAt = new Date();
       this.cacheConversation(conversationId, cached);
     } else {
+      console.log('🔵 [SERVICE] Creating new cache entry');
       // Create new cache entry
       const newState: ConversationState = {
         conversationId,
@@ -334,6 +443,7 @@ updateConversationCache(
       this.cacheConversation(conversationId, newState);
     }
   } catch (err) {
+    console.error('🔴 [SERVICE] updateConversationCache error:', err);
     // Silent fail
   }
 }

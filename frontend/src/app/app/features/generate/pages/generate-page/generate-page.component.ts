@@ -78,6 +78,7 @@ private sentImages: Array<{name: string, size: number}> = [];
   conversationId: string | null = null;
   messages$ = new BehaviorSubject<GenerationMessage[]>([]);
   currentHtml$ = new BehaviorSubject<string>('');
+  currentMjml$ = new BehaviorSubject<string>('');  // ✅ Track MJML separately
   isGenerating$ = new BehaviorSubject<boolean>(false);
   isRegenerating = false; // Track if it's a regeneration
   private justCreatedConversationId: string | null = null; // Track conversation we just created
@@ -179,6 +180,7 @@ private positionChatAtBottom(): void {
     this.destroy$.complete();
     this.messages$.complete();
     this.currentHtml$.complete();
+    this.currentMjml$.complete();  // ✅ Clean up MJML
     this.isGenerating$.complete();
   }
 
@@ -242,6 +244,7 @@ canDeactivate(): boolean {
 
 
   private loadConversation(conversationId: string): void {
+    console.log('🔵 [GENERATE PAGE] Loading conversation:', conversationId);
     this.conversationId = conversationId;
     this.isGenerating$.next(true);
 
@@ -250,6 +253,14 @@ canDeactivate(): boolean {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (conversation) => {
+          console.log('🔵 [GENERATE PAGE] Conversation loaded:', {
+            conversationId: conversation.conversationId,
+            messagesCount: conversation.messages.length,
+            hasHtml: !!conversation.currentHtml,
+            templateName: conversation.templateName,
+            status: conversation.status
+          });
+          console.log('🔵 [GENERATE PAGE] Messages history:', conversation.messages);
           this.messages$.next(conversation.messages);
           this.currentHtml$.next(conversation.currentHtml);
           this.templateName = conversation.templateName || 'Generated Template';
@@ -352,7 +363,16 @@ canDeactivate(): boolean {
 async onSend(): Promise<void> {
   const message = this.userInput.trim();
   
+  console.log('🔵 [GENERATE PAGE] onSend called:', {
+    message: message.substring(0, 50) + '...',
+    conversationId: this.conversationId,
+    currentMessagesCount: this.messages$.value.length,
+    hasTemplate: !!this.currentHtml$.value,
+    isGenerating: this.isGenerating$.value
+  });
+  
   if (!message || this.isGenerating$.value) {
+    console.log('🔵 [GENERATE PAGE] onSend blocked - empty message or already generating');
     return;
   }
 
@@ -408,13 +428,8 @@ async onSend(): Promise<void> {
   // Scroll to show the new user message
   setTimeout(() => this.scrollToBottom(), 50);
 
-  // ✅ Set isRegenerating to true if we already have a conversation
-  if (this.conversationId && this.currentHtml$.value) {
-    this.isRegenerating = true;
-  }
-
-  // Always use startGeneration with the conversationId (which is pre-generated)
-  this.startNewConversation(message, imageAttachments);
+  // ✅ Simple: Just call chat with current state
+  this.sendChatMessage(message, imageAttachments);
 
   // Clear input and images AFTER storing metadata
   this.userInput = '';
@@ -422,13 +437,105 @@ async onSend(): Promise<void> {
   this.imagePreviewUrls = [];
 }
 
+private async sendChatMessage(message: string, imageAttachments: ImageAttachment[]): Promise<void> {
+  console.log('🔵 [GENERATE PAGE] sendChatMessage called:', {
+    messageLength: message.length,
+    imageCount: imageAttachments.length,
+    conversationId: this.conversationId,
+    currentMessagesCount: this.messages$.value.length,
+    hasCurrentMjml: !!this.currentHtml$.value
+  });
+
+  // Get current conversation history (excluding the user message we just added)
+  const historyMessages = this.messages$.value.slice(0, -1);
+
+  this.generationService
+    .chat(message, historyMessages, this.currentMjml$.value || undefined, imageAttachments)
+    .pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: (response) => {
+        console.log('🔵 [GENERATE PAGE] chat response received:', {
+          hasHtml: !!response.html,
+          hasMjml: !!response.mjml,
+          message: response.message,
+          hasErrors: response.hasErrors
+        });
+
+        this.currentHtml$.next(response.html);
+        this.currentMjml$.next(response.mjml);  // ✅ Store MJML
+
+        // Add assistant response to messages
+        const assistantMessage: GenerationMessage = {
+          role: 'assistant',
+          content: response.message ||'✅ Template updated successfully!',
+          timestamp: new Date(),
+        };
+        
+        const updatedMessages = [...this.messages$.value, assistantMessage];
+        this.messages$.next(updatedMessages);
+
+        // ✅ Save the complete conversation state back to cache
+        console.log('🔵 [GENERATE PAGE] Saving conversation to cache:', {
+          conversationId: this.conversationId,
+          messagesCount: updatedMessages.length,
+          templateName: this.templateName
+        });
+        
+        if (this.conversationId) {
+          this.generationService.updateConversationCache(
+            this.conversationId,
+            updatedMessages,
+            response.html,
+            response.mjml || '',
+            this.templateName
+          );
+        }
+
+        this.isGenerating$.next(false);
+        this.shouldAutoScroll = true;
+        setTimeout(() => {
+          this.scrollToBottom();
+        }, 100);
+
+        if (response.hasErrors) {
+          this.snackBar.open(
+            'Template generated with warnings. Check console for details.',
+            'Close',
+            { duration: 5000, panelClass: ['info-snackbar'] }
+          );
+        }
+      },
+      error: (error) => {
+        this.isGenerating$.next(false);
+        this.snackBar.open(
+          error.error?.message || 'Failed to generate template',
+          'Close',
+          { duration: 5000, panelClass: ['error-snackbar'] }
+        );
+      },
+    });
+}
+
 private async startNewConversation(message: string, imageAttachments: ImageAttachment[]): Promise<void> {
+  console.log('🔵 [GENERATE PAGE] startNewConversation called:', {
+    messageLength: message.length,
+    imageCount: imageAttachments.length,
+    conversationId: this.conversationId,
+    isRegenerating: this.isRegenerating
+  });
 
   this.generationService
     .startGeneration(message, imageAttachments, this.conversationId || undefined)
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (response) => {
+        console.log('🔵 [GENERATE PAGE] startGeneration response received:', {
+          conversationId: response.conversationId,
+          hasHtml: !!response.html,
+          hasMjml: !!response.mjml,
+          message: response.message,
+          hasErrors: response.hasErrors
+        });
 
         // Update conversationId (should match what we sent, but backend might change it)
         this.conversationId = response.conversationId;
@@ -451,6 +558,11 @@ private async startNewConversation(message: string, imageAttachments: ImageAttac
         this.messages$.next(updatedMessages);
 
         // ✅ Save the complete conversation state back to cache
+        console.log('🔵 [GENERATE PAGE] Saving conversation to cache:', {
+          conversationId: response.conversationId,
+          messagesCount: updatedMessages.length,
+          templateName: this.templateName
+        });
         this.generationService.updateConversationCache(
           response.conversationId,
           updatedMessages,
@@ -684,13 +796,19 @@ onSaveTemplate(): void {
     .subscribe({
       next: (response) => {
 
+        // ✅ Production-grade: Add new template directly to cache (no unnecessary API call for 1000 templates)
+        this.templatesService.addTemplateToCache({
+          id: response.templateId,
+          name: response.templateName || name,
+          content: this.currentHtml$.value,
+          source: 'ai-generated',
+          templateType: 'AI Generated',
+        });
+        
         // ✅ Select the saved template so it appears first when we navigate
         this.templatesService.select(response.templateId, response.templateName || name);
-        
-        // ✅ Trigger a smart refresh to fetch the latest templates (including our new one)
-        this.templatesService.smartRefresh();
 
-        // Navigate to templates page without query parameters
+        // Navigate to templates page
         this.router.navigate(['/']);
         
 
@@ -713,8 +831,16 @@ onNewConversation(): void {
   // Check if there's an active conversation with unsaved content
   const hasActiveConversation = this.conversationId && this.currentHtml$.value;
   
+  console.log('🔵 [GENERATE PAGE] onNewConversation called:', {
+    conversationId: this.conversationId,
+    hasTemplate: !!this.currentHtml$.value,
+    hasActiveConversation,
+    messagesCount: this.messages$.value.length
+  });
+  
   if (hasActiveConversation) {
     // Show confirmation dialog
+    console.log('🔵 [GENERATE PAGE] Opening confirmation dialog');
     const dialogRef = this.dialog.open(ConfirmNewConversationDialog, {
       width: '500px',
       disableClose: false,
@@ -722,12 +848,17 @@ onNewConversation(): void {
     });
 
     dialogRef.afterClosed().subscribe((result: 'save' | 'discard' | 'cancel') => {
+      console.log('🔵 [GENERATE PAGE] Dialog closed with result:', result);
       if (result === 'save') {
         // Open save dialog
+        console.log('🔵 [GENERATE PAGE] User chose to save template');
         this.onSaveTemplate();
       } else if (result === 'discard') {
         // Proceed with clearing conversation
+        console.log('🔵 [GENERATE PAGE] User chose to discard and start new');
         this.clearAndStartNew();
+      } else {
+        console.log('🔵 [GENERATE PAGE] User cancelled - staying on current conversation');
       }
       // If 'cancel', do nothing - user stays on current conversation
     });

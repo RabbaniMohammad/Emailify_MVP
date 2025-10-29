@@ -348,4 +348,34 @@ export class TemplatesService {
     this.state.next(INITIAL_STATE);
     this.currentSearchQuery = '';
   }
+
+  // ✅ NEW: Add template to cache (for immediate display after save)
+  addTemplateToCache(template: TemplateItem): void {
+    // Get current state
+    const currentState = this.snapshot;
+    
+    // Add template to the beginning of items array (most recent first)
+    const updatedItems = [template, ...currentState.items];
+    
+    // Update state
+    this.updateState({ items: updatedItems });
+    
+    // Update cache
+    const cacheKey = this.currentSearchQuery 
+      ? `${CACHE_KEYS.SEARCH_PREFIX}${this.currentSearchQuery}`
+      : CACHE_KEYS.TEMPLATES_LIST;
+    
+    this.cache.set(cacheKey, updatedItems, CACHE_TTL.LIST, 'session');
+    
+    // Save to IndexedDB (async but we don't wait)
+    this.db.cacheTemplate({
+      id: template.id,
+      runId: 'template-' + template.id,
+      html: template.content || '',
+      timestamp: Date.now()
+    }).catch(err => console.error('Failed to cache template:', err));
+    
+    // Select the newly added template
+    this.select(template.id, template.name);
+  }
 }
