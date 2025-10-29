@@ -91,9 +91,6 @@ private sentImages: Array<{name: string, size: number}> = [];
     maxImages = 2;
     maxSizeBytes = 5 * 1024 * 1024; // 5MB
 
-    // Chat limit
-    readonly MAX_CHAT_MESSAGES = 20;
-
   // Scroll state
   private shouldAutoScroll = true;
   private isProgrammaticScroll = false; // Flag to ignore scroll events during auto-scroll
@@ -375,23 +372,6 @@ async onSend(): Promise<void> {
     console.log('🔵 [GENERATE PAGE] onSend blocked - empty message or already generating');
     return;
   }
-
-  // Check chat limit (20 messages)
-  const currentMessages = this.messages$.value;
-  
-  if (currentMessages.length >= this.MAX_CHAT_MESSAGES) {
-    this.snackBar.open(
-      `Chat limit reached (${this.MAX_CHAT_MESSAGES} messages). Please save your template and start a new chat.`,
-      'Close',
-      { 
-        duration: 6000, 
-        panelClass: ['error-snackbar'],
-        horizontalPosition: 'center',
-        verticalPosition: 'top',
-      }
-    );
-    return;
-  }
   
   // Convert selected images to base64 FIRST (before adding user message)
   const imageAttachments: ImageAttachment[] = await Promise.all(
@@ -489,6 +469,11 @@ private async sendChatMessage(message: string, imageAttachments: ImageAttachment
             response.mjml || '',
             this.templateName
           );
+        }
+
+        // ✅ Set isRegenerating to true after first successful generation
+        if (!this.isRegenerating) {
+          this.isRegenerating = true;
         }
 
         this.isGenerating$.next(false);

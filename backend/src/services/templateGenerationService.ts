@@ -488,8 +488,12 @@ export async function generateTemplate(
 
     logger.info(`📋 Building conversation history (${conversationHistory.length} messages)...`);
     
-    // Add conversation history
-    for (const msg of conversationHistory) {
+    // ⭐ Add conversation history with PROMPT CACHING
+    // Cache the last message in history to get 90% discount on tokens when reused
+    for (let i = 0; i < conversationHistory.length; i++) {
+      const msg = conversationHistory[i];
+      const isLastHistoryMessage = (i === conversationHistory.length - 1);
+      
       if (msg.images && msg.images.length > 0) {
         logger.info(`💬 History message with ${msg.images.length} images`);
         const content: Anthropic.MessageParam['content'] = [
@@ -504,11 +508,32 @@ export async function generateTemplate(
           {
             type: 'text' as const,
             text: msg.content,
+            // 🔥 Cache the last text block in history for 5min (90% discount on reuse)
+            ...(isLastHistoryMessage ? { cache_control: { type: 'ephemeral' as const } } : {})
           },
         ];
         messages.push({ role: msg.role, content });
       } else {
-        messages.push({ role: msg.role, content: msg.content });
+        // For text-only messages, use array format to support cache_control
+        if (isLastHistoryMessage) {
+          // 🔥 Cache the last message in history for 5min (90% discount on reuse)
+          messages.push({ 
+            role: msg.role, 
+            content: [
+              {
+                type: 'text' as const,
+                text: msg.content,
+                cache_control: { type: 'ephemeral' as const }
+              }
+            ]
+          });
+        } else {
+          // Regular messages without caching
+          messages.push({ 
+            role: msg.role, 
+            content: msg.content
+          });
+        }
       }
     }
 
@@ -536,6 +561,7 @@ export async function generateTemplate(
     }
 
     logger.info(`✅ Messages built: ${messages.length} total messages`);
+    logger.info(`🔥 Prompt caching: System prompt + last history message cached (90% discount on reuse)`);
 
     // ⭐ RETRY LOOP FOR MJML GENERATION AND VALIDATION
     for (let attempt = 1; attempt <= MAX_GENERATION_RETRIES; attempt++) {
@@ -564,6 +590,14 @@ export async function generateTemplate(
         logger.info(`📊 Response ID: ${response.id}`);
         logger.info(`📊 Stop reason: ${response.stop_reason}`);
         logger.info(`📊 Usage - Input: ${response.usage.input_tokens}, Output: ${response.usage.output_tokens}`);
+        
+        // 🔥 Log cache performance (if available)
+        if ((response.usage as any).cache_creation_input_tokens) {
+          logger.info(`🔥 Cache created: ${(response.usage as any).cache_creation_input_tokens} tokens`);
+        }
+        if ((response.usage as any).cache_read_input_tokens) {
+          logger.info(`🔥 Cache hit: ${(response.usage as any).cache_read_input_tokens} tokens (90% discount!)`);
+        };
 
         // Extract text content
         const assistantMessage =
@@ -601,10 +635,8 @@ export async function generateTemplate(
           logger.info(`✅ Template generated and validated successfully on attempt ${attempt}`);
           logger.info(`📊 Final stats - Attempts: ${attempt}, Had errors: ${attempt > 1}`);
           
-          // Create user-friendly message without MJML code
-          const userMessage = attempt > 1 
-            ? `✅ Template generated successfully after ${attempt} attempts. I've refined it based on validation feedback.`
-            : `✅ Template generated successfully! I've created a responsive email template based on your requirements.`;
+          // Create user-friendly message (no technical details about attempts/retries)
+          const userMessage = `✅ Template generated successfully! I've created a responsive email template based on your requirements.`;
           
           return {
             mjmlCode,
@@ -722,6 +754,7 @@ export async function refineTemplate(
     logger.info(`📝 User feedback length: ${userFeedback?.length}`);
     logger.info(`🖼️ Images provided: ${images?.length || 0}`);
     logger.info(`📋 Conversation history length: ${conversationHistory.length}`);
+    logger.info(`📄 Current MJML length: ${currentMjml?.length || 0} (LATEST VERSION ONLY)`);
 
     if (images && images.length > 0) {
       logger.info(`📊 Image details: ${JSON.stringify(images.map(img => ({
@@ -731,6 +764,9 @@ export async function refineTemplate(
         })))}`);
     }
 
+    // ✅ IMPORTANT: We use ONLY the latest MJML (currentMjml parameter)
+    // We do NOT extract old MJML from conversation history
+    // This ensures we always refine the most recent version
     const refinementPrompt = `Current MJML template:
 ${currentMjml}
 
