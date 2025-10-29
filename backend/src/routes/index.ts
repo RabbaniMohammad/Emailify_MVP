@@ -5,6 +5,7 @@ import UserRoutes from './UserRoutes';
 
 import templatesRouter from './templates';
 import qaRouter from './qa';
+import qaAdvancedRouter from './qa-advanced';
 import organizationRouter from './organization.routes';
 // templateGenerationRouter is mounted directly in server.ts, not here
 
@@ -26,6 +27,7 @@ apiRouter.use(Paths.Users.Base, userRouter);
 /** Feature routers */
 apiRouter.use('/templates', templatesRouter);       // → /api/templates/...
 apiRouter.use('/qa', qaRouter);                      // → /api/qa/...
+apiRouter.use('/qa-advanced', qaAdvancedRouter);     // → /api/qa-advanced/... (NEW - No API calls!)
 apiRouter.use('/organizations', organizationRouter); // → /api/organizations/...
 // Note: /generate router is mounted directly in server.ts
 
