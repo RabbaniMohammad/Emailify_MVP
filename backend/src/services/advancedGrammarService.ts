@@ -86,6 +86,17 @@ interface GPTCorrectionResult {
 }
 
 // ========================
+// HELPER FUNCTIONS
+// ========================
+
+/**
+ * Escape special regex characters in a string
+ */
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ========================
 // EXTRACT TEXT NODES WITH TAGS
 // ========================
 
@@ -215,12 +226,14 @@ RULES:
 3. Maintain original meaning
 4. Don't change correct text
 5. Return EXACT format as specified
+6. Find EVERY occurrence of each error - don't skip duplicates
 
 CRITICAL RULE FOR "find" FIELD:
 - Copy the COMPLETE wrong word/phrase EXACTLY as it appears in the input text
 - Include ALL characters, even repeated letters (e.g., "natureeeee" not "natur")
 - Character-by-character match - do NOT shorten or abbreviate
 - If the text has "beautyyy", your find must be "beautyyy", NOT "beauty" or "beaut"
+- If a misspelled word appears MULTIPLE times, report it MULTIPLE times (once per occurrence)
 
 INPUT: Array of text nodes with their HTML tags:
 ${JSON.stringify(input, null, 2)}
@@ -330,128 +343,22 @@ function applyCorrections(
     console.log(`   Corrected: "${correction.corrected}"`);
     
     // Apply correction to the actual DOM node
-    const originalText = textNode.node.textContent || '';
+    let originalText = textNode.node.textContent || '';
+    let currentText = originalText;
+    let hasAppliedAny = false;
     
-    // Try exact match first
-    if (originalText.trim() === correction.original?.trim()) {
-      // ✅ CAPTURE CONTEXT SNIPPETS BEFORE APPLYING CHANGES
-      const contextSnippets = correction.changes.map(change => {
-        if (change && change.find && change.replace) {
-          return extractContextSnippet(
-            textNode.originalText, // Use original text BEFORE any corrections
-            change.find,
-            50
-          );
-        }
-        return null;
-      });
-      
-      // Direct replacement
-      textNode.node.textContent = correction.corrected;
-      
-      console.log(`   ✅ APPLIED (exact match)!`);
-      
-      // Record all changes
-      correction.changes.forEach((change, index) => {
-        if (change && change.find && change.replace) {
-          console.log(`      - "${change.find}" → "${change.replace}" (${change.reason})`);
-          
-          // ✅ VERIFY: Check if the error word actually exists in the original text
-          const wordExists = textNode.originalText.includes(change.find);
-          
-          if (!wordExists) {
-            console.log(`      ⚠️  HALLUCINATION DETECTED & DISCARDED: "${change.find}" not found in original text`);
-            return; // Silently skip this hallucinated change
-          }
-          
-          // ✅ Use pre-captured context snippet
-          const context = contextSnippets[index] || {
-            snippet: textNode.originalText,
-            highlightStart: 0,
-            highlightEnd: 0
-          };
-          const { snippet, highlightStart, highlightEnd } = context;
-          
-          appliedEdits.push({
-            find: change.find,
-            replace: change.replace,
-            before_context: '',
-            after_context: '',
-            reason: change.reason || 'Grammar correction',
-            changeType: 'spelling',
-            status: 'applied',
-            // ✅ Add full sentence and highlight info
-            fullSentence: snippet,
-            highlightStart: highlightStart,
-            highlightEnd: highlightEnd,
-          });
-        }
-      });
-    } 
-    // Try partial match - GPT might have returned only part of the text
-    else if (originalText.includes(correction.original || '')) {
-      // ✅ CAPTURE CONTEXT SNIPPETS BEFORE APPLYING CHANGES
-      const contextSnippets = correction.changes.map(change => {
-        if (change && change.find && change.replace) {
-          return extractContextSnippet(
-            textNode.originalText, // Use original text BEFORE any corrections
-            change.find,
-            50
-          );
-        }
-        return null;
-      });
-      
-      // Find and replace the corrected portion
-      const newText = originalText.replace(correction.original || '', correction.corrected || '');
-      textNode.node.textContent = newText;
-      
-      console.log(`   ✅ APPLIED (partial match)!`);
-      console.log(`      Full result: "${newText.trim()}"`);
-      
-      // Record all changes
-      correction.changes.forEach((change, index) => {
-        if (change && change.find && change.replace) {
-          console.log(`      - "${change.find}" → "${change.replace}" (${change.reason})`);
-          
-          // ✅ VERIFY: Check if the error word actually exists in the original text
-          const wordExists = textNode.originalText.includes(change.find);
-          
-          if (!wordExists) {
-            console.log(`      ⚠️  HALLUCINATION DETECTED & DISCARDED: "${change.find}" not found in original text`);
-            return; // Silently skip this hallucinated change
-          }
-          
-          // ✅ Use pre-captured context snippet
-          const context = contextSnippets[index] || {
-            snippet: textNode.originalText,
-            highlightStart: 0,
-            highlightEnd: 0
-          };
-          const { snippet, highlightStart, highlightEnd } = context;
-          
-          appliedEdits.push({
-            find: change.find,
-            replace: change.replace,
-            before_context: '',
-            after_context: '',
-            reason: change.reason || 'Grammar correction',
-            changeType: 'spelling',
-            status: 'applied',
-            // ✅ Add full sentence and highlight info
-            fullSentence: snippet,
-            highlightStart: highlightStart,
-            highlightEnd: highlightEnd,
-          });
-        }
-      });
-    }
-    else {
-      console.log(`   ❌ MISMATCH - NOT APPLIED`);
-      
-      // Text mismatch
-      correction.changes?.forEach(change => {
-        if (change && change.find && change.replace) {
+    // ✅ NEW APPROACH: Apply each change individually (word-by-word)
+    // This handles multiple errors in the same sentence better
+    const contextSnippets: any[] = [];
+    const appliedChanges: any[] = [];
+    
+    correction.changes?.forEach(change => {
+      if (change && change.find && change.replace) {
+        // Check if the error word exists in current text
+        const wordExists = currentText.includes(change.find);
+        
+        if (!wordExists) {
+          console.log(`      ⚠️  Word "${change.find}" not found in text, skipping`);
           failedEdits.push({
             find: change.find,
             replace: change.replace,
@@ -460,10 +367,57 @@ function applyCorrections(
             reason: change.reason || 'Unknown',
             changeType: 'spelling',
             status: 'failed',
-            error: `Text mismatch: expected "${correction.original}" but found "${originalText.trim()}"`,
+            error: `Word not found in text`,
+          });
+          return;
+        }
+        
+        // Capture context BEFORE replacement
+        const context = extractContextSnippet(currentText, change.find, 50);
+        
+        // ✅ Apply replacement - ONLY FIRST OCCURRENCE (no 'g' flag)
+        // This allows users to fix duplicates one at a time
+        const newText = currentText.replace(change.find, change.replace);
+        
+        if (newText !== currentText) {
+          currentText = newText;
+          hasAppliedAny = true;
+          
+          console.log(`      ✅ "${change.find}" → "${change.replace}" (${change.reason})`);
+          
+          appliedChanges.push({
+            change,
+            context
           });
         }
+      }
+    });
+    
+    // If we applied any changes, update the DOM
+    if (hasAppliedAny) {
+      textNode.node.textContent = currentText;
+      console.log(`   ✅ APPLIED ${appliedChanges.length} changes!`);
+      console.log(`      Result: "${currentText.trim()}"`);
+      
+      // Record all applied changes
+      appliedChanges.forEach(({ change, context }) => {
+        const { snippet, highlightStart, highlightEnd } = context;
+        
+        appliedEdits.push({
+          find: change.find,
+          replace: change.replace,
+          before_context: '',
+          after_context: '',
+          reason: change.reason || 'Grammar correction',
+          changeType: change.changeType || 'spelling',
+          status: 'applied',
+          fullSentence: snippet,
+          highlightStart: highlightStart,
+          highlightEnd: highlightEnd,
+        });
       });
+    } else if (correction.changes && correction.changes.length > 0) {
+      console.log(`   ❌ NO CHANGES APPLIED`);
     }
   });
   

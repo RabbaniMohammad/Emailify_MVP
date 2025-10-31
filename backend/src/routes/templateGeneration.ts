@@ -110,7 +110,7 @@ console.log('🟢 [ROUTES] Registering POST /chat route');
 router.post('/chat', authenticate, organizationContext, async (req: Request, res: Response) => {
   console.log('🟢 [ROUTES] POST /chat route hit!');
   try {
-    const { message, conversationHistory = [], currentMjml, images } = req.body;
+    const { message, conversationHistory = [], currentMjml, images, extractedFileData } = req.body;
     const userId = (req as any).tokenPayload?.userId;
     const organization = (req as any).organization;
 
@@ -120,7 +120,9 @@ router.post('/chat', authenticate, organizationContext, async (req: Request, res
       messageLength: message?.length || 0,
       historyLength: conversationHistory.length,
       hasCurrentMjml: !!currentMjml,
-      imageCount: images?.length || 0
+      imageCount: images?.length || 0,
+      hasExtractedFileData: !!extractedFileData,
+      extractedFileDataLength: extractedFileData?.length || 0
     });
     
     if (!organization) {
@@ -143,6 +145,11 @@ router.post('/chat', authenticate, organizationContext, async (req: Request, res
     logger.info(`📋 Conversation history: ${conversationHistory.length} messages`);
     logger.info(`🖼️ Images: ${images?.length || 0}`);
     logger.info(`📄 Current MJML: ${currentMjml ? 'Yes' : 'No'}`);
+    logger.info(`📎 Extracted file data: ${extractedFileData ? 'Yes' : 'No'}`);
+    if (extractedFileData) {
+      logger.info(`📎 File data length: ${extractedFileData.length}`);
+      logger.info(`📎 First 200 chars: ${extractedFileData.substring(0, 200)}`);
+    }
 
     if (images && images.length > 0) {
       logger.info(`📊 Image details:`, images.map((img: any) => ({
@@ -156,13 +163,14 @@ router.post('/chat', authenticate, organizationContext, async (req: Request, res
     let result;
     if (currentMjml) {
       // Refinement - use existing MJML + new request
-      logger.info(`� Refining existing template...`);
+      logger.info(`🔧 Refining existing template...`);
       result = await refineTemplate(
         currentMjml,
         message.trim(),
         conversationHistory,  // ✅ Full history from frontend
         userId,
-        images || undefined
+        images || undefined,
+        extractedFileData || undefined
       );
     } else {
       // New template - generate from scratch
@@ -172,6 +180,7 @@ router.post('/chat', authenticate, organizationContext, async (req: Request, res
         conversationHistory,  // ✅ Full history from frontend
         userId,
         images: images || undefined,
+        extractedFileData: extractedFileData || undefined,
       });
     }
 

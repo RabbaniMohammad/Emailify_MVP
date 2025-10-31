@@ -24,6 +24,7 @@ interface GenerationRequest {
   }>;
   userId: string;
   images?: Array<{ data: string; mediaType: string; fileName: string }>;
+  extractedFileData?: string;
 }
 
 interface GenerationResponse {
@@ -464,11 +465,15 @@ export async function generateTemplate(
   request: GenerationRequest
 ): Promise<GenerationResponse> {
   try {
-    const { prompt, conversationHistory = [], userId, images } = request;
+    const { prompt, conversationHistory = [], userId, images, extractedFileData } = request;
 
     logger.info(`🎨 Generating template for user ${userId}`);
     logger.info(`📝 Prompt length: ${prompt?.length}`);
     logger.info(`🖼️ Images provided: ${images?.length || 0}`);
+    logger.info(`📎 Extracted file data: ${extractedFileData ? 'Yes' : 'No'}`);
+    if (extractedFileData) {
+      logger.info(`📎 File data length: ${extractedFileData.length}`);
+    }
     logger.info(`⏱️ Using timeout: ${API_TIMEOUT}ms`);
     logger.info(`🔄 Max MJML validation retries: ${MAX_GENERATION_RETRIES}`);
 
@@ -494,6 +499,9 @@ export async function generateTemplate(
       const msg = conversationHistory[i];
       const isLastHistoryMessage = (i === conversationHistory.length - 1);
       
+      // Check if this message contains Excel/file data
+      const hasFileData = msg.content.includes('ATTACHED DOCUMENT DATA:');
+      
       if (msg.images && msg.images.length > 0) {
         logger.info(`💬 History message with ${msg.images.length} images`);
         const content: Anthropic.MessageParam['content'] = [
@@ -508,15 +516,15 @@ export async function generateTemplate(
           {
             type: 'text' as const,
             text: msg.content,
-            // 🔥 Cache the last text block in history for 5min (90% discount on reuse)
-            ...(isLastHistoryMessage ? { cache_control: { type: 'ephemeral' as const } } : {})
+            // 🔥 Cache file data OR last message for 5min (90% discount on reuse)
+            ...(hasFileData || isLastHistoryMessage ? { cache_control: { type: 'ephemeral' as const } } : {})
           },
         ];
         messages.push({ role: msg.role, content });
       } else {
         // For text-only messages, use array format to support cache_control
-        if (isLastHistoryMessage) {
-          // 🔥 Cache the last message in history for 5min (90% discount on reuse)
+        if (hasFileData || isLastHistoryMessage) {
+          // 🔥 Cache file data OR last message in history for 5min (90% discount on reuse)
           messages.push({ 
             role: msg.role, 
             content: [
@@ -537,7 +545,24 @@ export async function generateTemplate(
       }
     }
 
-    // Add current user message with images
+    // Add current user message with images and/or extracted file data
+    let userPrompt = prompt;
+    
+    // ⭐ OPTIMIZATION: Only add extracted file data if it's NOT already in conversation history
+    // This prevents sending the same Excel/CSV data over and over again
+    const hasFileDataInHistory = conversationHistory.some(msg => 
+      msg.content.includes('ATTACHED DOCUMENT DATA:')
+    );
+    
+    if (extractedFileData && !hasFileDataInHistory) {
+      logger.info(`📎 Adding extracted file data to prompt (FIRST TIME - will be cached)`);
+      userPrompt = `ATTACHED DOCUMENT DATA:\n\n${extractedFileData}\n\n---\n\nUSER REQUEST: ${prompt}`;
+    } else if (extractedFileData && hasFileDataInHistory) {
+      logger.info(`📎 File data already in history - skipping to save tokens`);
+      // Don't add the file data again, just use the prompt
+      userPrompt = prompt;
+    }
+    
     if (images && images.length > 0) {
       logger.info(`📤 Adding current message with ${images.length} images`);
       const content: Anthropic.MessageParam['content'] = [
@@ -551,13 +576,13 @@ export async function generateTemplate(
         })),
         {
           type: 'text' as const,
-          text: prompt,
+          text: userPrompt,
         },
       ];
       messages.push({ role: 'user', content });
     } else {
       logger.info(`📤 Adding current message (text only)`);
-      messages.push({ role: 'user', content: prompt });
+      messages.push({ role: 'user', content: userPrompt });
     }
 
     logger.info(`✅ Messages built: ${messages.length} total messages`);
@@ -747,7 +772,8 @@ export async function refineTemplate(
     images?: Array<{ data: string; mediaType: string; fileName: string }>;
   }>,
   userId: string,
-  images?: Array<{ data: string; mediaType: string; fileName: string }>
+  images?: Array<{ data: string; mediaType: string; fileName: string }>,
+  extractedFileData?: string
 ): Promise<GenerationResponse> {
   try {
     logger.info(`🔧 Refining template for user ${userId}`);
@@ -755,6 +781,10 @@ export async function refineTemplate(
     logger.info(`🖼️ Images provided: ${images?.length || 0}`);
     logger.info(`📋 Conversation history length: ${conversationHistory.length}`);
     logger.info(`📄 Current MJML length: ${currentMjml?.length || 0} (LATEST VERSION ONLY)`);
+    logger.info(`📎 Extracted file data: ${extractedFileData ? 'Yes' : 'No'}`);
+    if (extractedFileData) {
+      logger.info(`📎 File data length: ${extractedFileData.length}`);
+    }
 
     if (images && images.length > 0) {
       logger.info(`📊 Image details: ${JSON.stringify(images.map(img => ({
@@ -781,6 +811,7 @@ Please update the template based on the user's feedback. Remember to output ONLY
       conversationHistory,
       userId,
       images: images || undefined,
+      extractedFileData: extractedFileData || undefined,
     });
   } catch (error) {
     logger.err('❌ Template refinement error:', error);
