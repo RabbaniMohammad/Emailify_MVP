@@ -136,7 +136,7 @@ function extractTextNodesWithTags(html: string): { textNodes: TextNodeWithTag[];
 // ========================
 
 /**
- * Split text nodes into chunks for parallel processing
+ * Chunk text nodes into smaller groups for parallel processing
  */
 function chunkTextNodes(textNodes: TextNodeWithTag[], chunkSize: number): TextNodeWithTag[][] {
   const chunks: TextNodeWithTag[][] = [];
@@ -146,6 +146,46 @@ function chunkTextNodes(textNodes: TextNodeWithTag[], chunkSize: number): TextNo
   }
   
   return chunks;
+}
+
+/**
+ * Extract context snippet around error with ellipsis
+ */
+function extractContextSnippet(
+  fullText: string,
+  errorWord: string,
+  contextLength: number = 50
+): { snippet: string; highlightStart: number; highlightEnd: number } {
+  const errorIndex = fullText.indexOf(errorWord);
+  
+  if (errorIndex === -1) {
+    // Error word not found, return full text
+    return {
+      snippet: fullText,
+      highlightStart: 0,
+      highlightEnd: 0,
+    };
+  }
+  
+  // Calculate snippet boundaries
+  const snippetStart = Math.max(0, errorIndex - contextLength);
+  const snippetEnd = Math.min(fullText.length, errorIndex + errorWord.length + contextLength);
+  
+  // Extract snippet
+  let snippet = fullText.substring(snippetStart, snippetEnd);
+  
+  // Add ellipsis if we cut off text
+  const hasLeadingEllipsis = snippetStart > 0;
+  const hasTrailingEllipsis = snippetEnd < fullText.length;
+  
+  if (hasLeadingEllipsis) snippet = '...' + snippet;
+  if (hasTrailingEllipsis) snippet = snippet + '...';
+  
+  // Calculate highlight positions relative to snippet
+  const highlightStart = errorIndex - snippetStart + (hasLeadingEllipsis ? 3 : 0);
+  const highlightEnd = highlightStart + errorWord.length;
+  
+  return { snippet, highlightStart, highlightEnd };
 }
 
 // ========================
@@ -294,20 +334,43 @@ function applyCorrections(
     
     // Try exact match first
     if (originalText.trim() === correction.original?.trim()) {
+      // ✅ CAPTURE CONTEXT SNIPPETS BEFORE APPLYING CHANGES
+      const contextSnippets = correction.changes.map(change => {
+        if (change && change.find && change.replace) {
+          return extractContextSnippet(
+            textNode.originalText, // Use original text BEFORE any corrections
+            change.find,
+            50
+          );
+        }
+        return null;
+      });
+      
       // Direct replacement
       textNode.node.textContent = correction.corrected;
       
       console.log(`   ✅ APPLIED (exact match)!`);
       
       // Record all changes
-      correction.changes.forEach(change => {
+      correction.changes.forEach((change, index) => {
         if (change && change.find && change.replace) {
           console.log(`      - "${change.find}" → "${change.replace}" (${change.reason})`);
           
-          // ✅ Calculate highlight positions
-          const fullSentence = textNode.originalText;
-          const highlightStart = fullSentence.indexOf(change.find);
-          const highlightEnd = highlightStart >= 0 ? highlightStart + change.find.length : -1;
+          // ✅ VERIFY: Check if the error word actually exists in the original text
+          const wordExists = textNode.originalText.includes(change.find);
+          
+          if (!wordExists) {
+            console.log(`      ⚠️  HALLUCINATION DETECTED & DISCARDED: "${change.find}" not found in original text`);
+            return; // Silently skip this hallucinated change
+          }
+          
+          // ✅ Use pre-captured context snippet
+          const context = contextSnippets[index] || {
+            snippet: textNode.originalText,
+            highlightStart: 0,
+            highlightEnd: 0
+          };
+          const { snippet, highlightStart, highlightEnd } = context;
           
           appliedEdits.push({
             find: change.find,
@@ -317,8 +380,8 @@ function applyCorrections(
             reason: change.reason || 'Grammar correction',
             changeType: 'spelling',
             status: 'applied',
-            // ✅ NEW: Add full sentence and highlight info
-            fullSentence: fullSentence,
+            // ✅ Add full sentence and highlight info
+            fullSentence: snippet,
             highlightStart: highlightStart,
             highlightEnd: highlightEnd,
           });
@@ -327,6 +390,18 @@ function applyCorrections(
     } 
     // Try partial match - GPT might have returned only part of the text
     else if (originalText.includes(correction.original || '')) {
+      // ✅ CAPTURE CONTEXT SNIPPETS BEFORE APPLYING CHANGES
+      const contextSnippets = correction.changes.map(change => {
+        if (change && change.find && change.replace) {
+          return extractContextSnippet(
+            textNode.originalText, // Use original text BEFORE any corrections
+            change.find,
+            50
+          );
+        }
+        return null;
+      });
+      
       // Find and replace the corrected portion
       const newText = originalText.replace(correction.original || '', correction.corrected || '');
       textNode.node.textContent = newText;
@@ -335,14 +410,25 @@ function applyCorrections(
       console.log(`      Full result: "${newText.trim()}"`);
       
       // Record all changes
-      correction.changes.forEach(change => {
+      correction.changes.forEach((change, index) => {
         if (change && change.find && change.replace) {
           console.log(`      - "${change.find}" → "${change.replace}" (${change.reason})`);
           
-          // ✅ Calculate highlight positions
-          const fullSentence = textNode.originalText;
-          const highlightStart = fullSentence.indexOf(change.find);
-          const highlightEnd = highlightStart >= 0 ? highlightStart + change.find.length : -1;
+          // ✅ VERIFY: Check if the error word actually exists in the original text
+          const wordExists = textNode.originalText.includes(change.find);
+          
+          if (!wordExists) {
+            console.log(`      ⚠️  HALLUCINATION DETECTED & DISCARDED: "${change.find}" not found in original text`);
+            return; // Silently skip this hallucinated change
+          }
+          
+          // ✅ Use pre-captured context snippet
+          const context = contextSnippets[index] || {
+            snippet: textNode.originalText,
+            highlightStart: 0,
+            highlightEnd: 0
+          };
+          const { snippet, highlightStart, highlightEnd } = context;
           
           appliedEdits.push({
             find: change.find,
@@ -352,8 +438,8 @@ function applyCorrections(
             reason: change.reason || 'Grammar correction',
             changeType: 'spelling',
             status: 'applied',
-            // ✅ NEW: Add full sentence and highlight info
-            fullSentence: fullSentence,
+            // ✅ Add full sentence and highlight info
+            fullSentence: snippet,
             highlightStart: highlightStart,
             highlightEnd: highlightEnd,
           });

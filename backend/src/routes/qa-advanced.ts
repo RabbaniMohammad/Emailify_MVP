@@ -98,6 +98,9 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
           after: edit.replace,
           parent: 'body',
           reason: edit.reason,
+          fullSentence: edit.fullSentence,
+          highlightStart: edit.highlightStart,
+          highlightEnd: edit.highlightEnd,
         },
       })),
       ...grammarResult.failedEdits.map((edit, index) => ({
@@ -119,6 +122,9 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
       after: edit.replace,
       parent: 'body',
       reason: edit.reason,
+      fullSentence: edit.fullSentence,
+      highlightStart: edit.highlightStart,
+      highlightEnd: edit.highlightEnd,
     }));
     
     const failedEdits = grammarResult.failedEdits.map(edit => ({
