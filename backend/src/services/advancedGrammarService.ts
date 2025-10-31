@@ -43,6 +43,9 @@ export interface GrammarCheckResult {
     reason: string;
     changeType: string;
     status: 'applied';
+    fullSentence: string;        // ✅ NEW: Full sentence with the error
+    highlightStart: number;      // ✅ NEW: Start position of error word
+    highlightEnd: number;        // ✅ NEW: End position of error word
   }>;
   failedEdits: Array<{
     find: string;
@@ -173,6 +176,12 @@ RULES:
 4. Don't change correct text
 5. Return EXACT format as specified
 
+CRITICAL RULE FOR "find" FIELD:
+- Copy the COMPLETE wrong word/phrase EXACTLY as it appears in the input text
+- Include ALL characters, even repeated letters (e.g., "natureeeee" not "natur")
+- Character-by-character match - do NOT shorten or abbreviate
+- If the text has "beautyyy", your find must be "beautyyy", NOT "beauty" or "beaut"
+
 INPUT: Array of text nodes with their HTML tags:
 ${JSON.stringify(input, null, 2)}
 
@@ -186,14 +195,20 @@ OUTPUT: Return JSON with "corrections" array:
       "corrected": "<corrected text>",
       "changes": [
         {
-          "find": "<exact wrong text>",
-          "replace": "<exact correct text>",
+          "find": "<EXACT COMPLETE substring from input - copy character-by-character>",
+          "replace": "<corrected version>",
           "reason": "<brief explanation>"
         }
       ]
     }
   ]
 }
+
+EXAMPLE:
+If input text is "Discover the beautyyy of natureee", your changes must be:
+{ "find": "beautyyy", "replace": "beauty", "reason": "Spelling error" }
+{ "find": "natureee", "replace": "nature", "reason": "Spelling error" }
+NOT: { "find": "beauty", ... } or { "find": "natur", ... }
 
 If text is already correct, return empty changes array for that node.
 CRITICAL: Return ONLY valid JSON, no other text.`;
@@ -288,6 +303,12 @@ function applyCorrections(
       correction.changes.forEach(change => {
         if (change && change.find && change.replace) {
           console.log(`      - "${change.find}" → "${change.replace}" (${change.reason})`);
+          
+          // ✅ Calculate highlight positions
+          const fullSentence = textNode.originalText;
+          const highlightStart = fullSentence.indexOf(change.find);
+          const highlightEnd = highlightStart >= 0 ? highlightStart + change.find.length : -1;
+          
           appliedEdits.push({
             find: change.find,
             replace: change.replace,
@@ -296,6 +317,10 @@ function applyCorrections(
             reason: change.reason || 'Grammar correction',
             changeType: 'spelling',
             status: 'applied',
+            // ✅ NEW: Add full sentence and highlight info
+            fullSentence: fullSentence,
+            highlightStart: highlightStart,
+            highlightEnd: highlightEnd,
           });
         }
       });
@@ -313,6 +338,12 @@ function applyCorrections(
       correction.changes.forEach(change => {
         if (change && change.find && change.replace) {
           console.log(`      - "${change.find}" → "${change.replace}" (${change.reason})`);
+          
+          // ✅ Calculate highlight positions
+          const fullSentence = textNode.originalText;
+          const highlightStart = fullSentence.indexOf(change.find);
+          const highlightEnd = highlightStart >= 0 ? highlightStart + change.find.length : -1;
+          
           appliedEdits.push({
             find: change.find,
             replace: change.replace,
@@ -321,6 +352,10 @@ function applyCorrections(
             reason: change.reason || 'Grammar correction',
             changeType: 'spelling',
             status: 'applied',
+            // ✅ NEW: Add full sentence and highlight info
+            fullSentence: fullSentence,
+            highlightStart: highlightStart,
+            highlightEnd: highlightEnd,
           });
         }
       });

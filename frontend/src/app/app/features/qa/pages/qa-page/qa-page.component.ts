@@ -1645,4 +1645,24 @@ private async handleVisualEditorReturn(
       : 'Edit in Visual Editor';
   }
 
+  /**
+   * Get highlighted sentence HTML for an edit
+   * Shows the full sentence with the error word highlighted
+   */
+  getHighlightedSentence(edit: any): string {
+    if (!edit.fullSentence || edit.highlightStart === undefined || edit.highlightEnd === undefined) {
+      return edit.find || '';
+    }
+    
+    if (edit.highlightStart === -1 || edit.highlightEnd === -1) {
+      return edit.fullSentence;
+    }
+    
+    const before = edit.fullSentence.substring(0, edit.highlightStart);
+    const highlighted = edit.fullSentence.substring(edit.highlightStart, edit.highlightEnd);
+    const after = edit.fullSentence.substring(edit.highlightEnd);
+    
+    return `${before}<span class="highlight-error">${highlighted}</span>${after}`;
+  }
+
 }

@@ -79,8 +79,8 @@ ngOnInit(): void {
     // Initial load
     this.loadPendingCount();
     
-    // Poll every 30 seconds
-    timer(30000, 30000).pipe(
+    // Poll every 30 minutes
+    timer(1800000, 1800000).pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
       this.loadPendingCount();

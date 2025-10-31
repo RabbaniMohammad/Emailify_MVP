@@ -1,8 +1,12 @@
 import { Router, type Request, type Response } from 'express';
 import { checkGrammarAdvanced } from '@src/services/advancedGrammarService';
 import * as cheerio from 'cheerio';
+import OpenAI from 'openai';
+import { randomUUID } from 'crypto';
 
 const router = Router();
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 /**
  * Helper function to ensure full HTML document
@@ -281,6 +285,188 @@ router.post('/test', async (req: Request, res: Response) => {
       message: String(err)
     });
   }
+});
+
+// ========================
+// VARIANTS ENDPOINTS  
+// ========================
+
+// TODO: applyContextEdits function needs to be copied from qa.ts or exported
+// import { applyContextEdits } from './qa';
+
+type VariantItem = {
+  no: number;
+  html: string;
+  changes: Array<any>;
+  why: string[];
+  artifacts?: any;
+  failedEdits?: any;
+  stats?: any;
+};
+
+type VariantRun = {
+  id: string;
+  templateId: string;
+  target: number;
+  goldenHtml: string;
+  currentHtml: string;
+  usedIdeas: Set<string>;
+  variants: VariantItem[];
+  createdAt: number;
+};
+
+const VARIANT_TARGET_DEFAULT = 5;
+const variantRuns = new Map<string, VariantRun>();
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+async function getVariantEditsAndWhy(sourceHtml: string, usedIdeas: Set<string>): Promise<{ edits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string; idea?: string }>; why: string[]; }> {
+  const $ = cheerio.load(sourceHtml);
+  $('script, style, noscript').remove();
+  const plain = $('body').text().replace(/\s+/g, ' ').trim();
+
+  const system = [
+    'You generate SMALL, high-signal copy tweaks for an email variant.',
+    'Return ONLY valid JSON:',
+    '{ "edits":[{ "find":"<exact substring from input text node>", "replace":"<final corrected text>", "before_context":"<10-40 chars from before the find>", "after_context":"<10-40 chars from after the find>", "reason":"...", "idea":"<short tag>"}], "why":["..."] }',
+    'Rules:',
+    '- Up to 12 edits. Each edit must be within ONE text node.',
+    '- "find" and contexts must be copied EXACTLY from the input text (no HTML).',
+    '- Do NOT change URLs, merge tags (*|FNAME|*), tracking codes, or anchor/link text.',
+    '- Keep tone/meaning; ≤20% length change per edit.',
+    '- Favor deliverability & SEO clarity; avoid spammy all-caps or exclamation!!!!',
+    `- Avoid previously used ideas: ${JSON.stringify(Array.from(usedIdeas))}`,
+  ].join('\n');
+
+  const completion = await openai.chat.completions.create({
+    model: OPENAI_MODEL,
+    temperature: 0.4,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: plain || 'No text.' }
+    ],
+    response_format: { type: 'json_object' as const }
+  });
+
+  let edits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string; idea?: string }> = [];
+  let why: string[] = [];
+  try {
+    const raw = completion.choices[0]?.message?.content || '{"edits":[],"why":[]}';
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      const e = (parsed as any).edits;
+      const w = (parsed as any).why;
+      if (Array.isArray(e)) {
+        edits = e.map((x: any) => ({
+          find: String(x?.find || ''),
+          replace: String(x?.replace || ''),
+          before_context: String(x?.before_context || ''),
+          after_context: String(x?.after_context || ''),
+          reason: x?.reason ? String(x.reason) : undefined,
+          idea: x?.idea ? String(x.idea) : undefined,
+        })).filter((x) => x.find && x.replace);
+      }
+      if (Array.isArray(w)) why = w.map((s: any) => String(s || '')).filter(Boolean);
+    }
+  } catch (_e: unknown) { /* ignore */ }
+
+  return { edits, why };
+}
+
+router.post('/:id/variants/start', async (req: Request, res: Response) => {
+  try {
+    const templateId = String(req.params.id);
+    const goldenHtml: string = String(req.body?.html || '').trim();
+    const target = Math.min(Math.max(Number(req.body?.target ?? VARIANT_TARGET_DEFAULT), 1), 5);
+
+    if (!goldenHtml) {
+      return res.status(400).json({ code: 'VARIANTS_START_BAD_REQUEST', message: 'goldenHtml is required' });
+    }
+
+    const runId = (typeof (randomUUID as any) === 'function') ? randomUUID() : `vr_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const run: VariantRun = {
+      id: runId,
+      templateId,
+      target,
+      goldenHtml,
+      currentHtml: goldenHtml,
+      usedIdeas: new Set<string>(),
+      variants: [],
+      createdAt: Date.now(),
+    };
+    variantRuns.set(runId, run);
+    res.json({ runId, target });
+  } catch (err: unknown) {
+    res.status(500).json({ code: 'VARIANTS_START_ERROR', message: errMsg(err) });
+  }
+});
+
+router.post('/variants/:runId/next', async (req: Request, res: Response) => {
+  try {
+    const runId = String(req.params.runId);
+    const run = variantRuns.get(runId);
+    if (!run) return res.status(404).json({ code: 'VARIANTS_RUN_NOT_FOUND', message: 'Run not found' });
+
+    if (run.variants.length >= run.target) {
+      return res.status(200).json({ done: true, message: 'All variants generated', no: run.variants.length });
+    }
+
+    const sourceHtml = run.goldenHtml;
+    const { edits, why } = await getVariantEditsAndWhy(sourceHtml, run.usedIdeas);
+
+    // TODO: Implement applyContextEdits or use original qa.ts logic
+    // const atomicResult = applyContextEdits(sourceHtml, edits);
+    return res.status(501).json({ 
+      code: 'NOT_IMPLEMENTED', 
+      message: 'Variants feature not fully implemented yet. Please use /api/qa/ endpoints for now.' 
+    });
+    
+    /* COMMENTED OUT UNTIL applyContextEdits IS AVAILABLE
+    const variantNo = run.variants.length + 1;
+
+    const ideas = Array.from(new Set((edits || []).map((e) => (e as any).idea).filter(Boolean) as string[]));
+    ideas.forEach((i) => run.usedIdeas.add(i));
+
+    const appliedEdits = atomicResult.results.filter((r: any) => r.status === 'applied');
+    const failedEdits = atomicResult.results.filter((r: any) => r.status !== 'applied' && r.status !== 'skipped');
+    const changes = appliedEdits.map((r: any) => r.change!).filter(Boolean);
+
+    const item: VariantItem = {
+      no: variantNo,
+      html: ensureFullDocShell(`Variant ${variantNo}`, atomicResult.html),
+      changes: changes,
+      why: (why && why.length) ? why : ['Small clarity and deliverability improvements.'],
+      artifacts: { usedIdeas: ideas },
+      failedEdits: failedEdits.map((r: any) => ({
+        ...r.edit,
+        status: r.status,
+        reason: r.reason,
+        diagnostics: r.diagnostics,
+      })),
+      stats: atomicResult.stats,
+    };
+
+    run.variants.push(item);
+    res.json(item);
+    END COMMENTED BLOCK */
+  } catch (err: unknown) {
+    res.status(500).json({ code: 'VARIANTS_NEXT_ERROR', message: errMsg(err) });
+  }
+});
+
+router.get('/variants/:runId/status', async (req: Request, res: Response) => {
+  const runId = String(req.params.runId);
+  const run = variantRuns.get(runId);
+  if (!run) return res.status(404).json({ code: 'VARIANTS_RUN_NOT_FOUND' });
+  res.json({
+    runId: run.id,
+    templateId: run.templateId,
+    target: run.target,
+    count: run.variants.length,
+    items: run.variants,
+  });
 });
 
 export default router;

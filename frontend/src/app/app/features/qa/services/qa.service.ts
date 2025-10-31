@@ -58,7 +58,15 @@ export interface EditDiagnostics {
 export interface GoldenResult {
   html: string;
   edits?: GoldenEdit[];  // ✅ Changed from inline Array type
-  changes?: Array<{ before: string; after: string; parent: string; reason?: string }>;
+  changes?: Array<{ 
+    before: string; 
+    after: string; 
+    parent: string; 
+    reason?: string;
+    fullSentence?: string;
+    highlightStart?: number;
+    highlightEnd?: number;
+  }>;
   
   // ✅ NEW: Atomic verification data (all optional for backward compatibility)
   atomicResults?: any[];
@@ -70,6 +78,9 @@ export interface GoldenResult {
     reason?: string;
     status?: EditStatus;
     diagnostics?: EditDiagnostics;
+    fullSentence?: string;
+    highlightStart?: number;
+    highlightEnd?: number;
   }>;
   stats?: {
     total: number;
@@ -344,7 +355,7 @@ export class QaService {
 
 
         return this.http.post<GoldenResult>(
-          `/api/qa/${id}/golden`,
+          `/api/qa-advanced/${id}/golden`,  // 🧪 TESTING LOCAL GRAMMAR CHECKER
           { html }
         );
       }),
@@ -719,7 +730,7 @@ export class QaService {
 
   startVariants(templateId: string, goldenHtml: string, target = 5) {
     return this.http.post<{ runId: string; target: number }>(
-      `/api/qa/${templateId}/variants/start`,
+      `/api/qa-advanced/${templateId}/variants/start`,  // 🧪 Using GPT tag-based approach
       { html: goldenHtml, target }
     ).pipe(
       tap(async ({ runId, target }) => {
@@ -739,7 +750,7 @@ export class QaService {
 
   nextVariant(runId: string) {
     return this.http.post<VariantItem>(
-      `/api/qa/variants/${runId}/next`,
+      `/api/qa-advanced/variants/${runId}/next`,  // 🧪 Using GPT tag-based approach
       {}
     ).pipe(
       tap(async (item) => {

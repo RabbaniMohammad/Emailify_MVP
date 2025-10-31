@@ -22,7 +22,7 @@ export class DebugLoggerService {
   private readonly FLUSH_INTERVAL = 2000; // Flush every 2 seconds
   private readonly MAX_BUFFER_SIZE = 50; // Flush if buffer reaches 50 entries
   private sessionId: string;
-  private enabled = true; // Can be toggled via localStorage
+  private enabled = false; // Can be toggled via localStorage
 
   constructor(private http: HttpClient) {
     // Generate unique session ID

@@ -42,7 +42,6 @@ router.get('/users/pending', authenticate, requireAdmin, async (req: Request, re
       .select('-__v')
       .sort({ createdAt: -1 });
 
-    logger.info(`🔍 [ADMIN] Fetching pending users for org: ${currentUser.organizationId}, found: ${users.length}`);
     res.json({ users });
   } catch (error) {
     logger.err('Get pending users error:', error);

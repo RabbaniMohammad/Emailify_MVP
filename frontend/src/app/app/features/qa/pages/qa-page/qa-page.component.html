@@ -315,16 +315,17 @@
             </div>
             <ul class="edits-list">
               <li *ngFor="let c of golden.changes; trackBy: trackByEdit" class="edit-item" [@listAnimation]>
-                <div class="edit-context">
-                  <code class="context-before">{{ c.before }}</code>
-                </div>
-                <div class="edit-replace">
+                <div class="edit-change-row">
+                  <code class="error-word">{{ c.before }}</code>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon">
                     <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
                   </svg>
-                  <span>{{ c.after }}</span>
+                  <code class="correction-word">{{ c.after }}</code>
                 </div>
-                <div class="edit-reason" *ngIf="c.reason">{{ c.reason }}</div>
+                <div class="edit-info-row">
+                  <span class="reason-badge" *ngIf="c.reason">{{ c.reason }}</span>
+                  <span class="context-text" *ngIf="c.fullSentence" [innerHTML]="getHighlightedSentence(c)"></span>
+                </div>
               </li>
             </ul>
           </div>
