@@ -1643,19 +1643,61 @@ async onCheckPreview(): Promise<void> {
   }
 }  /**
    * Copy text as plain text (no formatting)
+   * Uses fallback method for better cross-platform compatibility (Mac/Safari)
    */
   copyTextToClipboard(text: string, event?: MouseEvent): void {
     if (event) {
       event.stopPropagation();
     }
     
-    // ✅ Copy as plain text only
-    navigator.clipboard.writeText(text).then(() => {
-      this.showToast(`Copied: "${this.truncateText(text, 30)}"`, 'success');
-    }).catch(err => {
+    // ✅ Try modern Clipboard API first (works on most browsers)
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        this.showToast(`Copied: "${this.truncateText(text, 30)}"`, 'success');
+      }).catch(err => {
+        // Fallback to legacy method if modern API fails (common on Mac/Safari)
+        this.fallbackCopyTextToClipboard(text);
+      });
+    } else {
+      // Use fallback method if Clipboard API not available
+      this.fallbackCopyTextToClipboard(text);
+    }
+  }
 
+  /**
+   * Fallback copy method using textarea (works on all browsers including Safari/Mac)
+   */
+  private fallbackCopyTextToClipboard(text: string): void {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    
+    // Make the textarea invisible and prevent scrolling
+    textArea.style.position = 'fixed';
+    textArea.style.top = '-9999px';
+    textArea.style.left = '-9999px';
+    textArea.style.opacity = '0';
+    textArea.setAttribute('readonly', '');
+    
+    document.body.appendChild(textArea);
+    
+    // Select the text
+    textArea.focus();
+    textArea.select();
+    
+    try {
+      // Execute copy command
+      const successful = document.execCommand('copy');
+      if (successful) {
+        this.showToast(`Copied: "${this.truncateText(text, 30)}"`, 'success');
+      } else {
+        this.showToast('Copy failed. Please try again.', 'error');
+      }
+    } catch (err) {
       this.showToast('Copy failed. Please try again.', 'error');
-    });
+    } finally {
+      // Clean up
+      document.body.removeChild(textArea);
+    }
   }
 
   /**
@@ -1779,7 +1821,7 @@ async onCheckPreview(): Promise<void> {
             // Scroll to it
             parent.scrollIntoView({ behavior: 'smooth', block: 'center' });
             
-            // Highlight it
+            // Highlight it with click-to-replace functionality
             const range = doc.createRange();
             const startIndex = nodeText.toLowerCase().indexOf(searchLower);
             range.setStart(node, startIndex);
@@ -1787,12 +1829,46 @@ async onCheckPreview(): Promise<void> {
             
             const highlight = doc.createElement('span');
             highlight.setAttribute('data-ai-highlight', 'true');
-            highlight.style.cssText = 'background-color: yellow !important; color: black !important; padding: 2px;';
+            highlight.style.cssText = 'background-color: yellow !important; color: black !important; padding: 2px; cursor: pointer; transition: all 0.2s;';
+            highlight.title = `Click to replace with: ${replaceText}`;
+            
+            // ✅ Add click handler to automatically replace text
+            highlight.addEventListener('click', (e) => {
+              e.stopPropagation();
+              
+              // Replace the text
+              const textNode = doc.createTextNode(replaceText);
+              highlight.parentNode?.replaceChild(textNode, highlight);
+              
+              // Normalize to merge adjacent text nodes
+              if (textNode.parentNode) {
+                textNode.parentNode.normalize();
+              }
+              
+              // Show success message
+              this.showToast(`✓ Replaced with "${this.truncateText(replaceText, 25)}"`, 'success');
+              
+              // Mark editor as dirty to save changes
+              if (this.editor && this.templateId) {
+                const updatedHtml = this.editor.getHtml();
+                const updatedCss = this.editor.getCss();
+                this.templateState.saveEditorProgress(this.templateId, updatedHtml, updatedCss);
+              }
+            });
+            
+            // ✅ Add hover effect
+            highlight.addEventListener('mouseenter', () => {
+              highlight.style.cssText = 'background-color: #4ade80 !important; color: white !important; padding: 2px; cursor: pointer; transform: scale(1.05); box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);';
+            });
+            
+            highlight.addEventListener('mouseleave', () => {
+              highlight.style.cssText = 'background-color: yellow !important; color: black !important; padding: 2px; cursor: pointer; transition: all 0.2s;';
+            });
             
             try {
               range.surroundContents(highlight);
               found = true;
-              this.showToast(`Found "${this.truncateText(findText, 25)}"`, 'success');
+              this.showToast(`Found "${this.truncateText(findText, 25)}" - Click to replace`, 'success');
               break;
             } catch (e) {
               // Can't highlight - just scroll

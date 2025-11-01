@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { checkGrammarAdvanced } from '@src/services/advancedGrammarService';
+import { checkGrammarAdvanced, applyCustomEdits } from '@src/services/advancedGrammarService';
 import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
 import { randomUUID } from 'crypto';
@@ -297,9 +297,6 @@ router.post('/test', async (req: Request, res: Response) => {
 // VARIANTS ENDPOINTS  
 // ========================
 
-// TODO: applyContextEdits function needs to be copied from qa.ts or exported
-// import { applyContextEdits } from './qa';
-
 type VariantItem = {
   no: number;
   html: string;
@@ -328,13 +325,14 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+// ✅ Get variant edits with SEO focus
 async function getVariantEditsAndWhy(sourceHtml: string, usedIdeas: Set<string>): Promise<{ edits: Array<{ find: string; replace: string; before_context: string; after_context: string; reason?: string; idea?: string }>; why: string[]; }> {
   const $ = cheerio.load(sourceHtml);
   $('script, style, noscript').remove();
   const plain = $('body').text().replace(/\s+/g, ' ').trim();
 
   const system = [
-    'You generate SMALL, high-signal copy tweaks for an email variant.',
+    'You generate SMALL, high-signal copy tweaks for an email variant focused on SEO optimization and deliverability.',
     'Return ONLY valid JSON:',
     '{ "edits":[{ "find":"<exact substring from input text node>", "replace":"<final corrected text>", "before_context":"<10-40 chars from before the find>", "after_context":"<10-40 chars from after the find>", "reason":"...", "idea":"<short tag>"}], "why":["..."] }',
     'Rules:',
@@ -343,6 +341,7 @@ async function getVariantEditsAndWhy(sourceHtml: string, usedIdeas: Set<string>)
     '- Do NOT change URLs, merge tags (*|FNAME|*), tracking codes, or anchor/link text.',
     '- Keep tone/meaning; ≤20% length change per edit.',
     '- Favor deliverability & SEO clarity; avoid spammy all-caps or exclamation!!!!',
+    '- Focus on keyword optimization, clarity improvements, and engagement',
     `- Avoid previously used ideas: ${JSON.stringify(Array.from(usedIdeas))}`,
   ].join('\n');
 
@@ -403,6 +402,9 @@ router.post('/:id/variants/start', async (req: Request, res: Response) => {
       createdAt: Date.now(),
     };
     variantRuns.set(runId, run);
+    
+    console.log(`🎯 [QA-ADVANCED] Started variant run ${runId} for template ${templateId} (target: ${target})`);
+    
     res.json({ runId, target });
   } catch (err: unknown) {
     res.status(500).json({ code: 'VARIANTS_START_ERROR', message: errMsg(err) });
@@ -419,45 +421,69 @@ router.post('/variants/:runId/next', async (req: Request, res: Response) => {
       return res.status(200).json({ done: true, message: 'All variants generated', no: run.variants.length });
     }
 
+    console.log(`🔄 [QA-ADVANCED] Generating variant ${run.variants.length + 1}/${run.target} for run ${runId}`);
+    
+    // ✅ STEP 1: Get SEO-focused edits from GPT
     const sourceHtml = run.goldenHtml;
     const { edits, why } = await getVariantEditsAndWhy(sourceHtml, run.usedIdeas);
-
-    // TODO: Implement applyContextEdits or use original qa.ts logic
-    // const atomicResult = applyContextEdits(sourceHtml, edits);
-    return res.status(501).json({ 
-      code: 'NOT_IMPLEMENTED', 
-      message: 'Variants feature not fully implemented yet. Please use /api/qa/ endpoints for now.' 
-    });
+    console.log(`📝 [QA-ADVANCED] Got ${edits.length} SEO-focused edits from GPT`);
     
-    /* COMMENTED OUT UNTIL applyContextEdits IS AVAILABLE
+    // ✅ STEP 2: Apply edits using ADVANCED tag-based logic (SAME as golden template)
+    const result = await applyCustomEdits(sourceHtml, edits);
+    console.log(`✅ [QA-ADVANCED] Applied ${result.stats.applied} edits, ${result.stats.failed} failed`);
+    
     const variantNo = run.variants.length + 1;
 
+    // Track used ideas
     const ideas = Array.from(new Set((edits || []).map((e) => (e as any).idea).filter(Boolean) as string[]));
     ideas.forEach((i) => run.usedIdeas.add(i));
 
-    const appliedEdits = atomicResult.results.filter((r: any) => r.status === 'applied');
-    const failedEdits = atomicResult.results.filter((r: any) => r.status !== 'applied' && r.status !== 'skipped');
-    const changes = appliedEdits.map((r: any) => r.change!).filter(Boolean);
-
+    // ✅ STEP 3: Format response EXACTLY like golden template
+    const allEdits = result.appliedEdits.map(edit => ({
+      find: edit.find,
+      replace: edit.replace,
+      before_context: edit.before_context,
+      after_context: edit.after_context,
+      reason: edit.reason,
+    }));
+    
+    const changes = result.appliedEdits.map(edit => ({
+      before: edit.find,
+      after: edit.replace,
+      parent: 'body',
+      reason: edit.reason,
+      fullSentence: edit.fullSentence,
+      highlightStart: edit.highlightStart,
+      highlightEnd: edit.highlightEnd,
+    }));
+    
+    const failedEdits = result.failedEdits.map(edit => ({
+      find: edit.find,
+      replace: edit.replace,
+      before_context: edit.before_context,
+      after_context: edit.after_context,
+      reason: edit.reason,
+      status: 'failed' as const,
+      diagnostics: {
+        error: edit.error
+      },
+    }));
+    
     const item: VariantItem = {
       no: variantNo,
-      html: ensureFullDocShell(`Variant ${variantNo}`, atomicResult.html),
+      html: ensureFullDocShell(`Variant ${variantNo}`, result.html),
       changes: changes,
-      why: (why && why.length) ? why : ['Small clarity and deliverability improvements.'],
+      why: (why && why.length) ? why : ['SEO optimization and deliverability improvements.'],
       artifacts: { usedIdeas: ideas },
-      failedEdits: failedEdits.map((r: any) => ({
-        ...r.edit,
-        status: r.status,
-        reason: r.reason,
-        diagnostics: r.diagnostics,
-      })),
-      stats: atomicResult.stats,
+      failedEdits: failedEdits,
+      stats: result.stats,
     };
 
     run.variants.push(item);
+
     res.json(item);
-    END COMMENTED BLOCK */
   } catch (err: unknown) {
+    console.error('❌ [QA-ADVANCED] Variant generation error:', err);
     res.status(500).json({ code: 'VARIANTS_NEXT_ERROR', message: errMsg(err) });
   }
 });

@@ -1479,18 +1479,6 @@
   transition: all var(--transition-normal);
   position: relative;
   overflow: hidden;
-
-  .capture-mini-btn {
-    align-self: center !important;
-    margin: 0 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 36px !important; // Restore original size
-    height: 36px !important; // Restore original size
-    min-width: 36px !important; // Prevent shrinking
-    min-height: 36px !important; // Prevent shrinking
-  }
   
   .validation-content {
     display: flex;
@@ -1613,32 +1601,6 @@
   margin-top: 0.25rem; // Reduced margin
   font-style: italic;
   word-break: break-word; // Ensure wrapping
-}
-
-// COMPACT CAPTURE MINI BUTTON
-.capture-mini-btn {
-  width: 32px !important; // Reduced from 36px
-  height: 32px !important;
-  flex-shrink: 0;
-  border-radius: 50% !important;
-  transition: all var(--transition-normal) !important;
-  margin-top: 2px; // Align with content
-  
-  svg {
-    width: 16px; // Reduced from 18px
-    height: 16px;
-    color: var(--primary-purple);
-    transition: transform var(--transition-normal);
-  }
-  
-  &:hover {
-    background: linear-gradient(135deg, rgba(109, 40, 217, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%) !important;
-    transform: scale(1.05); // Reduced scale
-    
-    svg {
-      transform: scale(1.05); // Reduced transform
-    }
-  }
 }
 
 .no-results {
@@ -2027,19 +1989,6 @@
     grid-template-columns: auto 1fr;
     gap: 0.5rem;
     padding: 0.75rem;
-    
-    .capture-mini-btn {
-      grid-column: 1 / -1;
-      justify-self: center;
-      margin-top: 0.75rem;
-      width: 36px !important;
-      height: 36px !important;
-      
-      svg {
-        width: 18px;
-        height: 18px;
-      }
-    }
   }
   
   .validation-status {

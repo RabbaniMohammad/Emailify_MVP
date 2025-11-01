@@ -130,7 +130,7 @@ export class QaPageComponent implements OnDestroy {
   private snackBar = inject(MatSnackBar);
   private templateState = inject(TemplateStateService);
 
-  private readonly GOLDEN_TIMEOUT = 120000;
+  private readonly GOLDEN_TIMEOUT = 180000; // 3 minutes (increased from 2min for large templates)
   private readonly SUBJECTS_TIMEOUT = 60000;
   private readonly SUGGESTIONS_TIMEOUT = 90000;
   private readonly VARIANTS_START_TIMEOUT = 60000;
@@ -1071,14 +1071,32 @@ export class QaPageComponent implements OnDestroy {
     });
   }
 
+  /** ✅ NEW: Handle template preview iframe load */
+  onTemplatePreviewLoaded(): void {
+    if (this.templateLoading) {
+      this.templateLoading = false;
+      this.cdr.markForCheck();
+    }
+  }
+
   private loadOriginalTemplate(templateId: string) {
     this.templateLoading = true;
     this.templateHtml = '';
+    
+    // ✅ Set a fallback timeout to prevent infinite loading (3 seconds)
+    const loadingTimeout = setTimeout(() => {
+      if (this.templateLoading) {
+        console.warn('⚠️ Template loading timeout - forcing completion');
+        this.templateLoading = false;
+        this.cdr.markForCheck();
+      }
+    }, 3000);
     
     // ✅ Check cache first (faster than API)
     const cachedHtml = this.previewCache.get(templateId) || this.previewCache.getPersisted(templateId);
     
     if (cachedHtml) {
+      clearTimeout(loadingTimeout);
       this.templateHtml = cachedHtml;
       this.templateLoading = false;
       
@@ -1092,6 +1110,7 @@ export class QaPageComponent implements OnDestroy {
     const template = currentState.items.find(item => item.id === templateId);
     
     if (template?.content) {
+      clearTimeout(loadingTimeout);
       this.templateHtml = template.content;
       this.templateLoading = false;
       
@@ -1104,6 +1123,7 @@ export class QaPageComponent implements OnDestroy {
     this.http.get(`/api/templates/${templateId}/raw`, { responseType: 'text' })
       .subscribe({
         next: (html) => {
+          clearTimeout(loadingTimeout);
           this.templateHtml = html;
           this.templateLoading = false;
           
@@ -1113,6 +1133,7 @@ export class QaPageComponent implements OnDestroy {
           this.cdr.markForCheck();
         },
         error: (error) => {
+          clearTimeout(loadingTimeout);
           this.templateHtml = 'Failed to load template';
           this.templateLoading = false;
           this.cdr.markForCheck();
@@ -1643,6 +1664,17 @@ private async handleVisualEditorReturn(
     return count > 0
       ? `${count} failed edit${count > 1 ? 's' : ''} detected - open editor` 
       : 'Edit in Visual Editor';
+  }
+
+  /**
+   * Format milliseconds to human-readable time
+   * Examples: 500ms → "500ms", 5000ms → "5.0s", 91087ms → "91.1s"
+   */
+  formatTime(ms: number): string {
+    if (ms < 1000) {
+      return `${ms}ms`;
+    }
+    return `${(ms / 1000).toFixed(1)}s`;
   }
 
   /**

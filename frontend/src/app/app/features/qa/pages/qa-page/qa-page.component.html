@@ -50,6 +50,7 @@
             [html]="templateHtml"
             [loading]="templateLoading"
             [allowScripts]="true"
+            (iframeLoaded)="onTemplatePreviewLoaded()"
             style="flex: 1; height: 100%; min-height: 500px;">
           </app-html-preview>
         </div>
@@ -261,19 +262,19 @@
               <div class="timings-grid">
                 <div class="timing-item">
                   <span class="timing-label">Total:</span>
-                  <span class="timing-value">{{ golden.timings?.total || 0 }}ms</span>
+                  <span class="timing-value">{{ formatTime(golden.timings?.total || 0) }}</span>
                 </div>
                 <div class="timing-item">
                   <span class="timing-label">Parsing:</span>
-                  <span class="timing-value">{{ golden.timings?.parsing || 0 }}ms</span>
+                  <span class="timing-value">{{ formatTime(golden.timings?.parsing || 0) }}</span>
                 </div>
                 <div class="timing-item">
                   <span class="timing-label">Processing:</span>
-                  <span class="timing-value">{{ golden.timings?.processing || 0 }}ms</span>
+                  <span class="timing-value">{{ formatTime(golden.timings?.processing || 0) }}</span>
                 </div>
                 <div class="timing-item">
                   <span class="timing-label">Verification:</span>
-                  <span class="timing-value">{{ golden.timings?.verification || 0 }}ms</span>
+                  <span class="timing-value">{{ formatTime(golden.timings?.verification || 0) }}</span>
                 </div>
               </div>
             </div>

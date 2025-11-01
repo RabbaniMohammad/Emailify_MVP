@@ -147,6 +147,12 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
   readonly validLinks$ = this.validLinksSubject.asObservable();
 
   private htmlLinks$ = this.html$.pipe(map(html => this.extractAllLinks(html)));
+  
+  // ✅ Extract ORIGINAL URLs from screenshots (not redirected finalUrl)
+  private snapsOriginalUrls$ = this.snaps$.pipe(
+    map(snaps => snaps.map(s => s.url)), // Use original URL, not finalUrl
+    shareReplay(1) // Cache the last value
+  );
 
   @ViewChild('chatMessages') private chatMessagesRef!: ElementRef;
   private scrollAnimation: number | null = null;
@@ -168,30 +174,53 @@ export class UseVariantPageComponent implements AfterViewInit, OnInit, OnDestroy
 
 readonly linkChecks$ = combineLatest([this.validLinks$, this.htmlLinks$]).pipe(
   map(([fileLinks, htmlLinks]) => {
-    // ✅ ONLY show validation if file was uploaded (has valid links)
-    if (!fileLinks || fileLinks.length === 0) {
-      return []; // Return empty array if no file uploaded
+    try {
+      // ✅ ONLY show validation if file was uploaded (has valid links)
+      if (!fileLinks || fileLinks.length === 0) {
+        return []; // Return empty array if no file uploaded
+      }
+
+      // ✅ Use smart normalization for matching
+      const fset = new Set(fileLinks.map(u => this.normalizeUrl(u)));
+      const hset = new Set(htmlLinks.map(u => this.normalizeUrl(u)));
+      
+      const union: string[] = [];
+
+      // Build union preserving original format (prioritize HTML links as source of truth)
+      for (const u of htmlLinks) {
+        const normalized = this.normalizeUrl(u);
+        if (!union.some(existing => this.normalizeUrl(existing) === normalized)) {
+          union.push(u);
+        }
+      }
+      
+      // Add file links that aren't in HTML
+      for (const u of fileLinks) {
+        const normalized = this.normalizeUrl(u);
+        if (!union.some(existing => this.normalizeUrl(existing) === normalized)) {
+          union.push(u);
+        }
+      }
+
+      const checks: LinkCheck[] = union.map(u => {
+        const normalized = this.normalizeUrl(u);
+        return {
+          url: u,
+          inFile: fset.has(normalized),
+          inHtml: hset.has(normalized),
+        };
+      });
+      
+      checks.sort((a, b) => {
+        const aw = (a.inFile && a.inHtml) ? 1 : 0;
+        const bw = (b.inFile && b.inHtml) ? 1 : 0;
+        return aw - bw;
+      });
+      return checks;
+    } catch (error) {
+      console.error('Error in linkChecks$ observable:', error);
+      return []; // Return empty array on error
     }
-
-    const norm = (u: string) => u.trim().toLowerCase();
-    const fset = new Set(fileLinks.map(norm));
-    const hset = new Set(htmlLinks.map(norm));
-    const union: string[] = [];
-
-    for (const u of fileLinks) if (!union.map(norm).includes(norm(u))) union.push(u);
-    for (const u of htmlLinks) if (!union.map(norm).includes(norm(u))) union.push(u);
-
-    const checks: LinkCheck[] = union.map(u => ({
-      url: u,
-      inFile: fset.has(norm(u)),
-      inHtml: hset.has(norm(u)),
-    }));
-    checks.sort((a, b) => {
-      const aw = (a.inFile && a.inHtml) ? 1 : 0;
-      const bw = (b.inFile && b.inHtml) ? 1 : 0;
-      return aw - bw;
-    });
-    return checks;
   })
 );
 
@@ -306,13 +335,14 @@ constructor() {
   this.templateModalOpen$ = this.templateModalOpenSubject.asObservable();
   this.editorOpen$ = this.editorOpenSubject.asObservable();
 
-  // Timeout safety
+  // ✅ Safety timeout - force stop loading after 3 seconds
   this.loadingTimeout = window.setTimeout(() => {
     if (this.loadingVariant) {
+      console.warn('⚠️ Force-stopping loading state after 3s timeout');
       this.loadingVariant = false;
       this.cdr.markForCheck();
     }
-  }, 10000);
+  }, 3000); // 3 seconds instead of 10
 
   // Subscribe to runId changes
   this.runId$.subscribe(async (runId) => {
@@ -1105,6 +1135,21 @@ private restoreTemplateModalState(): boolean {
     }
   }
 
+  /** ✅ NEW: Handle iframe load completion */
+  onPreviewLoaded(): void {
+    // Clear loading state when iframe successfully loads
+    if (this.loadingVariant) {
+      this.loadingVariant = false;
+      
+      // Clear timeout if it exists
+      if (this.loadingTimeout) {
+        clearTimeout(this.loadingTimeout);
+        this.loadingTimeout = undefined;
+      }
+      
+      this.cdr.markForCheck();
+    }
+  }
 
   private smoothScrollTo(targetPosition: number): void {
     const element = this.chatMessagesRef?.nativeElement || document.querySelector('.chat-messages');
@@ -1573,25 +1618,53 @@ async onValidLinksUpload(e: Event) {
    * Extract all links from HTML including:
    * - Regular anchor hrefs
    * - Button URLs from various attributes and onclick handlers
+   * - Image sources (src, srcset) - TEMPORARILY DISABLED
+   * - Background images (style attributes) - TEMPORARILY DISABLED
+   * - All other asset URLs - TEMPORARILY DISABLED
    */
 private extractAllLinks(html: string): string[] {
-  const anchorLinks = this.extractHttpLinks(html);
-  const buttonLinks = this.extractButtonUrls(html);
-  
-  // Combine and dedupe
-  const allLinks = [...anchorLinks, ...buttonLinks];
-  const deduped = this.dedupe(allLinks);
-  
-  // ✅ FILTER OUT INVALID/PLACEHOLDER LINKS
-  return deduped.filter(url => {
-    const trimmed = url.trim().toLowerCase();
-    return trimmed && 
-           trimmed !== '#' && 
-           trimmed !== 'javascript:void(0)' &&
-           !trimmed.startsWith('mailto:') &&
-           !trimmed.startsWith('tel:') &&
-           trimmed.length > 1;
-  });
+  try {
+    const anchorLinks = this.extractHttpLinks(html);
+    const buttonLinks = this.extractButtonUrls(html);
+    // ⚠️ TEMPORARILY DISABLED - These are causing loading issues
+    // const imageLinks = this.extractImageUrls(html);
+    // const styleLinks = this.extractStyleUrls(html);
+    // const assetLinks = this.extractAssetUrls(html);
+    
+    // Combine all sources and dedupe
+    const allLinks = [
+      ...anchorLinks, 
+      ...buttonLinks, 
+      // ...imageLinks, 
+      // ...styleLinks,
+      // ...assetLinks
+    ];
+    const deduped = this.dedupe(allLinks);
+    
+    // ✅ FILTER OUT INVALID/PLACEHOLDER LINKS
+    return deduped.filter(url => {
+      const trimmed = url.trim().toLowerCase();
+      return trimmed && 
+             trimmed !== '#' && 
+             trimmed !== 'javascript:void(0)' &&
+             !trimmed.startsWith('mailto:') &&
+             !trimmed.startsWith('tel:') &&
+             trimmed.length > 1;
+    });
+  } catch (error) {
+    console.error('Error extracting links:', error);
+    // Fallback: only extract anchor links
+    try {
+      const anchorLinks = this.extractHttpLinks(html);
+      return anchorLinks.filter(url => {
+        const trimmed = url.trim().toLowerCase();
+        return trimmed && trimmed !== '#' && trimmed.length > 1;
+      });
+    } catch (fallbackError) {
+      console.error('Fallback extraction failed:', fallbackError);
+      return [];
+    }
+  }
 }
 
   /**
@@ -1678,6 +1751,172 @@ private extractAllLinks(html: string): string[] {
         /data-link\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
         /onclick\s*=\s*["'][^"']*(?:window\.)?location(?:\.href)?\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
         /onclick\s*=\s*["'][^"']*window\.open\s*\(\s*["'](https?:\/\/[^"']+)["']/gi
+      ];
+      
+      for (const pattern of patterns) {
+        let match;
+        while ((match = pattern.exec(html)) !== null) {
+          urls.push(match[1]);
+        }
+      }
+    }
+    
+    return urls;
+  }
+
+  /**
+   * Extract URLs from image elements (src and srcset)
+   */
+  private extractImageUrls(html: string): string[] {
+    const urls: string[] = [];
+    
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      
+      // Extract from src attributes (img, iframe, script, embed)
+      const srcElements = Array.from(doc.querySelectorAll('[src]'));
+      for (const el of srcElements) {
+        const src = (el.getAttribute('src') || '').trim();
+        if (src && /^https?:\/\//i.test(src)) {
+          urls.push(src);
+        }
+      }
+      
+      // Extract from srcset attributes (responsive images)
+      const srcsetElements = Array.from(doc.querySelectorAll('[srcset]'));
+      for (const el of srcsetElements) {
+        const srcset = (el.getAttribute('srcset') || '').trim();
+        if (srcset) {
+          // srcset format: "url1 1x, url2 2x" or "url1 480w, url2 800w"
+          const srcsetUrls = srcset.split(',').map(s => s.trim().split(/\s+/)[0]);
+          for (const url of srcsetUrls) {
+            if (url && /^https?:\/\//i.test(url)) {
+              urls.push(url);
+            }
+          }
+        }
+      }
+      
+      // Extract from poster attribute (video thumbnails)
+      const posterElements = Array.from(doc.querySelectorAll('[poster]'));
+      for (const el of posterElements) {
+        const poster = (el.getAttribute('poster') || '').trim();
+        if (poster && /^https?:\/\//i.test(poster)) {
+          urls.push(poster);
+        }
+      }
+      
+    } catch (error) {
+      // Fallback: regex-based extraction
+      const patterns = [
+        /src\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
+        /srcset\s*=\s*["']([^"']+)["']/gi,
+        /poster\s*=\s*["'](https?:\/\/[^"']+)["']/gi
+      ];
+      
+      for (const pattern of patterns) {
+        let match;
+        while ((match = pattern.exec(html)) !== null) {
+          if (pattern.source.includes('srcset')) {
+            // Parse srcset format
+            const srcset = match[1];
+            const srcsetUrls = srcset.split(',').map(s => s.trim().split(/\s+/)[0]);
+            for (const url of srcsetUrls) {
+              if (url && /^https?:\/\//i.test(url)) {
+                urls.push(url);
+              }
+            }
+          } else {
+            urls.push(match[1]);
+          }
+        }
+      }
+    }
+    
+    return urls;
+  }
+
+  /**
+   * Extract URLs from style attributes and CSS
+   */
+  private extractStyleUrls(html: string): string[] {
+    const urls: string[] = [];
+    
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      
+      // Extract from inline style attributes
+      const styledElements = Array.from(doc.querySelectorAll('[style]'));
+      for (const el of styledElements) {
+        const style = (el.getAttribute('style') || '').trim();
+        if (style) {
+          // Match url() in CSS
+          const urlMatches = style.matchAll(/url\s*\(\s*["']?(https?:\/\/[^"'\)]+)["']?\s*\)/gi);
+          for (const match of urlMatches) {
+            urls.push(match[1]);
+          }
+        }
+      }
+      
+      // Extract from <style> tags
+      const styleTags = Array.from(doc.querySelectorAll('style'));
+      for (const tag of styleTags) {
+        const css = tag.textContent || '';
+        const urlMatches = css.matchAll(/url\s*\(\s*["']?(https?:\/\/[^"'\)]+)["']?\s*\)/gi);
+        for (const match of urlMatches) {
+          urls.push(match[1]);
+        }
+      }
+      
+    } catch (error) {
+      // Fallback: regex-based extraction
+      const pattern = /url\s*\(\s*["']?(https?:\/\/[^"'\)]+)["']?\s*\)/gi;
+      let match;
+      while ((match = pattern.exec(html)) !== null) {
+        urls.push(match[1]);
+      }
+    }
+    
+    return urls;
+  }
+
+  /**
+   * Extract URLs from other asset-related attributes
+   */
+  private extractAssetUrls(html: string): string[] {
+    const urls: string[] = [];
+    
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      
+      // Extract from link tags (stylesheets, icons, etc.)
+      const linkElements = Array.from(doc.querySelectorAll('link[href]'));
+      for (const el of linkElements) {
+        const href = (el.getAttribute('href') || '').trim();
+        if (href && /^https?:\/\//i.test(href)) {
+          urls.push(href);
+        }
+      }
+      
+      // Extract from data attributes that might contain URLs
+      const dataUrlElements = Array.from(doc.querySelectorAll('[data-background], [data-bg], [data-image], [data-src]'));
+      for (const el of dataUrlElements) {
+        const attrs = ['data-background', 'data-bg', 'data-image', 'data-src'];
+        for (const attr of attrs) {
+          const value = (el.getAttribute(attr) || '').trim();
+          if (value && /^https?:\/\//i.test(value)) {
+            urls.push(value);
+          }
+        }
+      }
+      
+    } catch (error) {
+      // Fallback: regex-based extraction
+      const patterns = [
+        /data-background\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
+        /data-bg\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
+        /data-image\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
+        /data-src\s*=\s*["'](https?:\/\/[^"']+)["']/gi
       ];
       
       for (const pattern of patterns) {
@@ -1888,94 +2127,196 @@ hasBeenRetested(snap: SnapResult): boolean {
   const snapKey = this.getSnapKey(snap);  // ✅ Use snap key!
   return this.originalSnapUrls.has(snapKey);  // ✅ Check by snap key!
 }
+
+// ============================================
+// 🆕 URL NORMALIZATION & SMART MATCHING
+// ============================================
+
+/**
+ * Normalize URL for comparison purposes
+ * Handles: www vs non-www, http vs https, trailing slash, case sensitivity, URL encoding
+ */
+private normalizeUrl(url: string): string {
+  try {
+    let normalized = url.trim();
+    
+    // Add protocol if missing
+    if (!normalized.match(/^https?:\/\//i)) {
+      normalized = 'https://' + normalized;
+    }
+    
+    // Parse URL
+    const urlObj = new URL(normalized);
+    
+    // Normalize hostname: lowercase, remove www
+    let hostname = urlObj.hostname.toLowerCase();
+    hostname = hostname.replace(/^www\d*\./, ''); // Remove www, www2, www3, etc.
+    
+    // ✅ Special handling for twitter/x - treat them as same domain
+    if (hostname === 'x.com') {
+      hostname = 'twitter.com';
+    }
+    
+    // Normalize path: remove trailing slash (unless it's just the root)
+    let pathname = urlObj.pathname;
+    if (pathname.length > 1 && pathname.endsWith('/')) {
+      pathname = pathname.slice(0, -1);
+    }
+    
+    // Decode URL encoding for comparison
+    try {
+      pathname = decodeURIComponent(pathname);
+    } catch (e) {
+      // Keep original if decode fails
+    }
+    
+    // ✅ Decode and sort query parameters (handling encoded URLs in params)
+    const searchParams = new URLSearchParams(urlObj.search);
+    const sortedParams = new URLSearchParams();
+    
+    Array.from(searchParams.keys())
+      .sort()
+      .forEach(key => {
+        searchParams.getAll(key).forEach(value => {
+          // ✅ Decode URL-encoded values in query params
+          try {
+            const decoded = decodeURIComponent(value);
+            sortedParams.append(key.toLowerCase(), decoded);
+          } catch (e) {
+            sortedParams.append(key.toLowerCase(), value);
+          }
+        });
+      });
+    
+    const sortedSearch = sortedParams.toString();
+    const search = sortedSearch ? '?' + sortedSearch : '';
+    
+    // ✅ Decode hash as well
+    let hash = urlObj.hash;
+    try {
+      hash = hash ? decodeURIComponent(hash) : '';
+    } catch (e) {
+      // Keep original if decode fails
+    }
+    
+    // Reconstruct normalized URL (always https, no www, no trailing slash, sorted params)
+    return `https://${hostname}${pathname}${search}${hash}`;
+  } catch (e) {
+    // If URL parsing fails, return lowercase trimmed version
+    return url.trim().toLowerCase();
+  }
+}
+
+/**
+ * Find all variations of a URL in HTML
+ * Returns array of objects with: {exact: string, normalized: string, index: number}
+ */
+private findUrlVariations(html: string, targetUrl: string): Array<{exact: string, start: number, end: number}> {
+  const normalizedTarget = this.normalizeUrl(targetUrl);
+  const matches: Array<{exact: string, start: number, end: number}> = [];
+  
+  // Extract all URLs from HTML using regex
+  const urlPattern = /https?:\/\/[^\s"'<>]+/gi;
+  let match: RegExpExecArray | null;
+  
+  while ((match = urlPattern.exec(html)) !== null) {
+    const foundUrl = match[0];
+    const normalizedFound = this.normalizeUrl(foundUrl);
+    
+    if (normalizedFound === normalizedTarget) {
+      matches.push({
+        exact: foundUrl,
+        start: match.index,
+        end: match.index + foundUrl.length
+      });
+    }
+  }
+  
+  return matches;
+}
+
+/**
+ * Smart URL replacement with normalization
+ * Handles all edge cases: www, protocol, trailing slash, case, encoding
+ */
   // ✅ NEW: Replace URL in HTML with 1-to-1 mapping for duplicates
 private replaceUrlInHtml(oldUrl: string, newUrl: string, snap: SnapResult): void {
   const runId = this.ar.snapshot.paramMap.get('runId')!;
   const no = Number(this.ar.snapshot.paramMap.get('no')!);
   let html = this.htmlSubject.value;
-  // Try to find the URL with different protocols
-  let fullOldUrl = oldUrl;
-  if (!oldUrl.startsWith('http://') && !oldUrl.startsWith('https://')) {
-    const httpsCheck = html.includes('https://' + oldUrl);
-    const httpCheck = html.includes('http://' + oldUrl);
-    if (httpsCheck) {
-      fullOldUrl = 'https://' + oldUrl;
-    } else if (httpCheck) {
-      fullOldUrl = 'http://' + oldUrl;
-    } else {
+  
+  // ✅ Find all variations of the URL in HTML using smart matching
+  const urlVariations = this.findUrlVariations(html, oldUrl);
+  
+  if (urlVariations.length === 0) {
+    // Fallback to old logic for backwards compatibility
+    let fullOldUrl = oldUrl;
+    if (!oldUrl.startsWith('http://') && !oldUrl.startsWith('https://')) {
+      const httpsCheck = html.includes('https://' + oldUrl);
+      const httpCheck = html.includes('http://' + oldUrl);
+      if (httpsCheck) {
+        fullOldUrl = 'https://' + oldUrl;
+      } else if (httpCheck) {
+        fullOldUrl = 'http://' + oldUrl;
+      }
     }
-  } else {
+    
+    if (!html.includes(fullOldUrl)) {
+      alert(`URL not found in HTML.\n\nSearched for: ${oldUrl}\n\nThe link might have already been changed or exists in a different format (with/without www, different protocol, etc.)`);
+      throw new Error('URL not found in HTML');
+    }
   }
   
-  // Check if URL exists in HTML
-  const urlExistsInHtml = html.includes(fullOldUrl);
-  if (!urlExistsInHtml) {
-    // Additional debugging - try to find similar URLs
-    const urlParts = fullOldUrl.split('//')[1] || fullOldUrl;
-    const similarMatches = html.match(new RegExp(urlParts.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'));
-  }
-  
-  // Add protocol to new URL if needed
+  // Prepare new URL with proper protocol
   let fullNewUrl = newUrl;
   if (!newUrl.startsWith('http://') && !newUrl.startsWith('https://')) {
-    if (fullOldUrl.startsWith('https://')) {
-      fullNewUrl = 'https://' + newUrl;
-    } else if (fullOldUrl.startsWith('http://')) {
-      fullNewUrl = 'http://' + newUrl;
-    } else {
-    }
-  } else {
-  }
-  
-  // Error if URL not found
-  if (!html.includes(fullOldUrl)) {
-
-
-
-    alert('URL not found in HTML. The link might have already been changed.');
-    throw new Error('URL not found in HTML');
+    // Default to https if no protocol specified
+    fullNewUrl = 'https://' + newUrl;
   }
   
   // Find which occurrence this snap represents
   const allSnaps = this.snapsSubject.value;
   const snapIndex = allSnaps.indexOf(snap);
+  
   if (snapIndex === -1) {
+    console.warn('Snap not found in array');
   }
   
-  // Count how many times this URL appears before this snap
+  // Count how many times this normalized URL appears before this snap
   let occurrenceIndex = 0;
+  const normalizedOldUrl = this.normalizeUrl(oldUrl);
+  
   for (let i = 0; i < snapIndex; i++) {
     const snapUrl = allSnaps[i].finalUrl || allSnaps[i].url;
-    const matches = snapUrl.toLowerCase() === oldUrl.toLowerCase();
-    if (matches) {
+    const normalizedSnapUrl = this.normalizeUrl(snapUrl);
+    if (normalizedSnapUrl === normalizedOldUrl) {
       occurrenceIndex++;
     }
   }
   
-  // Count total occurrences in HTML
-  const totalOccurrences = (html.match(new RegExp(fullOldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
-  // Replace only the specific occurrence
-  const escapedUrl = fullOldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(escapedUrl, 'g');
-  let count = 0;
-  const replaced = html.replace(regex, (match) => {
-    const isTarget = count === occurrenceIndex;
-    if (isTarget) {
-      count++;
-      return fullNewUrl;
-    }
-    count++;
-    return match;
-  });
+  // Check if we have enough variations found
+  if (occurrenceIndex >= urlVariations.length) {
+    console.warn(`Occurrence index ${occurrenceIndex} exceeds found variations ${urlVariations.length}`);
+    occurrenceIndex = Math.min(occurrenceIndex, urlVariations.length - 1);
+  }
   
-  const htmlChanged = html !== replaced;
-  const newUrlInHtml = replaced.includes(fullNewUrl);
+  // Replace the specific occurrence
+  let replaced = html;
+  if (urlVariations.length > 0) {
+    const targetVariation = urlVariations[occurrenceIndex];
+    const exactOldUrl = targetVariation.exact;
+    
+    // Use the exact URL found in HTML for replacement
+    const searchIndex = html.indexOf(exactOldUrl, targetVariation.start);
+    if (searchIndex !== -1) {
+      replaced = 
+        html.substring(0, searchIndex) +
+        fullNewUrl +
+        html.substring(searchIndex + exactOldUrl.length);
+    }
+  }
   
   if (html === replaced) {
-
-
-
-
     alert('Replacement failed. No changes were made to the HTML.');
     throw new Error('No replacement was made');
   }

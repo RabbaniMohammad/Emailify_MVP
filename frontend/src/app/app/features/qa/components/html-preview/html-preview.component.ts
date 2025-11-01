@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
@@ -17,7 +17,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
         [attr.srcdoc]="safeSrcdoc"
         sandbox="allow-same-origin allow-scripts"
         referrerpolicy="no-referrer"
-        (load)="loading=false">
+        (load)="onIframeLoad()">
       </iframe>
 
       <ng-template #safeIframe>
@@ -26,7 +26,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
           [attr.srcdoc]="safeSrcdoc"
           sandbox="allow-same-origin"
           referrerpolicy="no-referrer"
-          (load)="loading=false">
+          (load)="onIframeLoad()">
         </iframe>
       </ng-template>
     </div>
@@ -46,6 +46,9 @@ export class HtmlPreviewComponent implements OnChanges {
   /** Optional: turn on to silence the console message locally. */
   @Input() allowScripts = false;
 
+  /** ✅ NEW: Emit event when iframe loads successfully */
+  @Output() iframeLoaded = new EventEmitter<void>();
+
   safeSrcdoc: SafeHtml | null = null;
 
   constructor(private s: DomSanitizer) {}
@@ -55,6 +58,12 @@ export class HtmlPreviewComponent implements OnChanges {
     const doc = this.ensureDoc(this.html || '');
     const cleaned = this.stripDangerousBits(doc);
     this.safeSrcdoc = this.s.bypassSecurityTrustHtml(cleaned);
+  }
+
+  /** ✅ NEW: Handle iframe load and notify parent */
+  onIframeLoad(): void {
+    this.loading = false;
+    this.iframeLoaded.emit();
   }
 
   private ensureDoc(bodyOrDoc: string): string {

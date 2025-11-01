@@ -95,6 +95,20 @@ private sentImages: Array<{name: string, size: number}> = [];
   private shouldAutoScroll = true;
   private isProgrammaticScroll = false; // Flag to ignore scroll events during auto-scroll
 
+  // CSV Banner state
+  showCsvBanner = false;
+  uploadedFile: File | null = null;
+  generatedPrompt: string = '';
+  isGeneratingPrompt = false;
+  isAttachingFile = false;
+  isDragOver = false;
+
+  // File attachment state (for chat)
+  attachedFile: File | null = null;
+  
+  // ⭐ Track if file data was already sent to avoid re-sending
+  private fileDataAlreadySent = false;
+
 
     ngOnInit(): void {
     this.templateName = 'Generated Template';
@@ -130,6 +144,236 @@ private sentImages: Array<{name: string, size: number}> = [];
   changeViewMode(mode: 'desktop' | 'tablet' | 'mobile'): void {
     this.viewMode = mode;
   }
+
+  // CSV Banner methods
+  openCsvBanner(): void {
+    this.showCsvBanner = true;
+  }
+
+  closeCsvBanner(): void {
+    this.showCsvBanner = false;
+    this.resetUpload();
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+      
+      // Validate file size (1MB limit)
+      const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
+      if (file.size > MAX_FILE_SIZE) {
+        this.snackBar.open(
+          `File too large (${this.formatFileSize(file.size)}). Maximum size is 1MB.`,
+          'Close',
+          { duration: 5000, panelClass: ['error-snackbar'] }
+        );
+        input.value = ''; // Reset input
+        return;
+      }
+      
+      this.uploadedFile = file;
+      this.generatedPrompt = ''; // Reset prompt when new file is selected
+    }
+  }
+
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = true;
+  }
+
+  onDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = false;
+  }
+
+  onFileDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDragOver = false;
+
+    if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+      const file = event.dataTransfer.files[0];
+      
+      // Validate file size (1MB limit)
+      const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
+      if (file.size > MAX_FILE_SIZE) {
+        this.snackBar.open(
+          `File too large (${this.formatFileSize(file.size)}). Maximum size is 1MB.`,
+          'Close',
+          { duration: 5000, panelClass: ['error-snackbar'] }
+        );
+        return;
+      }
+      
+      // Validate file type
+      const validExtensions = ['.xlsx', '.xls', '.csv', '.txt', '.doc', '.docx', '.pdf'];
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+      
+      if (validExtensions.includes(fileExtension)) {
+        this.uploadedFile = file;
+        this.generatedPrompt = '';
+      } else {
+        this.snackBar.open(
+          'Please upload a valid file (Excel, CSV, TXT, Word, or PDF)',
+          'Close',
+          { duration: 4000, panelClass: ['error-snackbar'] }
+        );
+      }
+    }
+  }
+
+  removeUploadedFile(): void {
+    this.uploadedFile = null;
+    this.generatedPrompt = '';
+  }
+
+  resetUpload(): void {
+    this.uploadedFile = null;
+    this.generatedPrompt = '';
+    this.isGeneratingPrompt = false;
+  }
+
+  getFileIcon(filename: string): string {
+    const extension = filename.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'xlsx':
+      case 'xls':
+        return 'table_chart';
+      case 'csv':
+        return 'grid_on';
+      case 'doc':
+      case 'docx':
+        return 'description';
+      case 'pdf':
+        return 'picture_as_pdf';
+      default:
+        return 'insert_drive_file';
+    }
+  }
+
+  formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  async generatePromptFromFile(): Promise<void> {
+    console.log('🔴 generatePromptFromFile called', {
+      hasFile: !!this.uploadedFile,
+      isGenerating: this.isGeneratingPrompt
+    });
+    
+    if (!this.uploadedFile || this.isGeneratingPrompt) {
+      console.log('🔴 generatePromptFromFile blocked');
+      return;
+    }
+
+    console.log('🔴 generatePromptFromFile executing...');
+    this.isGeneratingPrompt = true;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', this.uploadedFile);
+
+      const response = await fetch('http://localhost:3000/api/csv-to-prompt', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate prompt');
+      }
+
+      const data = await response.json();
+      this.generatedPrompt = data.prompt || data.message || '';
+
+      this.snackBar.open(
+        '✨ Prompt generated successfully!',
+        'Close',
+        { duration: 3000, panelClass: ['success-snackbar'] }
+      );
+    } catch (error) {
+      console.error('Error generating prompt:', error);
+      this.snackBar.open(
+        'Failed to generate prompt. Please try again.',
+        'Close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+    } finally {
+      this.isGeneratingPrompt = false;
+      console.log('🔴 generatePromptFromFile finished');
+    }
+  }
+
+  useGeneratedPrompt(): void {
+    if (this.generatedPrompt) {
+      // Set the prompt in the message input
+      this.userInput = this.generatedPrompt;
+      
+      // Close the banner
+      this.closeCsvBanner();
+      
+      // Focus on the message input
+      setTimeout(() => {
+        this.messageInput?.nativeElement.focus();
+      }, 100);
+
+      this.snackBar.open(
+        'Prompt added! Click Send to generate your template.',
+        'Close',
+        { duration: 4000, panelClass: ['success-snackbar'] }
+      );
+    }
+  }
+
+  async useFileInChat(): Promise<void> {
+    console.log('🟢 useFileInChat called', {
+      hasFile: !!this.uploadedFile,
+      isGenerating: this.isGeneratingPrompt,
+      isAttaching: this.isAttachingFile
+    });
+    
+    if (!this.uploadedFile || this.isGeneratingPrompt || this.isAttachingFile) {
+      console.log('🟢 useFileInChat blocked');
+      return;
+    }
+
+    console.log('🟢 useFileInChat executing...');
+    this.isAttachingFile = true;
+
+    // Attach the file to the chat
+    this.attachedFile = this.uploadedFile;
+    
+    // Close the banner
+    this.closeCsvBanner();
+    
+    // Enable auto-scroll and scroll to show the attachment
+    this.shouldAutoScroll = true;
+    
+    // Wait for DOM to update with the attachment, then scroll smoothly
+    this.cdr.detectChanges();
+    setTimeout(() => {
+      this.scrollToBottom();
+    }, 150);
+    
+    // Focus after scroll animation completes
+    setTimeout(() => {
+      this.messageInput?.nativeElement.focus();
+      this.isAttachingFile = false;
+    }, 600);
+    
+    console.log('🟢 useFileInChat finished');
+  }
+
+  removeAttachedFile(): void {
+    this.attachedFile = null;
+  }
+
   ngAfterViewInit() {
   setTimeout(() => {
     try {
@@ -151,6 +395,7 @@ private sentImages: Array<{name: string, size: number}> = [];
       }
 
       window.scrollTo(0, 0);
+      // ✅ Only position at bottom on initial load, then respect user scroll
       this.positionChatAtBottom();
     } catch (error) {
 
@@ -164,6 +409,7 @@ private positionChatAtBottom(): void {
     if (element && element.scrollHeight > 0) {
       element.style.scrollBehavior = 'auto'; // No animation on initial load
       element.scrollTop = element.scrollHeight;
+      this.shouldAutoScroll = true; // ✅ Reset to true when positioned at bottom
       
       setTimeout(() => {
         element.style.scrollBehavior = 'smooth'; // Enable smooth scroll after
@@ -244,6 +490,9 @@ canDeactivate(): boolean {
     console.log('🔵 [GENERATE PAGE] Loading conversation:', conversationId);
     this.conversationId = conversationId;
     this.isGenerating$.next(true);
+    
+    // Reset file data flag when loading a conversation
+    this.fileDataAlreadySent = false;
 
     this.generationService
       .getConversation(conversationId)
@@ -266,6 +515,9 @@ canDeactivate(): boolean {
           this.isRegenerating = !!conversation.currentHtml;
           
           this.isGenerating$.next(false);
+          
+          // ✅ Position at bottom initially, then let user control scroll
+          this.shouldAutoScroll = true;
           this.scrollToBottom();
         },
         error: (error) => {
@@ -365,13 +617,18 @@ async onSend(): Promise<void> {
     conversationId: this.conversationId,
     currentMessagesCount: this.messages$.value.length,
     hasTemplate: !!this.currentHtml$.value,
-    isGenerating: this.isGenerating$.value
+    isGenerating: this.isGenerating$.value,
+    hasAttachedFile: !!this.attachedFile
   });
   
-  if (!message || this.isGenerating$.value) {
-    console.log('🔵 [GENERATE PAGE] onSend blocked - empty message or already generating');
+  if ((!message && !this.attachedFile) || this.isGenerating$.value) {
+    console.log('🔵 [GENERATE PAGE] onSend blocked - empty message/no file or already generating');
     return;
   }
+
+  // If there's an attached file, we'll send it directly to the template generation
+  // No need to pre-process into a prompt
+  const finalMessage = message || 'Generate an email template based on the attached document data';
   
   // Convert selected images to base64 FIRST (before adding user message)
   const imageAttachments: ImageAttachment[] = await Promise.all(
@@ -389,7 +646,7 @@ async onSend(): Promise<void> {
   const existingMessages = this.messages$.value;
   const userMessage: GenerationMessage = {
     role: 'user',
-    content: message,
+    content: finalMessage,
     timestamp: new Date(),
     images: imageAttachments.length > 0 ? imageAttachments : undefined,
   };
@@ -408,29 +665,80 @@ async onSend(): Promise<void> {
   // Scroll to show the new user message
   setTimeout(() => this.scrollToBottom(), 50);
 
-  // ✅ Simple: Just call chat with current state
-  this.sendChatMessage(message, imageAttachments);
-
-  // Clear input and images AFTER storing metadata
+  // Store file reference before clearing
+  const fileToSend = this.attachedFile;
+  
+  // Clear input, images, and attached file AFTER storing metadata
   this.userInput = '';
   this.selectedImages = [];
   this.imagePreviewUrls = [];
+  this.attachedFile = null;
+
+  // ✅ If there's an attached file, extract its data first, then send to chat
+  if (fileToSend && !this.fileDataAlreadySent) {
+    console.log('📎 [GENERATE PAGE] Processing attached file before sending to chat:', fileToSend.name);
+    
+    try {
+      // Extract data from the file using the backend API
+      const formData = new FormData();
+      formData.append('file', fileToSend);
+
+      const response = await fetch('/api/csv-to-prompt/extract', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to extract file data');
+      }
+
+      const { extractedData } = await response.json();
+      console.log('📎 [GENERATE PAGE] File data extracted successfully, length:', extractedData.length);
+
+      // Mark that file data has been sent
+      this.fileDataAlreadySent = true;
+
+      // Send chat message with the extracted file data
+      this.sendChatMessage(finalMessage, imageAttachments, extractedData);
+    } catch (error) {
+      console.error('📎 [GENERATE PAGE] Error extracting file data:', error);
+      this.snackBar.open('Failed to process attached file', 'Close', { 
+        duration: 4000, 
+        panelClass: ['error-snackbar'] 
+      });
+      this.isGenerating$.next(false);
+    }
+  } else if (fileToSend && this.fileDataAlreadySent) {
+    console.log('📎 [GENERATE PAGE] File data already sent in conversation - skipping extraction to save tokens');
+    // File data was already sent earlier, don't send it again
+    this.sendChatMessage(finalMessage, imageAttachments);
+  } else {
+    // No file attached, send normal chat message
+    this.sendChatMessage(finalMessage, imageAttachments);
+  }
 }
 
-private async sendChatMessage(message: string, imageAttachments: ImageAttachment[]): Promise<void> {
+private async sendChatMessage(
+  message: string, 
+  imageAttachments: ImageAttachment[], 
+  extractedFileData?: string
+): Promise<void> {
   console.log('🔵 [GENERATE PAGE] sendChatMessage called:', {
     messageLength: message.length,
     imageCount: imageAttachments.length,
     conversationId: this.conversationId,
     currentMessagesCount: this.messages$.value.length,
-    hasCurrentMjml: !!this.currentHtml$.value
+    hasCurrentMjml: !!this.currentHtml$.value,
+    hasExtractedFileData: !!extractedFileData,
+    extractedFileDataLength: extractedFileData?.length || 0
   });
 
   // Get current conversation history (excluding the user message we just added)
   const historyMessages = this.messages$.value.slice(0, -1);
 
   this.generationService
-    .chat(message, historyMessages, this.currentMjml$.value || undefined, imageAttachments)
+    .chat(message, historyMessages, this.currentMjml$.value || undefined, imageAttachments, extractedFileData)
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (response) => {

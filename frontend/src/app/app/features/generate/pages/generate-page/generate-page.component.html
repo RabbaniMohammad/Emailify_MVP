@@ -65,7 +65,14 @@
   <section class="chat-section">
     <div class="chat-header">
       <div class="header-content">
-        <mat-icon class="header-icon">auto_awesome</mat-icon>
+        <!-- Excel Icon SVG -->
+        <svg class="header-icon excel-icon" 
+             matTooltip="Add Excel/CSV" 
+             viewBox="0 0 24 24" 
+             xmlns="http://www.w3.org/2000/svg"
+             (click)="openCsvBanner()">
+          <path fill="#217346" d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M12.9,14.5L15.8,19H14L12,15.6L10,19H8.2L11.1,14.5L8.2,10H10L12,13.4L14,10H15.8L12.9,14.5Z"/>
+        </svg>
         <div class="header-text">
           <h3>Template Generator</h3>
           <p>Powered by AI</p>
@@ -175,6 +182,31 @@
     </div>
   </div>
 
+  <!-- File Attachment Display (in chat) -->
+  <div class="chat-msg user-msg" *ngIf="attachedFile">
+    <div class="bubble user-bubble file-attachment-bubble">
+      <div class="bubble-header">
+        <span class="role">📎 Attached File</span>
+        <button 
+          mat-icon-button 
+          class="remove-attachment-btn-inline"
+          (click)="removeAttachedFile()"
+          matTooltip="Remove attachment">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+      <div class="file-attachment-content">
+        <div class="file-icon-wrapper">
+          <mat-icon class="file-icon">{{ getFileIcon(attachedFile.name) }}</mat-icon>
+        </div>
+        <div class="file-info">
+          <span class="file-name">{{ attachedFile.name }}</span>
+          <span class="file-size">{{ formatFileSize(attachedFile.size) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Generating Indicator -->
   <div class="chat-msg assistant-msg" *ngIf="isGenerating$ | async">
     <div class="bubble generating-bubble">
@@ -233,11 +265,133 @@
       mat-raised-button
       class="send-btn"
       (click)="onSend()"
-      [disabled]="!userInput.trim() || ((isGenerating$ | async) ?? false)">
+      [disabled]="(!userInput.trim() && !attachedFile) || ((isGenerating$ | async) ?? false)">
       <mat-icon>send</mat-icon>
       <span>Send</span>
     </button>
   </div>
 </div>
   </section>
+</div>
+<!-- CSV/Excel Upload Banner -->
+<div class="csv-banner-overlay" *ngIf="showCsvBanner" (click)="closeCsvBanner()">
+  <div class="csv-banner-content" (click)="$event.stopPropagation()">
+    <!-- Close Button -->
+    <button mat-icon-button class="close-btn" (click)="closeCsvBanner()">
+      <mat-icon>close</mat-icon>
+    </button>
+    
+    <!-- Banner Body -->
+    <div class="banner-body">
+      <h2 class="banner-title">📄 Upload Document</h2>
+      <p class="banner-subtitle">Upload Excel, CSV, Word, or PDF to generate a smart email template prompt</p>
+      
+      <!-- File Upload Section (Show when no file uploaded or no prompt generated) -->
+      <div *ngIf="!uploadedFile && !generatedPrompt" class="upload-section">
+        <!-- Hidden file input -->
+        <input 
+          type="file"
+          #fileInput
+          accept=".xlsx,.xls,.csv,.doc,.docx,.pdf"
+          (change)="onFileSelected($event)"
+          style="display: none;">
+        
+        <!-- Drag & Drop Zone -->
+        <div 
+          class="drop-zone"
+          (click)="fileInput.click()"
+          (dragover)="onDragOver($event)"
+          (dragleave)="onDragLeave($event)"
+          (drop)="onFileDrop($event)"
+          [class.drag-over]="isDragOver">
+          <mat-icon class="upload-icon">cloud_upload</mat-icon>
+          <p class="drop-text">Drag & drop your file here</p>
+          <p class="drop-subtext">or click to browse</p>
+          <div class="supported-formats">
+            <span class="format-badge">Excel</span>
+            <span class="format-badge">CSV</span>
+            <span class="format-badge">Word</span>
+            <span class="format-badge">PDF</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- File Preview Section (Show when file is uploaded but prompt not generated) -->
+      <div *ngIf="uploadedFile && !generatedPrompt" class="file-preview-section">
+        <div class="file-preview-card">
+          <div class="file-icon">
+            <mat-icon>{{ getFileIcon(uploadedFile.name) }}</mat-icon>
+          </div>
+          <div class="file-details">
+            <p class="file-name">{{ uploadedFile.name }}</p>
+            <p class="file-size">{{ formatFileSize(uploadedFile.size) }}</p>
+          </div>
+          <button mat-icon-button class="remove-file-btn" (click)="removeUploadedFile()">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons" (click)="$event.stopPropagation()">
+          <button 
+            mat-raised-button 
+            type="button"
+            class="generate-prompt-btn"
+            (click)="generatePromptFromFile(); $event.stopPropagation()"
+            [disabled]="isGeneratingPrompt || isAttachingFile">
+            <mat-spinner *ngIf="isGeneratingPrompt" diameter="20"></mat-spinner>
+            <mat-icon *ngIf="!isGeneratingPrompt">auto_awesome</mat-icon>
+            <span>{{ isGeneratingPrompt ? 'Generating...' : 'Generate Prompt (Recommended)' }}</span>
+          </button>
+
+          <button 
+            mat-raised-button 
+            type="button"
+            class="use-in-chat-btn"
+            (click)="useFileInChat(); $event.stopPropagation()"
+            [disabled]="isGeneratingPrompt || isAttachingFile">
+            <mat-spinner *ngIf="isAttachingFile" diameter="20"></mat-spinner>
+            <mat-icon *ngIf="!isAttachingFile">attach_file</mat-icon>
+            <span>{{ isAttachingFile ? 'Attaching...' : 'Attach Only' }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Prompt Display & Edit Section (Show when prompt is generated) -->
+      <div *ngIf="generatedPrompt" class="prompt-section">
+        <div class="prompt-header">
+          <h3>✨ Generated Prompt</h3>
+          <button mat-icon-button (click)="resetUpload()" matTooltip="Upload new file">
+            <mat-icon>refresh</mat-icon>
+          </button>
+        </div>
+
+        <!-- Editable Prompt -->
+        <textarea 
+          class="prompt-textarea"
+          [(ngModel)]="generatedPrompt"
+          rows="10"
+          placeholder="Edit your prompt here...">
+        </textarea>
+
+        <!-- Action Buttons -->
+        <div class="prompt-actions">
+          <button 
+            mat-stroked-button 
+            class="cancel-btn"
+            (click)="resetUpload()">
+            <mat-icon>close</mat-icon>
+            Cancel
+          </button>
+          <button 
+            mat-raised-button 
+            class="use-prompt-btn"
+            (click)="useGeneratedPrompt()">
+            <mat-icon>check</mat-icon>
+            Use This Prompt
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>

@@ -157,7 +157,8 @@ continueConversation(
     message: string,
     conversationHistory: GenerationMessage[],
     currentMjml?: string,
-    images?: Array<{ data: string; mediaType: string; fileName: string }>
+    images?: Array<{ data: string; mediaType: string; fileName: string }>,
+    extractedFileData?: string
   ): Observable<{
     html: string;
     mjml: string;
@@ -169,14 +170,17 @@ continueConversation(
       messageLength: message.length,
       historyLength: conversationHistory.length,
       hasCurrentMjml: !!currentMjml,
-      imageCount: images?.length || 0
+      imageCount: images?.length || 0,
+      hasExtractedFileData: !!extractedFileData,
+      extractedFileDataLength: extractedFileData?.length || 0
     });
     
     const payload = {
       message,
       conversationHistory,
       currentMjml,
-      images
+      images,
+      extractedFileData
     };
     
     return this.http.post<{

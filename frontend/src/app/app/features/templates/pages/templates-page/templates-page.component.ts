@@ -537,7 +537,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     // ✅ IMMEDIATELY clear old preview to prevent flash
     this.safeSrcdoc = null;
     
-    // Clear any pending loading timer
+    // ✅ Clear any pending loading timer to prevent conflicts
     if (this.loadingTimer) {
       clearTimeout(this.loadingTimer);
       this.loadingTimer = undefined;
@@ -549,7 +549,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Show loading state
+    // ✅ Show loading state IMMEDIATELY
     this.loading = true;
     this.cdr.markForCheck();
 
@@ -597,20 +597,21 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
       this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
       this.cdr.markForCheck();
       
-      // Hide loading after iframe renders
+      // ✅ Set a fallback timeout in case iframe load event doesn't fire
       this.loadingTimer = setTimeout(() => {
         if (this.svc.snapshot.selectedId === id) {
           this.loading = false;
           this.showRunButton(id);
           this.cdr.markForCheck();
         }
-      }, 50); // ⚡ Reduced to 50ms for faster display
+      }, 100); // ⚡ Increased to 100ms for more reliable display
       
       return;
     }
 
     // Check if we already have an in-flight request for this template
     if (this.inflightRequests.has(id)) {
+      // ✅ Don't start duplicate request, but ensure loading is shown
       this.loading = true;
       this.cdr.markForCheck();
       return;
@@ -651,6 +652,9 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           
           // Check if user switched templates during fetch
           if (currentId !== id) {
+            // User switched - clear loading state
+            this.loading = false;
+            this.cdr.markForCheck();
             return;
           }
           
@@ -659,6 +663,16 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           const wrapped = this.ensureDoc(html);
           const cleaned = this.stripDangerousBits(wrapped);
           this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
+          
+          // ✅ Set fallback timeout in case iframe doesn't load
+          this.loadingTimer = setTimeout(() => {
+            if (this.svc.snapshot.selectedId === id) {
+              this.loading = false;
+              this.showRunButton(id);
+              this.cdr.markForCheck();
+            }
+          }, 100);
+          
           this.cdr.markForCheck();
         },
         error: (e) => {
@@ -681,14 +695,18 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   }
 
   onIframeLoad(): void {
-    // Only clear loading if we actually have content to show
-    if (!this.safeSrcdoc) {
-      return;
+    // ✅ ALWAYS clear loading on iframe load (even if safeSrcdoc is null)
+    // This prevents infinite loading when templates switch quickly
+    this.loading = false;
+    
+    // Clear any pending timer
+    if (this.loadingTimer) {
+      clearTimeout(this.loadingTimer);
+      this.loadingTimer = undefined;
     }
     
-    this.loading = false;
     const currentId = this.svc.snapshot.selectedId;
-    if (currentId) {
+    if (currentId && this.safeSrcdoc) {
       this.showRunButton(currentId);
     }
     this.cdr.markForCheck();

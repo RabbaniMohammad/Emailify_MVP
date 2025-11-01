@@ -25,7 +25,8 @@
       <div class="preview-wrapper">
         <app-html-preview
           [html]="(html$ | async) || ''"
-          [loading]="loadingVariant">
+          [loading]="loadingVariant"
+          (iframeLoaded)="onPreviewLoaded()">
         </app-html-preview>
       </div>
     </section>
@@ -414,15 +415,6 @@
                 <div class="validation-reason" *ngIf="c.inFile && !c.inHtml">Missing from HTML</div>
                 <div class="validation-reason" *ngIf="!c.inFile && c.inHtml">Extra link in HTML</div>
               </div>
-<button
-  mat-icon-button
-  class="capture-mini-btn"
-  (click)="onSnapUrl(c.url)"
-  matTooltip="Capture">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-  </svg>
-</button>
             </div>
           </div>
 

@@ -730,7 +730,7 @@ export class QaService {
 
   startVariants(templateId: string, goldenHtml: string, target = 5) {
     return this.http.post<{ runId: string; target: number }>(
-      `/api/qa-advanced/${templateId}/variants/start`,  // 🧪 Using GPT tag-based approach
+      `/api/qa-advanced/${templateId}/variants/start`,  // Using QA Advanced endpoint
       { html: goldenHtml, target }
     ).pipe(
       tap(async ({ runId, target }) => {
@@ -750,7 +750,7 @@ export class QaService {
 
   nextVariant(runId: string) {
     return this.http.post<VariantItem>(
-      `/api/qa-advanced/variants/${runId}/next`,  // 🧪 Using GPT tag-based approach
+      `/api/qa-advanced/variants/${runId}/next`,  // Using QA Advanced endpoint
       {}
     ).pipe(
       tap(async (item) => {
@@ -780,7 +780,7 @@ export class QaService {
       target: number;
       count: number;
       items: VariantItem[];
-    }>(`/api/qa/variants/${runId}/status`).pipe(
+    }>(`/api/qa-advanced/variants/${runId}/status`).pipe(
       catchError((e) => {
         if (e?.status === 404) {
           return throwError(() => new Error(

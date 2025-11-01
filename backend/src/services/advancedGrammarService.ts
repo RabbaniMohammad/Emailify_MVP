@@ -479,3 +479,65 @@ export async function checkGrammarAdvanced(html: string): Promise<GrammarCheckRe
   
   return result;
 }
+
+/**
+ * 🎯 Apply custom edits (for SEO variants) using the SAME advanced tag-based logic
+ * This is identical to checkGrammarAdvanced but accepts pre-generated edits from GPT
+ */
+export async function applyCustomEdits(
+  html: string,
+  customEdits: Array<{ find: string; replace: string; reason?: string; idea?: string }>
+): Promise<GrammarCheckResult> {
+  console.log('🚀 [CUSTOM EDITS] Starting with advanced tag-based logic');
+  
+  // Step 1: Extract text nodes with tags (and get the DOM instance)
+  const { textNodes, dom } = extractTextNodesWithTags(html);
+  console.log(`📝 [CUSTOM EDITS] Extracted ${textNodes.length} text nodes`);
+  
+  if (textNodes.length === 0 || customEdits.length === 0) {
+    return {
+      html,
+      appliedEdits: [],
+      failedEdits: [],
+      stats: { total: 0, applied: 0, failed: 0 },
+    };
+  }
+  
+  // Step 2: Convert custom edits to correction format
+  // Group edits by which text node they belong to
+  const corrections: GPTCorrectionResult[] = [];
+  
+  textNodes.forEach((textNode, index) => {
+    const nodeChanges: Array<{ find: string; replace: string; reason: string }> = [];
+    
+    customEdits.forEach(edit => {
+      // Check if this edit applies to this text node
+      if (textNode.text.includes(edit.find)) {
+        nodeChanges.push({
+          find: edit.find,
+          replace: edit.replace,
+          reason: edit.reason || 'SEO optimization'
+        });
+      }
+    });
+    
+    if (nodeChanges.length > 0) {
+      corrections.push({
+        id: textNode.id,
+        tag: textNode.tag,
+        original: textNode.text,
+        corrected: textNode.text, // Will be updated during application
+        changes: nodeChanges
+      });
+    }
+  });
+  
+  console.log(`🔍 [CUSTOM EDITS] Matched ${corrections.length} text nodes with edits`);
+  
+  // Step 3: Apply corrections using the SAME DOM instance and SAME logic
+  const result = applyCorrections(dom, textNodes, corrections);
+  
+  console.log(`✅ [CUSTOM EDITS] Applied: ${result.stats.applied}, Failed: ${result.stats.failed}`);
+  
+  return result;
+}
