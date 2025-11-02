@@ -185,13 +185,8 @@ app.get('/api/ping', async (_req, res) => {
 app.use('/api', campaignRoutes);
 
 /******************************************************************************
-                             Start HTTP server
+                             Export app (don't start server here)
 ******************************************************************************/
-
-const port = Number(process.env.PORT ?? 3000);
-app.set('port', port);
-app.listen(port, () => {
-});
 
 // Crash hardening
 process.on('unhandledRejection', (err) => console.error('Unhandled Rejection:', err));

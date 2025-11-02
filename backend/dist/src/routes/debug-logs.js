@@ -1,0 +1,119 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+const LOGS_DIR = path_1.default.join(__dirname, '../../logs');
+if (!fs_1.default.existsSync(LOGS_DIR)) {
+    fs_1.default.mkdirSync(LOGS_DIR, { recursive: true });
+}
+router.post('/', auth_1.authenticate, async (req, res) => {
+    try {
+        const { sessionId, logs } = req.body;
+        if (!sessionId || !logs || !Array.isArray(logs)) {
+            return res.status(400).json({ error: 'Invalid payload' });
+        }
+        const logFileName = `debug_${sessionId}.log`;
+        const logFilePath = path_1.default.join(LOGS_DIR, logFileName);
+        const formattedLogs = logs.map(log => {
+            const timestamp = new Date(log.timestamp).toISOString();
+            const category = log.category?.padEnd(20) || ''.padEnd(20);
+            const level = log.level || 'INFO';
+            const message = log.message || '';
+            const data = log.data ? `\n    Data: ${JSON.stringify(log.data, null, 2)}` : '';
+            const error = log.error ? `\n    Error: ${JSON.stringify(log.error, null, 2)}` : '';
+            return `[${timestamp}] [${level}] [${category}] ${message}${data}${error}\n`;
+        }).join('');
+        fs_1.default.appendFileSync(logFilePath, formattedLogs, 'utf-8');
+        res.json({ success: true, logsWritten: logs.length });
+    }
+    catch (error) {
+        console.error('Error writing debug logs:', error);
+        res.status(500).json({ error: 'Failed to write logs' });
+    }
+});
+router.post('/clear', auth_1.authenticate, async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+        if (!sessionId) {
+            return res.status(400).json({ error: 'Session ID required' });
+        }
+        const logFileName = `debug_${sessionId}.log`;
+        const logFilePath = path_1.default.join(LOGS_DIR, logFileName);
+        if (fs_1.default.existsSync(logFilePath)) {
+            fs_1.default.unlinkSync(logFilePath);
+        }
+        res.json({ success: true, message: 'Logs cleared' });
+    }
+    catch (error) {
+        console.error('Error clearing debug logs:', error);
+        res.status(500).json({ error: 'Failed to clear logs' });
+    }
+});
+router.get('/list', auth_1.authenticate, async (req, res) => {
+    try {
+        const files = fs_1.default.readdirSync(LOGS_DIR)
+            .filter(file => file.startsWith('debug_') && file.endsWith('.log'))
+            .map(file => {
+            const filePath = path_1.default.join(LOGS_DIR, file);
+            const stats = fs_1.default.statSync(filePath);
+            return {
+                name: file,
+                size: stats.size,
+                created: stats.birthtime,
+                modified: stats.mtime
+            };
+        })
+            .sort((a, b) => b.modified.getTime() - a.modified.getTime());
+        res.json({ files });
+    }
+    catch (error) {
+        console.error('Error listing debug logs:', error);
+        res.status(500).json({ error: 'Failed to list logs' });
+    }
+});
+router.get('/:filename', auth_1.authenticate, async (req, res) => {
+    try {
+        const { filename } = req.params;
+        if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+            return res.status(400).json({ error: 'Invalid filename' });
+        }
+        const logFilePath = path_1.default.join(LOGS_DIR, filename);
+        if (!fs_1.default.existsSync(logFilePath)) {
+            return res.status(404).json({ error: 'Log file not found' });
+        }
+        const content = fs_1.default.readFileSync(logFilePath, 'utf-8');
+        res.json({ filename, content });
+    }
+    catch (error) {
+        console.error('Error reading debug log:', error);
+        res.status(500).json({ error: 'Failed to read log' });
+    }
+});
+router.delete('/cleanup', async (req, res) => {
+    try {
+        const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+        const files = fs_1.default.readdirSync(LOGS_DIR)
+            .filter(file => file.startsWith('debug_') && file.endsWith('.log'));
+        let deletedCount = 0;
+        files.forEach(file => {
+            const filePath = path_1.default.join(LOGS_DIR, file);
+            const stats = fs_1.default.statSync(filePath);
+            if (stats.mtime.getTime() < sevenDaysAgo) {
+                fs_1.default.unlinkSync(filePath);
+                deletedCount++;
+            }
+        });
+        res.json({ success: true, deletedCount });
+    }
+    catch (error) {
+        console.error('Error cleaning up debug logs:', error);
+        res.status(500).json({ error: 'Failed to cleanup logs' });
+    }
+});
+exports.default = router;
