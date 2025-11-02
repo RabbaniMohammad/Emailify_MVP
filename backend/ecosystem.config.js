@@ -18,7 +18,10 @@ module.exports = {
       name: 'emailify-backend',
       
       // Script to run
-      script: './dist/server.js',
+      script: './dist/src/server.js',
+      
+      // Node args to register tsconfig-paths
+      node_args: '-r tsconfig-paths/register',
       
       // Current working directory
       cwd: '/var/www/emailify-backend/backend',
