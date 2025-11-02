@@ -36,21 +36,27 @@ git push origin main
 ssh ubuntu@YOUR_LIGHTSAIL_IP
 ```
 
-### Step 3: Pull Latest Changes
+### Step 3: Pull Latest Changes (includes pre-built dist/)
 ```bash
 cd /var/www/emailify-backend/backend
 git pull origin main
 ```
 
-### Step 4: Install Dependencies (if needed)
+### Step 4: ⚠️ SKIP Dependencies - DO NOT RUN npm install!
 ```bash
-npm install
+# ❌ DO NOT RUN: npm install
+# Why? Causes dependency conflicts (Zod version mismatch with OpenAI)
+# The node_modules/ folder already exists on the server with working versions
 ```
 
-### Step 5: Rebuild the Application
+### Step 5: ⚠️ SKIP Build - dist/ Already Included!
 ```bash
-npm run build
-# This will compile TypeScript to dist/ directory
+# ❌ DO NOT RUN: npm run build
+# Why? The dist/ folder is pre-built on your local machine and committed to GitHub
+# Just pull it from GitHub - it's ready to run!
+
+# Verify the pre-built code exists:
+ls -la dist/src/index.js
 ```
 
 ### Step 6: Stop Current PM2 Process
