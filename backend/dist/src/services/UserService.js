@@ -4,9 +4,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.USER_NOT_FOUND_ERR = void 0;
-const route_errors_1 = require("@src/common/util/route-errors");
-const HttpStatusCodes_1 = __importDefault(require("@src/common/constants/HttpStatusCodes"));
-const UserRepo_1 = __importDefault(require("@src/repos/UserRepo"));
+const route_errors_1 = require("../common/util/route-errors");
+const HttpStatusCodes_1 = __importDefault(require("../common/constants/HttpStatusCodes"));
+const UserRepo_1 = __importDefault(require("../repos/UserRepo"));
 exports.USER_NOT_FOUND_ERR = 'User not found';
 function getAll() {
     return UserRepo_1.default.getAll();

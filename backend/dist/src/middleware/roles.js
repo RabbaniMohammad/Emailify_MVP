@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireAdmin = exports.requireSuperAdmin = exports.requireRole = void 0;
-const User_1 = __importDefault(require("@src/models/User"));
+const User_1 = __importDefault(require("../models/User"));
 const requireRole = (...allowedRoles) => {
     return async (req, res, next) => {
         try {

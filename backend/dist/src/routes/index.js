@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const Paths_1 = __importDefault(require("@src/common/constants/Paths"));
+const Paths_1 = __importDefault(require("../common/constants/Paths"));
 const UserRoutes_1 = __importDefault(require("./UserRoutes"));
 const templates_1 = __importDefault(require("./templates"));
 const qa_1 = __importDefault(require("./qa"));

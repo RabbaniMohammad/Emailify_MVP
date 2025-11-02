@@ -5,8 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const jet_validators_1 = require("jet-validators");
 const utils_1 = require("jet-validators/utils");
-const HttpStatusCodes_1 = __importDefault(require("@src/common/constants/HttpStatusCodes"));
-const UserService_1 = __importDefault(require("@src/services/UserService"));
+const HttpStatusCodes_1 = __importDefault(require("../common/constants/HttpStatusCodes"));
+const UserService_1 = __importDefault(require("../services/UserService"));
 const util_1 = require("./common/util");
 const Validators = {
     delete: (0, util_1.parseReq)({ id: (0, utils_1.transform)(Number, jet_validators_1.isNumber) }),

@@ -41,10 +41,10 @@ const mailchimp_marketing_1 = __importDefault(require("@mailchimp/mailchimp_mark
 const XLSX = __importStar(require("xlsx"));
 const multer_1 = __importDefault(require("multer"));
 const papaparse_1 = __importDefault(require("papaparse"));
-const Campaign_1 = __importDefault(require("@src/models/Campaign"));
-const User_1 = __importDefault(require("@src/models/User"));
-const Organization_1 = __importDefault(require("@src/models/Organization"));
-const auth_1 = require("@src/middleware/auth");
+const Campaign_1 = __importDefault(require("../models/Campaign"));
+const User_1 = __importDefault(require("../models/User"));
+const Organization_1 = __importDefault(require("../models/Organization"));
+const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 const MC = mailchimp_marketing_1.default;
 MC.setConfig({

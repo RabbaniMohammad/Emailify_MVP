@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.strictOrganizationAccess = void 0;
-const Organization_1 = __importDefault(require("@src/models/Organization"));
+const Organization_1 = __importDefault(require("../models/Organization"));
 const jet_logger_1 = __importDefault(require("jet-logger"));
 const strictOrganizationAccess = async (req, res, next) => {
     try {

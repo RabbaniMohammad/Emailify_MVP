@@ -4,12 +4,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const auth_1 = require("@src/middleware/auth");
-const roles_1 = require("@src/middleware/roles");
-const User_1 = __importDefault(require("@src/models/User"));
-const Organization_1 = __importDefault(require("@src/models/Organization"));
-const GeneratedTemplate_1 = __importDefault(require("@src/models/GeneratedTemplate"));
-const TemplateConversation_1 = __importDefault(require("@src/models/TemplateConversation"));
+const auth_1 = require("../middleware/auth");
+const roles_1 = require("../middleware/roles");
+const User_1 = __importDefault(require("../models/User"));
+const Organization_1 = __importDefault(require("../models/Organization"));
+const GeneratedTemplate_1 = __importDefault(require("../models/GeneratedTemplate"));
+const TemplateConversation_1 = __importDefault(require("../models/TemplateConversation"));
 const jet_logger_1 = __importDefault(require("jet-logger"));
 const router = (0, express_1.Router)();
 router.get('/users', auth_1.authenticate, roles_1.requireAdmin, async (req, res) => {

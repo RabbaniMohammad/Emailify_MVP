@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ValidationError = exports.RouteError = void 0;
-const HttpStatusCodes_1 = __importDefault(require("@src/common/constants/HttpStatusCodes"));
+const HttpStatusCodes_1 = __importDefault(require("../../common/constants/HttpStatusCodes"));
 class RouteError extends Error {
     constructor(status, message) {
         super(message);

@@ -12,6 +12,8 @@
     "paths": {
       "@src/*": ["src/*"]
     },
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
     "useUnknownInCatchVariables": false,
     "sourceMap": false,
     "removeComments": true

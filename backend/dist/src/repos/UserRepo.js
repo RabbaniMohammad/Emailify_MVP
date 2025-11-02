@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const misc_1 = require("@src/common/util/misc");
+const misc_1 = require("../common/util/misc");
 const MockOrm_1 = __importDefault(require("./MockOrm"));
 async function getOne(email) {
     const db = await MockOrm_1.default.openDb();

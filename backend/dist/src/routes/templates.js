@@ -5,10 +5,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const mailchimp_marketing_1 = __importDefault(require("@mailchimp/mailchimp_marketing"));
-const GeneratedTemplate_1 = __importDefault(require("@src/models/GeneratedTemplate"));
-const auth_1 = require("@src/middleware/auth");
-const organizationContext_1 = require("@src/middleware/organizationContext");
-const User_1 = __importDefault(require("@src/models/User"));
+const GeneratedTemplate_1 = __importDefault(require("../models/GeneratedTemplate"));
+const auth_1 = require("../middleware/auth");
+const organizationContext_1 = require("../middleware/organizationContext");
+const User_1 = __importDefault(require("../models/User"));
 const jet_logger_1 = __importDefault(require("jet-logger"));
 const mc = mailchimp_marketing_1.default;
 const MC_ANY = mailchimp_marketing_1.default;

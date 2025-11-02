@@ -4,8 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const jsonfile_1 = __importDefault(require("jsonfile"));
-const ENV_1 = __importDefault(require("@src/common/constants/ENV"));
-const constants_1 = require("@src/common/constants");
+const ENV_1 = __importDefault(require("../common/constants/ENV"));
+const constants_1 = require("../common/constants");
 const DB_FILE_NAME = (ENV_1.default.NodeEnv === constants_1.NodeEnvs.Test
     ? 'database.test.json'
     : 'database.json');

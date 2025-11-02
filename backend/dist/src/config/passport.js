@@ -38,7 +38,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const passport_1 = __importDefault(require("passport"));
 const passport_google_oauth20_1 = require("passport-google-oauth20");
-const User_1 = __importDefault(require("@src/models/User"));
+const User_1 = __importDefault(require("../models/User"));
 const jet_logger_1 = __importDefault(require("jet-logger"));
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
@@ -67,7 +67,7 @@ passport_1.default.use(new passport_google_oauth20_1.Strategy({
             jet_logger_1.default.warn(`⚠️ No organization specified for login: ${email}`);
             return done(new Error('Organization is required'), undefined);
         }
-        const Organization = (await Promise.resolve().then(() => __importStar(require('@src/models/Organization')))).default;
+        const Organization = (await Promise.resolve().then(() => __importStar(require('../models/Organization')))).default;
         let organization = await Organization.findOne({ slug: orgSlug.toLowerCase() });
         if (!organization) {
             jet_logger_1.default.info(`🏢 New organization will be created: ${orgSlug}`);

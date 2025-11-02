@@ -4,11 +4,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const passport_1 = __importDefault(require("@src/config/passport"));
-const authService_1 = require("@src/services/authService");
-const auth_1 = require("@src/middleware/auth");
-const User_1 = __importDefault(require("@src/models/User"));
-const Organization_1 = __importDefault(require("@src/models/Organization"));
+const passport_1 = __importDefault(require("../config/passport"));
+const authService_1 = require("../services/authService");
+const auth_1 = require("../middleware/auth");
+const User_1 = __importDefault(require("../models/User"));
+const Organization_1 = __importDefault(require("../models/Organization"));
 const jet_logger_1 = __importDefault(require("jet-logger"));
 const router = (0, express_1.Router)();
 router.get('/google', (req, res, next) => {

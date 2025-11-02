@@ -37,13 +37,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const advancedGrammarService_1 = require("@src/services/advancedGrammarService");
+const advancedGrammarService_1 = require("../services/advancedGrammarService");
 const cheerio = __importStar(require("cheerio"));
 const openai_1 = __importDefault(require("openai"));
 const crypto_1 = require("crypto");
-const GeneratedTemplate_1 = __importDefault(require("@src/models/GeneratedTemplate"));
-const auth_1 = require("@src/middleware/auth");
-const organizationContext_1 = require("@src/middleware/organizationContext");
+const GeneratedTemplate_1 = __importDefault(require("../models/GeneratedTemplate"));
+const auth_1 = require("../middleware/auth");
+const organizationContext_1 = require("../middleware/organizationContext");
 const jet_logger_1 = __importDefault(require("jet-logger"));
 const router = (0, express_1.Router)();
 const openai = new openai_1.default({ apiKey: process.env.OPENAI_API_KEY });

@@ -4,8 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.optionalAuth = exports.authenticate = void 0;
-const authService_1 = require("@src/services/authService");
-const User_1 = __importDefault(require("@src/models/User"));
+const authService_1 = require("../services/authService");
+const User_1 = __importDefault(require("../models/User"));
 const jet_logger_1 = __importDefault(require("jet-logger"));
 const authenticate = async (req, res, next) => {
     try {

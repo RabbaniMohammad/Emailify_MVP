@@ -4,13 +4,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const auth_1 = require("@src/middleware/auth");
-const organizationContext_1 = require("@src/middleware/organizationContext");
-const TemplateConversation_1 = __importDefault(require("@src/models/TemplateConversation"));
-const GeneratedTemplate_1 = __importDefault(require("@src/models/GeneratedTemplate"));
-const User_1 = __importDefault(require("@src/models/User"));
-const templateGenerationService_1 = require("@src/services/templateGenerationService");
-const mjmlConversionService_1 = require("@src/services/mjmlConversionService");
+const auth_1 = require("../middleware/auth");
+const organizationContext_1 = require("../middleware/organizationContext");
+const TemplateConversation_1 = __importDefault(require("../models/TemplateConversation"));
+const GeneratedTemplate_1 = __importDefault(require("../models/GeneratedTemplate"));
+const User_1 = __importDefault(require("../models/User"));
+const templateGenerationService_1 = require("../services/templateGenerationService");
+const mjmlConversionService_1 = require("../services/mjmlConversionService");
 const jet_logger_1 = __importDefault(require("jet-logger"));
 const router = (0, express_1.Router)();
 router.get('/test', (req, res) => {
