@@ -155,7 +155,7 @@ export class TemplatesService {
     this.updateState({ status: 'loading', error: null });
     
     // Fetch fresh template list from server
-    this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates')
+    this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates', { withCredentials: true })
       .pipe(
         tap(async response => {
           const freshItems = response.items || [];
@@ -220,7 +220,7 @@ export class TemplatesService {
   }
 
   deleteTemplate(id: string): Observable<any> {
-    return this.http.delete(`/api/templates/${id}`).pipe(
+    return this.http.delete(`/api/templates/${id}`, { withCredentials: true }).pipe(
       tap(() => {
         // Remove from current state
         const currentItems = this.snapshot.items;
@@ -281,7 +281,7 @@ export class TemplatesService {
     // ✅ Only set loading state when actually fetching
     this.updateState({ status: 'loading', error: null });
 
-    this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates')
+    this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates', { withCredentials: true })
       .pipe(
         tap(async response => {
           let items = response.items || [];

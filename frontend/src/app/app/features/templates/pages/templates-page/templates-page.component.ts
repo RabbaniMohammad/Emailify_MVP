@@ -325,7 +325,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
           this.router.navigate(['/qa', id]);
         } else {
           // Fetch from API
-          this.http.get(`/api/templates/${id}/raw`, { responseType: 'text' })
+          this.http.get(`/api/templates/${id}/raw`, { responseType: 'text', withCredentials: true })
             .subscribe({
               next: (html) => {
                 this.templateState.initializeOriginalTemplate(id, html);
@@ -563,7 +563,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       } else {
         // Fetch metadata from API and cache it
-        this.http.get(`/api/templates/${id}`, { responseType: 'json' })
+        this.http.get(`/api/templates/${id}`, { responseType: 'json', withCredentials: true })
           .subscribe({
             next: (response: any) => {
               this.templateMetadata = {
@@ -623,7 +623,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
 
     const subscription = this.http
-      .get(`/api/templates/${id}`, { responseType: 'json' })
+      .get(`/api/templates/${id}`, { responseType: 'json', withCredentials: true })
       .subscribe({
         next: (response: any) => {
           // Store metadata

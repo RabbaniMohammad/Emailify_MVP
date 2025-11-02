@@ -12,11 +12,12 @@
     "paths": {
       "@src/*": ["src/*"]
     },
-    "moduleResolution": "node",
+    "moduleResolution": "node10",
     "resolveJsonModule": true,
     "useUnknownInCatchVariables": false,
     "sourceMap": false,
-    "removeComments": true
+    "removeComments": true,
+    "allowImportingTsExtensions": false
   },
   "include": [
     "src/**/*.ts",

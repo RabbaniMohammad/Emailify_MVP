@@ -1120,7 +1120,7 @@ export class QaPageComponent implements OnDestroy {
       this.cdr.markForCheck();
       return;
     }
-    this.http.get(`/api/templates/${templateId}/raw`, { responseType: 'text' })
+    this.http.get(`/api/templates/${templateId}/raw`, { responseType: 'text', withCredentials: true })
       .subscribe({
         next: (html) => {
           clearTimeout(loadingTimeout);

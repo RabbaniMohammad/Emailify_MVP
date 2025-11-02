@@ -396,7 +396,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
     };
     
     const response: any = await firstValueFrom(
-      this.http.post('/api/templates', payload)
+      this.http.post('/api/templates', payload, { withCredentials: true })
     );
     
     this.showToast('Template saved successfully!', 'success');
