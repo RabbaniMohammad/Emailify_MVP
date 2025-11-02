@@ -6,6 +6,7 @@ import TemplateConversation from '@src/models/TemplateConversation';
 import Campaign from '@src/models/Campaign';
 import { authenticate } from '@src/middleware/auth';
 import { requireRole, requireAdmin } from '@src/middleware/roles';
+import { strictOrganizationAccess } from '@src/middleware/strictOrganizationAccess';
 import logger from 'jet-logger';
 import mailchimp from '@mailchimp/mailchimp_marketing';
 
@@ -63,7 +64,6 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       const MC: any = mailchimp as any;
       const folderName = `${organization.name} Templates`;
       
-      console.log(`📁 Creating Mailchimp template folder for org: ${organization.name}`);
       const folder = await MC.templateFolders.create({ name: folderName });
       const folderId = String(folder.id || folder.folder_id);
       
@@ -71,7 +71,6 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       organization.mailchimpTemplateFolderId = folderId;
       await organization.save();
       
-      console.log(`✅ Template folder created - ID: ${folderId}, Name: "${folderName}"`);
       logger.info(`✅ Created Mailchimp folder "${folderName}" (ID: ${folderId}) for org: ${organization.name}`);
     } catch (folderError: any) {
       // Don't fail organization creation if folder creation fails
@@ -85,7 +84,6 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       const MC: any = mailchimp as any;
       const listName = `${organization.name} Subscribers`;
       
-      console.log(`👥 Creating Mailchimp audience list for org: ${organization.name}`);
       
       // Use organization's sender settings (must be configured before creating audience)
       const fromEmail = organization.fromEmail;
@@ -122,7 +120,6 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       organization.mailchimpAudienceId = listId;
       await organization.save();
       
-      console.log(`✅ Audience list created - ID: ${listId}, Name: "${listName}"`);
       logger.info(`✅ Created Mailchimp audience list "${listName}" (ID: ${listId}) for org: ${organization.name}`);
     } catch (audienceError: any) {
       // Don't fail organization creation if audience creation fails
@@ -138,14 +135,6 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
     await user.save();
 
     logger.info(`✅ Organization created: ${organization.slug} by ${user.email}`);
-
-    console.log(`📊 Final organization state:`, {
-      id: organization._id,
-      name: organization.name,
-      slug: organization.slug,
-      mailchimpFolderId: organization.mailchimpTemplateFolderId || null,
-      mailchimpAudienceId: organization.mailchimpAudienceId || null,
-    });
 
     res.status(201).json({
       success: true,
@@ -171,10 +160,12 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
 /**
  * GET /api/organizations/:slug
  * Get organization details by slug
+ * 🔒 SECURITY: Protected - users can only view their own organization
  */
-router.get('/:slug', async (req: Request, res: Response) => {
+router.get('/:slug', authenticate, async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
 
     const organization = await Organization.findOne({ slug: slug.toLowerCase() })
       .select('name slug domain isActive maxUsers maxTemplates createdAt');
@@ -183,6 +174,16 @@ router.get('/:slug', async (req: Request, res: Response) => {
       return res.status(404).json({ 
         error: 'Organization not found',
         message: 'No organization found with this name' 
+      });
+    }
+
+    // 🔒 SECURITY: Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== (organization._id as any).toString()) {
+      logger.warn(`🚫 [SECURITY] User ${userId} attempted to access org ${organization.slug}`);
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'You can only view your own organization'
       });
     }
 
@@ -509,8 +510,9 @@ router.delete('/:slug', authenticate, async (req: Request, res: Response) => {
 /**
  * POST /api/organizations/:id/mailchimp-folder
  * Create and assign a Mailchimp template folder to an organization
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.post('/:id/mailchimp-folder', authenticate, requireRole('owner', 'admin'), async (req: Request, res: Response) => {
+router.post('/:id/mailchimp-folder', authenticate, strictOrganizationAccess, requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { folderName } = req.body;
@@ -567,8 +569,9 @@ router.post('/:id/mailchimp-folder', authenticate, requireRole('owner', 'admin')
 /**
  * PUT /api/organizations/:id/mailchimp-folder
  * Assign an existing Mailchimp folder to an organization
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.put('/:id/mailchimp-folder', authenticate, requireRole('owner', 'admin'), async (req: Request, res: Response) => {
+router.put('/:id/mailchimp-folder', authenticate, strictOrganizationAccess, requireRole('owner', 'admin'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { folderId } = req.body;
@@ -612,8 +615,9 @@ router.put('/:id/mailchimp-folder', authenticate, requireRole('owner', 'admin'),
 /**
  * GET /api/organizations/:id/mailchimp-folder
  * Get current Mailchimp folder for an organization
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.get('/:id/mailchimp-folder', authenticate, async (req: Request, res: Response) => {
+router.get('/:id/mailchimp-folder', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = (req as any).tokenPayload?.userId;
@@ -675,8 +679,9 @@ router.get('/mailchimp-folders/list', authenticate, requireRole('owner', 'admin'
  * PUT /api/organizations/:id/sender-settings
  * Update organization sender email and name for campaigns
  * ⚠️  Note: Email domain must be verified in Mailchimp
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.put('/:id/sender-settings', authenticate, requireAdmin, async (req: Request, res: Response) => {
+router.put('/:id/sender-settings', authenticate, strictOrganizationAccess, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { fromEmail, fromName } = req.body;
@@ -773,8 +778,9 @@ router.put('/:id/sender-settings', authenticate, requireAdmin, async (req: Reque
 /**
  * GET /api/organizations/:id/sender-settings
  * Get current sender settings for an organization
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.get('/:id/sender-settings', authenticate, async (req: Request, res: Response) => {
+router.get('/:id/sender-settings', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = (req as any).tokenPayload?.userId;
@@ -808,14 +814,14 @@ router.get('/:id/sender-settings', authenticate, async (req: Request, res: Respo
  * GET /api/organizations/:id/campaigns
  * Get all campaigns for an organization with optional filtering
  * Query params: status, limit, offset
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.get('/:id/campaigns', authenticate, async (req: Request, res: Response) => {
+router.get('/:id/campaigns', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = (req as any).tokenPayload?.userId;
     const { status, limit = 50, offset = 0 } = req.query;
 
-    console.log(`📋 Fetching campaigns for org: ${id}, status: ${status || 'all'}`);
 
     // Verify user belongs to this organization
     const user = await User.findById(userId);
@@ -866,7 +872,6 @@ router.get('/:id/campaigns', authenticate, async (req: Request, res: Response) =
       }
     });
 
-    console.log(`✅ Found ${campaigns.length} campaigns (total: ${totalCount})`);
 
     res.json({
       success: true,
@@ -893,13 +898,13 @@ router.get('/:id/campaigns', authenticate, async (req: Request, res: Response) =
 /**
  * GET /api/organizations/:id/campaigns/:campaignId
  * Get single campaign details
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.get('/:id/campaigns/:campaignId', authenticate, async (req: Request, res: Response) => {
+router.get('/:id/campaigns/:campaignId', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id, campaignId } = req.params;
     const userId = (req as any).tokenPayload?.userId;
 
-    console.log(`📧 Fetching campaign: ${campaignId} for org: ${id}`);
 
     // Verify user belongs to this organization
     const user = await User.findById(userId);
@@ -926,7 +931,6 @@ router.get('/:id/campaigns/:campaignId', authenticate, async (req: Request, res:
       });
     }
 
-    console.log(`✅ Campaign found: ${campaign.name}`);
 
     res.json({
       success: true,
@@ -946,13 +950,13 @@ router.get('/:id/campaigns/:campaignId', authenticate, async (req: Request, res:
 /**
  * GET /api/organizations/:id/dashboard
  * Get organization dashboard overview with stats
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.get('/:id/dashboard', authenticate, async (req: Request, res: Response) => {
+router.get('/:id/dashboard', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = (req as any).tokenPayload?.userId;
 
-    console.log(`📊 Loading dashboard for org: ${id}`);
 
     // Verify user belongs to this organization
     const user = await User.findById(userId);
@@ -1007,7 +1011,6 @@ router.get('/:id/dashboard', authenticate, async (req: Request, res: Response) =
       }
     });
 
-    console.log(`✅ Dashboard loaded: ${totalCampaigns} campaigns, ${totalTemplates} templates, ${totalMembers} members`);
 
     res.json({
       success: true,
@@ -1034,13 +1037,13 @@ router.get('/:id/dashboard', authenticate, async (req: Request, res: Response) =
 /**
  * POST /api/organizations/:id/setup-audience
  * Setup/link Mailchimp audience for an organization
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.post('/:id/setup-audience', authenticate, async (req: Request, res: Response) => {
+router.post('/:id/setup-audience', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = (req as any).tokenPayload?.userId;
 
-    console.log(`🔧 Setting up audience for org: ${id}`);
 
     // Verify user belongs to this organization and is admin
     const user = await User.findById(userId);
@@ -1078,14 +1081,10 @@ router.post('/:id/setup-audience', authenticate, async (req: Request, res: Respo
           memberCount: existingList.stats.member_count
         });
       } catch (err) {
-        console.log(`⚠️  Existing audience ${organization.mailchimpAudienceId} not found, will create new one`);
       }
     }
 
     // Always create a NEW dedicated list for this organization
-    console.log(`👥 Creating new dedicated Mailchimp audience list for org: ${organization.name}`);
-    console.log(`📋 Mailchimp API Key configured: ${process.env.MAILCHIMP_API_KEY ? 'Yes' : 'No'}`);
-    console.log(`📋 Mailchimp DC: ${process.env.MAILCHIMP_DC}`);
     
     const listName = `${organization.name} Subscribers`;
     
@@ -1125,7 +1124,6 @@ router.post('/:id/setup-audience', authenticate, async (req: Request, res: Respo
       organization.mailchimpAudienceId = listId;
       await organization.save();
 
-      console.log(`✅ Created dedicated audience "${listName}" (ID: ${listId}) for org: ${organization.name}`);
 
       res.json({
         success: true,
@@ -1172,14 +1170,14 @@ router.post('/:id/setup-audience', authenticate, async (req: Request, res: Respo
 /**
  * GET /api/organizations/:id/audience
  * Get audience/subscriber stats and recent members for an organization
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.get('/:id/audience', authenticate, async (req: Request, res: Response) => {
+router.get('/:id/audience', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = (req as any).tokenPayload?.userId;
-    const { limit = 10 } = req.query;
+    const { limit = 1000 } = req.query; // Increased default to get all members
 
-    console.log(`👥 Fetching audience stats for org: ${id}`);
 
     // Verify user belongs to this organization
     const user = await User.findById(userId);
@@ -1195,7 +1193,6 @@ router.get('/:id/audience', authenticate, async (req: Request, res: Response) =>
       return res.status(404).json({ error: 'Organization not found' });
     }
 
-    console.log(`📋 Organization: ${organization.name}, Audience ID: ${organization.mailchimpAudienceId}`);
 
     if (!organization.mailchimpAudienceId) {
       return res.status(400).json({ 
@@ -1207,7 +1204,6 @@ router.get('/:id/audience', authenticate, async (req: Request, res: Response) =>
     const MC: any = mailchimp as any;
     const listId = organization.mailchimpAudienceId;
 
-    console.log(`📋 Fetching from Mailchimp list: ${listId} for org: ${organization.name}`);
 
     // Fetch list stats and members in parallel
     const [listInfo, members] = await Promise.all([
@@ -1216,7 +1212,7 @@ router.get('/:id/audience', authenticate, async (req: Request, res: Response) =>
         count: Number(limit),
         sort_field: 'timestamp_opt',
         sort_dir: 'DESC', // Most recent first
-        status: 'subscribed'
+        // No status filter - return all members so frontend can filter by status
       })
     ]);
 
@@ -1253,13 +1249,11 @@ router.get('/:id/audience', authenticate, async (req: Request, res: Response) =>
       // Filter out Mailchimp account owner if present
       const mailchimpOwnerEmail = process.env.MAILCHIMP_OWNER_EMAIL;
       if (mailchimpOwnerEmail && m.email.toLowerCase() === mailchimpOwnerEmail.toLowerCase()) {
-        console.log(`🔧 Filtering out Mailchimp account owner: ${m.email}`);
         return false;
       }
       return true;
     });
 
-    console.log(`✅ Audience stats: ${stats.totalSubscribers} total, ${stats.newLast30Days} new in last 30 days, ${memberList.length} members returned`);
 
     res.json({
       success: true,
@@ -1295,8 +1289,9 @@ router.get('/:id/audience', authenticate, async (req: Request, res: Response) =>
 /**
  * POST /api/organizations/:id/subscribers/add
  * Add a single subscriber to organization's audience
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.post('/:id/subscribers/add', authenticate, async (req: Request, res: Response) => {
+router.post('/:id/subscribers/add', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = (req as any).tokenPayload?.userId;
@@ -1331,7 +1326,6 @@ router.post('/:id/subscribers/add', authenticate, async (req: Request, res: Resp
       tags: tags || []
     });
 
-    console.log(`✅ Added subscriber ${email} to org ${organization.name}`);
 
     res.json({
       success: true,
@@ -1355,8 +1349,9 @@ router.post('/:id/subscribers/add', authenticate, async (req: Request, res: Resp
 /**
  * POST /api/organizations/:id/subscribers/bulk-import
  * Bulk import subscribers from CSV data
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.post('/:id/subscribers/bulk-import', authenticate, async (req: Request, res: Response) => {
+router.post('/:id/subscribers/bulk-import', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = (req as any).tokenPayload?.userId;
@@ -1395,7 +1390,6 @@ router.post('/:id/subscribers/bulk-import', authenticate, async (req: Request, r
       update_existing: false
     });
 
-    console.log(`✅ Bulk imported ${result.new_members?.length || 0} subscribers to org ${organization.name}`);
 
     res.json({
       success: true,
@@ -1417,8 +1411,9 @@ router.post('/:id/subscribers/bulk-import', authenticate, async (req: Request, r
 /**
  * PUT /api/organizations/:id/subscribers/:email
  * Update a subscriber's information
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.put('/:id/subscribers/:email', authenticate, async (req: Request, res: Response) => {
+router.put('/:id/subscribers/:email', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id, email } = req.params;
     const userId = (req as any).tokenPayload?.userId;
@@ -1460,7 +1455,6 @@ router.put('/:id/subscribers/:email', authenticate, async (req: Request, res: Re
       });
     }
 
-    console.log(`✅ Updated subscriber ${email} in org ${organization.name}`);
 
     res.json({
       success: true,
@@ -1484,8 +1478,9 @@ router.put('/:id/subscribers/:email', authenticate, async (req: Request, res: Re
 /**
  * DELETE /api/organizations/:id/subscribers/:email
  * Remove a subscriber from organization's audience
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.delete('/:id/subscribers/:email', authenticate, async (req: Request, res: Response) => {
+router.delete('/:id/subscribers/:email', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id, email } = req.params;
     const userId = (req as any).tokenPayload?.userId;
@@ -1511,11 +1506,9 @@ router.delete('/:id/subscribers/:email', authenticate, async (req: Request, res:
     if (permanent === 'true') {
       // Permanently delete
       await MC.lists.deleteListMemberPermanent(listId, subscriberHash);
-      console.log(`✅ Permanently deleted subscriber ${email} from org ${organization.name}`);
     } else {
       // Just unsubscribe
       await MC.lists.updateListMember(listId, subscriberHash, { status: 'unsubscribed' });
-      console.log(`✅ Unsubscribed ${email} from org ${organization.name}`);
     }
 
     res.json({ success: true });
@@ -1532,8 +1525,9 @@ router.delete('/:id/subscribers/:email', authenticate, async (req: Request, res:
 /**
  * GET /api/organizations/:id/subscribers/tags
  * Get all tags used in organization's audience
+ * 🔒 SECURITY: Protected by strictOrganizationAccess
  */
-router.get('/:id/subscribers/tags', authenticate, async (req: Request, res: Response) => {
+router.get('/:id/subscribers/tags', authenticate, strictOrganizationAccess, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const userId = (req as any).tokenPayload?.userId;
@@ -1578,7 +1572,6 @@ router.post('/:id/campaigns/:campaignId/sync', authenticate, async (req: Request
     const { id: orgId, campaignId } = req.params;
     const userId = (req as any).tokenPayload?.userId;
 
-    console.log(`🔄 Syncing metrics for campaign ${campaignId} in org ${orgId}`);
 
     // Verify organization exists
     const org = await Organization.findById(orgId);
@@ -1608,19 +1601,10 @@ router.post('/:id/campaigns/:campaignId/sync', authenticate, async (req: Request
       });
     }
 
-    console.log(`📧 Fetching metrics from Mailchimp for campaign: ${campaign.mailchimpCampaignId}`);
 
     // Fetch campaign report from Mailchimp
     const MC: any = mailchimp as any;
     const report = await MC.reports.getCampaignReport(campaign.mailchimpCampaignId);
-    
-    console.log(`📊 Mailchimp report received:`, {
-      emailsSent: report.emails_sent,
-      opens: report.opens?.opens_total,
-      uniqueOpens: report.opens?.unique_opens,
-      clicks: report.clicks?.clicks_total,
-      uniqueClicks: report.clicks?.unique_clicks,
-    });
 
     // Update campaign metrics
     campaign.metrics = {
@@ -1655,7 +1639,6 @@ router.post('/:id/campaigns/:campaignId/sync', authenticate, async (req: Request
 
     await campaign.save();
 
-    console.log(`✅ Campaign metrics synced successfully`);
     logger.info(`✅ Synced metrics for campaign ${campaignId}`);
 
     res.json({
@@ -1698,7 +1681,6 @@ router.get('/:id/campaigns/:campaignId/report', authenticate, async (req: Reques
     const { id: orgId, campaignId } = req.params;
     const userId = (req as any).tokenPayload?.userId;
 
-    console.log(`📊 Fetching detailed report for campaign ${campaignId} in org ${orgId}`);
 
     // Verify organization exists
     const org = await Organization.findById(orgId);
@@ -1728,7 +1710,6 @@ router.get('/:id/campaigns/:campaignId/report', authenticate, async (req: Reques
       });
     }
 
-    console.log(`📧 Fetching full report from Mailchimp for: ${campaign.mailchimpCampaignId}`);
 
     const MC: any = mailchimp as any;
 
@@ -1742,13 +1723,9 @@ router.get('/:id/campaigns/:campaignId/report', authenticate, async (req: Reques
         count: 10
       });
       locationData = locationsResponse.locations || [];
-      console.log(`📍 Locations fetched:`, locationData.length, 'locations');
-      console.log(`📍 Sample location data:`, JSON.stringify(locationData[0], null, 2));
     } catch (locError: any) {
-      console.log(`⚠️ Could not fetch locations:`, locError.message);
     }
     
-    console.log(`✅ Full report data fetched from Mailchimp`);
 
     // Build comprehensive response
     const reportData = {
@@ -1860,7 +1837,6 @@ router.get('/:id/campaigns/:campaignId/activity', authenticate, async (req: Requ
     const { limit = '50', offset = '0' } = req.query;
     const userId = (req as any).tokenPayload?.userId;
 
-    console.log(`👥 Fetching subscriber activity for campaign ${campaignId}`);
 
     // Verify organization and user
     const org = await Organization.findById(orgId);

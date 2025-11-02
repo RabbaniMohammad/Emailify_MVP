@@ -32,8 +32,6 @@ import { NodeEnvs } from '@src/common/constants';
 
 import mailchimp from '@mailchimp/mailchimp_marketing';
 
-import qaNewRouter from '@src/routes/qa-new';
-
 /******************************************************************************
                                 Setup
 ******************************************************************************/
@@ -126,27 +124,17 @@ app.use('/api/auth', authRouter);
 // Debug logging endpoint
 app.use('/api/debug-logs', debugLogsRouter);
 
-// app.use('/api/qa-new', qaNewRouter);
-// app.use('/api/qa', qaNewRouter);
-
-
 // Admin Routes 
 app.use('/api/admin', adminRouter);
 
 // Template Generation Routes ✅ NEW
-console.log('🔵 [SERVER] About to mount templateGenerationRouter');
-console.log('🔵 [SERVER] Router type:', typeof templateGenerationRouter);
-console.log('🔵 [SERVER] Router is:', templateGenerationRouter);
 app.use('/api/generate', (req, res, next) => {
-  console.log('🔵 [SERVER] Request to /api/generate:', req.method, req.path);
   next();
 }, templateGenerationRouter);
-console.log('🔵 [SERVER] templateGenerationRouter mounted at /api/generate');
 
 // Core API routers
 app.use('/api/templates', templatesRouter);
 app.use('/api/qa', qaRouter);
-// app.use('/api/qa', qaNewRouter);
 
 // Existing base router
 app.use(Paths.Base, BaseRouter);

@@ -51,13 +51,19 @@ function isGeneratedTemplate(id: string): boolean {
   return id.startsWith('gen_') || id.startsWith('Generated_');
 }
 
-async function getGeneratedTemplateFromDB(id: string, organizationId?: any): Promise<{ name: string; html: string; source: string }> {
-  const query: any = { templateId: id };
-  
-  // Add organization filter if provided
-  if (organizationId) {
-    query.organizationId = organizationId;
+/**
+ * Get generated template from database
+ * 🔒 SECURITY: organizationId is REQUIRED to prevent cross-org access
+ */
+async function getGeneratedTemplateFromDB(id: string, organizationId: any): Promise<{ name: string; html: string; source: string }> {
+  if (!organizationId) {
+    throw new Error('Organization ID is required for security');
   }
+  
+  const query: any = { 
+    templateId: id,
+    organizationId: organizationId // Always filter by organization
+  };
   
   const template = await GeneratedTemplate.findOne(query);
   
@@ -110,9 +116,15 @@ async function renderViaTempCampaign(templateId: string): Promise<string> {
   }
 }
 
-/** Build best-effort HTML for a template */
-async function getHtmlForTemplate(id: string, organizationId?: any): Promise<{ name: string; html: string; source: string }> {
+/** 
+ * Build best-effort HTML for a template 
+ * 🔒 SECURITY: organizationId is REQUIRED for generated templates
+ */
+async function getHtmlForTemplate(id: string, organizationId: any): Promise<{ name: string; html: string; source: string }> {
   if (isGeneratedTemplate(id)) {
+    if (!organizationId) {
+      throw new Error('Organization ID is required for generated templates');
+    }
     return await getGeneratedTemplateFromDB(id, organizationId);
   }
 

@@ -3,6 +3,10 @@ import { checkGrammarAdvanced, applyCustomEdits } from '@src/services/advancedGr
 import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
 import { randomUUID } from 'crypto';
+import GeneratedTemplate from '@src/models/GeneratedTemplate';
+import { authenticate } from '@src/middleware/auth';
+import { organizationContext } from '@src/middleware/organizationContext';
+import logger from 'jet-logger';
 
 const router = Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -32,10 +36,31 @@ function ensureFullDocShell(name: string, bodyOrDocHtml: string): string {
  * EXACT REPLACEMENT for /api/qa/:id/golden but using local grammar checker
  * This matches the EXACT response format so frontend works without changes!
  */
-router.post('/:id/golden', async (req: Request, res: Response) => {
+router.post('/:id/golden', authenticate, organizationContext, async (req: Request, res: Response) => {
   const requestStart = Date.now();
   try {
     const id = String(req.params.id);
+    const organization = (req as any).organization;
+    const userId = (req as any).tokenPayload?.userId;
+    
+    // ✅ SECURITY: Validate template ownership for generated templates
+    if (id.startsWith('gen_') || id.startsWith('Generated_')) {
+      const template = await GeneratedTemplate.findOne({ 
+        templateId: id,
+        organizationId: organization._id
+      });
+      
+      if (!template) {
+        logger.warn(`🚫 [SECURITY] User ${userId} from org ${organization._id} attempted to access template ${id}`);
+        return res.status(404).json({ 
+          code: 'TEMPLATE_NOT_FOUND',
+          message: 'Template not found or access denied' 
+        });
+      }
+      
+      logger.info(`✅ [QA-ADVANCED] Template ownership validated: ${id} belongs to org ${organization.name}`);
+    }
+    
     let html = String(req.body?.html || '').trim();
     let name = `Template ${id}`;
     
@@ -46,29 +71,11 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
       });
     }
     
-    console.log('🔍 [ADVANCED GOLDEN] Template ID:', id);
-    console.log('📏 [ADVANCED GOLDEN] HTML length:', html.length);
-    console.log('🚀 [ADVANCED GOLDEN] Using GPT-4o-mini with tag-based chunking');
     
     const parseStart = Date.now();
     
     // Use advanced grammar checker with timeout
-    console.log('⏳ [ADVANCED GOLDEN] Starting grammar check...');
     const grammarResult = await checkGrammarAdvanced(html);
-    console.log('⏱️ [ADVANCED GOLDEN] Grammar check completed in', Date.now() - parseStart, 'ms');
-    
-    console.log('✅ [ADVANCED GOLDEN] Check complete:', {
-      total: grammarResult.stats.total,
-      applied: grammarResult.stats.applied,
-      failed: grammarResult.stats.failed
-    });
-    
-    if (grammarResult.appliedEdits.length > 0) {
-      console.log('📝 [ADVANCED GOLDEN] Corrections:');
-      grammarResult.appliedEdits.forEach((edit, i) => {
-        console.log(`   ${i + 1}. "${edit.find}" → "${edit.replace}" (${edit.changeType})`);
-      });
-    }
     
     const parseTime = Date.now() - parseStart;
     
@@ -190,7 +197,7 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
  *   - count: number
  *   - message: string
  */
-router.post('/grammar-check', async (req: Request, res: Response) => {
+router.post('/grammar-check', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const html: string = String(req.body?.html || '').trim();
     
@@ -201,32 +208,9 @@ router.post('/grammar-check', async (req: Request, res: Response) => {
       });
     }
 
-    console.log('🔍 [ADVANCED GRAMMAR] Received HTML length:', html.length);
-    console.log('🔍 [ADVANCED GRAMMAR] Checking for errors...');
 
     // Run the advanced grammar checker
     const result = await checkGrammarAdvanced(html);
-
-    console.log('✅ [ADVANCED GRAMMAR] Check complete:', {
-      total: result.stats.total,
-      applied: result.stats.applied,
-      failed: result.stats.failed
-    });
-
-    // Log what was found
-    if (result.appliedEdits.length > 0) {
-      console.log('📝 [ADVANCED GRAMMAR] Corrections made:');
-      result.appliedEdits.forEach((edit, i) => {
-        console.log(`   ${i + 1}. "${edit.find}" → "${edit.replace}" (${edit.changeType})`);
-      });
-    }
-
-    if (result.failedEdits.length > 0) {
-      console.log('⚠️ [ADVANCED GRAMMAR] Could not fix (boundary issues):');
-      result.failedEdits.forEach((edit, i) => {
-        console.log(`   ${i + 1}. "${edit.find}" → "${edit.replace}"`);
-      });
-    }
 
     // 🎯 Transform to MATCH the original /api/qa/template/grammar-check format
     const mistakes = result.appliedEdits.map(edit => ({
@@ -403,7 +387,6 @@ router.post('/:id/variants/start', async (req: Request, res: Response) => {
     };
     variantRuns.set(runId, run);
     
-    console.log(`🎯 [QA-ADVANCED] Started variant run ${runId} for template ${templateId} (target: ${target})`);
     
     res.json({ runId, target });
   } catch (err: unknown) {
@@ -421,16 +404,13 @@ router.post('/variants/:runId/next', async (req: Request, res: Response) => {
       return res.status(200).json({ done: true, message: 'All variants generated', no: run.variants.length });
     }
 
-    console.log(`🔄 [QA-ADVANCED] Generating variant ${run.variants.length + 1}/${run.target} for run ${runId}`);
     
     // ✅ STEP 1: Get SEO-focused edits from GPT
     const sourceHtml = run.goldenHtml;
     const { edits, why } = await getVariantEditsAndWhy(sourceHtml, run.usedIdeas);
-    console.log(`📝 [QA-ADVANCED] Got ${edits.length} SEO-focused edits from GPT`);
     
     // ✅ STEP 2: Apply edits using ADVANCED tag-based logic (SAME as golden template)
     const result = await applyCustomEdits(sourceHtml, edits);
-    console.log(`✅ [QA-ADVANCED] Applied ${result.stats.applied} edits, ${result.stats.failed} failed`);
     
     const variantNo = run.variants.length + 1;
 

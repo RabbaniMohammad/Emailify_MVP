@@ -215,8 +215,6 @@ async function checkChunkWithGPT(chunk: TextNodeWithTag[]): Promise<GPTCorrectio
       text: node.text,
     }));
 
-    console.log('📤 [GPT CHUNK] SENDING TO GPT:');
-    console.log(JSON.stringify(input, null, 2));
 
     const prompt = `You are a grammar and spelling checker. Fix all errors in the provided text nodes.
 
@@ -266,7 +264,6 @@ NOT: { "find": "beauty", ... } or { "find": "natur", ... }
 If text is already correct, return empty changes array for that node.
 CRITICAL: Return ONLY valid JSON, no other text.`;
 
-    console.log(`🔍 [GPT CHUNK] Checking ${chunk.length} text nodes...`);
 
     const completion = await openai.chat.completions.create({
       model: OPENAI_MODEL,
@@ -286,17 +283,12 @@ CRITICAL: Return ONLY valid JSON, no other text.`;
 
     const responseText = completion.choices[0]?.message?.content || '{}';
     
-    console.log('📥 [GPT CHUNK] RECEIVED FROM GPT:');
-    console.log(responseText);
     
     const parsed = JSON.parse(responseText);
     
     // Handle both array and object with array property
     const results = parsed.corrections || parsed.results || [];
     
-    console.log(`✅ [GPT CHUNK] Parsed ${results.length} correction results`);
-    console.log('📋 [GPT CHUNK] RESULTS:');
-    console.log(JSON.stringify(results, null, 2));
     
     return results;
   } catch (error) {
@@ -337,10 +329,6 @@ function applyCorrections(
       return; // No changes needed
     }
     
-    console.log(`🔧 [APPLY] Node ${textNode.id} (${textNode.tag}):`);
-    console.log(`   Original: "${textNode.originalText}"`);
-    console.log(`   Expected: "${correction.original}"`);
-    console.log(`   Corrected: "${correction.corrected}"`);
     
     // Apply correction to the actual DOM node
     let originalText = textNode.node.textContent || '';
@@ -358,7 +346,6 @@ function applyCorrections(
         const wordExists = currentText.includes(change.find);
         
         if (!wordExists) {
-          console.log(`      ⚠️  Word "${change.find}" not found in text, skipping`);
           failedEdits.push({
             find: change.find,
             replace: change.replace,
@@ -383,7 +370,6 @@ function applyCorrections(
           currentText = newText;
           hasAppliedAny = true;
           
-          console.log(`      ✅ "${change.find}" → "${change.replace}" (${change.reason})`);
           
           appliedChanges.push({
             change,
@@ -396,8 +382,6 @@ function applyCorrections(
     // If we applied any changes, update the DOM
     if (hasAppliedAny) {
       textNode.node.textContent = currentText;
-      console.log(`   ✅ APPLIED ${appliedChanges.length} changes!`);
-      console.log(`      Result: "${currentText.trim()}"`);
       
       // Record all applied changes
       appliedChanges.forEach(({ change, context }) => {
@@ -417,7 +401,6 @@ function applyCorrections(
         });
       });
     } else if (correction.changes && correction.changes.length > 0) {
-      console.log(`   ❌ NO CHANGES APPLIED`);
     }
   });
   
@@ -443,11 +426,9 @@ function applyCorrections(
  * Main grammar check function using GPT-4o-mini with chunking strategy
  */
 export async function checkGrammarAdvanced(html: string): Promise<GrammarCheckResult> {
-  console.log('🚀 [ADVANCED GRAMMAR] Starting GPT-based check with chunking');
   
   // Step 1: Extract text nodes with tags (and get the DOM instance)
   const { textNodes, dom } = extractTextNodesWithTags(html);
-  console.log(`📝 [ADVANCED GRAMMAR] Extracted ${textNodes.length} text nodes`);
   
   if (textNodes.length === 0) {
     return {
@@ -460,22 +441,18 @@ export async function checkGrammarAdvanced(html: string): Promise<GrammarCheckRe
   
   // Step 2: Split into chunks
   const chunks = chunkTextNodes(textNodes, CHUNK_SIZE);
-  console.log(`📦 [ADVANCED GRAMMAR] Split into ${chunks.length} chunks (size: ${CHUNK_SIZE})`);
   
   // Step 3: Process chunks in parallel
-  console.log(`⚡ [ADVANCED GRAMMAR] Processing ${chunks.length} chunks in parallel...`);
   const chunkResults = await Promise.all(
     chunks.map(chunk => checkChunkWithGPT(chunk))
   );
   
   // Step 4: Flatten results
   const allResults = chunkResults.flat();
-  console.log(`🔍 [ADVANCED GRAMMAR] Got ${allResults.length} correction results`);
   
   // Step 5: Apply corrections using the SAME DOM instance
   const result = applyCorrections(dom, textNodes, allResults);
   
-  console.log(`✅ [ADVANCED GRAMMAR] Applied: ${result.stats.applied}, Failed: ${result.stats.failed}`);
   
   return result;
 }
@@ -488,11 +465,9 @@ export async function applyCustomEdits(
   html: string,
   customEdits: Array<{ find: string; replace: string; reason?: string; idea?: string }>
 ): Promise<GrammarCheckResult> {
-  console.log('🚀 [CUSTOM EDITS] Starting with advanced tag-based logic');
   
   // Step 1: Extract text nodes with tags (and get the DOM instance)
   const { textNodes, dom } = extractTextNodesWithTags(html);
-  console.log(`📝 [CUSTOM EDITS] Extracted ${textNodes.length} text nodes`);
   
   if (textNodes.length === 0 || customEdits.length === 0) {
     return {
@@ -532,12 +507,10 @@ export async function applyCustomEdits(
     }
   });
   
-  console.log(`🔍 [CUSTOM EDITS] Matched ${corrections.length} text nodes with edits`);
   
   // Step 3: Apply corrections using the SAME DOM instance and SAME logic
   const result = applyCorrections(dom, textNodes, corrections);
   
-  console.log(`✅ [CUSTOM EDITS] Applied: ${result.stats.applied}, Failed: ${result.stats.failed}`);
   
   return result;
 }

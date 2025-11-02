@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -15,8 +16,9 @@ if (!fs.existsSync(LOGS_DIR)) {
 /**
  * POST /api/debug-logs
  * Receive and write debug logs from frontend
+ * REQUIRES AUTHENTICATION to prevent abuse
  */
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticate, async (req: Request, res: Response) => {
   try {
     const { sessionId, logs } = req.body;
 
@@ -53,8 +55,9 @@ router.post('/', async (req: Request, res: Response) => {
 /**
  * POST /api/debug-logs/clear
  * Clear debug logs for a session (called on logout)
+ * REQUIRES AUTHENTICATION to prevent abuse
  */
-router.post('/clear', async (req: Request, res: Response) => {
+router.post('/clear', authenticate, async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.body;
 
@@ -80,8 +83,9 @@ router.post('/clear', async (req: Request, res: Response) => {
 /**
  * GET /api/debug-logs/list
  * List all debug log files
+ * REQUIRES AUTHENTICATION to prevent information disclosure
  */
-router.get('/list', async (req: Request, res: Response) => {
+router.get('/list', authenticate, async (req: Request, res: Response) => {
   try {
     const files = fs.readdirSync(LOGS_DIR)
       .filter(file => file.startsWith('debug_') && file.endsWith('.log'))
@@ -107,8 +111,9 @@ router.get('/list', async (req: Request, res: Response) => {
 /**
  * GET /api/debug-logs/:filename
  * Read a specific log file
+ * REQUIRES AUTHENTICATION to prevent information disclosure
  */
-router.get('/:filename', async (req: Request, res: Response) => {
+router.get('/:filename', authenticate, async (req: Request, res: Response) => {
   try {
     const { filename } = req.params;
 

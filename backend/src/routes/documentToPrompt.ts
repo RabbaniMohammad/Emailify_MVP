@@ -113,8 +113,6 @@ router.post('/csv-to-prompt', upload.single('file'), async (req: Request, res: R
     }
 
     // Log extracted data for debugging
-    console.log('📄 Extracted Data Length:', extractedText.length);
-    console.log('📄 First 500 characters:', extractedText.substring(0, 500));
 
     // ⚠️ Smart truncation: Limit to ~100K tokens (~400KB) to stay within GPT limits
     const MAX_CHARS = 400000; // ~100K tokens
@@ -122,7 +120,6 @@ router.post('/csv-to-prompt', upload.single('file'), async (req: Request, res: R
     let wasTruncated = false;
     
     if (extractedText.length > MAX_CHARS) {
-      console.log(`⚠️ Data too large (${extractedText.length} chars), truncating to ${MAX_CHARS} chars`);
       dataToSend = extractedText.substring(0, MAX_CHARS);
       wasTruncated = true;
     }
@@ -146,8 +143,6 @@ router.post('/csv-to-prompt', upload.single('file'), async (req: Request, res: R
       16000  // Use almost full GPT-4o-mini capacity
     );
     
-    console.log(`📊 Token estimation: Input ~${estimatedInputTokens} tokens, Output max ${dynamicMaxTokens} tokens`);
-    console.log(`📊 File size: ${dataToSend.length} chars, Max tokens: ${dynamicMaxTokens}`);
 
     // Generate prompt using GPT-4o-mini
     const completion = await openai.chat.completions.create({
@@ -226,7 +221,6 @@ router.post('/csv-to-prompt/extract', upload.single('file'), async (req: Request
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    console.log('📄 [EXTRACT] File received:', req.file.originalname);
 
     const fileExtension = req.file.originalname.split('.').pop()?.toLowerCase();
     let extractedData = '';
@@ -244,8 +238,6 @@ router.post('/csv-to-prompt/extract', upload.single('file'), async (req: Request
       return res.status(400).json({ error: 'Unsupported file type' });
     }
 
-    console.log('📄 [EXTRACT] Data extracted, length:', extractedData.length);
-    console.log('📄 [EXTRACT] First 500 characters:', extractedData.substring(0, 500));
 
     res.json({
       success: true,

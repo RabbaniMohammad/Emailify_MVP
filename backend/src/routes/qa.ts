@@ -6,6 +6,9 @@ import { randomUUID } from 'crypto';
 import puppeteer from 'puppeteer';
 import type { Browser } from 'puppeteer';
 import GeneratedTemplate from '@src/models/GeneratedTemplate';
+import { authenticate } from '@src/middleware/auth';
+import { organizationContext } from '@src/middleware/organizationContext';
+import logger from 'jet-logger';
 
 const router = Router();
 const MC: any = mailchimp as any;
@@ -1132,10 +1135,30 @@ async function getSuggestionsFromHtml(html: string): Promise<{ gibberish: Array<
 /*                               Routes                                */
 /* ------------------------------------------------------------------ */
 
-router.post('/:id/golden', async (req: Request, res: Response) => {
+router.post('/:id/golden', authenticate, organizationContext, async (req: Request, res: Response) => {
   const requestStart = Date.now();
   try {
     const id = String(req.params.id);
+    const organization = (req as any).organization;
+    const userId = (req as any).tokenPayload?.userId;
+    
+    // ✅ SECURITY: Validate template ownership for generated templates
+    if (id.startsWith('gen_') || id.startsWith('Generated_')) {
+      const template = await GeneratedTemplate.findOne({ 
+        templateId: id,
+        organizationId: organization._id
+      });
+      
+      if (!template) {
+        logger.warn(`🚫 [SECURITY] User ${userId} from org ${organization._id} attempted to access template ${id}`);
+        return res.status(404).json({ 
+          code: 'TEMPLATE_NOT_FOUND',
+          message: 'Template not found or access denied' 
+        });
+      }
+      
+      logger.info(`✅ [QA] Template ownership validated: ${id} belongs to org ${organization.name}`);
+    }
     
     // ✅ USE REQUEST BODY HTML if provided (cache-first approach)
     let html = String(req.body?.html || '').trim();
@@ -1219,9 +1242,27 @@ router.post('/:id/golden', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/subjects', async (req: Request, res: Response) => {
+router.post('/:id/subjects', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
+    const organization = (req as any).organization;
+    const userId = (req as any).tokenPayload?.userId;
+    
+    // ✅ SECURITY: Validate template ownership for generated templates
+    if (id.startsWith('gen_') || id.startsWith('Generated_')) {
+      const template = await GeneratedTemplate.findOne({ 
+        templateId: id,
+        organizationId: organization._id
+      });
+      
+      if (!template) {
+        logger.warn(`🚫 [SECURITY] User ${userId} attempted to access template ${id}`);
+        return res.status(404).json({ 
+          code: 'TEMPLATE_NOT_FOUND',
+          message: 'Template not found or access denied' 
+        });
+      }
+    }
     
     // ✅ USE REQUEST BODY HTML (fast path)
     let html = String(req.body?.html || '').trim();
@@ -1265,9 +1306,28 @@ router.post('/:id/subjects', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/suggestions', async (req: Request, res: Response) => {
+router.post('/:id/suggestions', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
+    const organization = (req as any).organization;
+    const userId = (req as any).tokenPayload?.userId;
+    
+    // ✅ SECURITY: Validate template ownership for generated templates
+    if (id.startsWith('gen_') || id.startsWith('Generated_')) {
+      const template = await GeneratedTemplate.findOne({ 
+        templateId: id,
+        organizationId: organization._id
+      });
+      
+      if (!template) {
+        logger.warn(`🚫 [SECURITY] User ${userId} attempted to access template ${id}`);
+        return res.status(404).json({ 
+          code: 'TEMPLATE_NOT_FOUND',
+          message: 'Template not found or access denied' 
+        });
+      }
+    }
+    
     const { html } = await getRobustTemplateHtml(id);
     const out = await getSuggestionsFromHtml(html);
     res.json(out);

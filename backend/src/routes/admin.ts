@@ -132,6 +132,8 @@ router.post('/users/:userId/promote', authenticate, requireSuperAdmin, async (re
     user.orgRole = 'admin';
     await user.save();
 
+    // ✅ AUDIT LOG: User role promotion
+    logger.warn(`⬆️ [SUPER ADMIN AUDIT] ${currentUser.email} promoted ${user.email} to admin`);
     logger.info(`⬆️ User promoted to admin: ${user.email} by ${currentUser.email}`);
     res.json({ message: 'User promoted to admin', user });
   } catch (error) {
@@ -222,6 +224,11 @@ router.post('/users/:userId/demote', authenticate, requireSuperAdmin, async (req
 // Get all organizations (super admin only)
 router.get('/organizations', authenticate, requireSuperAdmin, async (req: Request, res: Response) => {
   try {
+    const currentUser = (req as any).currentUser;
+    
+    // ✅ AUDIT LOG: Super admin viewing all organizations
+    logger.info(`🔍 [SUPER ADMIN AUDIT] ${currentUser.email} (${currentUser._id}) accessed all organizations list`);
+    
     const organizations = await Organization.find()
       .select('-__v')
       .sort({ createdAt: -1 })
@@ -253,8 +260,12 @@ router.delete('/organizations/:slug', authenticate, requireSuperAdmin, async (re
     const { deleteData } = req.body; // boolean flag to also delete users
     const currentUser = (req as any).currentUser;
 
+    // ✅ AUDIT LOG: Super admin attempting organization deletion
+    logger.warn(`🚨 [SUPER ADMIN AUDIT] ${currentUser.email} (${currentUser._id}) attempting to delete organization: ${slug} (deleteData: ${deleteData})`);
+
     // Prevent deleting the default organization
     if (slug.toLowerCase() === 'default') {
+      logger.warn(`🚫 [SUPER ADMIN AUDIT] ${currentUser.email} blocked from deleting default organization`);
       return res.status(403).json({ 
         error: 'Cannot delete default organization',
         message: 'The default organization cannot be deleted for system integrity.'
@@ -263,12 +274,14 @@ router.delete('/organizations/:slug', authenticate, requireSuperAdmin, async (re
 
     const organization = await Organization.findOne({ slug: slug.toLowerCase() });
     if (!organization) {
+      logger.warn(`⚠️ [SUPER ADMIN AUDIT] ${currentUser.email} tried to delete non-existent org: ${slug}`);
       return res.status(404).json({ error: 'Organization not found' });
     }
 
     // Only super admins from the default org can delete other organizations
     const userOrg = await Organization.findById(currentUser.organizationId);
     if (!userOrg || userOrg.slug !== 'default') {
+      logger.warn(`🚫 [SUPER ADMIN AUDIT] ${currentUser.email} from ${userOrg?.slug} denied deleting org ${slug}`);
       return res.status(403).json({ 
         error: 'Insufficient permissions',
         message: 'Only super admins from the default organization can delete organizations.'
@@ -299,6 +312,8 @@ router.delete('/organizations/:slug', authenticate, requireSuperAdmin, async (re
     // Delete the organization
     await Organization.findByIdAndDelete(organization._id);
 
+    // ✅ AUDIT LOG: Successful organization deletion
+    logger.warn(`✅ [SUPER ADMIN AUDIT] ${currentUser.email} successfully deleted organization: ${organization.slug}`);
     logger.info(`🗑️ [SUPER ADMIN] Organization deleted: ${organization.slug} by ${currentUser.email}`);
     logger.info(`   - Users ${deleteData ? 'deleted' : 'unlinked'}: ${deleteData ? deletedUsers : 'N/A'}`);
     logger.info(`   - Templates deleted: ${deletedTemplates.deletedCount}`);

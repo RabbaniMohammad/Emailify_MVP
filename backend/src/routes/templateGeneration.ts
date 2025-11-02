@@ -11,22 +11,18 @@ import { randomUUID } from 'crypto';
 
 const router = Router();
 
-console.log('🟢 [ROUTES] templateGeneration.ts - Router created');
 
 // Test route to verify router is working
 router.get('/test', (req: Request, res: Response) => {
-  console.log('🟢 [ROUTES] /test route hit!');
   res.json({ message: 'Template generation router is working!' });
 });
 
-console.log('🟢 [ROUTES] /test route registered');
 
 /**
  * POST /api/generate
  * Simple one-shot template generation (no conversation)
  */
 router.post('/', authenticate, async (req: Request, res: Response) => {
-  console.log('🟢 [ROUTES] POST / route hit!');
   try {
     const { prompt } = req.body;
     const userId = (req as any).tokenPayload?.userId;
@@ -106,24 +102,11 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
  * ✅ No database: Everything managed in frontend cache
  * ✅ Simple: One endpoint for all messages
  */
-console.log('🟢 [ROUTES] Registering POST /chat route');
 router.post('/chat', authenticate, organizationContext, async (req: Request, res: Response) => {
-  console.log('🟢 [ROUTES] POST /chat route hit!');
   try {
     const { message, conversationHistory = [], currentMjml, images, extractedFileData } = req.body;
     const userId = (req as any).tokenPayload?.userId;
     const organization = (req as any).organization;
-
-    console.log('🟢 [BACKEND /chat] Request received:', {
-      userId,
-      organizationId: organization?._id,
-      messageLength: message?.length || 0,
-      historyLength: conversationHistory.length,
-      hasCurrentMjml: !!currentMjml,
-      imageCount: images?.length || 0,
-      hasExtractedFileData: !!extractedFileData,
-      extractedFileDataLength: extractedFileData?.length || 0
-    });
     
     if (!organization) {
       return res.status(403).json({ 
@@ -214,12 +197,6 @@ router.post('/chat', authenticate, organizationContext, async (req: Request, res
       attemptsUsed: result.attemptsUsed,
       hadErrors: result.hadErrors,
     };
-    
-    console.log('� [BACKEND /chat] Response ready:', {
-      hasHtml: !!responseData.html,
-      hasMjml: !!responseData.mjml,
-      hasErrors: responseData.hasErrors
-    });
     
     res.json(responseData);
   } catch (error: any) {
@@ -349,15 +326,6 @@ router.post('/save/:conversationId', authenticate, organizationContext, async (r
     const { templateName, html, mjml } = req.body;
     const userId = (req as any).tokenPayload?.userId;
     const organization = (req as any).organization;
-
-    console.log('💾 [SAVE] Save request:', {
-      conversationId,
-      templateName,
-      hasHtml: !!html,
-      hasMjml: !!mjml,
-      userId,
-      organizationId: organization?._id
-    });
 
     if (!organization) {
       return res.status(403).json({ 

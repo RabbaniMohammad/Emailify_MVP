@@ -218,6 +218,5 @@ CampaignSchema.index({ status: 1, scheduledFor: 1 }); // Find scheduled campaign
 // Text index for searching campaigns by name or subject
 CampaignSchema.index({ name: 'text', subject: 'text' });
 
-console.log('📧 Campaign model loaded');
 
 export default mongoose.model<ICampaign>('Campaign', CampaignSchema);

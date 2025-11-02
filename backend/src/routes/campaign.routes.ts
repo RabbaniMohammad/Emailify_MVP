@@ -11,7 +11,6 @@ import { authenticate } from '@src/middleware/auth';
 const router = Router();
 const MC: any = mailchimp as any;
 
-console.log('📧 Campaign routes loaded');
 
 // Configure Mailchimp
 MC.setConfig({
@@ -136,7 +135,6 @@ router.get('/mailchimp/audiences', authenticate, async (req: Request, res: Respo
     // Only return THIS organization's audience
     const audienceList = await MC.lists.getList(org.mailchimpAudienceId);
     
-    console.log(`📋 Fetched audience for org ${org.name}: ${audienceList.name} (${audienceList.id})`);
     
     res.json({
       lists: [audienceList]  // Only the org's own audience
@@ -153,8 +151,9 @@ router.get('/mailchimp/audiences', authenticate, async (req: Request, res: Respo
 /**
  * POST /api/campaign/upload-master
  * Parse uploaded CSV/Excel master document
+ * 🔒 SECURITY: Protected - requires authentication
  */
-router.post('/campaign/upload-master', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/campaign/upload-master', authenticate, upload.single('file'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -251,14 +250,30 @@ router.post('/campaign/upload-master', upload.single('file'), async (req: Reques
 /**
  * POST /api/campaign/reconcile
  * Compare uploaded emails with Mailchimp audience
+ * 🔒 SECURITY: Protected - requires authentication and org validation
  */
-router.post('/campaign/reconcile', async (req: Request, res: Response) => {
+router.post('/campaign/reconcile', authenticate, async (req: Request, res: Response) => {
   try {
     const { audienceId, emails } = req.body;
+    const userId = (req as any).tokenPayload?.userId;
 
     if (!audienceId || !Array.isArray(emails)) {
       return res.status(400).json({
         error: 'Missing required fields: audienceId, emails'
+      });
+    }
+
+    // 🔒 SECURITY: Verify user belongs to organization
+    const user = await User.findById(userId);
+    if (!user?.organizationId) {
+      return res.status(403).json({ error: 'No organization assigned' });
+    }
+
+    const org = await Organization.findById(user.organizationId);
+    if (!org || org.mailchimpAudienceId !== audienceId) {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'You can only access your organization\'s audience'
       });
     }
 
@@ -313,10 +328,12 @@ router.post('/campaign/reconcile', async (req: Request, res: Response) => {
 /**
  * POST /api/campaign/send-test
  * Send test emails
+ * 🔒 SECURITY: Protected - requires authentication
  */
-router.post('/campaign/send-test', async (req: Request, res: Response) => {
+router.post('/campaign/send-test', authenticate, async (req: Request, res: Response) => {
   try {
     const { testEmails, subject, html } = req.body;
+    const userId = (req as any).tokenPayload?.userId;
 
     if (!Array.isArray(testEmails) || !subject || !html) {
       return res.status(400).json({
@@ -332,8 +349,19 @@ router.post('/campaign/send-test', async (req: Request, res: Response) => {
       });
     }
 
+    // 🔒 SECURITY: Get user's organization
+    const user = await User.findById(userId);
+    if (!user?.organizationId) {
+      return res.status(403).json({ error: 'No organization assigned' });
+    }
+
+    const organization = await Organization.findById(user.organizationId);
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
     // Create a temporary campaign for testing
-    const listId = process.env.MC_AUDIENCE_ID;
+    const listId = organization.mailchimpAudienceId || process.env.MC_AUDIENCE_ID;
     const fromEmail = organization.fromEmail;
     const fromName = organization.fromName || organization.name;
 
@@ -490,7 +518,6 @@ router.post('/campaign/add-members', authenticate, async (req: Request, res: Res
       });
     }
 
-    console.log(`📧 Adding ${validEmails.length} members to audience ${audienceId} for org: ${org.name}`);
 
     const response = await MC.lists.batchListMembers(audienceId, {
       members: validEmails.map(email => ({
@@ -526,7 +553,6 @@ router.post('/campaign/submit', authenticate, async (req: Request, res: Response
     const { subject, templateHtml, scheduleGroups, testEmails } = req.body;
     const userId = (req as any).tokenPayload?.userId;
 
-    console.log(`📧 Campaign submit requested by user: ${userId}`);
 
     if (!subject || !templateHtml || !Array.isArray(scheduleGroups)) {
       return res.status(400).json({
@@ -547,7 +573,6 @@ router.post('/campaign/submit', authenticate, async (req: Request, res: Response
     const organization = user.organizationId as any;
     const organizationId = organization._id;
 
-    console.log(`🏢 Organization: ${organization.name} (ID: ${organizationId})`);
 
     // Use organization's Mailchimp audience list and sender settings
     const listId = organization.mailchimpAudienceId || process.env.MC_AUDIENCE_ID;
@@ -568,7 +593,6 @@ router.post('/campaign/submit', authenticate, async (req: Request, res: Response
       });
     }
 
-    console.log(`📋 Using audience list: ${listId}`);
 
     const campaignIds: string[] = [];
     const dbCampaignIds: string[] = [];
@@ -577,7 +601,6 @@ router.post('/campaign/submit', authenticate, async (req: Request, res: Response
     for (const group of scheduleGroups) {
       const scheduledTime = new Date(group.scheduledTime);
 
-      console.log(`📅 Creating campaign for schedule: ${scheduledTime.toISOString()}, Recipients: ${group.emails.length}`);
 
       // Create campaign in Mailchimp
       const campaign = await MC.campaigns.create({
@@ -603,7 +626,6 @@ router.post('/campaign/submit', authenticate, async (req: Request, res: Response
       });
 
       const campaignId = campaign.id;
-      console.log(`✅ Mailchimp campaign created: ${campaignId}`);
 
       // Set content
       await MC.campaigns.setContent(campaignId, { html: templateHtml });
@@ -619,7 +641,6 @@ router.post('/campaign/submit', authenticate, async (req: Request, res: Response
         await MC.campaigns.send(campaignId);
         status = 'sent';
         sentAt = new Date();
-        console.log(`📤 Campaign sent immediately: ${campaignId}`);
       } else {
         // Schedule for later (requires paid plan)
         await MC.campaigns.schedule(campaignId, {
@@ -627,7 +648,6 @@ router.post('/campaign/submit', authenticate, async (req: Request, res: Response
         });
         status = 'scheduled';
         scheduledFor = scheduledTime;
-        console.log(`⏰ Campaign scheduled for: ${scheduledTime.toISOString()}`);
       }
 
       // 💾 Save to database for org isolation
@@ -658,13 +678,11 @@ router.post('/campaign/submit', authenticate, async (req: Request, res: Response
         }
       });
 
-      console.log(`💾 Campaign saved to database: ${dbCampaign._id}`);
 
       campaignIds.push(campaignId);
       dbCampaignIds.push(String(dbCampaign._id));
     }
 
-    console.log(`✅ All campaigns created successfully. Total: ${campaignIds.length}`);
 
     res.json({
       success: true,
@@ -689,7 +707,6 @@ router.post('/campaign/submit', authenticate, async (req: Request, res: Response
  */
 router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'), async (req: Request, res: Response) => {
   try {
-    console.log('🔍 Validating audience CSV...');
     
     const userId = (req as any).tokenPayload?.userId;
     const file = req.file;
@@ -717,7 +734,6 @@ router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'
     }
 
     const audienceId = organization.mailchimpAudienceId;
-    console.log(`📋 Organization: ${organization.name}, Audience: ${audienceId}`);
 
     // Parse CSV file
     const csvContent = file.buffer.toString('utf-8');
@@ -756,7 +772,6 @@ router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'
 
     // Deduplicate master emails
     const uniqueMasterEmails = Array.from(new Set(masterEmails));
-    console.log(`📧 Found ${uniqueMasterEmails.length} unique valid emails in CSV`);
 
     if (uniqueMasterEmails.length === 0) {
       return res.status(400).json({ 
@@ -766,7 +781,6 @@ router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'
     }
 
     // Fetch all subscribers from Mailchimp audience (paginated)
-    console.log(`🔍 Fetching Mailchimp audience members...`);
     const mailchimpEmails: string[] = [];
     let offset = 0;
     const batchSize = 1000;
@@ -789,10 +803,8 @@ router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'
       offset += batchSize;
       hasMore = members.length === batchSize;
       
-      console.log(`   Fetched ${mailchimpEmails.length} / ${response.total_items} members...`);
     }
 
-    console.log(`✅ Total Mailchimp subscribers: ${mailchimpEmails.length}`);
 
     // Create sets for efficient comparison
     const mailchimpSet = new Set(mailchimpEmails);
@@ -825,10 +837,6 @@ router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'
       ? excludedSubscribers.filter(email => email !== ownerEmail)
       : excludedSubscribers;
 
-    console.log(`\n📊 Validation Results:`);
-    console.log(`   🟠 New: ${newSubscribers.length}`);
-    console.log(`   🟢 Existing: ${existingSubscribers.length}`);
-    console.log(`   🔴 Excluded: ${filteredExcluded.length}`);
 
     res.json({
       success: true,

@@ -41,6 +41,30 @@ export const authenticate = async (
         return;
       }
       
+      // ✅ SECURITY: Token refresh validation - ensure token data matches current database state
+      if (payload.organizationId && user.organizationId) {
+        if (payload.organizationId.toString() !== user.organizationId.toString()) {
+          logger.warn(`🚫 [TOKEN_VALIDATION] User ${user.email} organization changed: token=${payload.organizationId}, current=${user.organizationId}`);
+          res.status(401).json({ 
+            error: 'Organization changed',
+            code: 'ORG_CHANGED',
+            message: 'Your organization has changed. Please log in again.'
+          });
+          return;
+        }
+      }
+      
+      // ✅ SECURITY: Verify role hasn't changed
+      if (payload.orgRole && payload.orgRole !== user.orgRole) {
+        logger.warn(`🚫 [TOKEN_VALIDATION] User ${user.email} role changed: token=${payload.orgRole}, current=${user.orgRole}`);
+        res.status(401).json({ 
+          error: 'Role changed',
+          code: 'ROLE_CHANGED',
+          message: 'Your role has changed. Please log in again.'
+        });
+        return;
+      }
+      
       // For all other routes, check approval and active status
       if (!user.isApproved) {
         res.status(403).json({ error: 'Account pending approval' });
