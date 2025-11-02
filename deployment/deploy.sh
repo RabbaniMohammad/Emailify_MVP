@@ -74,7 +74,7 @@ echo ""
 ##############################################################################
 print_info "Installing backend dependencies..."
 cd $APP_DIR/backend
-npm ci --production
+npm ci --production --legacy-peer-deps
 print_success "Backend dependencies installed"
 echo ""
 
