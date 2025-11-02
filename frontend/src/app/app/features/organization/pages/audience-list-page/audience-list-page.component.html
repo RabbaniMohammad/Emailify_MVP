@@ -58,6 +58,13 @@
           </div>
         </div>
         <div class="header-actions">
+          <button mat-icon-button 
+                  class="refresh-button"
+                  (click)="refreshData()" 
+                  [disabled]="loading || paginationLoading"
+                  matTooltip="Refresh data">
+            <mat-icon>refresh</mat-icon>
+          </button>
           <button class="modern-btn primary-btn" (click)="toggleAddForm()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
@@ -206,7 +213,7 @@
             type="text" 
             class="filter-input" 
             [(ngModel)]="searchText" 
-            (ngModelChange)="filterMembers()" 
+            (ngModelChange)="onSearchChange($event)" 
             placeholder="Search by email or name...">
         </div>
         <div class="filter-field status-filter">
@@ -254,7 +261,7 @@
           </mat-form-field>
         </div>
         <div class="filter-results">
-          <span class="results-text">Showing {{ filteredMembers.length }} of {{ audienceMembers.length }}</span>
+          <span class="results-text">Showing {{ filteredMembers.length }} of {{ totalItems }}</span>
         </div>
       </div>
     </div>
@@ -372,6 +379,23 @@
         </div>
       </div>
     </div>
+
+    <!-- 🚀 Enterprise Pagination Component -->
+    <app-pagination
+      *ngIf="totalItems > 0"
+      [totalItems]="totalItems"
+      [currentPage]="currentPage"
+      [pageSize]="pageSize"
+      [loading]="paginationLoading"
+      [config]="{
+        pageSizeOptions: [5, 10, 25, 50, 100],
+        showFirstLastButtons: true,
+        showPageSizeSelector: true,
+        showPageInfo: true,
+        maxVisiblePages: 7
+      }"
+      (pageChange)="onPageChange($event)">
+    </app-pagination>
 
   </div>
 </div>

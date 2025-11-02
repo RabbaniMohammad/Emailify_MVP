@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
+import { tap } from 'rxjs/operators';
+import { CacheService } from './cache.service';
 
 export interface Organization {
   _id: string;
@@ -109,17 +111,36 @@ export interface AudienceStats {
   clickRate: number;
 }
 
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  totalItems: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  startItem: number;
+  endItem: number;
+}
+
+export interface AudienceMember {
+  email: string;
+  status: string;
+  joinedAt: string;
+  firstName: string;
+  lastName: string;
+}
+
 export interface AudienceResponse {
   success: boolean;
   audienceId: string;
   stats: AudienceStats;
-  recentMembers: Array<{
-    email: string;
-    status: string;
-    joinedAt: string;
-    firstName: string;
-    lastName: string;
-  }>;
+  members?: AudienceMember[];  // Paginated members
+  recentMembers?: AudienceMember[];  // For backward compatibility
+  pagination?: PaginationMeta;
+  filters?: {
+    status?: string;
+    search?: string;
+  };
 }
 
 @Injectable({
@@ -127,6 +148,7 @@ export interface AudienceResponse {
 })
 export class OrganizationService {
   private http = inject(HttpClient);
+  private cache = inject(CacheService);
 
   // Get all organizations (super admin only)
   getAllOrganizations(): Observable<OrganizationsResponse> {
@@ -159,11 +181,27 @@ export class OrganizationService {
     return this.http.post('/api/organizations', data, { withCredentials: true });
   }
 
-  // Get organization dashboard
-  getDashboard(orgId: string): Observable<DashboardResponse> {
+  // Get organization dashboard with caching
+  getDashboard(orgId: string, forceRefresh: boolean = false): Observable<DashboardResponse> {
+    const cacheKey = `dashboard_${orgId}`;
+    
+    // Clear cache if force refresh
+    if (forceRefresh) {
+      this.cache.invalidate(cacheKey);
+    }
+    
+    // Try to get from cache first
+    const cached = this.cache.get<DashboardResponse>(cacheKey);
+    if (cached) {
+      return of(cached);
+    }
+    
+    // Fetch fresh data and cache it
     return this.http.get<DashboardResponse>(
       `/api/organizations/${orgId}/dashboard`,
       { withCredentials: true }
+    ).pipe(
+      tap(data => this.cache.set(cacheKey, data, 5 * 60 * 1000, 'session')) // Cache for 5 minutes in session storage
     );
   }
 
@@ -179,11 +217,53 @@ export class OrganizationService {
     );
   }
 
-  // Get audience stats
-  getAudienceStats(orgId: string): Observable<AudienceResponse> {
+  // Get audience stats with pagination support and caching
+  getAudienceStats(
+    orgId: string, 
+    options?: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      search?: string;
+    },
+    forceRefresh: boolean = false
+  ): Observable<AudienceResponse> {
+    const params: any = {};
+    
+    if (options?.page) params.page = options.page.toString();
+    if (options?.limit) params.limit = options.limit.toString();
+    if (options?.status && options.status !== 'all') params.status = options.status;
+    if (options?.search) params.search = options.search;
+
+    // Create cache key based on params (including pagination)
+    const cacheKey = `audience_${orgId}_${JSON.stringify(params)}`;
+    
+    // Clear cache if force refresh
+    if (forceRefresh) {
+      this.cache.invalidate(cacheKey);
+    }
+    
+    // Try to get from cache first (cache all requests except search)
+    if (!options?.search) {
+      const cached = this.cache.get<AudienceResponse>(cacheKey);
+      if (cached) {
+        console.log('✅ Returning cached audience data for:', cacheKey);
+        return of(cached);
+      }
+    }
+
+    console.log('🌐 Fetching fresh audience data for:', cacheKey);
     return this.http.get<AudienceResponse>(
       `/api/organizations/${orgId}/audience`,
-      { withCredentials: true }
+      { params, withCredentials: true }
+    ).pipe(
+      tap(data => {
+        // Cache all requests except search (search results may change frequently)
+        if (!options?.search) {
+          this.cache.set(cacheKey, data, 5 * 60 * 1000, 'session');
+          console.log('💾 Cached audience data for:', cacheKey);
+        }
+      })
     );
   }
 
@@ -218,6 +298,11 @@ export class OrganizationService {
       `/api/organizations/${orgId}/setup-audience`,
       {},
       { withCredentials: true }
+    ).pipe(
+      tap(() => {
+        // Clear both dashboard and audience caches
+        this.clearOrgCaches(orgId);
+      })
     );
   }
 
@@ -227,6 +312,11 @@ export class OrganizationService {
       `/api/organizations/${orgId}/subscribers/add`,
       subscriber,
       { withCredentials: true }
+    ).pipe(
+      tap(() => {
+        // Clear audience cache
+        this.clearAudienceCaches(orgId);
+      })
     );
   }
 
@@ -236,6 +326,11 @@ export class OrganizationService {
       `/api/organizations/${orgId}/subscribers/bulk-import`,
       { subscribers },
       { withCredentials: true }
+    ).pipe(
+      tap(() => {
+        // Clear audience cache
+        this.clearAudienceCaches(orgId);
+      })
     );
   }
 
@@ -245,6 +340,11 @@ export class OrganizationService {
       `/api/organizations/${orgId}/subscribers/${encodeURIComponent(email)}`,
       data,
       { withCredentials: true }
+    ).pipe(
+      tap(() => {
+        // Clear audience cache
+        this.clearAudienceCaches(orgId);
+      })
     );
   }
 
@@ -253,6 +353,11 @@ export class OrganizationService {
     return this.http.delete(
       `/api/organizations/${orgId}/subscribers/${encodeURIComponent(email)}`,
       { params: { permanent: permanent.toString() }, withCredentials: true }
+    ).pipe(
+      tap(() => {
+        // Clear audience cache
+        this.clearAudienceCaches(orgId);
+      })
     );
   }
 
@@ -262,5 +367,18 @@ export class OrganizationService {
       `/api/organizations/${orgId}/subscribers/tags`,
       { withCredentials: true }
     );
+  }
+
+  // Helper method to clear all organization caches
+  private clearOrgCaches(orgId: string): void {
+    this.cache.invalidate(`dashboard_${orgId}`);
+    this.clearAudienceCaches(orgId);
+  }
+
+  // Helper method to clear audience-related caches
+  private clearAudienceCaches(orgId: string): void {
+    // Clear all audience cache entries by prefix matching
+    // This clears base audience, paginated results, and filtered results
+    this.cache.invalidatePrefix(`audience_${orgId}_`);
   }
 }

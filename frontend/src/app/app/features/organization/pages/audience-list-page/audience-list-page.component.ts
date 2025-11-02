@@ -15,17 +15,10 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatMenuModule } from '@angular/material/menu';
 import { Subject } from 'rxjs';
-import { takeUntil, take } from 'rxjs/operators';
-import { OrganizationService } from '../../../../core/services/organization.service';
+import { takeUntil, take, debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { OrganizationService, AudienceMember } from '../../../../core/services/organization.service';
 import { AuthService } from '../../../../core/services/auth.service';
-
-interface AudienceMember {
-  email: string;
-  status: string;
-  firstName?: string;
-  lastName?: string;
-  joinedAt?: string;
-}
+import { PaginationComponent, PageChangeEvent } from '../../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-audience-list-page',
@@ -44,7 +37,8 @@ interface AudienceMember {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatMenuModule
+    MatMenuModule,
+    PaginationComponent  // 🚀 Import our new pagination component
   ],
   templateUrl: './audience-list-page.component.html',
   styleUrls: ['./audience-list-page.component.scss']
@@ -55,13 +49,27 @@ export class AudienceListPageComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private dialog = inject(MatDialog);
   private destroy$ = new Subject<void>();
+  private searchSubject$ = new Subject<string>();
 
   loading = true;
+  paginationLoading = false; // Separate loading state for pagination
   error: string | null = null;
   organizationId: string | null = null;
+  
+  // Audience data
   audienceMembers: AudienceMember[] = [];
   filteredMembers: AudienceMember[] = [];
   totalSubscribers = 0;
+  
+  // Pagination state
+  currentPage = 1;
+  pageSize = 5;
+  totalItems = 0;
+  
+  // Pagination cache
+  private paginationCache = new Map<string, AudienceMember[]>();
+  
+  // Filters
   searchText = '';
   selectedStatus = 'all';
   showAddForm = false;
@@ -77,8 +85,18 @@ export class AudienceListPageComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     console.log('👥 Audience list page initializing...');
     
+    // Setup search debounce
+    this.searchSubject$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(searchText => {
+      this.searchText = searchText;
+      this.currentPage = 1; // Reset to first page on search
+      this.loadAudienceData(true); // Use pagination loading for search
+    });
+    
     // Get organization ID from current user - only once on init
-    // Using take(1) to prevent reloading when auth service updates user status every 30s
     this.authService.currentUser$
       .pipe(take(1))
       .subscribe(user => {
@@ -101,49 +119,98 @@ export class AudienceListPageComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  loadAudienceData(): void {
+  loadAudienceData(isPagination: boolean = false): void {
     if (!this.organizationId) return;
 
-    this.loading = true;
-    console.log(`📊 Loading audience for org: ${this.organizationId}`);
+    // Create cache key for pagination
+    const cacheKey = `page_${this.currentPage}_${this.pageSize}_${this.selectedStatus}_${this.searchText}`;
+    
+    // Check pagination cache first
+    const cached = this.paginationCache.get(cacheKey);
+    if (cached && isPagination) {
+      this.audienceMembers = cached;
+      this.filteredMembers = [...cached];
+      this.paginationLoading = false;
+      return;
+    }
 
-    this.orgService.getAudienceStats(this.organizationId)
+    // Use different loading states for initial load vs pagination
+    if (isPagination) {
+      this.paginationLoading = true;
+    } else {
+      this.loading = true;
+    }
+    
+    console.log(`📊 Loading audience page ${this.currentPage} for org: ${this.organizationId}`);
+
+    this.orgService.getAudienceStats(this.organizationId, {
+      page: this.currentPage,
+      limit: this.pageSize,
+      status: this.selectedStatus,
+      search: this.searchText
+    })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (data: any) => {
           console.log('✅ Audience data loaded:', data);
-          this.audienceMembers = data.recentMembers || [];
+          
+          // Handle both old and new response formats
+          this.audienceMembers = data.members || data.recentMembers || [];
           this.filteredMembers = [...this.audienceMembers];
+          
+          // Cache the page data
+          this.paginationCache.set(cacheKey, this.audienceMembers);
+          
+          // Update stats
           this.totalSubscribers = data.stats?.totalSubscribers || 0;
+          
+          // Update pagination metadata
+          if (data.pagination) {
+            this.totalItems = data.pagination.totalItems;
+            this.currentPage = data.pagination.page;
+          } else {
+            // Fallback for backward compatibility
+            this.totalItems = this.audienceMembers.length;
+          }
+          
           this.loading = false;
+          this.paginationLoading = false;
         },
         error: (err: any) => {
           console.error('❌ Failed to load audience:', err);
           this.error = 'Failed to load audience data';
           this.loading = false;
+          this.paginationLoading = false;
         }
       });
   }
 
+  // Search filter with debounce
+  onSearchChange(searchText: string): void {
+    this.searchSubject$.next(searchText);
+  }
+
+  // Status filter - triggers server-side reload
   filterMembers(): void {
-    let filtered = [...this.audienceMembers];
+    this.currentPage = 1; // Reset to first page
+    this.paginationCache.clear(); // Clear pagination cache
+    this.loadAudienceData();
+  }
 
-    // Filter by search text
-    if (this.searchText) {
-      const search = this.searchText.toLowerCase();
-      filtered = filtered.filter(m => 
-        m.email.toLowerCase().includes(search) ||
-        m.firstName?.toLowerCase().includes(search) ||
-        m.lastName?.toLowerCase().includes(search)
-      );
-    }
+  // Manual refresh method
+  refreshData(): void {
+    console.log('🔄 Refreshing audience data...');
+    this.paginationCache.clear(); // Clear all pagination cache
+    this.currentPage = 1; // Reset to first page
+    this.loadAudienceData();
+  }
 
-    // Filter by status
-    if (this.selectedStatus !== 'all') {
-      filtered = filtered.filter(m => m.status === this.selectedStatus);
-    }
-
-    this.filteredMembers = filtered;
+  // Pagination handlers
+  onPageChange(event: PageChangeEvent): void {
+    console.log('📄 Page changed:', event);
+    this.currentPage = event.page;
+    this.pageSize = event.pageSize;
+    this.loadAudienceData(true); // Pass true to indicate pagination change
   }
 
   toggleAddForm(): void {
@@ -156,19 +223,53 @@ export class AudienceListPageComponent implements OnInit, OnDestroy {
   addSubscriber(): void {
     if (!this.organizationId || !this.newSubscriber.email) return;
 
-    this.loading = true;
-    this.orgService.addSubscriber(this.organizationId, this.newSubscriber)
+    // Create optimistic member
+    const optimisticMember: AudienceMember = {
+      email: this.newSubscriber.email,
+      firstName: this.newSubscriber.firstName || '',
+      lastName: this.newSubscriber.lastName || '',
+      status: 'subscribed',
+      joinedAt: new Date().toISOString()
+    };
+    
+    // Optimistic update - add to UI immediately
+    this.audienceMembers.unshift(optimisticMember);
+    this.filteredMembers = [...this.audienceMembers];
+    this.totalSubscribers++;
+    this.totalItems++;
+    
+    // Clear form and hide
+    const subscriberData = { ...this.newSubscriber };
+    this.showAddForm = false;
+    this.newSubscriber = { email: '', firstName: '', lastName: '' };
+    
+    // Clear pagination cache
+    this.paginationCache.clear();
+
+    // Send to server
+    this.orgService.addSubscriber(this.organizationId, subscriberData)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: () => {
-          console.log('✅ Subscriber added');
-          this.showAddForm = false;
-          this.newSubscriber = { email: '', firstName: '', lastName: '' };
-          this.loadAudienceData(); // Reload list
+        next: (response) => {
+          console.log('✅ Subscriber added:', response);
+          // Update with server response if available
+          if (response.member) {
+            const index = this.audienceMembers.findIndex(m => m.email === optimisticMember.email);
+            if (index !== -1) {
+              this.audienceMembers[index] = response.member;
+              this.filteredMembers = [...this.audienceMembers];
+            }
+          }
         },
         error: (err: any) => {
           console.error('❌ Failed to add subscriber:', err);
-          this.loading = false;
+          // Rollback optimistic update
+          this.audienceMembers = this.audienceMembers.filter(m => m.email !== optimisticMember.email);
+          this.filteredMembers = [...this.audienceMembers];
+          this.totalSubscribers--;
+          this.totalItems--;
+          // Show error to user
+          alert('Failed to add subscriber: ' + (err.error?.message || err.message));
         }
       });
   }
@@ -178,15 +279,34 @@ export class AudienceListPageComponent implements OnInit, OnDestroy {
     
     if (!confirm(`Are you sure you want to unsubscribe ${email}?`)) return;
 
+    // Find the member to delete
+    const memberToDelete = this.audienceMembers.find(m => m.email === email);
+    if (!memberToDelete) return;
+    
+    // Optimistic update - remove from UI immediately
+    this.audienceMembers = this.audienceMembers.filter(m => m.email !== email);
+    this.filteredMembers = [...this.audienceMembers];
+    this.totalSubscribers--;
+    this.totalItems--;
+    
+    // Clear pagination cache
+    this.paginationCache.clear();
+
+    // Send to server
     this.orgService.deleteSubscriber(this.organizationId, email, false)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
           console.log('✅ Subscriber removed');
-          this.loadAudienceData(); // Reload list
         },
         error: (err: any) => {
           console.error('❌ Failed to remove subscriber:', err);
+          // Rollback optimistic update - add back the deleted member
+          this.audienceMembers.push(memberToDelete);
+          this.filteredMembers = [...this.audienceMembers];
+          this.totalSubscribers++;
+          this.totalItems++;
+          alert('Failed to delete subscriber: ' + (err.error?.message || err.message));
         }
       });
   }
@@ -205,15 +325,40 @@ export class AudienceListPageComponent implements OnInit, OnDestroy {
     if (firstName !== null) updateData.firstName = firstName;
     if (lastName !== null) updateData.lastName = lastName;
 
+    // Store original data for rollback
+    const originalMember = { ...member };
+    
+    // Optimistic update - update UI immediately
+    const index = this.audienceMembers.findIndex(m => m.email === member.email);
+    if (index !== -1) {
+      if (firstName !== null) this.audienceMembers[index].firstName = firstName;
+      if (lastName !== null) this.audienceMembers[index].lastName = lastName;
+      this.filteredMembers = [...this.audienceMembers];
+    }
+    
+    // Clear pagination cache
+    this.paginationCache.clear();
+
+    // Send to server
     this.orgService.updateSubscriber(this.organizationId, member.email, updateData)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: () => {
-          console.log('✅ Subscriber updated');
-          this.loadAudienceData(); // Reload list
+        next: (response) => {
+          console.log('✅ Subscriber updated:', response);
+          // Update with server response if available
+          if (response.member && index !== -1) {
+            this.audienceMembers[index] = response.member;
+            this.filteredMembers = [...this.audienceMembers];
+          }
         },
         error: (err: any) => {
           console.error('❌ Failed to update subscriber:', err);
+          // Rollback optimistic update
+          if (index !== -1) {
+            this.audienceMembers[index] = originalMember;
+            this.filteredMembers = [...this.audienceMembers];
+          }
+          alert('Failed to update subscriber: ' + (err.error?.message || err.message));
         }
       });
   }
@@ -253,13 +398,17 @@ export class AudienceListPageComponent implements OnInit, OnDestroy {
     if (!this.organizationId) return;
 
     this.loading = true;
+    
+    // Clear pagination cache before import
+    this.paginationCache.clear();
+    
     this.orgService.bulkImportSubscribers(this.organizationId, subscribers)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (result: any) => {
           console.log('✅ Bulk import complete:', result);
           alert(`Added ${result.addedCount} subscribers, ${result.errorCount} errors`);
-          this.loadAudienceData(); // Reload list
+          this.loadAudienceData(); // Reload list after bulk import
         },
         error: (err: any) => {
           console.error('❌ Failed to import:', err);

@@ -177,6 +177,30 @@
     gap: 1rem;
     flex-wrap: wrap;
     
+    .refresh-button {
+      background: var(--glass-white);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--glass-shadow);
+      transition: all var(--transition-fast);
+      
+      &:hover:not(:disabled) {
+        background: white;
+        transform: translateY(-2px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+        
+        mat-icon {
+          color: var(--primary-purple);
+          animation: spin 0.5s ease-in-out;
+        }
+      }
+      
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
+    
     .modern-btn {
       display: inline-flex;
       align-items: center;
@@ -795,6 +819,40 @@
         margin: 0;
       }
     }
+
+    // 📜 Scrollable table container with consistent sizing
+    .responsive-table {
+      min-height: 400px; // Minimum height to prevent too small
+      max-height: 600px; // Maximum height before scrolling kicks in
+      overflow-y: auto;
+      overflow-x: auto;
+      position: relative;
+      
+      // Custom scrollbar styling
+      &::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      
+      &::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 4px;
+      }
+      
+      &::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+        border-radius: 4px;
+        transition: background 0.2s ease;
+        
+        &:hover {
+          background: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%);
+        }
+      }
+      
+      // For Firefox
+      scrollbar-width: thin;
+      scrollbar-color: #8b5cf6 #f1f5f9;
+    }
   }
 }
 
@@ -805,8 +863,12 @@
   border-spacing: 0;
   
   thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    
     tr {
-      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      background: #f8fafc;
       
       th {
         padding: 1.25rem 1.5rem;
@@ -818,6 +880,7 @@
         letter-spacing: 0.5px;
         border-bottom: 2px solid #e2e8f0;
         white-space: nowrap;
+        background: #f8fafc;
         
         &:first-child {
           border-top-left-radius: var(--radius-md);
@@ -845,13 +908,11 @@
   tbody {
     tr.table-row {
       background: white;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease;
       border-bottom: 1px solid #f1f5f9;
       
       &:hover {
         background: #f8fafc;
-        transform: translateX(4px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
       }
       
       &:last-child {
@@ -1267,5 +1328,25 @@
         background: rgba(239, 68, 68, 0.1);
       }
     }
+  }
+}
+
+// 🚀 Pagination Container Styling
+app-pagination {
+  margin-top: 2rem;
+  display: block;
+  animation: fadeInUp 0.6s ease;
+  animation-delay: 0.4s;
+  animation-fill-mode: backwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

@@ -122,6 +122,42 @@
   padding: 0.5rem;
 }
 
+// Dashboard Header with Refresh Button
+.dashboard-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+  
+  .refresh-button {
+    background: var(--glass-white);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--glass-shadow);
+    transition: all var(--transition-fast);
+    
+    &:hover:not(:disabled) {
+      background: white;
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+      
+      mat-icon {
+        color: var(--primary-purple);
+        animation: spin 0.5s ease-in-out;
+      }
+    }
+    
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 // Stats Grid
 .stats-grid {
   display: grid;
@@ -407,6 +443,45 @@
 
 // Audience Insights
 .audience-insights {
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: center; // Center the content
+    position: relative; // For absolute positioning of refresh button
+    
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    
+    .refresh-button {
+      position: absolute; // Position absolute to not affect centering
+      right: 1.5rem; // Align to right edge
+      background: var(--glass-white);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--glass-shadow);
+      transition: all var(--transition-fast);
+      
+      &:hover:not(:disabled) {
+        background: white;
+        transform: translateY(-2px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+        
+        mat-icon {
+          color: var(--primary-purple);
+          animation: spin 0.5s ease-in-out;
+        }
+      }
+      
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
+  }
+  
   .insights-stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -615,6 +690,9 @@
           font-size: 0.8125rem;
           font-weight: 600;
           text-transform: capitalize;
+          display: inline-flex; // Change to inline-flex for better alignment
+          align-items: center; // Ensure text is centered vertically
+          line-height: 1; // Prevent extra line-height spacing
 
           &.status-draft {
             background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
@@ -3907,7 +3985,7 @@
   border-radius: 20px;
   font-size: 0.8125rem;
   font-weight: 700;
-  margin-bottom: 1rem;
+  // margin-bottom: 1rem;
   
   mat-icon {
     font-size: 16px;

@@ -8,7 +8,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject } from 'rxjs';
+import { Subject, forkJoin } from 'rxjs';
 import { takeUntil, take } from 'rxjs/operators';
 import { 
   OrganizationService, 
@@ -17,6 +17,7 @@ import {
   Campaign
 } from '../../../../core/services/organization.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { PaginationComponent, PageChangeEvent } from '../../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-organization-page',
@@ -29,7 +30,8 @@ import { AuthService } from '../../../../core/services/auth.service';
     MatIconModule,
     MatButtonModule,
     MatChipsModule,
-    MatTooltipModule
+    MatTooltipModule,
+    PaginationComponent
   ],
   templateUrl: './organization-page.component.html',
   styleUrls: ['./organization-page.component.scss']
@@ -50,6 +52,12 @@ export class OrganizationPageComponent implements OnInit, OnDestroy {
   organizationId: string | null = null;
   syncingCampaigns = new Set<string>(); // Track which campaigns are syncing
   settingUpAudience = false;
+  
+  // Pagination for campaigns
+  campaignsCurrentPage = 1;
+  campaignsPageSize = 5;
+  campaignsTotalItems = 0;
+  paginatedCampaigns: Campaign[] = [];
   
   private isInitialized = false; // Prevent multiple initializations
 
@@ -100,39 +108,87 @@ export class OrganizationPageComponent implements OnInit, OnDestroy {
     this.loading = true;
     console.log(`📊 Loading dashboard for org: ${this.organizationId}`);
 
-    // Load dashboard data
-    this.orgService.getDashboard(this.organizationId)
+    // Load dashboard and audience data in parallel using forkJoin
+    forkJoin({
+      dashboard: this.orgService.getDashboard(this.organizationId),
+      audience: this.orgService.getAudienceStats(this.organizationId)
+    })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (data) => {
-          console.log('✅ Dashboard data loaded:', data);
-          this.dashboardData = data;
-          this.loadAudienceData();
+        next: ({ dashboard, audience }) => {
+          console.log('✅ Dashboard data loaded:', dashboard);
+          console.log('✅ Audience data loaded:', audience);
+          this.dashboardData = dashboard;
+          this.audienceData = audience;
+          this.loading = false;
+          
+          // Initialize campaigns pagination
+          this.updateCampaignsPagination();
         },
         error: (err) => {
-          console.error('❌ Failed to load dashboard:', err);
+          console.error('❌ Failed to load data:', err);
           this.error = 'Failed to load dashboard data';
           this.loading = false;
         }
       });
   }
+  
+  // Update campaigns pagination
+  updateCampaignsPagination(): void {
+    if (!this.dashboardData?.recentCampaigns) {
+      this.paginatedCampaigns = [];
+      this.campaignsTotalItems = 0;
+      return;
+    }
+    
+    const allCampaigns = this.dashboardData.recentCampaigns;
+    this.campaignsTotalItems = allCampaigns.length;
+    
+    // Calculate start and end indices
+    const startIndex = (this.campaignsCurrentPage - 1) * this.campaignsPageSize;
+    const endIndex = startIndex + this.campaignsPageSize;
+    
+    // Get campaigns for current page
+    this.paginatedCampaigns = allCampaigns.slice(startIndex, endIndex);
+  }
+  
+  // Handle campaign page change
+  onCampaignPageChange(event: PageChangeEvent): void {
+    this.campaignsCurrentPage = event.page;
+    this.campaignsPageSize = event.pageSize;
+    this.updateCampaignsPagination();
+  }
 
-  loadAudienceData(): void {
+  // Manual refresh method
+  refreshData(): void {
     if (!this.organizationId) return;
 
-    console.log(`👥 Loading audience stats for org: ${this.organizationId}`);
+    this.loading = true;
+    console.log(`� Refreshing dashboard data for org: ${this.organizationId}`);
 
-    this.orgService.getAudienceStats(this.organizationId)
+    // Force refresh by clearing cache
+    forkJoin({
+      dashboard: this.orgService.getDashboard(this.organizationId, true), // forceRefresh = true
+      audience: this.orgService.getAudienceStats(this.organizationId, undefined, true) // forceRefresh = true
+    })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (data) => {
-          console.log('✅ Audience data loaded:', data);
-          this.audienceData = data;
+        next: ({ dashboard, audience }) => {
+          console.log('✅ Dashboard refreshed:', dashboard);
+          console.log('✅ Audience refreshed:', audience);
+          this.dashboardData = dashboard;
+          this.audienceData = audience;
           this.loading = false;
+          
+          this.snackBar.open('✅ Data refreshed!', 'Close', {
+            duration: 2000,
+            horizontalPosition: 'center',
+            verticalPosition: 'top'
+          });
         },
         error: (err) => {
-          console.warn('⚠️ Failed to load audience data:', err);
-          // Don't fail the whole page if audience fails
+          console.error('❌ Failed to refresh data:', err);
+          this.error = 'Failed to refresh data';
           this.loading = false;
         }
       });
@@ -222,8 +278,8 @@ export class OrganizationPageComponent implements OnInit, OnDestroy {
             panelClass: ['success-snackbar']
           });
           
-          // Reload audience data
-          this.loadAudienceData();
+          // Reload dashboard data (includes audience)
+          this.refreshData();
         },
         error: (err) => {
           console.error('❌ Failed to setup audience:', err);
