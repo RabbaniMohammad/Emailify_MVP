@@ -6,12 +6,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 const LOGS_DIR = path_1.default.join(__dirname, '../../logs');
 if (!fs_1.default.existsSync(LOGS_DIR)) {
     fs_1.default.mkdirSync(LOGS_DIR, { recursive: true });
 }
-router.post('/', async (req, res) => {
+router.post('/', auth_1.authenticate, async (req, res) => {
     try {
         const { sessionId, logs } = req.body;
         if (!sessionId || !logs || !Array.isArray(logs)) {
@@ -36,7 +37,7 @@ router.post('/', async (req, res) => {
         res.status(500).json({ error: 'Failed to write logs' });
     }
 });
-router.post('/clear', async (req, res) => {
+router.post('/clear', auth_1.authenticate, async (req, res) => {
     try {
         const { sessionId } = req.body;
         if (!sessionId) {
@@ -54,7 +55,7 @@ router.post('/clear', async (req, res) => {
         res.status(500).json({ error: 'Failed to clear logs' });
     }
 });
-router.get('/list', async (req, res) => {
+router.get('/list', auth_1.authenticate, async (req, res) => {
     try {
         const files = fs_1.default.readdirSync(LOGS_DIR)
             .filter(file => file.startsWith('debug_') && file.endsWith('.log'))
@@ -76,7 +77,7 @@ router.get('/list', async (req, res) => {
         res.status(500).json({ error: 'Failed to list logs' });
     }
 });
-router.get('/:filename', async (req, res) => {
+router.get('/:filename', auth_1.authenticate, async (req, res) => {
     try {
         const { filename } = req.params;
         if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {

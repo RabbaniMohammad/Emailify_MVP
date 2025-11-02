@@ -383,10 +383,14 @@ function getFallbackTemplate(originalPrompt, lastError, attemptsUsed) {
 }
 async function generateTemplate(request) {
     try {
-        const { prompt, conversationHistory = [], userId, images } = request;
+        const { prompt, conversationHistory = [], userId, images, extractedFileData } = request;
         jet_logger_1.default.info(`🎨 Generating template for user ${userId}`);
         jet_logger_1.default.info(`📝 Prompt length: ${prompt?.length}`);
         jet_logger_1.default.info(`🖼️ Images provided: ${images?.length || 0}`);
+        jet_logger_1.default.info(`📎 Extracted file data: ${extractedFileData ? 'Yes' : 'No'}`);
+        if (extractedFileData) {
+            jet_logger_1.default.info(`📎 File data length: ${extractedFileData.length}`);
+        }
         jet_logger_1.default.info(`⏱️ Using timeout: ${API_TIMEOUT}ms`);
         jet_logger_1.default.info(`🔄 Max MJML validation retries: ${MAX_GENERATION_RETRIES}`);
         if (images && images.length > 0) {
@@ -400,7 +404,10 @@ async function generateTemplate(request) {
         let lastMjmlCode = '';
         const messages = [];
         jet_logger_1.default.info(`📋 Building conversation history (${conversationHistory.length} messages)...`);
-        for (const msg of conversationHistory) {
+        for (let i = 0; i < conversationHistory.length; i++) {
+            const msg = conversationHistory[i];
+            const isLastHistoryMessage = (i === conversationHistory.length - 1);
+            const hasFileData = msg.content.includes('ATTACHED DOCUMENT DATA:');
             if (msg.images && msg.images.length > 0) {
                 jet_logger_1.default.info(`💬 History message with ${msg.images.length} images`);
                 const content = [
@@ -415,13 +422,41 @@ async function generateTemplate(request) {
                     {
                         type: 'text',
                         text: msg.content,
+                        ...(hasFileData || isLastHistoryMessage ? { cache_control: { type: 'ephemeral' } } : {})
                     },
                 ];
                 messages.push({ role: msg.role, content });
             }
             else {
-                messages.push({ role: msg.role, content: msg.content });
+                if (hasFileData || isLastHistoryMessage) {
+                    messages.push({
+                        role: msg.role,
+                        content: [
+                            {
+                                type: 'text',
+                                text: msg.content,
+                                cache_control: { type: 'ephemeral' }
+                            }
+                        ]
+                    });
+                }
+                else {
+                    messages.push({
+                        role: msg.role,
+                        content: msg.content
+                    });
+                }
             }
+        }
+        let userPrompt = prompt;
+        const hasFileDataInHistory = conversationHistory.some(msg => msg.content.includes('ATTACHED DOCUMENT DATA:'));
+        if (extractedFileData && !hasFileDataInHistory) {
+            jet_logger_1.default.info(`📎 Adding extracted file data to prompt (FIRST TIME - will be cached)`);
+            userPrompt = `ATTACHED DOCUMENT DATA:\n\n${extractedFileData}\n\n---\n\nUSER REQUEST: ${prompt}`;
+        }
+        else if (extractedFileData && hasFileDataInHistory) {
+            jet_logger_1.default.info(`📎 File data already in history - skipping to save tokens`);
+            userPrompt = prompt;
         }
         if (images && images.length > 0) {
             jet_logger_1.default.info(`📤 Adding current message with ${images.length} images`);
@@ -436,16 +471,17 @@ async function generateTemplate(request) {
                 })),
                 {
                     type: 'text',
-                    text: prompt,
+                    text: userPrompt,
                 },
             ];
             messages.push({ role: 'user', content });
         }
         else {
             jet_logger_1.default.info(`📤 Adding current message (text only)`);
-            messages.push({ role: 'user', content: prompt });
+            messages.push({ role: 'user', content: userPrompt });
         }
         jet_logger_1.default.info(`✅ Messages built: ${messages.length} total messages`);
+        jet_logger_1.default.info(`🔥 Prompt caching: System prompt + last history message cached (90% discount on reuse)`);
         for (let attempt = 1; attempt <= MAX_GENERATION_RETRIES; attempt++) {
             try {
                 jet_logger_1.default.info(`🔄 Generation attempt ${attempt}/${MAX_GENERATION_RETRIES}`);
@@ -468,6 +504,13 @@ async function generateTemplate(request) {
                 jet_logger_1.default.info(`📊 Response ID: ${response.id}`);
                 jet_logger_1.default.info(`📊 Stop reason: ${response.stop_reason}`);
                 jet_logger_1.default.info(`📊 Usage - Input: ${response.usage.input_tokens}, Output: ${response.usage.output_tokens}`);
+                if (response.usage.cache_creation_input_tokens) {
+                    jet_logger_1.default.info(`🔥 Cache created: ${response.usage.cache_creation_input_tokens} tokens`);
+                }
+                if (response.usage.cache_read_input_tokens) {
+                    jet_logger_1.default.info(`🔥 Cache hit: ${response.usage.cache_read_input_tokens} tokens (90% discount!)`);
+                }
+                ;
                 const assistantMessage = response.content[0].type === 'text' ? response.content[0].text : '';
                 if (response.stop_reason === 'max_tokens') {
                     jet_logger_1.default.warn(`⚠️ Response was truncated (hit max_tokens limit)`);
@@ -489,9 +532,7 @@ async function generateTemplate(request) {
                 if (validationResult.isValid) {
                     jet_logger_1.default.info(`✅ Template generated and validated successfully on attempt ${attempt}`);
                     jet_logger_1.default.info(`📊 Final stats - Attempts: ${attempt}, Had errors: ${attempt > 1}`);
-                    const userMessage = attempt > 1
-                        ? `✅ Template generated successfully after ${attempt} attempts. I've refined it based on validation feedback.`
-                        : `✅ Template generated successfully! I've created a responsive email template based on your requirements.`;
+                    const userMessage = `✅ Template generated successfully! I've created a responsive email template based on your requirements.`;
                     return {
                         mjmlCode,
                         assistantMessage: userMessage,
@@ -568,12 +609,17 @@ async function generateTemplate(request) {
         throw new Error(error.message || 'Failed to generate template');
     }
 }
-async function refineTemplate(currentMjml, userFeedback, conversationHistory, userId, images) {
+async function refineTemplate(currentMjml, userFeedback, conversationHistory, userId, images, extractedFileData) {
     try {
         jet_logger_1.default.info(`🔧 Refining template for user ${userId}`);
         jet_logger_1.default.info(`📝 User feedback length: ${userFeedback?.length}`);
         jet_logger_1.default.info(`🖼️ Images provided: ${images?.length || 0}`);
         jet_logger_1.default.info(`📋 Conversation history length: ${conversationHistory.length}`);
+        jet_logger_1.default.info(`📄 Current MJML length: ${currentMjml?.length || 0} (LATEST VERSION ONLY)`);
+        jet_logger_1.default.info(`📎 Extracted file data: ${extractedFileData ? 'Yes' : 'No'}`);
+        if (extractedFileData) {
+            jet_logger_1.default.info(`📎 File data length: ${extractedFileData.length}`);
+        }
         if (images && images.length > 0) {
             jet_logger_1.default.info(`📊 Image details: ${JSON.stringify(images.map(img => ({
                 fileName: img.fileName,
@@ -593,6 +639,7 @@ Please update the template based on the user's feedback. Remember to output ONLY
             conversationHistory,
             userId,
             images: images || undefined,
+            extractedFileData: extractedFileData || undefined,
         });
     }
     catch (error) {

@@ -23,10 +23,13 @@ function isGeneratedTemplate(id) {
     return id.startsWith('gen_') || id.startsWith('Generated_');
 }
 async function getGeneratedTemplateFromDB(id, organizationId) {
-    const query = { templateId: id };
-    if (organizationId) {
-        query.organizationId = organizationId;
+    if (!organizationId) {
+        throw new Error('Organization ID is required for security');
     }
+    const query = {
+        templateId: id,
+        organizationId: organizationId
+    };
     const template = await GeneratedTemplate_1.default.findOne(query);
     if (!template) {
         throw new Error(`Generated template not found: ${id}`);
@@ -72,6 +75,9 @@ async function renderViaTempCampaign(templateId) {
 }
 async function getHtmlForTemplate(id, organizationId) {
     if (isGeneratedTemplate(id)) {
+        if (!organizationId) {
+            throw new Error('Organization ID is required for generated templates');
+        }
         return await getGeneratedTemplateFromDB(id, organizationId);
     }
     const sdk = mc;

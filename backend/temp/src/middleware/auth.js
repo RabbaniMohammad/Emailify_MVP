@@ -30,6 +30,26 @@ const authenticate = async (req, res, next) => {
                 });
                 return;
             }
+            if (payload.organizationId && user.organizationId) {
+                if (payload.organizationId.toString() !== user.organizationId.toString()) {
+                    jet_logger_1.default.warn(`🚫 [TOKEN_VALIDATION] User ${user.email} organization changed: token=${payload.organizationId}, current=${user.organizationId}`);
+                    res.status(401).json({
+                        error: 'Organization changed',
+                        code: 'ORG_CHANGED',
+                        message: 'Your organization has changed. Please log in again.'
+                    });
+                    return;
+                }
+            }
+            if (payload.orgRole && payload.orgRole !== user.orgRole) {
+                jet_logger_1.default.warn(`🚫 [TOKEN_VALIDATION] User ${user.email} role changed: token=${payload.orgRole}, current=${user.orgRole}`);
+                res.status(401).json({
+                    error: 'Role changed',
+                    code: 'ROLE_CHANGED',
+                    message: 'Your role has changed. Please log in again.'
+                });
+                return;
+            }
             if (!user.isApproved) {
                 res.status(403).json({ error: 'Account pending approval' });
                 return;

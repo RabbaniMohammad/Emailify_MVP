@@ -81,7 +81,9 @@ mailchimp_marketing_1.default.setConfig({
 app.use('/api/auth', auth_1.default);
 app.use('/api/debug-logs', debug_logs_1.default);
 app.use('/api/admin', admin_1.default);
-app.use('/api/generate', templateGeneration_1.default);
+app.use('/api/generate', (req, res, next) => {
+    next();
+}, templateGeneration_1.default);
 app.use('/api/templates', templates_1.default);
 app.use('/api/qa', qa_1.default);
 app.use(Paths_1.default.Base, routes_1.default);

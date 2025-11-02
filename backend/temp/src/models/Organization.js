@@ -87,6 +87,26 @@ const OrganizationSchema = new mongoose_1.Schema({
         default: '',
         sparse: true,
     },
+    fromEmail: {
+        type: String,
+        default: '',
+        lowercase: true,
+        trim: true,
+        validate: {
+            validator: function (v) {
+                if (!v)
+                    return true;
+                return /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(v);
+            },
+            message: 'Invalid email address format'
+        }
+    },
+    fromName: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 100,
+    },
     maxUsers: {
         type: Number,
         default: 50,

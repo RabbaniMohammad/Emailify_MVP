@@ -44,6 +44,9 @@ const cheerio = __importStar(require("cheerio"));
 const crypto_1 = require("crypto");
 const puppeteer_1 = __importDefault(require("puppeteer"));
 const GeneratedTemplate_1 = __importDefault(require("@src/models/GeneratedTemplate"));
+const auth_1 = require("@src/middleware/auth");
+const organizationContext_1 = require("@src/middleware/organizationContext");
+const jet_logger_1 = __importDefault(require("jet-logger"));
 const router = (0, express_1.Router)();
 const MC = mailchimp_marketing_1.default;
 const openai = new openai_1.default({ apiKey: process.env.OPENAI_API_KEY });
@@ -484,7 +487,6 @@ function applyReplacementToNodes(nodeMap, matchStart, matchEnd, replacement) {
         }
     }
     catch (error) {
-        console.error('❌ Error in applyReplacementToNodes:', error);
         return false;
     }
 }
@@ -910,10 +912,26 @@ async function getSuggestionsFromHtml(html) {
     catch (_e) { }
     return { gibberish, suggestions };
 }
-router.post('/:id/golden', async (req, res) => {
+router.post('/:id/golden', auth_1.authenticate, organizationContext_1.organizationContext, async (req, res) => {
     const requestStart = Date.now();
     try {
         const id = String(req.params.id);
+        const organization = req.organization;
+        const userId = req.tokenPayload?.userId;
+        if (id.startsWith('gen_') || id.startsWith('Generated_')) {
+            const template = await GeneratedTemplate_1.default.findOne({
+                templateId: id,
+                organizationId: organization._id
+            });
+            if (!template) {
+                jet_logger_1.default.warn(`🚫 [SECURITY] User ${userId} from org ${organization._id} attempted to access template ${id}`);
+                return res.status(404).json({
+                    code: 'TEMPLATE_NOT_FOUND',
+                    message: 'Template not found or access denied'
+                });
+            }
+            jet_logger_1.default.info(`✅ [QA] Template ownership validated: ${id} belongs to org ${organization.name}`);
+        }
         let html = String(req.body?.html || '').trim();
         let name = `Template ${id}`;
         if (!html) {
@@ -923,13 +941,7 @@ router.post('/:id/golden', async (req, res) => {
         }
         const visible = extractVisibleText(html);
         const chunks = chunkText(visible, 700);
-        console.log('🔍 [GOLDEN CHECK] Template ID:', id);
-        console.log('📏 [GOLDEN CHECK] Total visible text length:', visible.length, 'characters');
-        console.log('✂️ [GOLDEN CHECK] Number of chunks created:', chunks.length);
-        console.log('📦 [GOLDEN CHECK] Chunk sizes:', chunks.map((c, i) => `Chunk ${i + 1}: ${c.length} chars`).join(', '));
-        console.log('🚀 [GOLDEN CHECK] Processing all chunks in parallel...\n');
         const chunkPromises = chunks.map(async (chunk, i) => {
-            console.log(`🚀 [GOLDEN CHECK] Starting chunk ${i + 1}/${chunks.length} (${chunk.length} characters)...`);
             try {
                 const completion = await openai.chat.completions.create({
                     model: OPENAI_MODEL,
@@ -951,27 +963,21 @@ router.post('/:id/golden', async (req, res) => {
                         after_context: String(e?.after_context || ''),
                         reason: e?.reason ? String(e.reason) : undefined,
                     })).filter((e) => e.find && e.replace);
-                    console.log(`✅ [GOLDEN CHECK] Chunk ${i + 1} completed with ${edits.length} edits`);
                     return edits;
                 }
                 return [];
             }
             catch (e) {
-                console.error(`❌ [GOLDEN CHECK] Failed to process chunk ${i + 1}:`, e);
                 return [];
             }
         });
         const allChunkResults = await Promise.all(chunkPromises);
         const allEdits = allChunkResults.flat().slice(0, 60);
-        console.log(`\n🎯 [GOLDEN CHECK] Finished processing all chunks`);
-        console.log(`📝 [GOLDEN CHECK] Total edits collected: ${allEdits.length}`);
         const atomicResult = applyContextEdits(html, allEdits);
         const doc = ensureFullDocShell(name, atomicResult.html);
         const appliedEdits = atomicResult.results.filter(r => r.status === 'applied');
         const failedEdits = atomicResult.results.filter(r => r.status !== 'applied' && r.status !== 'skipped');
         const changes = appliedEdits.map(r => r.change).filter(Boolean);
-        console.log(`✅ [GOLDEN CHECK] Applied: ${appliedEdits.length}, Failed: ${failedEdits.length}, Changes: ${changes.length}`);
-        console.log(`⏱️ [GOLDEN CHECK] Total time: ${Date.now() - requestStart}ms\n`);
         res.json({
             html: doc,
             edits: allEdits,
@@ -988,13 +994,27 @@ router.post('/:id/golden', async (req, res) => {
         });
     }
     catch (err) {
-        console.error('❌ GOLDEN ERROR:', err);
         res.status(500).json({ code: 'QA_GOLDEN_ERROR', message: errMsg(err) });
     }
 });
-router.post('/:id/subjects', async (req, res) => {
+router.post('/:id/subjects', auth_1.authenticate, organizationContext_1.organizationContext, async (req, res) => {
     try {
         const id = String(req.params.id);
+        const organization = req.organization;
+        const userId = req.tokenPayload?.userId;
+        if (id.startsWith('gen_') || id.startsWith('Generated_')) {
+            const template = await GeneratedTemplate_1.default.findOne({
+                templateId: id,
+                organizationId: organization._id
+            });
+            if (!template) {
+                jet_logger_1.default.warn(`🚫 [SECURITY] User ${userId} attempted to access template ${id}`);
+                return res.status(404).json({
+                    code: 'TEMPLATE_NOT_FOUND',
+                    message: 'Template not found or access denied'
+                });
+            }
+        }
         let html = String(req.body?.html || '').trim();
         let name = `Template ${id}`;
         if (!html) {
@@ -1031,9 +1051,24 @@ router.post('/:id/subjects', async (req, res) => {
         res.status(500).json({ code: 'QA_SUBJECTS_ERROR', message: errMsg(err) });
     }
 });
-router.post('/:id/suggestions', async (req, res) => {
+router.post('/:id/suggestions', auth_1.authenticate, organizationContext_1.organizationContext, async (req, res) => {
     try {
         const id = String(req.params.id);
+        const organization = req.organization;
+        const userId = req.tokenPayload?.userId;
+        if (id.startsWith('gen_') || id.startsWith('Generated_')) {
+            const template = await GeneratedTemplate_1.default.findOne({
+                templateId: id,
+                organizationId: organization._id
+            });
+            if (!template) {
+                jet_logger_1.default.warn(`🚫 [SECURITY] User ${userId} attempted to access template ${id}`);
+                return res.status(404).json({
+                    code: 'TEMPLATE_NOT_FOUND',
+                    message: 'Template not found or access denied'
+                });
+            }
+        }
         const { html } = await getRobustTemplateHtml(id);
         const out = await getSuggestionsFromHtml(html);
         res.json(out);
