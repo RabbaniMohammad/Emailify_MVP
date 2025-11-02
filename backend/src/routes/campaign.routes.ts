@@ -29,6 +29,7 @@ type MasterDocRow = {
   audiences_list: string;
   scheduled_time: string;
   test_emails: string;
+  timezone?: string;
 };
 
 type AudienceReconciliation = {
@@ -57,26 +58,257 @@ function isValidEmail(email: string): boolean {
   return re.test(email);
 }
 
-function parseScheduledTime(timeStr: string): Date | null {
+// Timezone abbreviation to IANA timezone mapping
+const TIMEZONE_MAP: Record<string, string> = {
+  // North America
+  'EST': 'America/New_York', 'ET': 'America/New_York', 'EDT': 'America/New_York',
+  'CST': 'America/Chicago', 'CT': 'America/Chicago', 'CDT': 'America/Chicago',
+  'MST': 'America/Denver', 'MT': 'America/Denver', 'MDT': 'America/Denver',
+  'PST': 'America/Los_Angeles', 'PT': 'America/Los_Angeles', 'PDT': 'America/Los_Angeles',
+  'AKST': 'America/Anchorage', 'AKDT': 'America/Anchorage',
+  'HST': 'Pacific/Honolulu', 'HAST': 'Pacific/Honolulu',
+  'AST': 'America/Halifax', 'ADT': 'America/Halifax',
+  'NST': 'America/St_Johns', 'NDT': 'America/St_Johns',
+  // Latin America
+  'BRT': 'America/Sao_Paulo', 'BRST': 'America/Sao_Paulo',
+  'ART': 'America/Argentina/Buenos_Aires',
+  'CLT': 'America/Santiago', 'CLST': 'America/Santiago',
+  // Europe
+  'UTC': 'UTC', 'GMT': 'Europe/London', 'BST': 'Europe/London',
+  'CET': 'Europe/Paris', 'CEST': 'Europe/Paris',
+  'EET': 'Europe/Athens', 'EEST': 'Europe/Athens',
+  'WET': 'Europe/Lisbon', 'WEST': 'Europe/Lisbon',
+  'MSK': 'Europe/Moscow',
+  // Middle East
+  'GST': 'Asia/Dubai',
+  'IST_ISRAEL': 'Asia/Jerusalem', 'IDT': 'Asia/Jerusalem',
+  'AST_ARABIA': 'Asia/Riyadh',
+  // Asia
+  'IST': 'Asia/Kolkata',
+  'SGT': 'Asia/Singapore',
+  'JST': 'Asia/Tokyo',
+  'KST': 'Asia/Seoul',
+  'CST_CHINA': 'Asia/Shanghai', 'HKT': 'Asia/Hong_Kong',
+  'ICT': 'Asia/Bangkok',
+  'WIB': 'Asia/Jakarta',
+  'PHT': 'Asia/Manila',
+  'PKT': 'Asia/Karachi',
+  // Australia & Oceania
+  'AEDT': 'Australia/Sydney', 'AEST': 'Australia/Sydney',
+  'ACDT': 'Australia/Adelaide', 'ACST': 'Australia/Adelaide',
+  'AWST': 'Australia/Perth',
+  'NZDT': 'Pacific/Auckland', 'NZST': 'Pacific/Auckland',
+  // Africa
+  'SAST': 'Africa/Johannesburg',
+  'EAT': 'Africa/Nairobi',
+  'WAT': 'Africa/Lagos',
+  'CAT': 'Africa/Harare'
+};
+
+// Timezone offset mapping (in hours from UTC)
+// Note: These are standard time offsets (not daylight saving)
+const TIMEZONE_OFFSETS: Record<string, number> = {
+  // North America - Abbreviations
+  'EST': -5, 'ET': -5, 'EDT': -4,
+  'CST': -6, 'CT': -6, 'CDT': -5,
+  'MST': -7, 'MT': -7, 'MDT': -6,
+  'PST': -8, 'PT': -8, 'PDT': -7,
+  'AKST': -9, 'AKDT': -8,
+  'HST': -10, 'HAST': -10,
+  'AST': -4, 'ADT': -3,
+  'NST': -3.5, 'NDT': -2.5,
+  // Latin America
+  'BRT': -3, 'BRST': -2,
+  'ART': -3,
+  'CLT': -4, 'CLST': -3,
+  // Europe - Abbreviations
+  'UTC': 0, 'GMT': 0, 'BST': 1,
+  'CET': 1, 'CEST': 2,
+  'EET': 2, 'EEST': 3,
+  'WET': 0, 'WEST': 1,
+  'MSK': 3,
+  // Middle East
+  'GST': 4,
+  'IST_ISRAEL': 2, 'IDT': 3,
+  'AST_ARABIA': 3,
+  // Asia
+  'IST': 5.5,
+  'SGT': 8,
+  'JST': 9,
+  'KST': 9,
+  'CST_CHINA': 8, 'HKT': 8,
+  'ICT': 7,
+  'WIB': 7,
+  'PHT': 8,
+  'PKT': 5,
+  // Australia & Oceania
+  'AEDT': 11, 'AEST': 10,
+  'ACDT': 10.5, 'ACST': 9.5,
+  'AWST': 8,
+  'NZDT': 13, 'NZST': 12,
+  // Africa
+  'SAST': 2,
+  'EAT': 3,
+  'WAT': 1,
+  'CAT': 2,
+  // IANA timezone names (from frontend UI)
+  'AMERICA/NEW_YORK': -5,
+  'AMERICA/CHICAGO': -6,
+  'AMERICA/DENVER': -7,
+  'AMERICA/LOS_ANGELES': -8,
+  'AMERICA/ANCHORAGE': -9,
+  'PACIFIC/HONOLULU': -10,
+  'AMERICA/HALIFAX': -4,
+  'AMERICA/ST_JOHNS': -3.5,
+  'AMERICA/SAO_PAULO': -3,
+  'AMERICA/ARGENTINA/BUENOS_AIRES': -3,
+  'AMERICA/SANTIAGO': -4,
+  'AMERICA/MEXICO_CITY': -6,
+  'EUROPE/LONDON': 0,
+  'EUROPE/PARIS': 1,
+  'EUROPE/BERLIN': 1,
+  'EUROPE/MADRID': 1,
+  'EUROPE/ROME': 1,
+  'EUROPE/AMSTERDAM': 1,
+  'EUROPE/ATHENS': 2,
+  'EUROPE/LISBON': 0,
+  'EUROPE/MOSCOW': 3,
+  'EUROPE/ISTANBUL': 3,
+  'ASIA/DUBAI': 4,
+  'ASIA/JERUSALEM': 2,
+  'ASIA/RIYADH': 3,
+  'ASIA/KOLKATA': 5.5,
+  'ASIA/SINGAPORE': 8,
+  'ASIA/TOKYO': 9,
+  'ASIA/SEOUL': 9,
+  'ASIA/SHANGHAI': 8,
+  'ASIA/HONG_KONG': 8,
+  'ASIA/BANGKOK': 7,
+  'ASIA/JAKARTA': 7,
+  'ASIA/MANILA': 8,
+  'ASIA/KARACHI': 5,
+  'AUSTRALIA/SYDNEY': 11,
+  'AUSTRALIA/MELBOURNE': 11,
+  'AUSTRALIA/BRISBANE': 10,
+  'AUSTRALIA/ADELAIDE': 10.5,
+  'AUSTRALIA/PERTH': 8,
+  'PACIFIC/AUCKLAND': 13,
+  'AFRICA/JOHANNESBURG': 2,
+  'AFRICA/NAIROBI': 3,
+  'AFRICA/LAGOS': 1,
+  'AFRICA/CAIRO': 2,
+  'AFRICA/HARARE': 2
+};
+
+function parseScheduledTime(timeStr: string, timezone?: string): Date | null {
   try {
-    const date = new Date(timeStr);
-    return isNaN(date.getTime()) ? null : date;
-  } catch {
+    // Edge case: Empty or null time
+    if (!timeStr || timeStr.trim() === '') {
+      console.warn(`⚠️ Empty time string provided`);
+      return null;
+    }
+    
+    // Normalize common time format variations
+    let normalizedTime = timeStr.trim();
+    
+    // Handle lowercase am/pm -> uppercase AM/PM
+    normalizedTime = normalizedTime.replace(/(\d+):(\d+)\s*am/i, '$1:$2 AM');
+    normalizedTime = normalizedTime.replace(/(\d+):(\d+)\s*pm/i, '$1:$2 PM');
+    
+    // Handle formats like "9am" -> "9:00 AM"
+    normalizedTime = normalizedTime.replace(/(\d+)\s*am/i, '$1:00 AM');
+    normalizedTime = normalizedTime.replace(/(\d+)\s*pm/i, '$1:00 PM');
+    
+    // Parse the date string
+    const date = new Date(normalizedTime);
+    
+    // Edge case: Invalid date format
+    if (isNaN(date.getTime())) {
+      console.warn(`⚠️ Unable to parse time: "${timeStr}". Expected format: MM/DD/YYYY HH:MM or YYYY-MM-DD HH:MM`);
+      return null;
+    }
+    
+    // Edge case: Date in the past
+    const now = new Date();
+    if (date < now) {
+      console.warn(`⚠️ Scheduled time "${timeStr}" is in the past. Current time: ${now.toISOString()}`);
+      // Allow it but warn - customer might want to schedule in past for testing
+    }
+    
+    // If no timezone specified, return as-is (will be interpreted as local time)
+    if (!timezone) return date;
+    
+    // Edge case: Empty timezone string
+    if (timezone.trim() === '') {
+      console.warn(`⚠️ Empty timezone provided for time "${timeStr}"`);
+      return date;
+    }
+    
+    // Get the timezone (uppercase for lookup)
+    const tz = timezone.trim().toUpperCase();
+    
+    // Get offset for this timezone
+    const offset = TIMEZONE_OFFSETS[tz];
+    
+    // Edge case: Unknown timezone
+    if (offset === undefined) {
+      console.warn(`⚠️ Unknown timezone: "${timezone}". Supported: EST, CST, MST, PST, UTC, GMT, CET, IST, SGT, JST, etc.`);
+      return date; // Use local time as fallback
+    }
+    
+    // IMPORTANT: new Date(timeStr) parses as local server time
+    // We need to interpret it as the specified timezone, then convert to UTC
+    // 
+    // Example: "11/5/2025 9:00" in EST (UTC-5):
+    // - User means 9:00 AM Eastern Time
+    // - That's 14:00 UTC (9 + 5 = 14)
+    // - So we SUBTRACT the offset from the local timestamp
+    //
+    // Formula: UTC = LocalTime - TimezoneOffset
+    // For EST (offset = -5): UTC = 9:00 - (-5) = 9:00 + 5 = 14:00 ✓
+    
+    const utcTime = date.getTime() - (offset * 60 * 60 * 1000);
+    return new Date(utcTime);
+  } catch (error) {
+    console.error(`❌ Error parsing time "${timeStr}":`, error);
     return null;
   }
 }
 
 function groupByScheduleTime(rows: MasterDocRow[]): ScheduleGroup[] {
   const groups = new Map<string, string[]>();
+  const validationErrors: string[] = [];
 
-  rows.forEach(row => {
+  rows.forEach((row, index) => {
+    const rowNum = index + 2; // +2 because CSV has header row and arrays are 0-indexed
     const email = row.audiences_list?.trim().toLowerCase();
     const time = row.scheduled_time?.trim();
+    const timezone = row.timezone?.trim();
 
-    if (!email || !isValidEmail(email) || !time) return;
+    // Validate email
+    if (!email) {
+      validationErrors.push(`Row ${rowNum}: Missing email in 'audiences_list' column`);
+      return;
+    }
+    if (!isValidEmail(email)) {
+      validationErrors.push(`Row ${rowNum}: Invalid email format '${email}'`);
+      return;
+    }
 
-    const scheduledDate = parseScheduledTime(time);
-    if (!scheduledDate) return;
+    // Validate time
+    if (!time) {
+      validationErrors.push(`Row ${rowNum}: Missing scheduled time for email '${email}'`);
+      return;
+    }
+
+    const scheduledDate = parseScheduledTime(time, timezone);
+    if (!scheduledDate) {
+      const suggestion = timezone 
+        ? `Please use format like '11/5/2025 9:00 AM' with timezone '${timezone}'`
+        : `Please use format like '11/5/2025 9:00 AM'`;
+      validationErrors.push(`Row ${rowNum}: Invalid time format '${time}'. ${suggestion}`);
+      return;
+    }
 
     const timeKey = scheduledDate.toISOString();
 
@@ -85,6 +317,12 @@ function groupByScheduleTime(rows: MasterDocRow[]): ScheduleGroup[] {
     }
     groups.get(timeKey)!.push(email);
   });
+
+  // If there are validation errors, log them
+  if (validationErrors.length > 0) {
+    console.warn(`⚠️ CSV Validation Warnings (${validationErrors.length} issues):`);
+    validationErrors.forEach(err => console.warn(`  - ${err}`));
+  }
 
   const scheduleGroups: ScheduleGroup[] = [];
   groups.forEach((emails, timeKey) => {
@@ -693,10 +931,29 @@ router.post('/campaign/submit', authenticate, async (req: Request, res: Response
 
   } catch (error: any) {
     console.error('❌ Failed to submit campaign:', error);
-    res.status(500).json({
+    
+    // Extract Mailchimp error details if available
+    let statusCode = 500;
+    let errorResponse: any = {
       error: 'Failed to submit campaign',
       message: error.message || 'Unknown error'
-    });
+    };
+    
+    // Check if this is a Mailchimp API error
+    if (error.response?.body) {
+      const mailchimpError = error.response.body;
+      statusCode = error.status || 400;
+      
+      errorResponse = {
+        error: mailchimpError.title || 'Mailchimp API Error',
+        detail: mailchimpError.detail || error.message,
+        errors: mailchimpError.errors || []
+      };
+    } else if (error.status) {
+      statusCode = error.status;
+    }
+    
+    res.status(statusCode).json(errorResponse);
   }
 });
 
@@ -735,11 +992,12 @@ router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'
 
     const audienceId = organization.mailchimpAudienceId;
 
-    // Parse CSV file
+    // Parse CSV file (auto-detect delimiter for CSV/TSV)
     const csvContent = file.buffer.toString('utf-8');
     const parseResult = Papa.parse<any>(csvContent, {
       header: true,
       skipEmptyLines: true,
+      delimiter: '', // Auto-detect delimiter (comma, tab, etc.)
       transformHeader: (header: string) => header.trim().toLowerCase()
     });
 

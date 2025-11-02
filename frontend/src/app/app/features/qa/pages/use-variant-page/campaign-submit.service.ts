@@ -340,8 +340,9 @@ export class CampaignSubmitService {
       submission
     ).pipe(
       catchError(err => {
-
-        return throwError(() => new Error('Campaign submission failed'));
+        console.error('Submit campaign error:', err);
+        // Pass through the actual error from backend
+        return throwError(() => err);
       })
     );
   }

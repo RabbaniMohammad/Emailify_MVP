@@ -21,6 +21,7 @@ import { HttpClient } from '@angular/common/http';
 
 import { AdminEventService } from '../../../../core/services/admin-event.service';
 import { OrganizationManagementComponent } from '../../components/organization-management/organization-management.component';
+import { CacheService } from '../../../../core/services/cache.service';
 
 @Component({
   selector: 'app-admin-dashboard',
@@ -52,6 +53,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private adminEventService = inject(AdminEventService);
   private http = inject(HttpClient);
+  private cacheService = inject(CacheService);
 
   private allUsersSubject = new BehaviorSubject<AdminUser[]>([]);
   readonly allUsers$ = this.allUsersSubject.asObservable();
@@ -447,6 +449,11 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
             this.savingSenderSettings = false;
             this.senderSettingsConfigured = true;
             this.editingSenderSettings = false; // Switch to display mode
+            
+            // ✅ INVALIDATE SENDER SETTINGS CACHE
+            // This ensures campaign pages fetch fresh data after admin updates
+            this.cacheService.invalidatePrefix('sender_settings_');
+            
             if (response.warning) {
               this.snackBar.open(`⚠️  ${response.message}. ${response.warning}`, 'Close', {
                 duration: 8000,

@@ -23,6 +23,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { CampaignStorageService } from '../../services/campaign-storage.service';
 import { AudienceValidationDialogComponent } from '../../../campaign/components/audience-validation-dialog/audience-validation-dialog.component';
 import { AuthService } from '../../../../core/services/auth.service';
+import { CacheService } from '../../../../core/services/cache.service';
 
 import { FormsModule } from '@angular/forms';
 
@@ -179,7 +180,8 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
     private dialog: MatDialog,
     private authService: AuthService,
     private http: HttpClient,
-    private router: Router
+    private router: Router,
+    private cacheService: CacheService
   ) {}
 
 ngOnInit(): void {
@@ -408,6 +410,7 @@ private initializeCampaignPage(): void {
 
   /**
    * Check if sender settings are configured for the organization
+   * Uses cache to avoid API calls on every page load
    */
   checkSenderSettings(): void {
     this.checkingSenderSettings = true;
@@ -417,10 +420,35 @@ private initializeCampaignPage(): void {
     this.authService.currentUser$.pipe(take(1)).subscribe(user => {
       if (user?.organizationId) {
         const orgId = typeof user.organizationId === 'object' ? user.organizationId._id : user.organizationId;
+        const cacheKey = `sender_settings_${orgId}`;
+        
+        // ✅ TRY CACHE FIRST - Session storage persists across refreshes
+        const cached = this.cacheService.get<any>(cacheKey);
+        
+        if (cached) {
+          // Use cached data
+          console.log('✅ Using cached sender settings');
+          this.senderSettingsConfigured = cached.isConfigured || false;
+          this.checkingSenderSettings = false;
+          
+          if (!wasConfigured && this.senderSettingsConfigured) {
+            this.initializeCampaignPage();
+          }
+          
+          this.cdr.markForCheck();
+          return;
+        }
+        
+        // ✅ NO CACHE - Fetch from API
+        console.log('🔍 Fetching sender settings from API');
         this.http.get<any>(`/api/organizations/${orgId}/sender-settings`).subscribe({
           next: (response) => {
             this.senderSettingsConfigured = response.isConfigured || false;
             this.checkingSenderSettings = false;
+            
+            // ✅ CACHE THE RESULT - 30 minutes TTL (users don't change settings often)
+            // Cache cleared on logout via auth.service.ts
+            this.cacheService.set(cacheKey, response, 30 * 60 * 1000, 'session');
             
             // If settings just became configured (after clicking "Check Again"), initialize the page
             if (!wasConfigured && this.senderSettingsConfigured) {
@@ -1027,7 +1055,8 @@ isSubjectSelected(subject: string): boolean {
     }
 
     // Simple final confirmation
-    const totalRecipients = this.reconciliation?.summary.existingCount || 0;
+    // Count total unique recipients from schedule groups (most accurate)
+    const totalRecipients = this.scheduleGroups.reduce((total, group) => total + group.count, 0);
     if (!confirm(`🚀 Proceed with submission?\n\nThis will send to ${totalRecipients} recipient(s) and cannot be undone.`)) {
       return;
     }
@@ -1096,10 +1125,68 @@ isSubjectSelected(subject: string): boolean {
       // Don't auto-close, let user stay on the page to see results
       // User can manually go back if needed
 
-    } catch (error) {
-
+    } catch (error: any) {
+      console.error('Campaign submission error:', error);
+      console.error('Error structure:', JSON.stringify(error, null, 2));
       this.submitLoadingSubject.next('error');
-      this.showError('Campaign submission failed. Please try again.');
+      
+      // Extract error message and make it customer-friendly
+      let errorMessage = 'Campaign submission failed. Please try again.';
+      
+      // Try different error paths
+      const errorData = error?.error || error;
+      const errors = errorData?.errors || [];
+      
+      // Check for specific errors and provide helpful messages
+      if (Array.isArray(errors) && errors.length > 0) {
+        const fieldErrors = errors;
+        
+        // Handle schedule_time errors
+        const scheduleError = fieldErrors.find((err: any) => err.field === 'schedule_time');
+        if (scheduleError) {
+          if (scheduleError.message.includes('must be in the future')) {
+            errorMessage = '⏰ Scheduled time must be in the future. Please update your schedule times and try again.';
+          } else {
+            errorMessage = `⏰ Invalid schedule time: ${scheduleError.message}`;
+          }
+        } 
+        // Handle email validation errors
+        else if (fieldErrors.some((err: any) => 
+          err.field?.toLowerCase().includes('email') || 
+          err.message?.toLowerCase().includes('email') ||
+          err.message?.toLowerCase().includes('invalid address')
+        )) {
+          errorMessage = '📧 Invalid email address detected. Please check your email list and ensure all addresses are valid.';
+        }
+        // Handle recipient/list errors
+        else if (fieldErrors.some((err: any) => 
+          err.field?.toLowerCase().includes('recipient') || 
+          err.field?.toLowerCase().includes('list')
+        )) {
+          errorMessage = '👥 Invalid recipient list. Please verify your audience and try again.';
+        }
+        else {
+          // Generic field error
+          errorMessage = '❌ ' + fieldErrors
+            .map((err: any) => err.message || `Invalid ${err.field}`)
+            .join('. ');
+        }
+      } else if (errorData?.detail) {
+        // Use detail message if no specific field errors
+        errorMessage = errorData.detail
+          .replace(/Mailchimp/gi, 'Email service')
+          .replace(/API/gi, 'service');
+      } else if (errorData?.message) {
+        errorMessage = errorData.message
+          .replace(/Mailchimp/gi, 'Email service')
+          .replace(/API/gi, 'service');
+      } else if (error?.message) {
+        errorMessage = error.message
+          .replace(/Mailchimp/gi, 'Email service')
+          .replace(/API/gi, 'service');
+      }
+      
+      this.showError(errorMessage);
     }
   }
 

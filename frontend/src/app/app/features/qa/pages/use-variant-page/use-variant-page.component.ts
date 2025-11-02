@@ -262,6 +262,14 @@ ngOnDestroy(): void {
   // ✅ CLEANUP: Remove validation-modal-open class to restore navbar
   document.body.classList.remove('validation-modal-open');
   document.body.style.overflow = 'auto';
+  
+  // ✅ Set navigation flag - this will be checked on next init
+  // If this flag exists, it means we're navigating away (not refreshing)
+  const runId = this.ar.snapshot.paramMap.get('runId');
+  const no = this.ar.snapshot.paramMap.get('no');
+  if (runId && no) {
+    sessionStorage.setItem(`navigating_away_${runId}_${no}`, 'true');
+  }
 }
 
 constructor() {
@@ -270,8 +278,22 @@ constructor() {
   const no = this.ar.snapshot.paramMap.get('no');
   // ✅ DON'T PRELOAD IN CONSTRUCTOR - Let subscription handle it
   if (runId && no) {
+    // ✅ CHECK: Are we coming from navigation (not refresh)?
+    const navigationKey = `navigating_away_${runId}_${no}`;
+    const wasNavigating = sessionStorage.getItem(navigationKey) === 'true';
+    
+    // ✅ CLEAR THE NAVIGATION FLAG IMMEDIATELY
+    if (wasNavigating) {
+      sessionStorage.removeItem(navigationKey);
+    }
+    
     // ✅ INITIALIZE TEMPLATE MODAL STATE FIRST
     this.templateModalKey = `template_modal_${runId}_${no}`;
+    
+    // ✅ If navigating, force close the modal
+    if (wasNavigating) {
+      sessionStorage.setItem(this.templateModalKey, 'false');
+    }
     
     // ✅ CHECK: Are we returning from campaign page?
     const returnFromCampaignKey = `return_to_modal_${runId}_${no}`;
@@ -282,7 +304,8 @@ constructor() {
       sessionStorage.removeItem(returnFromCampaignKey);
     }
     
-    const wasModalOpen = this.restoreTemplateModalState();
+    // ✅ Only restore modal state if NOT navigating (i.e., this is a refresh)
+    const wasModalOpen = wasNavigating ? false : this.restoreTemplateModalState();
     this.templateModalOpenSubject = new BehaviorSubject<boolean>(wasModalOpen);
     
     // ✅ IMMEDIATELY HIDE NAVBAR IF MODAL WAS OPEN (before Angular renders)
@@ -1459,6 +1482,10 @@ navigateToVisualEditorWithGrammar(): void {
   // ✅ CLEANUP: Remove validation-modal-open class before navigating
   document.body.classList.remove('validation-modal-open');
   document.body.style.overflow = 'auto';
+  
+  // ✅ CRITICAL FIX: Close the modal before navigating
+  this.templateModalOpenSubject.next(false);
+  this.saveTemplateModalState(false);
   
   // Navigate
   this.router.navigate(['/visual-editor', templateId]);
