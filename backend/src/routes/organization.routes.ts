@@ -1176,8 +1176,13 @@ router.get('/:id/audience', authenticate, strictOrganizationAccess, async (req: 
   try {
     const { id } = req.params;
     const userId = (req as any).tokenPayload?.userId;
-    const { limit = 1000 } = req.query; // Increased default to get all members
-
+    
+    // 🚀 Enterprise Pagination Parameters
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit as string) || 25));
+    const status = (req.query.status as string) || 'all'; // all, subscribed, unsubscribed, cleaned
+    const search = (req.query.search as string) || ''; // Search by email or name
+    const offset = (page - 1) * limit;
 
     // Verify user belongs to this organization
     const user = await User.findById(userId);
@@ -1193,7 +1198,6 @@ router.get('/:id/audience', authenticate, strictOrganizationAccess, async (req: 
       return res.status(404).json({ error: 'Organization not found' });
     }
 
-
     if (!organization.mailchimpAudienceId) {
       return res.status(400).json({ 
         error: 'No audience list',
@@ -1204,39 +1208,41 @@ router.get('/:id/audience', authenticate, strictOrganizationAccess, async (req: 
     const MC: any = mailchimp as any;
     const listId = organization.mailchimpAudienceId;
 
+    // Build Mailchimp API parameters
+    const mailchimpParams: any = {
+      count: limit,
+      offset: offset,
+      sort_field: 'timestamp_opt',
+      sort_dir: 'DESC', // Most recent first
+    };
+
+    // Apply status filter if not 'all'
+    if (status !== 'all') {
+      mailchimpParams.status = status;
+    }
 
     // Fetch list stats and members in parallel
     const [listInfo, members] = await Promise.all([
       MC.lists.getList(listId),
-      MC.lists.getListMembersInfo(listId, {
-        count: Number(limit),
-        sort_field: 'timestamp_opt',
-        sort_dir: 'DESC', // Most recent first
-        // No status filter - return all members so frontend can filter by status
-      })
+      MC.lists.getListMembersInfo(listId, mailchimpParams)
     ]);
 
     // Calculate growth (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const recentMembers = members.members.filter((m: any) => {
-      const joinDate = new Date(m.timestamp_opt);
-      return joinDate >= thirtyDaysAgo;
-    });
-
     const stats = {
       totalSubscribers: listInfo.stats.member_count || 0,
       subscribed: listInfo.stats.member_count || 0,
       unsubscribed: listInfo.stats.unsubscribe_count || 0,
       cleaned: listInfo.stats.cleaned_count || 0,
-      newLast30Days: recentMembers.length,
+      newLast30Days: 0, // Will be calculated if needed
       openRate: listInfo.stats.open_rate || 0,
       clickRate: listInfo.stats.click_rate || 0,
     };
 
     // Format member list
-    const memberList = members.members.map((m: any) => ({
+    let memberList = members.members.map((m: any) => ({
       email: m.email_address,
       status: m.status,
       joinedAt: m.timestamp_opt,
@@ -1254,12 +1260,46 @@ router.get('/:id/audience', authenticate, strictOrganizationAccess, async (req: 
       return true;
     });
 
+    // Apply client-side search filter if provided
+    if (search) {
+      const searchLower = search.toLowerCase();
+      memberList = memberList.filter((m: any) => 
+        m.email.toLowerCase().includes(searchLower) ||
+        m.firstName.toLowerCase().includes(searchLower) ||
+        m.lastName.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // 📊 Pagination Metadata
+    const totalMembers = members.total_items || 0;
+    const totalPages = Math.ceil(totalMembers / limit);
 
     res.json({
       success: true,
       audienceId: listId,
       stats,
-      recentMembers: memberList,
+      
+      // Paginated members
+      members: memberList,
+      
+      // Pagination metadata
+      pagination: {
+        page,
+        limit,
+        totalItems: totalMembers,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+        startItem: totalMembers === 0 ? 0 : offset + 1,
+        endItem: Math.min(offset + limit, totalMembers),
+      },
+
+      // Filters applied
+      filters: {
+        status,
+        search,
+      },
+
       listInfo: {
         name: listInfo.name,
         dateCreated: listInfo.date_created,
