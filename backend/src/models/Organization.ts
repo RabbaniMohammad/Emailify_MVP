@@ -11,6 +11,10 @@ export interface IOrganization extends Document {
   mailchimpAudienceId?: string;
   mailchimpTemplateFolderId?: string; // Mailchimp template folder ID for organization isolation
   
+  // Email sender settings
+  fromEmail?: string; // Sender email address for campaigns (e.g., "marketing@acmecorp.com")
+  fromName?: string; // Sender name for campaigns (e.g., "Acme Corp Marketing")
+  
   // Settings
   maxUsers: number; // Maximum users allowed
   maxTemplates: number; // Maximum templates allowed
@@ -78,6 +82,28 @@ const OrganizationSchema = new Schema<IOrganization>(
       type: String,
       default: '',
       sparse: true, // Allow multiple null/empty values
+    },
+    
+    // Email sender settings
+    fromEmail: {
+      type: String,
+      default: '',
+      lowercase: true,
+      trim: true,
+      validate: {
+        validator: function(v: string) {
+          if (!v) return true;
+          // Standard email validation
+          return /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(v);
+        },
+        message: 'Invalid email address format'
+      }
+    },
+    fromName: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: 100,
     },
     
     // Limits

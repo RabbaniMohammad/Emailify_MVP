@@ -12,8 +12,12 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { FormsModule } from '@angular/forms';
 import { BehaviorSubject, Subscription } from 'rxjs';
-import { filter } from 'rxjs/operators';
+import { filter, take } from 'rxjs/operators';
+import { HttpClient } from '@angular/common/http';
 
 import { AdminEventService } from '../../../../core/services/admin-event.service';
 import { OrganizationManagementComponent } from '../../components/organization-management/organization-management.component';
@@ -32,6 +36,9 @@ import { OrganizationManagementComponent } from '../../components/organization-m
     MatSnackBarModule,
     MatMenuModule,
     MatDividerModule,
+    MatFormFieldModule,
+    MatInputModule,
+    FormsModule,
     OrganizationManagementComponent
   ],
   templateUrl: './admin-dashboard.component.html',
@@ -44,6 +51,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
   private adminEventService = inject(AdminEventService);
+  private http = inject(HttpClient);
 
   private allUsersSubject = new BehaviorSubject<AdminUser[]>([]);
   readonly allUsers$ = this.allUsersSubject.asObservable();
@@ -59,6 +67,14 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   loading = false;
   displayedColumns = ['picture', 'name', 'email', 'role', 'status', 'createdAt', 'actions'];
   
+  // Sender settings
+  fromEmail = '';
+  fromName = '';
+  savingSenderSettings = false;
+  loadingSenderSettings = false;
+  editingSenderSettings = false;
+  senderSettingsConfigured = false;
+  
   // Image retry logic
   private imageRetryCount = new Map<string, number>();
   private readonly MAX_RETRIES = 2;
@@ -69,6 +85,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadData();
+    this.loadSenderSettings();
     
     // Subscribe to admin events to refresh data when other admins make changes
     this.refreshSub = this.adminEventService.refresh$.subscribe(() => {
@@ -359,6 +376,96 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     if (!user.isActive) return 'Inactive';
     if (!user.isApproved) return 'Pending';
     return 'Active';
+  }
+
+  // Sender Settings Methods
+  loadSenderSettings(): void {
+    this.currentUser$.pipe(take(1)).subscribe(user => {
+      if (user?.organizationId) {
+        this.loadingSenderSettings = true;
+        // organizationId can be an object with _id or a string
+        const orgId = typeof user.organizationId === 'object' ? user.organizationId._id : user.organizationId;
+        this.http.get<any>(`/api/organizations/${orgId}/sender-settings`).subscribe({
+          next: (response) => {
+            this.fromEmail = response.fromEmail || '';
+            this.fromName = response.fromName || '';
+            this.senderSettingsConfigured = response.isConfigured || false;
+            this.editingSenderSettings = !this.senderSettingsConfigured; // Auto-edit if not configured
+            this.loadingSenderSettings = false;
+          },
+          error: (error) => {
+            console.error('Failed to load sender settings:', error);
+            this.loadingSenderSettings = false;
+            this.editingSenderSettings = true; // Show form on error
+          }
+        });
+      }
+    });
+  }
+
+  enableEditSenderSettings(): void {
+    this.editingSenderSettings = true;
+  }
+
+  cancelEditSenderSettings(): void {
+    this.editingSenderSettings = false;
+    this.loadSenderSettings(); // Reload original values
+  }
+
+  saveSenderSettings(): void {
+    // Validate inputs
+    if (!this.fromEmail || !this.fromName) {
+      this.showError('Both sender email and name are required');
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+    if (!emailRegex.test(this.fromEmail)) {
+      this.showError('Please enter a valid email address');
+      return;
+    }
+
+    // Check for generic domains
+    const genericDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com'];
+    const domain = this.fromEmail.split('@')[1]?.toLowerCase();
+    if (genericDomains.includes(domain)) {
+      this.showError('Cannot use generic email providers (Gmail, Yahoo, etc). Please use your organization\'s domain.');
+      return;
+    }
+
+    this.currentUser$.pipe(take(1)).subscribe(user => {
+      if (user?.organizationId) {
+        this.savingSenderSettings = true;
+        // organizationId can be an object with _id or a string
+        const orgId = typeof user.organizationId === 'object' ? user.organizationId._id : user.organizationId;
+        this.http.put<any>(`/api/organizations/${orgId}/sender-settings`, {
+          fromEmail: this.fromEmail,
+          fromName: this.fromName
+        }).subscribe({
+          next: (response) => {
+            this.savingSenderSettings = false;
+            this.senderSettingsConfigured = true;
+            this.editingSenderSettings = false; // Switch to display mode
+            if (response.warning) {
+              this.snackBar.open(`⚠️  ${response.message}. ${response.warning}`, 'Close', {
+                duration: 8000,
+                panelClass: ['warning-snackbar']
+              });
+            } else {
+              this.snackBar.open('✅ Sender settings saved successfully! Remember to verify your domain.', 'Close', {
+                duration: 6000,
+                panelClass: ['success-snackbar']
+              });
+            }
+          },
+          error: (error) => {
+            this.savingSenderSettings = false;
+            this.showError(error.error?.message || 'Failed to save sender settings');
+          }
+        });
+      }
+    });
   }
 
   formatDate(date: string): string {

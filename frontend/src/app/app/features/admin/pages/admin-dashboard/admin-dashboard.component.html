@@ -310,6 +310,142 @@
       </div>
     </mat-tab>
 
+    <!-- Organization Settings Tab (Super Admin & Admin only) -->
+    <mat-tab *ngIf="(currentUser$ | async)?.orgRole === 'super_admin' || (currentUser$ | async)?.orgRole === 'admin'">
+      <ng-template mat-tab-label>
+        <mat-icon>settings</mat-icon>
+        <span>Organization Settings</span>
+      </ng-template>
+
+      <div class="tab-content settings-tab">
+        <div class="settings-section">
+          <div class="section-header">
+            <h2>
+              <mat-icon>email</mat-icon>
+              Email Sender Configuration
+            </h2>
+            <p class="section-description">
+              Configure the sender email and name that will appear in all campaigns sent from this organization.
+            </p>
+          </div>
+
+          <div class="sender-settings-card">
+            <div *ngIf="loadingSenderSettings" class="loading-state">
+              <mat-spinner diameter="32"></mat-spinner>
+              <p>Loading settings...</p>
+            </div>
+
+            <!-- Display Mode (when configured and not editing) -->
+            <div *ngIf="!loadingSenderSettings && senderSettingsConfigured && !editingSenderSettings" class="display-mode">
+              <div class="settings-display">
+                <div class="display-item">
+                  <div class="display-label">
+                    <mat-icon>alternate_email</mat-icon>
+                    <span>Sender Email Address</span>
+                  </div>
+                  <div class="display-value">{{ fromEmail }}</div>
+                </div>
+
+                <div class="display-item">
+                  <div class="display-label">
+                    <mat-icon>person</mat-icon>
+                    <span>Sender Name</span>
+                  </div>
+                  <div class="display-value">{{ fromName }}</div>
+                </div>
+              </div>
+
+              <div class="display-actions">
+                <button 
+                  mat-raised-button 
+                  color="primary" 
+                  (click)="enableEditSenderSettings()"
+                  class="edit-button">
+                  <mat-icon>edit</mat-icon>
+                  Edit Sender Settings
+                </button>
+              </div>
+
+              <div class="info-box success">
+                <mat-icon>check_circle</mat-icon>
+                <div class="info-content">
+                  <h4>✅ Sender Settings Configured</h4>
+                  <p>Your organization's sender email and name are set up. Make sure your email domain is verified before sending campaigns.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Edit Mode (when not configured or editing) -->
+            <form *ngIf="!loadingSenderSettings && (!senderSettingsConfigured || editingSenderSettings)" class="sender-form">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Sender Email Address</mat-label>
+                <input 
+                  matInput 
+                  type="email" 
+                  [(ngModel)]="fromEmail" 
+                  name="fromEmail"
+                  placeholder="marketing@yourcompany.com"
+                  required>
+                <mat-icon matPrefix>alternate_email</mat-icon>
+                <mat-hint>Use your organization's domain email (not Gmail, Yahoo, etc.)</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Sender Name</mat-label>
+                <input 
+                  matInput 
+                  type="text" 
+                  [(ngModel)]="fromName" 
+                  name="fromName"
+                  placeholder="Your Company Name"
+                  required>
+                <mat-icon matPrefix>person</mat-icon>
+                <mat-hint>This name will appear as the sender in recipient inboxes</mat-hint>
+              </mat-form-field>
+
+              <div class="info-box warning">
+                <mat-icon>warning</mat-icon>
+                <div class="info-content">
+                  <h4>⚠️  Domain Verification Required</h4>
+                  <p>
+                    Your email domain must be verified before you can send campaigns. 
+                    <br>Contact your system administrator or check your email service provider settings.
+                  </p>
+                  <ul>
+                    <li>Cannot use generic providers (Gmail, Yahoo, Hotmail, etc.)</li>
+                    <li>Domain verification typically takes 24-48 hours</li>
+                    <li>You may need to add DNS TXT or CNAME records to your domain</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button 
+                  mat-raised-button 
+                  color="primary" 
+                  (click)="saveSenderSettings()"
+                  [disabled]="savingSenderSettings || !fromEmail || !fromName"
+                  class="save-button">
+                  <mat-icon *ngIf="!savingSenderSettings">save</mat-icon>
+                  <mat-spinner *ngIf="savingSenderSettings" diameter="20"></mat-spinner>
+                  {{ savingSenderSettings ? 'Saving...' : 'Save Sender Settings' }}
+                </button>
+                
+                <button 
+                  *ngIf="senderSettingsConfigured"
+                  mat-button 
+                  (click)="cancelEditSenderSettings()"
+                  [disabled]="savingSenderSettings"
+                  class="cancel-button">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </mat-tab>
+
     <!-- Organization Management Tab (Only for Default Organization Super Admin) -->
     <mat-tab *ngIf="isOwnerOrgSuperAdmin(currentUser$ | async)">
       <ng-template mat-tab-label>

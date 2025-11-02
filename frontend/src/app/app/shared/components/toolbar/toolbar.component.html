@@ -147,17 +147,18 @@
           <mat-divider></mat-divider>
 
           <!-- Organization Info Section -->
-          <div class="org-info-section">
-            <div class="org-info-content">
-              <div class="org-icon">
-                <mat-icon>business</mat-icon>
-              </div>
-              <div class="org-details">
-                <span class="org-name">{{ (currentUser$ | async)?.organizationId?.name || 'Unknown Org' }}</span>
-                <span class="org-label">Organization</span>
-              </div>
+          <button 
+            mat-menu-item 
+            class="menu-item org-info-item"
+            (click)="navigateToOrganization()">
+            <div class="menu-item-icon org-icon">
+              <mat-icon>business</mat-icon>
             </div>
-          </div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">{{ (currentUser$ | async)?.organizationId?.name || 'Unknown Org' }}</span>
+              <span class="menu-item-subtitle">Organization</span>
+            </div>
+          </button>
 
           <mat-divider></mat-divider>
 

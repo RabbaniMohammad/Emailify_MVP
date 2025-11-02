@@ -1,6 +1,56 @@
 <div class="campaign-submit-wrapper">
   
   <!-- ============================================ -->
+  <!-- BLOCKING OVERLAY FOR MISSING SENDER SETTINGS -->
+  <!-- ============================================ -->
+  <div class="blocking-overlay" *ngIf="!senderSettingsConfigured">
+    <div class="blocking-modal">
+      
+      <!-- Loading State -->
+      <div *ngIf="checkingSenderSettings" class="checking-state">
+        <mat-spinner diameter="48"></mat-spinner>
+        <p class="checking-message">Checking sender settings...</p>
+      </div>
+      
+      <!-- Not Configured State -->
+      <div *ngIf="!checkingSenderSettings" class="not-configured-state">
+        <div class="modal-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </div>
+        <h2>⚠️ Configuration Required</h2>
+        <p class="modal-message">
+          Your organization's <strong>sender email and name</strong> must be configured before you can submit campaigns.
+        </p>
+        <div class="modal-instructions">
+          <h3>What to do:</h3>
+          <ol>
+            <li>Contact your <strong>Organization Administrator</strong></li>
+            <li>Ask them to configure sender settings in the <strong>Admin Dashboard → Organization Settings</strong> tab</li>
+            <li>Once configured, click "Check Again" below</li>
+          </ol>
+        </div>
+        <div class="modal-actions">
+          <button mat-raised-button color="primary" (click)="checkSenderSettings()">
+            <mat-icon>refresh</mat-icon>
+            Check Again
+          </button>
+          <button mat-button (click)="goBackFromBlockedPage()">
+            <mat-icon>arrow_back</mat-icon>
+            Go Back
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Content (disabled when settings not configured) -->
+  <div class="content-wrapper" [class.disabled]="!senderSettingsConfigured">
+  
+  <!-- ============================================ -->
   <!-- STEP 1: MAILCHIMP AUDIENCE SELECTION -->
   <!-- ============================================ -->
   <div class="section-card">
@@ -342,11 +392,46 @@
       <circle cx="12" cy="12" r="10"/>
       <polyline points="12 6 12 12 16 14"/>
     </svg>
-    <span>{{ scheduleGroups.length }} time slot(s)</span>
+    <span>Schedule Summary</span>
+  </div>
+  
+  <!-- ✅ SCHEDULE SUMMARY BOX -->
+  <div class="schedule-summary-box">
+    <div class="summary-item" *ngFor="let group of scheduleGroups">
+      <div class="summary-count">
+        <span class="count-badge">{{ group.count }}</span>
+        <span class="count-label">{{ group.count === 1 ? 'recipient' : 'recipients' }}</span>
+      </div>
+      <div class="summary-details">
+        <ng-container *ngIf="group.isImmediate">
+          <div class="summary-time immediate">
+            <mat-icon>bolt</mat-icon>
+            <strong>Immediate Send</strong>
+          </div>
+          <div class="summary-note">Will be sent immediately when you submit</div>
+        </ng-container>
+        <ng-container *ngIf="!group.isImmediate">
+          <div class="summary-time">
+            <mat-icon>schedule</mat-icon>
+            <strong>{{ group.scheduledTime | date:'short' }}</strong>
+          </div>
+          <div class="summary-timezone" *ngIf="group.timezone">
+            <mat-icon>public</mat-icon>
+            <span>{{ group.timezone }}</span>
+            <span class="timezone-badge" *ngIf="group.timezoneSource === 'customer'">Customer Timezone</span>
+            <span class="timezone-badge local" *ngIf="group.timezoneSource === 'local'">Local Timezone</span>
+          </div>
+          <div class="summary-timezone warning" *ngIf="!group.timezone">
+            <mat-icon>warning</mat-icon>
+            <span>No timezone specified - using local time</span>
+          </div>
+        </ng-container>
+      </div>
+    </div>
   </div>
   
   <!-- ✅ TIMEZONE INFORMATION BANNER WITH SCROLL -->
-  <div class="timezone-info-banner" *ngIf="timezoneAnalysis">
+  <div class="timezone-info-banner" *ngIf="timezoneAnalysis" style="display: none;">
     <!-- Warning State: No timezone or mixed -->
     <div class="timezone-warning" *ngIf="shouldShowTimezoneWarning()">
       <!-- <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -371,6 +456,8 @@
     </div>
   </div>
   
+  <!-- OLD SECTIONS - HIDDEN -->
+  <div style="display: none;">
   <!-- ✅ IMMEDIATE SEND WARNING -->
   <div class="immediate-warning" *ngIf="hasImmediateSends()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -426,9 +513,8 @@
       </div>
     </div>
   </div>
-</div>
   </div>
-  </div>
+  <!-- END HIDDEN SECTIONS -->
 
   <!-- ============================================ -->
   <!-- STEP 5: TEST EMAIL -->
@@ -585,4 +671,5 @@
   </div>
 </div>
 
-<!-- </div> -->
+  </div> <!-- Close content-wrapper -->
+</div> <!-- Close campaign-submit-wrapper -->

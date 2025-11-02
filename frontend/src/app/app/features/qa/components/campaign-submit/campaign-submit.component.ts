@@ -1,11 +1,13 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, Input, Output, EventEmitter, inject, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog } from '@angular/material/dialog';
 import { BehaviorSubject, Subject, firstValueFrom, takeUntil, Subscription, debounceTime } from 'rxjs';
 import { timeout, catchError, retry } from 'rxjs/operators';
 import { 
@@ -17,8 +19,10 @@ import {
   TimezoneAnalysis
 } from '../../pages/use-variant-page/campaign-submit.service';
 import { QaService } from '../../services/qa.service';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { CampaignStorageService } from '../../services/campaign-storage.service';
+import { AudienceValidationDialogComponent } from '../../../campaign/components/audience-validation-dialog/audience-validation-dialog.component';
+import { AuthService } from '../../../../core/services/auth.service';
 
 import { FormsModule } from '@angular/forms';
 
@@ -107,9 +111,16 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
   
   timezoneAnalysis: TimezoneAnalysis | null = null;
   
+  // Track ignored emails (excluded from campaign but not added to master)
+  ignoredEmails: string[] = [];
+  
   // Test email tracking
   testEmailSent = false;
   testEmailSentAt: Date | null = null;
+
+  // Sender settings validation
+  senderSettingsConfigured = false;
+  checkingSenderSettings = true;
 
   // File upload
   uploadedFileName: string = '';
@@ -134,6 +145,7 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
 
   get canSubmit(): boolean {
     return (
+      this.senderSettingsConfigured &&
       this.subjectControl.valid &&
       this.reconciliation !== null &&
       this.scheduleGroups.length > 0 &&
@@ -163,7 +175,11 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
   constructor(
     private campaignService: CampaignSubmitService,
     private cdr: ChangeDetectorRef,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private dialog: MatDialog,
+    private authService: AuthService,
+    private http: HttpClient,
+    private router: Router
   ) {}
 
 ngOnInit(): void {
@@ -171,6 +187,28 @@ ngOnInit(): void {
   this._templateId = this.templateId || this.ar.snapshot.paramMap.get('id') || '';
   this._runId = this.runId || this.ar.snapshot.paramMap.get('runId') || '';
   this._variantNo = this.variantNo || this.ar.snapshot.paramMap.get('no') || '';
+  
+  // Check sender settings first - if missing, don't initialize anything else
+  this.checkSenderSettings();
+  
+  // Wait for sender settings check to complete before initializing
+  // This prevents unnecessary API calls and data loading when user is blocked
+  const checkInterval = setInterval(() => {
+    if (!this.checkingSenderSettings) {
+      clearInterval(checkInterval);
+      
+      // Only initialize if sender settings are configured
+      if (this.senderSettingsConfigured) {
+        this.initializeCampaignPage();
+      }
+    }
+  }, 100);
+}
+
+/**
+ * Initialize the campaign page - only called if sender settings are configured
+ */
+private initializeCampaignPage(): void {
   // Load saved data if exists
   this.loadSavedData();
   
@@ -366,6 +404,48 @@ ngOnInit(): void {
     setTimeout(() => {
       this.cdr.markForCheck();
     }, 0);
+  }
+
+  /**
+   * Check if sender settings are configured for the organization
+   */
+  checkSenderSettings(): void {
+    this.checkingSenderSettings = true;
+    const wasConfigured = this.senderSettingsConfigured;
+    
+    this.authService.currentUser$.pipe(takeUntil(this.destroy$)).subscribe(user => {
+      if (user?.organizationId) {
+        const orgId = typeof user.organizationId === 'object' ? user.organizationId._id : user.organizationId;
+        this.http.get<any>(`/api/organizations/${orgId}/sender-settings`).subscribe({
+          next: (response) => {
+            this.senderSettingsConfigured = response.isConfigured || false;
+            this.checkingSenderSettings = false;
+            
+            // If settings just became configured (after clicking "Check Again"), initialize the page
+            if (!wasConfigured && this.senderSettingsConfigured) {
+              this.initializeCampaignPage();
+            }
+            
+            this.cdr.markForCheck();
+          },
+          error: (error) => {
+            console.error('Failed to check sender settings:', error);
+            this.checkingSenderSettings = false;
+            this.senderSettingsConfigured = false;
+            this.cdr.markForCheck();
+          }
+        });
+      }
+    });
+  }
+
+  /**
+   * Handle "Go Back" action from blocking modal
+   * Navigates to QA dashboard and replaces history to prevent back-button loop
+   */
+  goBackFromBlockedPage(): void {
+    // Navigate to QA dashboard with replaceUrl to prevent going back to blocked page
+    this.router.navigate(['/qa'], { replaceUrl: true });
   }
 
   /**
@@ -671,9 +751,87 @@ isSubjectSelected(subject: string): boolean {
     this.uploadLoadingSubject.next('loading');
 
     try {
+      // Get current user's organization ID and name
+      const currentUser = await firstValueFrom(this.authService.currentUser$);
+      const organizationId = typeof currentUser?.organizationId === 'string'
+        ? currentUser.organizationId
+        : (currentUser?.organizationId as any)?._id;
+      
+      const organizationName = typeof currentUser?.organizationId === 'object'
+        ? (currentUser?.organizationId as any)?.name
+        : undefined;
+
+      if (!organizationId) {
+        this.showError('User not associated with an organization');
+        this.uploadLoadingSubject.next('error');
+        return;
+      }
+
+      // Open validation dialog
+      const dialogRef = this.dialog.open(AudienceValidationDialogComponent, {
+        width: '1000px',
+        maxWidth: '95vw',
+        data: {
+          csvFile: file,
+          organizationId: organizationId,
+          organizationName: organizationName
+        },
+        disableClose: true
+      });
+
+      const result = await firstValueFrom(dialogRef.afterClosed());
+
+      if (!result?.validated) {
+        // User cancelled validation
+        this.uploadLoadingSubject.next('idle');
+        input.value = ''; // Reset input
+        return;
+      }
+
+      // Store added members and their schedules
+      const addedToMaster: string[] = result.addedToMaster || [];
+      const scheduledEmails: any[] = result.scheduledEmails || [];
+      const validationResult = result.result;
+
+      // Calculate ignored emails (excluded but NOT added to master)
+      const totalExcluded = validationResult?.excludedFromCampaign?.subscribers || [];
+      this.ignoredEmails = totalExcluded.filter((email: string) => !addedToMaster.includes(email));
+      
+      console.log(`📊 Validation Summary:`);
+      console.log(`  - Total excluded: ${totalExcluded.length}`);
+      console.log(`  - Added to master: ${addedToMaster.length}`);
+      console.log(`  - Ignored: ${this.ignoredEmails.length}`);
+
+      // Continue with the normal upload flow
       const data = await firstValueFrom(
         this.campaignService.uploadMasterDocument(file)
       );
+
+      // Merge added emails into master data
+      if (addedToMaster.length > 0) {
+        const scheduledEmailsMap = new Map(scheduledEmails.map(s => [s.email, s]));
+        
+        addedToMaster.forEach(email => {
+          const scheduleInfo = scheduledEmailsMap.get(email);
+          console.log(`🔍 Adding excluded email to master:`, {
+            email,
+            scheduleInfo,
+            hasTime: !!scheduleInfo?.time,
+            hasTimezone: !!scheduleInfo?.timezone
+          });
+          
+          const newRow: MasterDocRow = {
+            audiences_list: email,
+            scheduled_time: scheduleInfo?.time || '',
+            timezone: scheduleInfo?.timezone || '',
+            test_emails: ''
+          };
+          data.push(newRow);
+        });
+
+        console.log(`📧 Added ${addedToMaster.length} excluded emails to master document`);
+        this.showSuccess(`${addedToMaster.length} excluded subscribers added to campaign`);
+      }
 
       this.masterData = data;
       this.uploadLoadingSubject.next('success');
@@ -681,21 +839,21 @@ isSubjectSelected(subject: string): boolean {
       // Extract test emails
       this.testEmails = this.campaignService.extractTestEmails(data);
       
-      // Group by schedule
+      // Group by schedule - this will include the newly added emails
       this.scheduleGroups = this.campaignService.groupByScheduleTime(data);
 
-      this.showSuccess(`Uploaded ${data.length} rows successfully`);
+      this.showSuccess(`Uploaded ${data.length} total recipients (${validationResult?.summary?.totalInCsv || 0} from CSV + ${addedToMaster.length} added)`);
       
       // Save state after upload
       this.saveCurrentState();
 
-      // Auto-reconcile if audience selected
+      // Auto-reconcile if audience selected - this will update the reconciliation stats
       if (this.selectedAudience) {
         await this.reconcileAudiences();
       }
 
     } catch (error) {
-
+      console.error('Upload error:', error);
       this.uploadLoadingSubject.next('error');
       this.showError('Failed to upload file. Check format.');
     } finally {
@@ -721,6 +879,10 @@ isSubjectSelected(subject: string): boolean {
       const result = await firstValueFrom(
         this.campaignService.reconcileAudiences(this.selectedAudience.id, emails)
       );
+
+      // ✅ Override the ignored array with our tracked ignored emails
+      result.ignored = this.ignoredEmails;
+      result.summary.ignoredCount = this.ignoredEmails.length;
 
       // ✅ Store the reconciliation result
       this.reconciliation = result;

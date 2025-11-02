@@ -1,0 +1,173 @@
+<div class="audience-container">
+  <!-- Loading State -->
+  <div *ngIf="loading" class="loading-container">
+    <mat-spinner></mat-spinner>
+    <p>Loading audience data...</p>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="error && !loading" class="error-container">
+    <mat-icon color="warn">error</mat-icon>
+    <p>{{ error }}</p>
+    <button mat-raised-button color="primary" (click)="goBack()">
+      <mat-icon>arrow_back</mat-icon>
+      Back to Dashboard
+    </button>
+  </div>
+
+  <!-- Audience List -->
+  <div *ngIf="!loading && !error">
+    <!-- Header -->
+    <div class="audience-header">
+      <div class="header-left">
+        <button mat-icon-button (click)="goBack()" matTooltip="Back to Dashboard">
+          <mat-icon>arrow_back</mat-icon>
+        </button>
+        <h1>Audience List</h1>
+      </div>
+      <div class="header-actions">
+        <mat-chip color="primary">
+          <mat-icon>people</mat-icon>
+          {{ totalSubscribers }} Subscribers
+        </mat-chip>
+        <button mat-raised-button color="primary" (click)="toggleAddForm()">
+          <mat-icon>person_add</mat-icon>
+          Add Subscriber
+        </button>
+        <button mat-stroked-button (click)="fileInput.click()">
+          <mat-icon>upload_file</mat-icon>
+          Import CSV
+        </button>
+        <input #fileInput type="file" accept=".csv" style="display: none;" (change)="onFileSelected($event)">
+      </div>
+    </div>
+
+    <!-- Add Subscriber Form -->
+    <mat-card *ngIf="showAddForm" class="add-form">
+      <mat-card-content>
+        <h3>Add New Subscriber</h3>
+        <div class="form-row">
+          <mat-form-field appearance="outline">
+            <mat-label>Email</mat-label>
+            <input matInput [(ngModel)]="newSubscriber.email" type="email" required>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>First Name</mat-label>
+            <input matInput [(ngModel)]="newSubscriber.firstName">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Last Name</mat-label>
+            <input matInput [(ngModel)]="newSubscriber.lastName">
+          </mat-form-field>
+        </div>
+        <div class="form-actions">
+          <button mat-button (click)="toggleAddForm()">Cancel</button>
+          <button mat-raised-button color="primary" (click)="addSubscriber()" [disabled]="!newSubscriber.email">
+            Add Subscriber
+          </button>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Search and Filter Bar -->
+    <div class="filter-bar">
+      <mat-form-field appearance="outline" class="search-field">
+        <mat-label>Search subscribers</mat-label>
+        <mat-icon matPrefix>search</mat-icon>
+        <input matInput [(ngModel)]="searchText" (ngModelChange)="filterMembers()" placeholder="Search by email or name">
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="status-filter">
+        <mat-label>Status</mat-label>
+        <mat-select [(ngModel)]="selectedStatus" (selectionChange)="filterMembers()">
+          <mat-option value="all">All</mat-option>
+          <mat-option value="subscribed">Subscribed</mat-option>
+          <mat-option value="unsubscribed">Unsubscribed</mat-option>
+          <mat-option value="cleaned">Cleaned</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <!-- Subscribers Table -->
+    <mat-card>
+      <mat-card-content>
+        <div *ngIf="audienceMembers.length === 0" class="empty-state">
+          <mat-icon>inbox</mat-icon>
+          <p>No subscribers found</p>
+        </div>
+
+        <table mat-table [dataSource]="filteredMembers" *ngIf="filteredMembers.length > 0">
+          <!-- Email Column -->
+          <ng-container matColumnDef="email">
+            <th mat-header-cell *matHeaderCellDef>Email</th>
+            <td mat-cell *matCellDef="let member">
+              <div class="email-cell">
+                <mat-icon>email</mat-icon>
+                {{ member.email }}
+              </div>
+            </td>
+          </ng-container>
+
+          <!-- First Name Column -->
+          <ng-container matColumnDef="firstName">
+            <th mat-header-cell *matHeaderCellDef>First Name</th>
+            <td mat-cell *matCellDef="let member">
+              {{ member.firstName || 'N/A' }}
+            </td>
+          </ng-container>
+
+          <!-- Last Name Column -->
+          <ng-container matColumnDef="lastName">
+            <th mat-header-cell *matHeaderCellDef>Last Name</th>
+            <td mat-cell *matCellDef="let member">
+              {{ member.lastName || 'N/A' }}
+            </td>
+          </ng-container>
+
+          <!-- Status Column -->
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let member">
+              <mat-chip [color]="getStatusColor(member.status)" class="status-chip">
+                {{ member.status }}
+              </mat-chip>
+            </td>
+          </ng-container>
+
+          <!-- Joined Date Column -->
+          <ng-container matColumnDef="joinedAt">
+            <th mat-header-cell *matHeaderCellDef>Joined</th>
+            <td mat-cell *matCellDef="let member">
+              <div class="date-cell">
+                <mat-icon>calendar_today</mat-icon>
+                {{ formatDate(member.joinedAt) }}
+              </div>
+            </td>
+          </ng-container>
+
+          <!-- Actions Column -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>Actions</th>
+            <td mat-cell *matCellDef="let member">
+              <button mat-icon-button [matMenuTriggerFor]="menu">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #menu="matMenu">
+                <button mat-menu-item (click)="editSubscriber(member)">
+                  <mat-icon>edit</mat-icon>
+                  <span>Edit</span>
+                </button>
+                <button mat-menu-item (click)="deleteSubscriber(member.email)">
+                  <mat-icon>delete</mat-icon>
+                  <span>Delete</span>
+                </button>
+              </mat-menu>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>

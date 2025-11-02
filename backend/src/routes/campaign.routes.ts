@@ -3,9 +3,15 @@ import mailchimp from '@mailchimp/mailchimp_marketing';
 import * as XLSX from 'xlsx';
 import multer from 'multer';
 import Papa from 'papaparse';
+import Campaign from '@src/models/Campaign';
+import User from '@src/models/User';
+import Organization from '@src/models/Organization';
+import { authenticate } from '@src/middleware/auth';
 
 const router = Router();
 const MC: any = mailchimp as any;
+
+console.log('📧 Campaign routes loaded');
 
 // Configure Mailchimp
 MC.setConfig({
@@ -102,14 +108,38 @@ function groupByScheduleTime(rows: MasterDocRow[]): ScheduleGroup[] {
 
 /**
  * GET /api/mailchimp/audiences
- * Fetch all Mailchimp audience lists
+ * Fetch Mailchimp audience list for current user's organization
  */
-router.get('/mailchimp/audiences', async (req: Request, res: Response) => {
+router.get('/mailchimp/audiences', authenticate, async (req: Request, res: Response) => {
   try {
-    const response = await MC.lists.getAllLists({ count: 1000 });
+    const userId = (req as any).tokenPayload?.userId;
+    
+    // Get user's organization
+    const user = await User.findById(userId);
+    if (!user?.organizationId) {
+      return res.status(403).json({ 
+        error: 'User not in organization',
+        message: 'You must be a member of an organization to access audiences'
+      });
+    }
+    
+    const org = await Organization.findById(user.organizationId);
+    if (!org) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+    
+    if (!org.mailchimpAudienceId) {
+      // Organization has no audience configured yet
+      return res.json({ lists: [] });
+    }
+    
+    // Only return THIS organization's audience
+    const audienceList = await MC.lists.getList(org.mailchimpAudienceId);
+    
+    console.log(`📋 Fetched audience for org ${org.name}: ${audienceList.name} (${audienceList.id})`);
     
     res.json({
-      lists: response.lists || []
+      lists: [audienceList]  // Only the org's own audience
     });
   } catch (error: any) {
     console.error('Failed to fetch Mailchimp audiences:', error);
@@ -304,12 +334,20 @@ router.post('/campaign/send-test', async (req: Request, res: Response) => {
 
     // Create a temporary campaign for testing
     const listId = process.env.MC_AUDIENCE_ID;
-    const fromEmail = process.env.MC_FROM_EMAIL;
-    const fromName = process.env.MC_FROM_NAME;
+    const fromEmail = organization.fromEmail;
+    const fromName = organization.fromName || organization.name;
 
-    if (!listId || !fromEmail || !fromName) {
-      return res.status(500).json({
-        error: 'Server configuration error: Missing Mailchimp credentials'
+    if (!listId) {
+      return res.status(400).json({
+        error: 'Audience configuration error',
+        message: 'Organization audience not configured'
+      });
+    }
+
+    if (!fromEmail || !fromName) {
+      return res.status(400).json({
+        error: 'Sender settings not configured',
+        message: 'Please configure sender email and name in organization settings'
       });
     }
 
@@ -368,9 +406,32 @@ router.post('/campaign/send-test', async (req: Request, res: Response) => {
  */
 
 // Route 2: Cleanup/archive (needed when checkbox UNCHECKED)
-router.post('/campaign/cleanup-temp', async (req: Request, res: Response) => {
+router.post('/campaign/cleanup-temp', authenticate, async (req: Request, res: Response) => {
   try {
     const { audienceId, emails } = req.body;
+    const userId = (req as any).tokenPayload?.userId;
+    
+    // Validate ownership
+    const user = await User.findById(userId);
+    if (!user?.organizationId) {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'User not in organization' 
+      });
+    }
+    
+    const org = await Organization.findById(user.organizationId);
+    if (!org) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+    
+    if (org.mailchimpAudienceId !== audienceId) {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'Cannot modify another organization\'s audience' 
+      });
+    }
+    
     const validEmails = emails.filter((e: string) => isValidEmail(e));
 
     await MC.lists.batchListMembers(audienceId, {
@@ -388,13 +449,36 @@ router.post('/campaign/cleanup-temp', async (req: Request, res: Response) => {
 });
 
 
-router.post('/campaign/add-members', async (req: Request, res: Response) => {
+router.post('/campaign/add-members', authenticate, async (req: Request, res: Response) => {
   try {
     const { audienceId, emails } = req.body;
+    const userId = (req as any).tokenPayload?.userId;
     
     if (!audienceId || !Array.isArray(emails)) {
       return res.status(400).json({
         error: 'Missing required fields: audienceId, emails'
+      });
+    }
+
+    // Validate ownership - ensure audienceId belongs to user's organization
+    const user = await User.findById(userId);
+    if (!user?.organizationId) {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'User not in organization' 
+      });
+    }
+    
+    const org = await Organization.findById(user.organizationId);
+    if (!org) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+    
+    if (org.mailchimpAudienceId !== audienceId) {
+      console.warn(`⚠️  User ${userId} (org: ${org.name}) attempted to add members to unauthorized audience: ${audienceId}`);
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'Cannot add members to another organization\'s audience' 
       });
     }
 
@@ -405,6 +489,8 @@ router.post('/campaign/add-members', async (req: Request, res: Response) => {
         error: 'No valid emails provided'
       });
     }
+
+    console.log(`📧 Adding ${validEmails.length} members to audience ${audienceId} for org: ${org.name}`);
 
     const response = await MC.lists.batchListMembers(audienceId, {
       members: validEmails.map(email => ({
@@ -433,10 +519,14 @@ router.post('/campaign/add-members', async (req: Request, res: Response) => {
 /**
  * POST /api/campaign/submit
  * Create and schedule campaigns
+ * NOW WITH DATABASE TRACKING FOR ORG ISOLATION
  */
-router.post('/campaign/submit', async (req: Request, res: Response) => {
+router.post('/campaign/submit', authenticate, async (req: Request, res: Response) => {
   try {
     const { subject, templateHtml, scheduleGroups, testEmails } = req.body;
+    const userId = (req as any).tokenPayload?.userId;
+
+    console.log(`📧 Campaign submit requested by user: ${userId}`);
 
     if (!subject || !templateHtml || !Array.isArray(scheduleGroups)) {
       return res.status(400).json({
@@ -444,23 +534,52 @@ router.post('/campaign/submit', async (req: Request, res: Response) => {
       });
     }
 
-    const listId = process.env.MC_AUDIENCE_ID;
-    const fromEmail = process.env.MC_FROM_EMAIL;
-    const fromName = process.env.MC_FROM_NAME;
+    // Get user and organization info for isolation
+    const user = await User.findById(userId).populate('organizationId');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-    if (!listId || !fromEmail || !fromName) {
-      return res.status(500).json({
-        error: 'Server configuration error: Missing Mailchimp credentials'
+    if (!user.organizationId) {
+      return res.status(400).json({ error: 'User not in an organization' });
+    }
+
+    const organization = user.organizationId as any;
+    const organizationId = organization._id;
+
+    console.log(`🏢 Organization: ${organization.name} (ID: ${organizationId})`);
+
+    // Use organization's Mailchimp audience list and sender settings
+    const listId = organization.mailchimpAudienceId || process.env.MC_AUDIENCE_ID;
+    const fromEmail = organization.fromEmail;
+    const fromName = organization.fromName || organization.name;
+
+    if (!listId) {
+      return res.status(400).json({
+        error: 'Organization audience not configured',
+        message: 'Please set up your organization audience first'
       });
     }
 
+    if (!fromEmail || !fromName) {
+      return res.status(400).json({
+        error: 'Sender settings not configured',
+        message: 'Please configure sender email and name in organization settings'
+      });
+    }
+
+    console.log(`📋 Using audience list: ${listId}`);
+
     const campaignIds: string[] = [];
+    const dbCampaignIds: string[] = [];
 
     // Create one campaign per schedule group
     for (const group of scheduleGroups) {
       const scheduledTime = new Date(group.scheduledTime);
 
-      // Create campaign with multiple email conditions (one per email address)
+      console.log(`📅 Creating campaign for schedule: ${scheduledTime.toISOString()}, Recipients: ${group.emails.length}`);
+
+      // Create campaign in Mailchimp
       const campaign = await MC.campaigns.create({
         type: 'regular',
         recipients: {
@@ -484,34 +603,257 @@ router.post('/campaign/submit', async (req: Request, res: Response) => {
       });
 
       const campaignId = campaign.id;
+      console.log(`✅ Mailchimp campaign created: ${campaignId}`);
 
       // Set content
       await MC.campaigns.setContent(campaignId, { html: templateHtml });
+
+      // Determine status and send/schedule
+      let status: 'draft' | 'scheduled' | 'sent' = 'draft';
+      let sentAt: Date | undefined;
+      let scheduledFor: Date | undefined;
 
       // Check if this group is marked for immediate send
       if (group.isImmediate) {
         // Send immediately (works on free plan)
         await MC.campaigns.send(campaignId);
+        status = 'sent';
+        sentAt = new Date();
+        console.log(`📤 Campaign sent immediately: ${campaignId}`);
       } else {
         // Schedule for later (requires paid plan)
         await MC.campaigns.schedule(campaignId, {
           schedule_time: scheduledTime.toISOString()
         });
+        status = 'scheduled';
+        scheduledFor = scheduledTime;
+        console.log(`⏰ Campaign scheduled for: ${scheduledTime.toISOString()}`);
       }
 
+      // 💾 Save to database for org isolation
+      const dbCampaign = await Campaign.create({
+        mailchimpCampaignId: campaignId,
+        name: `Campaign - ${scheduledTime.toISOString()}`,
+        subject: subject,
+        organizationId: organizationId,
+        createdBy: userId,
+        status: status,
+        recipientsCount: group.emails.length,
+        audienceId: listId,
+        audienceName: organization.name + ' Subscribers',
+        sentAt: sentAt,
+        scheduledFor: scheduledFor,
+        metrics: {
+          emailsSent: status === 'sent' ? group.emails.length : 0,
+          opens: 0,
+          uniqueOpens: 0,
+          openRate: 0,
+          clicks: 0,
+          uniqueClicks: 0,
+          clickRate: 0,
+          bounces: 0,
+          bounceRate: 0,
+          unsubscribes: 0,
+          unsubscribeRate: 0,
+        }
+      });
+
+      console.log(`💾 Campaign saved to database: ${dbCampaign._id}`);
+
       campaignIds.push(campaignId);
+      dbCampaignIds.push(String(dbCampaign._id));
     }
+
+    console.log(`✅ All campaigns created successfully. Total: ${campaignIds.length}`);
 
     res.json({
       success: true,
       campaignIds,
+      dbCampaignIds,
       count: campaignIds.length
     });
 
   } catch (error: any) {
-    console.error('Failed to submit campaign:', error);
+    console.error('❌ Failed to submit campaign:', error);
     res.status(500).json({
       error: 'Failed to submit campaign',
+      message: error.message || 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/campaign/validate-audience
+ * Validate uploaded CSV against Mailchimp audience
+ * Returns: new subscribers (orange), existing subscribers (green), excluded subscribers (red)
+ */
+router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'), async (req: Request, res: Response) => {
+  try {
+    console.log('🔍 Validating audience CSV...');
+    
+    const userId = (req as any).tokenPayload?.userId;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: 'No CSV file uploaded' });
+    }
+
+    // Get user's organization
+    const user = await User.findById(userId);
+    if (!user?.organizationId) {
+      return res.status(403).json({ error: 'User not associated with organization' });
+    }
+
+    const orgId = typeof user.organizationId === 'string' 
+      ? user.organizationId 
+      : (user.organizationId as any)._id;
+
+    const organization = await Organization.findById(orgId);
+    if (!organization?.mailchimpAudienceId) {
+      return res.status(400).json({ 
+        error: 'Organization has no Mailchimp audience configured',
+        hint: 'Please setup an audience first' 
+      });
+    }
+
+    const audienceId = organization.mailchimpAudienceId;
+    console.log(`📋 Organization: ${organization.name}, Audience: ${audienceId}`);
+
+    // Parse CSV file
+    const csvContent = file.buffer.toString('utf-8');
+    const parseResult = Papa.parse<any>(csvContent, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header: string) => header.trim().toLowerCase()
+    });
+
+    if (parseResult.errors.length > 0) {
+      console.error('❌ CSV parse errors:', parseResult.errors);
+      return res.status(400).json({ 
+        error: 'Failed to parse CSV',
+        details: parseResult.errors.slice(0, 5) // First 5 errors
+      });
+    }
+
+    // Extract emails from CSV
+    const masterEmails: string[] = [];
+    const emailColumns = ['email', 'audiences_list', 'email_address', 'subscriber_email'];
+    
+    parseResult.data.forEach((row: any) => {
+      // Find email in any of the common column names
+      let email = '';
+      for (const col of emailColumns) {
+        if (row[col] && typeof row[col] === 'string') {
+          email = row[col].trim().toLowerCase();
+          break;
+        }
+      }
+
+      if (email && isValidEmail(email)) {
+        masterEmails.push(email);
+      }
+    });
+
+    // Deduplicate master emails
+    const uniqueMasterEmails = Array.from(new Set(masterEmails));
+    console.log(`📧 Found ${uniqueMasterEmails.length} unique valid emails in CSV`);
+
+    if (uniqueMasterEmails.length === 0) {
+      return res.status(400).json({ 
+        error: 'No valid emails found in CSV',
+        hint: 'CSV should have a column named: email, audiences_list, email_address, or subscriber_email'
+      });
+    }
+
+    // Fetch all subscribers from Mailchimp audience (paginated)
+    console.log(`🔍 Fetching Mailchimp audience members...`);
+    const mailchimpEmails: string[] = [];
+    let offset = 0;
+    const batchSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const response = await MC.lists.getListMembersInfo(audienceId, {
+        count: batchSize,
+        offset: offset,
+        fields: ['members.email_address', 'total_items']
+      });
+
+      const members = response.members || [];
+      members.forEach((member: any) => {
+        if (member.email_address) {
+          mailchimpEmails.push(member.email_address.toLowerCase());
+        }
+      });
+
+      offset += batchSize;
+      hasMore = members.length === batchSize;
+      
+      console.log(`   Fetched ${mailchimpEmails.length} / ${response.total_items} members...`);
+    }
+
+    console.log(`✅ Total Mailchimp subscribers: ${mailchimpEmails.length}`);
+
+    // Create sets for efficient comparison
+    const mailchimpSet = new Set(mailchimpEmails);
+    const masterSet = new Set(uniqueMasterEmails);
+
+    // Categorize subscribers
+    const newSubscribers: string[] = [];      // 🟠 In CSV, NOT in Mailchimp
+    const existingSubscribers: string[] = []; // 🟢 In CSV AND in Mailchimp
+    const excludedSubscribers: string[] = []; // 🔴 In Mailchimp, NOT in CSV
+
+    // Process master document emails
+    uniqueMasterEmails.forEach(email => {
+      if (mailchimpSet.has(email)) {
+        existingSubscribers.push(email);
+      } else {
+        newSubscribers.push(email);
+      }
+    });
+
+    // Find excluded subscribers
+    mailchimpEmails.forEach(email => {
+      if (!masterSet.has(email)) {
+        excludedSubscribers.push(email);
+      }
+    });
+
+    // Filter out Mailchimp account owner from excluded list
+    const ownerEmail = process.env.MAILCHIMP_OWNER_EMAIL?.toLowerCase();
+    const filteredExcluded = ownerEmail 
+      ? excludedSubscribers.filter(email => email !== ownerEmail)
+      : excludedSubscribers;
+
+    console.log(`\n📊 Validation Results:`);
+    console.log(`   🟠 New: ${newSubscribers.length}`);
+    console.log(`   🟢 Existing: ${existingSubscribers.length}`);
+    console.log(`   🔴 Excluded: ${filteredExcluded.length}`);
+
+    res.json({
+      success: true,
+      masterDocument: {
+        total: uniqueMasterEmails.length,
+        new: newSubscribers,
+        existing: existingSubscribers
+      },
+      excludedFromCampaign: {
+        total: filteredExcluded.length,
+        subscribers: filteredExcluded
+      },
+      summary: {
+        newCount: newSubscribers.length,
+        existingCount: existingSubscribers.length,
+        excludedCount: filteredExcluded.length,
+        totalInCsv: uniqueMasterEmails.length,
+        totalInMailchimp: mailchimpEmails.length
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Audience validation failed:', error);
+    res.status(500).json({
+      error: 'Failed to validate audience',
       message: error.message || 'Unknown error'
     });
   }

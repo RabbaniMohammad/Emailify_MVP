@@ -227,9 +227,16 @@ export class CampaignSubmitService {
 
       if (!email) return;
 
+      console.log(`📅 Processing schedule for ${email}:`, {
+        timeStr,
+        timezone,
+        isEmpty: !timeStr
+      });
+
       // Handle missing/empty schedule time → Immediate send
       if (!timeStr) {
         immediateEmails.push(email);
+        console.log(`  ⚡ Marked as immediate (no time)`);
         return;
       }
 

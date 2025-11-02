@@ -459,3 +459,207 @@
   padding: 0 !important;
   background: #f8fafc;
 }
+
+// Organization Settings Tab
+.settings-tab {
+  padding: 2rem !important;
+  background: #f8fafc;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.settings-section {
+  .section-header {
+    margin-bottom: 2rem;
+    
+    h2 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 0 0 0.5rem 0;
+      
+      mat-icon {
+        color: #667eea;
+        font-size: 2rem;
+        width: 2rem;
+        height: 2rem;
+      }
+    }
+    
+    .section-description {
+      color: #64748b;
+      font-size: 1rem;
+      margin: 0;
+      padding-left: 2.75rem;
+    }
+  }
+}
+
+.sender-settings-card {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  
+  // Display Mode
+  .display-mode {
+    .settings-display {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+      
+      .display-item {
+        .display-label {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: #64748b;
+          font-size: 0.875rem;
+          font-weight: 600;
+          margin-bottom: 0.5rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          
+          mat-icon {
+            font-size: 1.25rem;
+            width: 1.25rem;
+            height: 1.25rem;
+            color: #667eea;
+          }
+        }
+        
+        .display-value {
+          padding-left: 2rem;
+          font-size: 1.125rem;
+          color: #1e293b;
+          font-weight: 500;
+        }
+      }
+    }
+    
+    .display-actions {
+      margin-bottom: 1.5rem;
+      
+      .edit-button {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+    }
+  }
+  
+  // Edit Mode
+  .sender-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    
+    .full-width {
+      width: 100%;
+    }
+    
+    mat-form-field {
+      mat-icon[matPrefix] {
+        color: #667eea;
+        margin-right: 0.5rem;
+      }
+    }
+  }
+  
+  .info-box {
+    padding: 1.25rem;
+    border-radius: 8px;
+    display: flex;
+    gap: 1rem;
+    
+    &.warning {
+      background: #fffbeb;
+      border: 2px solid #fbbf24;
+      
+      > mat-icon {
+        color: #f59e0b;
+        font-size: 1.5rem;
+        width: 1.5rem;
+        height: 1.5rem;
+        flex-shrink: 0;
+      }
+    }
+    
+    &.success {
+      background: #f0fdf4;
+      border: 2px solid #4ade80;
+      
+      > mat-icon {
+        color: #22c55e;
+        font-size: 1.5rem;
+        width: 1.5rem;
+        height: 1.5rem;
+        flex-shrink: 0;
+      }
+    }
+    
+    .info-content {
+      flex: 1;
+      
+      h4 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1rem;
+        font-weight: 700;
+        
+        &:has(+ p) {
+          color: #92400e;
+        }
+      }
+      
+      p {
+        margin: 0 0 0.75rem 0;
+        line-height: 1.5;
+        
+        &:last-child {
+          margin-bottom: 0;
+        }
+      }
+      
+      ul {
+        margin: 0;
+        padding-left: 1.25rem;
+        
+        li {
+          margin-bottom: 0.25rem;
+          line-height: 1.4;
+        }
+      }
+    }
+  }
+  
+  .form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-start;
+    padding-top: 0.5rem;
+    
+    .save-button {
+      padding: 0 2rem;
+      height: 48px;
+      font-size: 1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      
+      mat-spinner {
+        display: inline-block;
+      }
+    }
+    
+    .cancel-button {
+      height: 48px;
+      color: #64748b;
+    }
+  }
+}
+

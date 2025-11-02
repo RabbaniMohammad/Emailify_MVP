@@ -11,6 +11,9 @@ import { qaDeactivateGuard } from './app/core/guards/qa-deactivate.guard';
 import { VisualEditorComponent } from '../app/app/features/visual-editor/visual-editor.component';
 
 import { CanDeactivateGuard } from './app/core/guards/can-deactivate.guard';
+import { OrganizationPageComponent } from './app/features/organization/pages/organization-page/organization-page.component';
+import { CampaignDetailPageComponent } from './app/features/organization/pages/campaign-detail-page/campaign-detail-page.component';
+import { AudienceListPageComponent } from './app/features/organization/pages/audience-list-page/audience-list-page.component';
 
 export const routes: Routes = [
   // Public routes
@@ -35,6 +38,27 @@ export const routes: Routes = [
         .then(m => m.AdminDashboardComponent),
     canActivate: [authGuard, adminGuard],
     runGuardsAndResolvers: 'always'
+  },
+  
+  // Organization route (all authenticated users)
+  { 
+    path: 'organization', 
+    component: OrganizationPageComponent,
+    canActivate: [authGuard]
+  },
+  
+  // Campaign detail route
+  { 
+    path: 'organization/campaigns/:id', 
+    component: CampaignDetailPageComponent,
+    canActivate: [authGuard]
+  },
+
+  // Audience list route
+  {
+    path: 'organization/audience',
+    component: AudienceListPageComponent,
+    canActivate: [authGuard]
   },
   
   // Protected routes (all authenticated users)

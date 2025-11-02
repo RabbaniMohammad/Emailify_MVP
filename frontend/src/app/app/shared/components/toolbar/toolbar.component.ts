@@ -255,6 +255,10 @@ navigateToHome(): void {
     this.router.navigate(['/admin']);
   }
 
+  navigateToOrganization(): void {
+    this.router.navigate(['/organization']);
+  }
+
   navigateToGenerate(): void {
     // Smart navigation: check if user has an active conversation
     const activeConversationId = this.generationService.getCurrentConversationId();

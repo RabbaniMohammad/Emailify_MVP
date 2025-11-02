@@ -1,0 +1,205 @@
+<div class="organization-page">
+  <!-- Loading State -->
+  <div *ngIf="loading" class="loading-container">
+    <mat-spinner diameter="50"></mat-spinner>
+    <p>Loading organization dashboard...</p>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="error && !loading" class="error-container">
+    <mat-icon>error_outline</mat-icon>
+    <h2>{{ error }}</h2>
+  </div>
+
+  <!-- Dashboard Content -->
+  <div *ngIf="dashboardData && !loading" class="dashboard-content">
+    
+    <!-- Header -->
+    <div class="dashboard-header">
+      <div class="org-info">
+        <h1>{{ dashboardData.organization.name }}</h1>
+        <p class="org-slug">{{ dashboardData.organization.slug }}</p>
+        <p class="org-created">Created {{ formatDate(dashboardData.organization.createdAt) }}</p>
+      </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+      <!-- Campaigns Card -->
+      <mat-card class="stat-card campaigns-card">
+        <mat-card-header>
+          <mat-icon mat-card-avatar>campaign</mat-icon>
+          <mat-card-title>Campaigns</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="stat-number">{{ dashboardData.stats.campaigns.total }}</div>
+          <div class="stat-breakdown">
+            <span class="badge badge-draft">{{ dashboardData.stats.campaigns.draft }} Draft</span>
+            <span class="badge badge-scheduled">{{ dashboardData.stats.campaigns.scheduled }} Scheduled</span>
+            <span class="badge badge-sent">{{ dashboardData.stats.campaigns.sent }} Sent</span>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- Subscribers Card -->
+      <mat-card class="stat-card subscribers-card">
+        <mat-card-header>
+          <mat-icon mat-card-avatar>people</mat-icon>
+          <mat-card-title>Subscribers</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div *ngIf="audienceData">
+            <div class="stat-number">{{ audienceData.stats.totalSubscribers }}</div>
+            <div class="stat-detail">
+              <mat-icon class="growth-icon">trending_up</mat-icon>
+              <span>+{{ audienceData.stats.newLast30Days }} last 30 days</span>
+            </div>
+            <button 
+              mat-stroked-button 
+              color="primary"
+              class="view-audience-btn"
+              (click)="viewAudienceList()"
+              matTooltip="View all subscribers">
+              <mat-icon>list</mat-icon>
+              View Audience
+            </button>
+          </div>
+          <div *ngIf="!audienceData" class="no-audience">
+            <mat-icon>info</mat-icon>
+            <p>No audience list configured</p>
+            <small>Link or create a Mailchimp audience list to track subscribers</small>
+            <button 
+              mat-raised-button 
+              color="primary"
+              class="setup-audience-btn"
+              (click)="setupAudience()"
+              [disabled]="settingUpAudience">
+              <mat-icon>add_circle</mat-icon>
+              {{ settingUpAudience ? 'Setting up...' : 'Setup Audience' }}
+            </button>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- Templates Card -->
+      <mat-card class="stat-card templates-card">
+        <mat-card-header>
+          <mat-icon mat-card-avatar>email</mat-icon>
+          <mat-card-title>Templates</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="stat-number">{{ dashboardData.stats.templates }}</div>
+          <div class="stat-detail">Email templates created</div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- Team Card -->
+      <mat-card class="stat-card team-card">
+        <mat-card-header>
+          <mat-icon mat-card-avatar>group</mat-icon>
+          <mat-card-title>Team</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="stat-number">{{ dashboardData.stats.members }}</div>
+          <div class="stat-detail">Team members</div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+
+    <!-- Recent Campaigns -->
+    <mat-card class="section-card recent-campaigns" *ngIf="dashboardData.recentCampaigns.length > 0">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>history</mat-icon>
+        <mat-card-title>Recent Campaigns</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="campaigns-list">
+          <div *ngFor="let campaign of dashboardData.recentCampaigns" class="campaign-item">
+            <div class="campaign-info">
+              <h3>{{ campaign.name }}</h3>
+              <p class="campaign-subject" *ngIf="campaign.subject">{{ campaign.subject }}</p>
+              <p class="campaign-meta">
+                <span>{{ campaign.recipientsCount }} recipients</span>
+                <span class="separator">•</span>
+                <span>{{ formatDate(campaign.createdAt) }}</span>
+              </p>
+            </div>
+            <div class="campaign-stats">
+              <mat-chip [ngClass]="getStatusClass(campaign.status)">
+                {{ campaign.status }}
+              </mat-chip>
+              <div class="metrics" *ngIf="campaign.status === 'sent'">
+                <span class="metric">
+                  <mat-icon>visibility</mat-icon>
+                  {{ formatPercent(campaign.metrics.openRate) }}
+                </span>
+                <span class="metric">
+                  <mat-icon>touch_app</mat-icon>
+                  {{ formatPercent(campaign.metrics.clickRate) }}
+                </span>
+              </div>
+              <div class="campaign-actions">
+                <button 
+                  *ngIf="campaign.status === 'sent'"
+                  mat-raised-button 
+                  color="primary"
+                  class="view-report-btn"
+                  [routerLink]="['/organization/campaigns', campaign._id]"
+                  matTooltip="View detailed campaign report">
+                  <mat-icon>analytics</mat-icon>
+                  View Report
+                </button>
+                <button 
+                  mat-icon-button 
+                  class="refresh-btn"
+                  (click)="refreshCampaignMetrics(campaign._id); $event.stopPropagation()"
+                  [disabled]="syncingCampaigns.has(campaign._id)"
+                  matTooltip="Refresh metrics from Mailchimp">
+                  <mat-icon [class.spinning]="syncingCampaigns.has(campaign._id)">
+                    {{ syncingCampaigns.has(campaign._id) ? 'sync' : 'refresh' }}
+                  </mat-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Audience Insights -->
+    <mat-card class="section-card audience-insights" *ngIf="audienceData">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>insights</mat-icon>
+        <mat-card-title>Audience Insights</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="insights-grid">
+          <div class="insight-item">
+            <div class="insight-label">Subscribed</div>
+            <div class="insight-value">{{ audienceData.stats.subscribed }}</div>
+          </div>
+          <div class="insight-item">
+            <div class="insight-label">Unsubscribed</div>
+            <div class="insight-value">{{ audienceData.stats.unsubscribed }}</div>
+          </div>
+          <div class="insight-item">
+            <div class="insight-label">Avg. Open Rate</div>
+            <div class="insight-value">{{ formatPercent(audienceData.stats.openRate) }}</div>
+          </div>
+          <div class="insight-item">
+            <div class="insight-label">Avg. Click Rate</div>
+            <div class="insight-value">{{ formatPercent(audienceData.stats.clickRate) }}</div>
+          </div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Empty State -->
+    <div *ngIf="dashboardData.recentCampaigns.length === 0" class="empty-state">
+      <mat-icon>campaign</mat-icon>
+      <h2>No campaigns yet</h2>
+      <p>Create your first email campaign to get started</p>
+    </div>
+
+  </div>
+</div>

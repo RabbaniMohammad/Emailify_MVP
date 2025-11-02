@@ -3,8 +3,9 @@ import Organization from '@src/models/Organization';
 import User from '@src/models/User';
 import GeneratedTemplate from '@src/models/GeneratedTemplate';
 import TemplateConversation from '@src/models/TemplateConversation';
+import Campaign from '@src/models/Campaign';
 import { authenticate } from '@src/middleware/auth';
-import { requireRole } from '@src/middleware/roles';
+import { requireRole, requireAdmin } from '@src/middleware/roles';
 import logger from 'jet-logger';
 import mailchimp from '@mailchimp/mailchimp_marketing';
 
@@ -62,6 +63,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       const MC: any = mailchimp as any;
       const folderName = `${organization.name} Templates`;
       
+      console.log(`📁 Creating Mailchimp template folder for org: ${organization.name}`);
       const folder = await MC.templateFolders.create({ name: folderName });
       const folderId = String(folder.id || folder.folder_id);
       
@@ -69,11 +71,64 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       organization.mailchimpTemplateFolderId = folderId;
       await organization.save();
       
+      console.log(`✅ Template folder created - ID: ${folderId}, Name: "${folderName}"`);
       logger.info(`✅ Created Mailchimp folder "${folderName}" (ID: ${folderId}) for org: ${organization.name}`);
     } catch (folderError: any) {
       // Don't fail organization creation if folder creation fails
+      console.error(`❌ Template folder creation failed:`, folderError?.message);
       logger.warn(`⚠️  Failed to create Mailchimp folder for ${organization.name}:`, folderError?.message);
       logger.warn(`   Organization created successfully, but folder must be created manually.`);
+    }
+
+    // ✅ Auto-create Mailchimp audience list for the organization
+    try {
+      const MC: any = mailchimp as any;
+      const listName = `${organization.name} Subscribers`;
+      
+      console.log(`👥 Creating Mailchimp audience list for org: ${organization.name}`);
+      
+      // Use organization's sender settings (must be configured before creating audience)
+      const fromEmail = organization.fromEmail;
+      const fromName = organization.fromName || organization.name;
+      
+      if (!fromEmail) {
+        throw new Error('Organization must have fromEmail configured before creating audience');
+      }
+      
+      // Create audience list with required fields
+      const audienceList = await MC.lists.createList({
+        name: listName,
+        permission_reminder: `You are receiving this email because you signed up for ${organization.name}.`,
+        email_type_option: false,
+        contact: {
+          company: organization.name,
+          address1: '',
+          city: '',
+          state: '',
+          zip: '',
+          country: 'US',
+        },
+        campaign_defaults: {
+          from_name: fromName,
+          from_email: fromEmail,
+          subject: '',
+          language: 'en',
+        },
+      });
+      
+      const listId = String(audienceList.id);
+      
+      // Save audience list ID to organization
+      organization.mailchimpAudienceId = listId;
+      await organization.save();
+      
+      console.log(`✅ Audience list created - ID: ${listId}, Name: "${listName}"`);
+      logger.info(`✅ Created Mailchimp audience list "${listName}" (ID: ${listId}) for org: ${organization.name}`);
+    } catch (audienceError: any) {
+      // Don't fail organization creation if audience creation fails
+      console.error(`❌ Audience list creation failed:`, audienceError?.message);
+      logger.warn(`⚠️  Failed to create Mailchimp audience list for ${organization.name}:`, audienceError?.message);
+      logger.warn(`   Organization created successfully, but audience list must be created manually.`);
     }
 
     // Update user to be the super_admin
@@ -84,6 +139,14 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
 
     logger.info(`✅ Organization created: ${organization.slug} by ${user.email}`);
 
+    console.log(`📊 Final organization state:`, {
+      id: organization._id,
+      name: organization.name,
+      slug: organization.slug,
+      mailchimpFolderId: organization.mailchimpTemplateFolderId || null,
+      mailchimpAudienceId: organization.mailchimpAudienceId || null,
+    });
+
     res.status(201).json({
       success: true,
       organization: {
@@ -92,6 +155,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
         slug: organization.slug,
         domain: organization.domain,
         mailchimpFolderId: organization.mailchimpTemplateFolderId || null,
+        mailchimpAudienceId: organization.mailchimpAudienceId || null,
       },
       message: 'Organization created successfully. You are now the owner.'
     });
@@ -328,11 +392,67 @@ router.delete('/:slug', authenticate, async (req: Request, res: Response) => {
       templatesDeleted: 0,
       conversationsDeleted: 0,
       usersAffected: 0,
+      mailchimpAudienceDeleted: false,
+      mailchimpFolderDeleted: false,
     };
 
     if (deleteData) {
       // CASCADE DELETE: Remove all organization data
       logger.info(`🗑️  Cascade deleting organization: ${orgToDelete.name}`);
+
+      const MC: any = mailchimp as any;
+
+      // Delete all Mailchimp campaigns for this audience first
+      if (orgToDelete.mailchimpAudienceId) {
+        try {
+          logger.info(`  🗑️  Fetching campaigns for audience: ${orgToDelete.mailchimpAudienceId}`);
+          const campaigns = await MC.campaigns.list({
+            list_id: orgToDelete.mailchimpAudienceId,
+            count: 1000
+          });
+          
+          if (campaigns.campaigns && campaigns.campaigns.length > 0) {
+            logger.info(`  🗑️  Deleting ${campaigns.campaigns.length} Mailchimp campaigns...`);
+            for (const campaign of campaigns.campaigns) {
+              try {
+                await MC.campaigns.remove(campaign.id);
+                logger.info(`    ✅ Deleted campaign: ${campaign.id}`);
+              } catch (campError: any) {
+                logger.err(`    ⚠️  Failed to delete campaign ${campaign.id}: ${campError.message}`);
+              }
+            }
+          }
+        } catch (campError: any) {
+          logger.err(`  ⚠️  Failed to fetch/delete campaigns: ${campError.message}`);
+        }
+      }
+
+      // Delete Mailchimp audience if it exists
+      if (orgToDelete.mailchimpAudienceId) {
+        try {
+          logger.info(`  🗑️  Deleting Mailchimp audience: ${orgToDelete.mailchimpAudienceId}`);
+          await MC.lists.deleteList(orgToDelete.mailchimpAudienceId);
+          deletionSummary.mailchimpAudienceDeleted = true;
+          logger.info(`  ✅ Mailchimp audience deleted`);
+        } catch (mcError: any) {
+          logger.err(`  ⚠️  Failed to delete Mailchimp audience: ${mcError.message}`);
+          logger.err(`  ⚠️  Error details: ${JSON.stringify(mcError.response?.body || mcError)}`);
+          // Continue with deletion even if Mailchimp fails
+        }
+      }
+
+      // Delete Mailchimp template folder if it exists
+      if (orgToDelete.mailchimpTemplateFolderId) {
+        try {
+          logger.info(`  🗑️  Deleting Mailchimp template folder: ${orgToDelete.mailchimpTemplateFolderId}`);
+          await MC.templateFolders.delete(orgToDelete.mailchimpTemplateFolderId);
+          deletionSummary.mailchimpFolderDeleted = true;
+          logger.info(`  ✅ Mailchimp template folder deleted`);
+        } catch (mcError: any) {
+          logger.err(`  ⚠️  Failed to delete Mailchimp template folder: ${mcError.message}`);
+          // Continue with deletion even if Mailchimp fails
+        }
+      }
 
       // Delete templates
       const templateResult = await GeneratedTemplate.deleteMany({ 
@@ -547,6 +667,1296 @@ router.get('/mailchimp-folders/list', authenticate, requireRole('owner', 'admin'
     res.status(500).json({
       error: 'Failed to list Mailchimp folders',
       message: error?.message || 'Mailchimp API error'
+    });
+  }
+});
+
+/**
+ * PUT /api/organizations/:id/sender-settings
+ * Update organization sender email and name for campaigns
+ * ⚠️  Note: Email domain must be verified in Mailchimp
+ */
+router.put('/:id/sender-settings', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { fromEmail, fromName } = req.body;
+    const userId = (req as any).tokenPayload?.userId;
+
+    // Validate input
+    if (!fromEmail || !fromName) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        message: 'Both fromEmail and fromName are required' 
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+    if (!emailRegex.test(fromEmail)) {
+      return res.status(400).json({ 
+        error: 'Invalid email format',
+        message: 'Please provide a valid email address' 
+      });
+    }
+
+    // Prevent use of generic email providers
+    const genericDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com'];
+    const domain = fromEmail.split('@')[1]?.toLowerCase();
+    if (genericDomains.includes(domain)) {
+      return res.status(400).json({ 
+        error: 'Invalid email domain',
+        message: 'Cannot use generic email providers (Gmail, Yahoo, etc). Please use your organization\'s domain.' 
+      });
+    }
+
+    const organization = await Organization.findById(id);
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    // Verify user has permission
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ error: 'Not a member of this organization' });
+    }
+
+    // Update organization sender settings
+    organization.fromEmail = fromEmail.toLowerCase().trim();
+    organization.fromName = fromName.trim();
+    await organization.save();
+
+    // If organization has a Mailchimp audience, update its campaign defaults
+    if (organization.mailchimpAudienceId) {
+      try {
+        const MC: any = mailchimp as any;
+        await MC.lists.updateList(organization.mailchimpAudienceId, {
+          campaign_defaults: {
+            from_name: fromName,
+            from_email: fromEmail,
+            subject: '',
+            language: 'en',
+          }
+        });
+        logger.info(`✅ Updated email service campaign defaults for org: ${organization.name}`);
+      } catch (mcError: any) {
+        logger.warn(`⚠️  Failed to update email service defaults:`, mcError?.message);
+        // Don't fail the request if update fails
+        return res.status(200).json({
+          success: true,
+          message: 'Sender settings saved, but email service update failed. Email domain may need verification.',
+          warning: mcError?.message || 'Email service update error',
+          fromEmail: organization.fromEmail,
+          fromName: organization.fromName,
+          requiresVerification: true
+        });
+      }
+    }
+
+    logger.info(`✅ Updated sender settings for org: ${organization.name} - ${fromEmail}`);
+
+    res.json({
+      success: true,
+      message: 'Sender settings updated successfully',
+      fromEmail: organization.fromEmail,
+      fromName: organization.fromName,
+      requiresVerification: true, // Always remind to verify domain
+    });
+  } catch (error: any) {
+    logger.err('❌ Update sender settings error:', error);
+    res.status(500).json({
+      error: 'Failed to update sender settings',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/organizations/:id/sender-settings
+ * Get current sender settings for an organization
+ */
+router.get('/:id/sender-settings', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+
+    const organization = await Organization.findById(id);
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    // Verify user belongs to organization
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ error: 'Not a member of this organization' });
+    }
+
+    res.json({
+      fromEmail: organization.fromEmail || '',
+      fromName: organization.fromName || organization.name,
+      isConfigured: !!(organization.fromEmail && organization.fromName)
+    });
+  } catch (error: any) {
+    logger.err('❌ Get sender settings error:', error);
+    res.status(500).json({
+      error: 'Failed to get sender settings',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/organizations/:id/campaigns
+ * Get all campaigns for an organization with optional filtering
+ * Query params: status, limit, offset
+ */
+router.get('/:id/campaigns', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+    const { status, limit = 50, offset = 0 } = req.query;
+
+    console.log(`📋 Fetching campaigns for org: ${id}, status: ${status || 'all'}`);
+
+    // Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'Not a member of this organization' 
+      });
+    }
+
+    // Build query
+    const query: any = { organizationId: id };
+    if (status) {
+      query.status = status;
+    }
+
+    // Fetch campaigns with pagination
+    const campaigns = await Campaign.find(query)
+      .sort({ createdAt: -1 }) // Newest first
+      .limit(Number(limit))
+      .skip(Number(offset))
+      .populate('createdBy', 'name email')
+      .populate('templateUsed', 'name templateId')
+      .lean();
+
+    // Get total count for pagination
+    const totalCount = await Campaign.countDocuments(query);
+
+    // Get status breakdown
+    const statusCounts = await Campaign.aggregate([
+      { $match: { organizationId: user.organizationId } },
+      { $group: { _id: '$status', count: { $sum: 1 } } }
+    ]);
+
+    const stats = {
+      total: totalCount,
+      draft: 0,
+      scheduled: 0,
+      sent: 0,
+      sending: 0,
+      paused: 0,
+      canceled: 0,
+    };
+
+    statusCounts.forEach((item: any) => {
+      if (item._id in stats) {
+        (stats as any)[item._id] = item.count;
+      }
+    });
+
+    console.log(`✅ Found ${campaigns.length} campaigns (total: ${totalCount})`);
+
+    res.json({
+      success: true,
+      campaigns,
+      pagination: {
+        total: totalCount,
+        limit: Number(limit),
+        offset: Number(offset),
+        hasMore: totalCount > Number(offset) + campaigns.length,
+      },
+      stats,
+    });
+
+  } catch (error: any) {
+    console.error('❌ Get campaigns error:', error);
+    logger.err('❌ Get campaigns error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch campaigns',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/organizations/:id/campaigns/:campaignId
+ * Get single campaign details
+ */
+router.get('/:id/campaigns/:campaignId', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id, campaignId } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+
+    console.log(`📧 Fetching campaign: ${campaignId} for org: ${id}`);
+
+    // Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'Not a member of this organization' 
+      });
+    }
+
+    // Fetch campaign
+    const campaign = await Campaign.findOne({ 
+      _id: campaignId,
+      organizationId: id 
+    })
+      .populate('createdBy', 'name email picture')
+      .populate('templateUsed', 'name templateId html')
+      .lean();
+
+    if (!campaign) {
+      return res.status(404).json({ 
+        error: 'Campaign not found',
+        message: 'Campaign not found or does not belong to this organization' 
+      });
+    }
+
+    console.log(`✅ Campaign found: ${campaign.name}`);
+
+    res.json({
+      success: true,
+      campaign,
+    });
+
+  } catch (error: any) {
+    console.error('❌ Get campaign error:', error);
+    logger.err('❌ Get campaign error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch campaign',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/organizations/:id/dashboard
+ * Get organization dashboard overview with stats
+ */
+router.get('/:id/dashboard', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+
+    console.log(`📊 Loading dashboard for org: ${id}`);
+
+    // Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'Not a member of this organization' 
+      });
+    }
+
+    const organization = await Organization.findById(id);
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    // Get stats in parallel
+    const [
+      totalCampaigns,
+      totalTemplates,
+      totalMembers,
+      recentCampaigns,
+      campaignStats
+    ] = await Promise.all([
+      Campaign.countDocuments({ organizationId: id }),
+      GeneratedTemplate.countDocuments({ organizationId: id }),
+      User.countDocuments({ organizationId: id }),
+      Campaign.find({ organizationId: id })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate('createdBy', 'name email')
+        .lean(),
+      Campaign.aggregate([
+        { $match: { organizationId: user.organizationId } },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ])
+    ]);
+
+    const stats = {
+      campaigns: {
+        total: totalCampaigns,
+        draft: 0,
+        scheduled: 0,
+        sent: 0,
+      },
+      templates: totalTemplates,
+      members: totalMembers,
+    };
+
+    campaignStats.forEach((item: any) => {
+      if (item._id in stats.campaigns) {
+        (stats.campaigns as any)[item._id] = item.count;
+      }
+    });
+
+    console.log(`✅ Dashboard loaded: ${totalCampaigns} campaigns, ${totalTemplates} templates, ${totalMembers} members`);
+
+    res.json({
+      success: true,
+      organization: {
+        id: organization._id,
+        name: organization.name,
+        slug: organization.slug,
+        createdAt: organization.createdAt,
+      },
+      stats,
+      recentCampaigns,
+    });
+
+  } catch (error: any) {
+    console.error('❌ Get dashboard error:', error);
+    logger.err('❌ Get dashboard error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch dashboard data',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/organizations/:id/setup-audience
+ * Setup/link Mailchimp audience for an organization
+ */
+router.post('/:id/setup-audience', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+
+    console.log(`🔧 Setting up audience for org: ${id}`);
+
+    // Verify user belongs to this organization and is admin
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'Not a member of this organization' 
+      });
+    }
+
+    // Only super_admin or admin can setup audience
+    if (user.orgRole !== 'super_admin' && user.orgRole !== 'admin') {
+      return res.status(403).json({
+        error: 'Insufficient permissions',
+        message: 'Only organization admins can setup audience lists'
+      });
+    }
+
+    const organization = await Organization.findById(id);
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    const MC: any = mailchimp as any;
+
+    // If organization already has an audience, verify it exists
+    if (organization.mailchimpAudienceId) {
+      try {
+        const existingList = await MC.lists.getList(organization.mailchimpAudienceId);
+        return res.json({
+          success: true,
+          message: 'Audience already configured',
+          audienceId: organization.mailchimpAudienceId,
+          audienceName: existingList.name,
+          memberCount: existingList.stats.member_count
+        });
+      } catch (err) {
+        console.log(`⚠️  Existing audience ${organization.mailchimpAudienceId} not found, will create new one`);
+      }
+    }
+
+    // Always create a NEW dedicated list for this organization
+    console.log(`👥 Creating new dedicated Mailchimp audience list for org: ${organization.name}`);
+    console.log(`📋 Mailchimp API Key configured: ${process.env.MAILCHIMP_API_KEY ? 'Yes' : 'No'}`);
+    console.log(`📋 Mailchimp DC: ${process.env.MAILCHIMP_DC}`);
+    
+    const listName = `${organization.name} Subscribers`;
+    
+    // Use organization's sender settings (must be configured)
+    const fromEmail = organization.fromEmail;
+    const fromName = organization.fromName || organization.name;
+    
+    if (!fromEmail) {
+      return res.status(400).json({
+        error: 'Sender email not configured',
+        message: 'Please configure organization sender email in settings before creating audience'
+      });
+    }
+    
+    try {
+      const newList = await MC.lists.createList({
+        name: listName,
+        permission_reminder: `You are receiving this email because you signed up for ${organization.name}.`,
+        email_type_option: false,
+        contact: {
+          company: organization.name,
+          address1: '123 Main St',
+          city: 'New York',
+          state: 'NY',
+          zip: '10001',
+          country: 'US',
+        },
+        campaign_defaults: {
+          from_name: fromName,
+          from_email: fromEmail,
+          subject: '',
+          language: 'en',
+        },
+      });
+
+      const listId = String(newList.id);
+      organization.mailchimpAudienceId = listId;
+      await organization.save();
+
+      console.log(`✅ Created dedicated audience "${listName}" (ID: ${listId}) for org: ${organization.name}`);
+
+      res.json({
+        success: true,
+        message: 'New dedicated audience created successfully',
+        audienceId: listId,
+        audienceName: newList.name,
+        memberCount: 0
+      });
+    } catch (createError: any) {
+      console.error('❌ Mailchimp createList failed:', createError);
+      console.error('❌ Error details:', {
+        status: createError.status,
+        title: createError.title,
+        detail: createError.detail,
+        message: createError.message
+      });
+      throw createError;
+    }
+
+  } catch (error: any) {
+    console.error('❌ Setup audience error:', error);
+    logger.err('❌ Setup audience error:', error);
+    
+    // Provide more helpful error messages
+    let errorMessage = error.message || 'Unknown error';
+    let statusCode = 500;
+    
+    if (error.status === 403 || errorMessage.includes('Forbidden')) {
+      errorMessage = 'Your Mailchimp account does not have permission to create new audiences. Free accounts are limited to 1 audience. Please upgrade your Mailchimp plan or contact support.';
+      statusCode = 403;
+    } else if (error.status === 400) {
+      errorMessage = `Mailchimp API error: ${error.message}`;
+      statusCode = 400;
+    }
+    
+    res.status(statusCode).json({
+      error: 'Failed to setup audience',
+      message: errorMessage,
+      details: error.response?.text || error.message
+    });
+  }
+});
+
+/**
+ * GET /api/organizations/:id/audience
+ * Get audience/subscriber stats and recent members for an organization
+ */
+router.get('/:id/audience', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+    const { limit = 10 } = req.query;
+
+    console.log(`👥 Fetching audience stats for org: ${id}`);
+
+    // Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'Not a member of this organization' 
+      });
+    }
+
+    const organization = await Organization.findById(id);
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    console.log(`📋 Organization: ${organization.name}, Audience ID: ${organization.mailchimpAudienceId}`);
+
+    if (!organization.mailchimpAudienceId) {
+      return res.status(400).json({ 
+        error: 'No audience list',
+        message: 'This organization does not have a Mailchimp audience list configured' 
+      });
+    }
+
+    const MC: any = mailchimp as any;
+    const listId = organization.mailchimpAudienceId;
+
+    console.log(`📋 Fetching from Mailchimp list: ${listId} for org: ${organization.name}`);
+
+    // Fetch list stats and members in parallel
+    const [listInfo, members] = await Promise.all([
+      MC.lists.getList(listId),
+      MC.lists.getListMembersInfo(listId, {
+        count: Number(limit),
+        sort_field: 'timestamp_opt',
+        sort_dir: 'DESC', // Most recent first
+        status: 'subscribed'
+      })
+    ]);
+
+    // Calculate growth (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentMembers = members.members.filter((m: any) => {
+      const joinDate = new Date(m.timestamp_opt);
+      return joinDate >= thirtyDaysAgo;
+    });
+
+    const stats = {
+      totalSubscribers: listInfo.stats.member_count || 0,
+      subscribed: listInfo.stats.member_count || 0,
+      unsubscribed: listInfo.stats.unsubscribe_count || 0,
+      cleaned: listInfo.stats.cleaned_count || 0,
+      newLast30Days: recentMembers.length,
+      openRate: listInfo.stats.open_rate || 0,
+      clickRate: listInfo.stats.click_rate || 0,
+    };
+
+    // Format member list
+    const memberList = members.members.map((m: any) => ({
+      email: m.email_address,
+      status: m.status,
+      joinedAt: m.timestamp_opt,
+      firstName: m.merge_fields?.FNAME || '',
+      lastName: m.merge_fields?.LNAME || '',
+      emailClient: m.email_client || 'Unknown',
+      location: m.location?.country_code || '',
+    }))
+    .filter((m: any) => {
+      // Filter out Mailchimp account owner if present
+      const mailchimpOwnerEmail = process.env.MAILCHIMP_OWNER_EMAIL;
+      if (mailchimpOwnerEmail && m.email.toLowerCase() === mailchimpOwnerEmail.toLowerCase()) {
+        console.log(`🔧 Filtering out Mailchimp account owner: ${m.email}`);
+        return false;
+      }
+      return true;
+    });
+
+    console.log(`✅ Audience stats: ${stats.totalSubscribers} total, ${stats.newLast30Days} new in last 30 days, ${memberList.length} members returned`);
+
+    res.json({
+      success: true,
+      audienceId: listId,
+      stats,
+      recentMembers: memberList,
+      listInfo: {
+        name: listInfo.name,
+        dateCreated: listInfo.date_created,
+        webId: listInfo.web_id,
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Get audience error:', error);
+    logger.err('❌ Get audience error:', error);
+    
+    // Handle Mailchimp-specific errors
+    if (error.status === 404) {
+      return res.status(404).json({
+        error: 'Audience not found',
+        message: 'The Mailchimp audience list for this organization was not found'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Failed to fetch audience data',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/organizations/:id/subscribers/add
+ * Add a single subscriber to organization's audience
+ */
+router.post('/:id/subscribers/add', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+    const { email, firstName, lastName, tags, status = 'subscribed' } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const organization = await Organization.findById(id);
+    if (!organization?.mailchimpAudienceId) {
+      return res.status(400).json({ error: 'Organization has no audience list configured' });
+    }
+
+    const MC: any = mailchimp as any;
+    const listId = organization.mailchimpAudienceId;
+
+    // Add member to Mailchimp audience
+    const member = await MC.lists.addListMember(listId, {
+      email_address: email,
+      status: status,
+      merge_fields: {
+        FNAME: firstName || '',
+        LNAME: lastName || ''
+      },
+      tags: tags || []
+    });
+
+    console.log(`✅ Added subscriber ${email} to org ${organization.name}`);
+
+    res.json({
+      success: true,
+      member: {
+        email: member.email_address,
+        status: member.status,
+        firstName: member.merge_fields?.FNAME,
+        lastName: member.merge_fields?.LNAME
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Add subscriber error:', error);
+    res.status(500).json({
+      error: 'Failed to add subscriber',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/organizations/:id/subscribers/bulk-import
+ * Bulk import subscribers from CSV data
+ */
+router.post('/:id/subscribers/bulk-import', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+    const { subscribers } = req.body; // Array of { email, firstName, lastName }
+
+    if (!Array.isArray(subscribers) || subscribers.length === 0) {
+      return res.status(400).json({ error: 'Subscribers array is required' });
+    }
+
+    // Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const organization = await Organization.findById(id);
+    if (!organization?.mailchimpAudienceId) {
+      return res.status(400).json({ error: 'Organization has no audience list configured' });
+    }
+
+    const MC: any = mailchimp as any;
+    const listId = organization.mailchimpAudienceId;
+
+    // Batch add members
+    const operations = subscribers.map((sub: any) => ({
+      email_address: sub.email,
+      status: 'subscribed',
+      merge_fields: {
+        FNAME: sub.firstName || '',
+        LNAME: sub.lastName || ''
+      }
+    }));
+
+    const result = await MC.lists.batchListMembers(listId, {
+      members: operations,
+      update_existing: false
+    });
+
+    console.log(`✅ Bulk imported ${result.new_members?.length || 0} subscribers to org ${organization.name}`);
+
+    res.json({
+      success: true,
+      addedCount: result.new_members?.length || 0,
+      updatedCount: result.updated_members?.length || 0,
+      errorCount: result.errors?.length || 0,
+      errors: result.errors || []
+    });
+
+  } catch (error: any) {
+    console.error('❌ Bulk import error:', error);
+    res.status(500).json({
+      error: 'Failed to import subscribers',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/organizations/:id/subscribers/:email
+ * Update a subscriber's information
+ */
+router.put('/:id/subscribers/:email', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id, email } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+    const { firstName, lastName, status, tags } = req.body;
+
+    // Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const organization = await Organization.findById(id);
+    if (!organization?.mailchimpAudienceId) {
+      return res.status(400).json({ error: 'Organization has no audience list configured' });
+    }
+
+    const MC: any = mailchimp as any;
+    const listId = organization.mailchimpAudienceId;
+    
+    // Create subscriber hash for Mailchimp API
+    const crypto = require('crypto');
+    const subscriberHash = crypto.createHash('md5').update(email.toLowerCase()).digest('hex');
+
+    // Update member
+    const updateData: any = {};
+    if (firstName !== undefined || lastName !== undefined) {
+      updateData.merge_fields = {};
+      if (firstName !== undefined) updateData.merge_fields.FNAME = firstName;
+      if (lastName !== undefined) updateData.merge_fields.LNAME = lastName;
+    }
+    if (status) updateData.status = status;
+
+    const member = await MC.lists.updateListMember(listId, subscriberHash, updateData);
+
+    // Update tags if provided
+    if (tags && Array.isArray(tags)) {
+      await MC.lists.updateListMemberTags(listId, subscriberHash, {
+        tags: tags.map((tag: string) => ({ name: tag, status: 'active' }))
+      });
+    }
+
+    console.log(`✅ Updated subscriber ${email} in org ${organization.name}`);
+
+    res.json({
+      success: true,
+      member: {
+        email: member.email_address,
+        status: member.status,
+        firstName: member.merge_fields?.FNAME,
+        lastName: member.merge_fields?.LNAME
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Update subscriber error:', error);
+    res.status(500).json({
+      error: 'Failed to update subscriber',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/organizations/:id/subscribers/:email
+ * Remove a subscriber from organization's audience
+ */
+router.delete('/:id/subscribers/:email', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id, email } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+    const { permanent = false } = req.query;
+
+    // Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const organization = await Organization.findById(id);
+    if (!organization?.mailchimpAudienceId) {
+      return res.status(400).json({ error: 'Organization has no audience list configured' });
+    }
+
+    const MC: any = mailchimp as any;
+    const listId = organization.mailchimpAudienceId;
+    
+    const crypto = require('crypto');
+    const subscriberHash = crypto.createHash('md5').update(email.toLowerCase()).digest('hex');
+
+    if (permanent === 'true') {
+      // Permanently delete
+      await MC.lists.deleteListMemberPermanent(listId, subscriberHash);
+      console.log(`✅ Permanently deleted subscriber ${email} from org ${organization.name}`);
+    } else {
+      // Just unsubscribe
+      await MC.lists.updateListMember(listId, subscriberHash, { status: 'unsubscribed' });
+      console.log(`✅ Unsubscribed ${email} from org ${organization.name}`);
+    }
+
+    res.json({ success: true });
+
+  } catch (error: any) {
+    console.error('❌ Delete subscriber error:', error);
+    res.status(500).json({
+      error: 'Failed to remove subscriber',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/organizations/:id/subscribers/tags
+ * Get all tags used in organization's audience
+ */
+router.get('/:id/subscribers/tags', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+
+    // Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || user.organizationId?.toString() !== id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const organization = await Organization.findById(id);
+    if (!organization?.mailchimpAudienceId) {
+      return res.status(400).json({ error: 'Organization has no audience list configured' });
+    }
+
+    const MC: any = mailchimp as any;
+    const listId = organization.mailchimpAudienceId;
+
+    // Get all segments (Mailchimp's way of grouping)
+    const segments = await MC.lists.listSegments(listId);
+
+    res.json({
+      success: true,
+      segments: segments.segments || []
+    });
+
+  } catch (error: any) {
+    console.error('❌ Get tags error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch tags',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/organizations/:id/campaigns/:campaignId/sync
+ * Manually sync campaign metrics from Mailchimp
+ */
+router.post('/:id/campaigns/:campaignId/sync', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id: orgId, campaignId } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+
+    console.log(`🔄 Syncing metrics for campaign ${campaignId} in org ${orgId}`);
+
+    // Verify organization exists
+    const org = await Organization.findById(orgId);
+    if (!org) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    // Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || String(user.organizationId) !== orgId) {
+      return res.status(403).json({ 
+        error: 'Forbidden',
+        message: 'You do not belong to this organization' 
+      });
+    }
+
+    // Find campaign in database
+    const campaign = await Campaign.findOne({
+      _id: campaignId,
+      organizationId: orgId
+    });
+
+    if (!campaign) {
+      return res.status(404).json({ 
+        error: 'Campaign not found',
+        message: 'Campaign not found in this organization' 
+      });
+    }
+
+    console.log(`📧 Fetching metrics from Mailchimp for campaign: ${campaign.mailchimpCampaignId}`);
+
+    // Fetch campaign report from Mailchimp
+    const MC: any = mailchimp as any;
+    const report = await MC.reports.getCampaignReport(campaign.mailchimpCampaignId);
+    
+    console.log(`📊 Mailchimp report received:`, {
+      emailsSent: report.emails_sent,
+      opens: report.opens?.opens_total,
+      uniqueOpens: report.opens?.unique_opens,
+      clicks: report.clicks?.clicks_total,
+      uniqueClicks: report.clicks?.unique_clicks,
+    });
+
+    // Update campaign metrics
+    campaign.metrics = {
+      emailsSent: report.emails_sent || 0,
+      
+      // Opens
+      opens: report.opens?.opens_total || 0,
+      uniqueOpens: report.opens?.unique_opens || 0,
+      openRate: report.opens?.open_rate ? report.opens.open_rate * 100 : 0,
+      
+      // Clicks
+      clicks: report.clicks?.clicks_total || 0,
+      uniqueClicks: report.clicks?.unique_clicks || 0,
+      clickRate: report.clicks?.click_rate ? report.clicks.click_rate * 100 : 0,
+      
+      // Negative metrics
+      bounces: report.bounces?.hard_bounces || 0,
+      bounceRate: report.bounces?.bounce_rate ? report.bounces.bounce_rate * 100 : 0,
+      unsubscribes: report.unsubscribed?.unsubscribe_count || 0,
+      unsubscribeRate: report.unsubscribed?.unsubscribe_rate ? report.unsubscribed.unsubscribe_rate * 100 : 0,
+      
+      lastSyncedAt: new Date(),
+    };
+
+    // Update status if needed
+    if (report.status === 'sent' && campaign.status !== 'sent') {
+      campaign.status = 'sent';
+      if (report.send_time) {
+        campaign.sentAt = new Date(report.send_time);
+      }
+    }
+
+    await campaign.save();
+
+    console.log(`✅ Campaign metrics synced successfully`);
+    logger.info(`✅ Synced metrics for campaign ${campaignId}`);
+
+    res.json({
+      success: true,
+      message: 'Campaign metrics synced successfully',
+      campaign: {
+        id: campaign._id,
+        name: campaign.name,
+        status: campaign.status,
+        metrics: campaign.metrics,
+        lastSyncedAt: campaign.metrics.lastSyncedAt
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Sync metrics error:', error);
+    logger.err('❌ Sync metrics error:', error);
+    
+    // Handle Mailchimp-specific errors
+    if (error.status === 404) {
+      return res.status(404).json({
+        error: 'Campaign not found in Mailchimp',
+        message: 'The campaign was not found in Mailchimp'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Failed to sync campaign metrics',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/organizations/:id/campaigns/:campaignId/report
+ * Get detailed campaign report with analytics
+ */
+router.get('/:id/campaigns/:campaignId/report', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id: orgId, campaignId } = req.params;
+    const userId = (req as any).tokenPayload?.userId;
+
+    console.log(`📊 Fetching detailed report for campaign ${campaignId} in org ${orgId}`);
+
+    // Verify organization exists
+    const org = await Organization.findById(orgId);
+    if (!org) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    // Verify user belongs to this organization
+    const user = await User.findById(userId);
+    if (!user || String(user.organizationId) !== orgId) {
+      return res.status(403).json({ 
+        error: 'Forbidden',
+        message: 'You do not belong to this organization' 
+      });
+    }
+
+    // Find campaign in database
+    const campaign = await Campaign.findOne({
+      _id: campaignId,
+      organizationId: orgId
+    }).populate('createdBy', 'name email');
+
+    if (!campaign) {
+      return res.status(404).json({ 
+        error: 'Campaign not found',
+        message: 'Campaign not found in this organization' 
+      });
+    }
+
+    console.log(`📧 Fetching full report from Mailchimp for: ${campaign.mailchimpCampaignId}`);
+
+    const MC: any = mailchimp as any;
+
+    // Fetch comprehensive report data from Mailchimp
+    const report = await MC.reports.getCampaignReport(campaign.mailchimpCampaignId);
+    
+    // Fetch location data separately
+    let locationData: any[] = [];
+    try {
+      const locationsResponse = await MC.reports.getLocationsForCampaign(campaign.mailchimpCampaignId, {
+        count: 10
+      });
+      locationData = locationsResponse.locations || [];
+      console.log(`📍 Locations fetched:`, locationData.length, 'locations');
+      console.log(`📍 Sample location data:`, JSON.stringify(locationData[0], null, 2));
+    } catch (locError: any) {
+      console.log(`⚠️ Could not fetch locations:`, locError.message);
+    }
+    
+    console.log(`✅ Full report data fetched from Mailchimp`);
+
+    // Build comprehensive response
+    const reportData = {
+      success: true,
+      campaign: {
+        id: campaign._id,
+        name: campaign.name,
+        subject: campaign.subject,
+        status: campaign.status,
+        createdAt: campaign.createdAt,
+        sentAt: campaign.sentAt,
+        createdBy: campaign.createdBy,
+        recipientsCount: campaign.recipientsCount,
+      },
+      
+      // Email performance metrics
+      performance: {
+        emailsSent: report.emails_sent || 0,
+        delivered: (report.emails_sent || 0) - (report.bounces?.hard_bounces || 0) - (report.bounces?.soft_bounces || 0),
+        
+        opens: {
+          total: report.opens?.opens_total || 0,
+          unique: report.opens?.unique_opens || 0,
+          rate: report.opens?.open_rate ? (report.opens.open_rate * 100) : 0,
+          lastOpen: report.opens?.last_open || null,
+        },
+        
+        clicks: {
+          total: report.clicks?.clicks_total || 0,
+          unique: report.clicks?.unique_clicks || 0,
+          rate: report.clicks?.click_rate ? (report.clicks.click_rate * 100) : 0,
+          lastClick: report.clicks?.last_click || null,
+          subscriberClicks: report.clicks?.unique_subscriber_clicks || 0,
+        },
+        
+        bounces: {
+          total: (report.bounces?.hard_bounces || 0) + (report.bounces?.soft_bounces || 0),
+          hard: report.bounces?.hard_bounces || 0,
+          soft: report.bounces?.soft_bounces || 0,
+          rate: report.bounces?.bounce_rate ? (report.bounces.bounce_rate * 100) : 0,
+        },
+        
+        unsubscribes: {
+          total: report.unsubscribed?.unsubscribe_count || 0,
+          rate: report.unsubscribed?.unsubscribe_rate ? (report.unsubscribed.unsubscribe_rate * 100) : 0,
+        },
+      },
+      
+      // Top clicked links (from report.clicks.click_detail if available)
+      clickedLinks: (report.clicks?.click_detail || []).slice(0, 10).map((link: any) => ({
+        url: link.url,
+        totalClicks: link.total_clicks || 0,
+        uniqueClicks: link.unique_clicks || 0,
+        clickPercentage: link.percent || 0,
+      })),
+      
+      // Geographic data - Top locations
+      topLocations: locationData.slice(0, 10).map((loc: any) => ({
+        country: loc.country_code || 'Unknown',
+        countryName: loc.country_name || loc.country_code || 'Unknown',
+        region: loc.region || '',
+        regionName: loc.region_name || loc.region || '',
+        opens: loc.opens || 0,
+      })),
+      
+      // Timeseries data (if available)
+      timeseries: report.timeseries || [],
+      
+      // Send time info
+      sendTime: {
+        sentAt: report.send_time || campaign.sentAt,
+        timezone: report.timezone || 'UTC',
+      },
+      
+      // List info
+      list: {
+        id: report.list_id,
+        name: report.list_name,
+      },
+    };
+
+    res.json(reportData);
+
+  } catch (error: any) {
+    console.error('❌ Get campaign report error:', error);
+    logger.err('❌ Get campaign report error:', error);
+    
+    if (error.status === 404) {
+      return res.status(404).json({
+        error: 'Campaign report not found',
+        message: 'The campaign report was not found in Mailchimp'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Failed to fetch campaign report',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/organizations/:id/campaigns/:campaignId/activity
+ * Get subscriber activity (who opened, who clicked)
+ */
+router.get('/:id/campaigns/:campaignId/activity', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id: orgId, campaignId } = req.params;
+    const { limit = '50', offset = '0' } = req.query;
+    const userId = (req as any).tokenPayload?.userId;
+
+    console.log(`👥 Fetching subscriber activity for campaign ${campaignId}`);
+
+    // Verify organization and user
+    const org = await Organization.findById(orgId);
+    if (!org) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user || String(user.organizationId) !== orgId) {
+      return res.status(403).json({ 
+        error: 'Forbidden',
+        message: 'You do not belong to this organization' 
+      });
+    }
+
+    // Find campaign
+    const campaign = await Campaign.findOne({
+      _id: campaignId,
+      organizationId: orgId
+    });
+
+    if (!campaign) {
+      return res.status(404).json({ 
+        error: 'Campaign not found',
+        message: 'Campaign not found in this organization' 
+      });
+    }
+
+    const MC: any = mailchimp as any;
+
+    // Fetch email activity from Mailchimp
+    const [openedMembers, clickedMembers] = await Promise.all([
+      MC.reports.getEmailActivityForCampaign(campaign.mailchimpCampaignId, {
+        count: parseInt(limit as string),
+        offset: parseInt(offset as string),
+      }).catch(() => ({ emails: [], total_items: 0 })),
+      MC.reports.getCampaignClickDetails(campaign.mailchimpCampaignId, {
+        count: parseInt(limit as string),
+      }).catch(() => ({ members_clicked: [], total_items: 0 }))
+    ]);
+
+    // Process and combine activity data
+    const activityMap = new Map();
+
+    // Add opened members
+    (openedMembers.emails || []).forEach((email: any) => {
+      const key = email.email_address;
+      if (!activityMap.has(key)) {
+        activityMap.set(key, {
+          email: email.email_address,
+          opened: false,
+          clicked: false,
+          openCount: 0,
+          clickCount: 0,
+          lastOpened: null,
+          lastClicked: null,
+        });
+      }
+      
+      const activity = activityMap.get(key);
+      if (email.activity && email.activity.length > 0) {
+        const opens = email.activity.filter((a: any) => a.action === 'open');
+        if (opens.length > 0) {
+          activity.opened = true;
+          activity.openCount = opens.length;
+          activity.lastOpened = opens[opens.length - 1].timestamp;
+        }
+        
+        const clicks = email.activity.filter((a: any) => a.action === 'click');
+        if (clicks.length > 0) {
+          activity.clicked = true;
+          activity.clickCount = clicks.length;
+          activity.lastClicked = clicks[clicks.length - 1].timestamp;
+        }
+      }
+    });
+
+    const activityList = Array.from(activityMap.values());
+
+    res.json({
+      success: true,
+      activity: activityList,
+      pagination: {
+        total: openedMembers.total_items || activityList.length,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string),
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Get subscriber activity error:', error);
+    logger.err('❌ Get subscriber activity error:', error);
+    
+    res.status(500).json({
+      error: 'Failed to fetch subscriber activity',
+      message: error.message
     });
   }
 });
