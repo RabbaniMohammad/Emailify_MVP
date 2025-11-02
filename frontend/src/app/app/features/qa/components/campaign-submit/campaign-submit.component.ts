@@ -8,7 +8,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
-import { BehaviorSubject, Subject, firstValueFrom, takeUntil, Subscription, debounceTime } from 'rxjs';
+import { BehaviorSubject, Subject, firstValueFrom, takeUntil, Subscription, debounceTime, take } from 'rxjs';
 import { timeout, catchError, retry } from 'rxjs/operators';
 import { 
   CampaignSubmitService, 
@@ -413,7 +413,8 @@ private initializeCampaignPage(): void {
     this.checkingSenderSettings = true;
     const wasConfigured = this.senderSettingsConfigured;
     
-    this.authService.currentUser$.pipe(takeUntil(this.destroy$)).subscribe(user => {
+    // Use take(1) to prevent reloading when auth service updates user status every 30s
+    this.authService.currentUser$.pipe(take(1)).subscribe(user => {
       if (user?.organizationId) {
         const orgId = typeof user.organizationId === 'object' ? user.organizationId._id : user.organizationId;
         this.http.get<any>(`/api/organizations/${orgId}/sender-settings`).subscribe({

@@ -24,7 +24,7 @@ import {
   Filler
 } from 'chart.js';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { takeUntil, take } from 'rxjs/operators';
 import { OrganizationService } from '../../../../core/services/organization.service';
 import { AuthService } from '../../../../core/services/auth.service';
 
@@ -189,9 +189,9 @@ export class CampaignDetailPageComponent implements OnInit, OnDestroy {
         this.campaignId = params['id'];
         console.log(`📧 Campaign ID from route: ${this.campaignId}`);
         
-        // Get organization ID from user
+        // Get organization ID from user - only once to prevent reload on auth status updates
         this.authService.currentUser$
-          .pipe(takeUntil(this.destroy$))
+          .pipe(take(1))
           .subscribe(user => {
             if (user?.organizationId) {
               const orgId = typeof user.organizationId === 'string' 

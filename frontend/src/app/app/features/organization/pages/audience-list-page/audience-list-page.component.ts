@@ -15,7 +15,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatMenuModule } from '@angular/material/menu';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { takeUntil, take } from 'rxjs/operators';
 import { OrganizationService } from '../../../../core/services/organization.service';
 import { AuthService } from '../../../../core/services/auth.service';
 
@@ -77,9 +77,10 @@ export class AudienceListPageComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     console.log('👥 Audience list page initializing...');
     
-    // Get organization ID from current user
+    // Get organization ID from current user - only once on init
+    // Using take(1) to prevent reloading when auth service updates user status every 30s
     this.authService.currentUser$
-      .pipe(takeUntil(this.destroy$))
+      .pipe(take(1))
       .subscribe(user => {
         if (user?.organizationId) {
           const orgId = typeof user.organizationId === 'string' 
@@ -287,5 +288,10 @@ export class AudienceListPageComponent implements OnInit, OnDestroy {
   formatDate(dateString?: string): string {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString();
+  }
+
+  getStatusCount(status: string): number {
+    if (status === 'all') return this.audienceMembers.length;
+    return this.audienceMembers.filter(m => m.status === status).length;
   }
 }

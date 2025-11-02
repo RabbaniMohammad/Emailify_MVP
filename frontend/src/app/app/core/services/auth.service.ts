@@ -47,7 +47,6 @@ export class AuthService implements OnDestroy {
 
   // ==================== Internal Flags ====================
   private authCheckComplete = false;
-  private statusCheckSubscription?: Subscription;
   private tokenRefreshTimer?: any;
 
   constructor() {
@@ -61,27 +60,25 @@ export class AuthService implements OnDestroy {
   // ==================== Status Monitoring ====================
   
   /**
-   * Start monitoring user status and proactively refresh tokens
+   * Start token refresh monitoring
    * Call this after successful login
+   * 
+   * Note: Removed 30-second status check - backend validates on every request anyway.
+   * This reduces API calls by 99% while maintaining security.
    */
   startStatusMonitoring(): void {
     this.stopStatusMonitoring();
 
-    // ✅ Check user status every 30 seconds
-    this.statusCheckSubscription = interval(30000).subscribe(() => {
-      if (this.isAuthenticatedSubject.value) {
-        this.checkUserStatus();
-      }
-    });
-
     // ✅ Proactive token refresh every 50 minutes (before 60-minute expiry)
+    // This is the ONLY background check we need - keeps session alive
     this.tokenRefreshTimer = setInterval(() => {
       if (this.isAuthenticatedSubject.value) {
         this.refreshToken().subscribe({
           next: () => {
+            console.log('🔄 Token refreshed successfully');
           },
           error: (err) => {
-
+            console.error('❌ Token refresh failed:', err);
             this.handleRefreshFailure(err);
           }
         });
@@ -93,56 +90,12 @@ export class AuthService implements OnDestroy {
    * Stop all monitoring timers
    */
   stopStatusMonitoring(): void {
-    if (this.statusCheckSubscription) {
-      this.statusCheckSubscription.unsubscribe();
-      this.statusCheckSubscription = undefined;
-    }
+    // Removed statusCheckSubscription - no longer needed
     
     if (this.tokenRefreshTimer) {
       clearInterval(this.tokenRefreshTimer);
       this.tokenRefreshTimer = undefined;
     }
-  }
-
-  /**
-   * Check if current user is still active and approved
-   * Called every 30 seconds by status monitoring
-   */
-  private checkUserStatus(): void {
-    this.http.get<{ user: User }>('/api/auth/me', { withCredentials: true })
-      .subscribe({
-        next: (response) => {
-          const user = response.user;
-          
-          // ✅ Check if user account status changed
-          if (!user.isActive || !user.isApproved) {
-            const reason = !user.isActive ? 'account_deactivated' : 'pending_approval';
-            this.handleForceLogout(reason);
-          } else {
-            // ✅ Update user data
-            this.currentUserSubject.next(user);
-          }
-        },
-        error: (error) => {
-          // ✅ Try to refresh token if 401
-          if (error.status === 401) {
-            this.refreshToken().subscribe({
-              next: () => {
-                // Retry the status check after successful refresh
-                this.checkUserStatus();
-              },
-              error: (refreshError) => {
-
-                this.handleRefreshFailure(refreshError);
-              }
-            });
-          } else if (error.status === 403) {
-            // ✅ Access forbidden
-
-            this.handleForceLogout('access_denied');
-          }
-        }
-      });
   }
 
   // ==================== Authentication Methods ====================

@@ -14,8 +14,8 @@ import { AdminService } from '../../../core/services/admin.service';
 import { AdminEventService } from '../../../core/services/admin-event.service';
 import { TemplateGenerationService } from '../../../core/services/template-generation.service';
 import { PerformanceDashboardComponent } from '../performance-dashboard/performance-dashboard.component';
-import { map, takeUntil, startWith, tap, switchMap, filter } from 'rxjs/operators';
-import { BehaviorSubject, Subject, timer } from 'rxjs';
+import { map, takeUntil, startWith, tap, switchMap, filter, take } from 'rxjs/operators';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 @Component({
   selector: 'app-toolbar',
@@ -65,26 +65,18 @@ ngOnInit(): void {
   });
 
   // ========================================
-  // Admin pending count polling
+  // Admin pending count - load on demand only
   // ========================================
-  // Load pending count immediately if user is available
+  // Load pending count immediately if user is admin
   this.currentUser$.pipe(
     filter(user => {
       if (!user) return false;
       const isOrgAdmin = user.orgRole === 'admin' || user.orgRole === 'super_admin';
       return isOrgAdmin;
     }),
-    takeUntil(this.destroy$)
+    take(1) // Load once, no polling
   ).subscribe(() => {
-    // Initial load
     this.loadPendingCount();
-    
-    // Poll every 30 minutes
-    timer(1800000, 1800000).pipe(
-      takeUntil(this.destroy$)
-    ).subscribe(() => {
-      this.loadPendingCount();
-    });
   });
 
   // Listen to refresh events

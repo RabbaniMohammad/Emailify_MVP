@@ -1,202 +1,308 @@
-<div class="organization-page">
+<div class="organization-page-wrapper">
+  <!-- Animated Background -->
+  <div class="page-background">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+  </div>
+
   <!-- Loading State -->
-  <div *ngIf="loading" class="loading-container">
-    <mat-spinner diameter="50"></mat-spinner>
-    <p>Loading organization dashboard...</p>
+  <div *ngIf="loading" class="loading-container glass-card">
+    <div class="loading-content">
+      <mat-spinner diameter="60" color="primary"></mat-spinner>
+      <p class="loading-text">Loading organization dashboard...</p>
+    </div>
   </div>
 
   <!-- Error State -->
-  <div *ngIf="error && !loading" class="error-container">
-    <mat-icon>error_outline</mat-icon>
-    <h2>{{ error }}</h2>
+  <div *ngIf="error && !loading" class="error-container glass-card">
+    <div class="error-content">
+      <div class="error-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <h2>{{ error }}</h2>
+      <p>Please try refreshing the page or contact support</p>
+    </div>
   </div>
 
   <!-- Dashboard Content -->
   <div *ngIf="dashboardData && !loading" class="dashboard-content">
-    
-    <!-- Header -->
-    <div class="dashboard-header">
-      <div class="org-info">
-        <h1>{{ dashboardData.organization.name }}</h1>
-        <p class="org-slug">{{ dashboardData.organization.slug }}</p>
-        <p class="org-created">Created {{ formatDate(dashboardData.organization.createdAt) }}</p>
-      </div>
-    </div>
 
-    <!-- Stats Cards -->
+    <!-- Stats Cards Grid -->
     <div class="stats-grid">
       <!-- Campaigns Card -->
-      <mat-card class="stat-card campaigns-card">
-        <mat-card-header>
-          <mat-icon mat-card-avatar>campaign</mat-icon>
-          <mat-card-title>Campaigns</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
+      <div class="stat-card glass-card campaigns-card">
+        <div class="card-header">
+          <div class="header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+            </svg>
+          </div>
+          <h3 class="section-title">Campaigns</h3>
+          <div class="title-underline"></div>
+        </div>
+        <div class="card-content">
           <div class="stat-number">{{ dashboardData.stats.campaigns.total }}</div>
           <div class="stat-breakdown">
-            <span class="badge badge-draft">{{ dashboardData.stats.campaigns.draft }} Draft</span>
-            <span class="badge badge-scheduled">{{ dashboardData.stats.campaigns.scheduled }} Scheduled</span>
-            <span class="badge badge-sent">{{ dashboardData.stats.campaigns.sent }} Sent</span>
+            <div class="breakdown-item draft">
+              <div class="breakdown-dot"></div>
+              <span class="breakdown-count">{{ dashboardData.stats.campaigns.draft }}</span>
+              <span class="breakdown-label">Draft</span>
+            </div>
+            <div class="breakdown-item scheduled">
+              <div class="breakdown-dot"></div>
+              <span class="breakdown-count">{{ dashboardData.stats.campaigns.scheduled }}</span>
+              <span class="breakdown-label">Scheduled</span>
+            </div>
+            <div class="breakdown-item sent">
+              <div class="breakdown-dot"></div>
+              <span class="breakdown-count">{{ dashboardData.stats.campaigns.sent }}</span>
+              <span class="breakdown-label">Sent</span>
+            </div>
           </div>
-        </mat-card-content>
-      </mat-card>
+        </div>
+      </div>
 
       <!-- Subscribers Card -->
-      <mat-card class="stat-card subscribers-card">
-        <mat-card-header>
-          <mat-icon mat-card-avatar>people</mat-icon>
-          <mat-card-title>Subscribers</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
+      <div class="stat-card glass-card subscribers-card">
+        <div class="card-header">
+          <div class="header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+            </svg>
+          </div>
+          <h3 class="section-title">Subscribers</h3>
+          <div class="title-underline"></div>
+        </div>
+        <div class="card-content">
           <div *ngIf="audienceData">
             <div class="stat-number">{{ audienceData.stats.totalSubscribers }}</div>
-            <div class="stat-detail">
-              <mat-icon class="growth-icon">trending_up</mat-icon>
+            <div class="stat-growth">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+              </svg>
               <span>+{{ audienceData.stats.newLast30Days }} last 30 days</span>
             </div>
             <button 
-              mat-stroked-button 
-              color="primary"
-              class="view-audience-btn"
+              class="modern-btn primary-btn view-audience-btn"
               (click)="viewAudienceList()"
               matTooltip="View all subscribers">
-              <mat-icon>list</mat-icon>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+              </svg>
               View Audience
             </button>
           </div>
-          <div *ngIf="!audienceData" class="no-audience">
-            <mat-icon>info</mat-icon>
-            <p>No audience list configured</p>
-            <small>Link or create a Mailchimp audience list to track subscribers</small>
+          <div *ngIf="!audienceData" class="no-audience-state">
+            <div class="no-audience-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <p class="no-audience-title">No audience configured</p>
+            <p class="no-audience-desc">Link or create a Mailchimp audience list</p>
             <button 
-              mat-raised-button 
-              color="primary"
-              class="setup-audience-btn"
+              class="modern-btn accent-btn setup-audience-btn"
               (click)="setupAudience()"
               [disabled]="settingUpAudience">
-              <mat-icon>add_circle</mat-icon>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
               {{ settingUpAudience ? 'Setting up...' : 'Setup Audience' }}
             </button>
           </div>
-        </mat-card-content>
-      </mat-card>
+        </div>
+      </div>
 
       <!-- Templates Card -->
-      <mat-card class="stat-card templates-card">
-        <mat-card-header>
-          <mat-icon mat-card-avatar>email</mat-icon>
-          <mat-card-title>Templates</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
+      <div class="stat-card glass-card templates-card">
+        <div class="card-header">
+          <div class="header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <h3 class="section-title">Templates</h3>
+          <div class="title-underline"></div>
+        </div>
+        <div class="card-content">
           <div class="stat-number">{{ dashboardData.stats.templates }}</div>
-          <div class="stat-detail">Email templates created</div>
-        </mat-card-content>
-      </mat-card>
+          <div class="stat-label">Email templates created</div>
+        </div>
+      </div>
 
       <!-- Team Card -->
-      <mat-card class="stat-card team-card">
-        <mat-card-header>
-          <mat-icon mat-card-avatar>group</mat-icon>
-          <mat-card-title>Team</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
+      <div class="stat-card glass-card team-card">
+        <div class="card-header">
+          <div class="header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+          </div>
+          <h3 class="section-title">Team</h3>
+          <div class="title-underline"></div>
+        </div>
+        <div class="card-content">
           <div class="stat-number">{{ dashboardData.stats.members }}</div>
-          <div class="stat-detail">Team members</div>
-        </mat-card-content>
-      </mat-card>
+          <div class="stat-label">Team members</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audience Insights -->
+    <div class="section-card glass-card audience-insights" *ngIf="audienceData">
+      <div class="card-header">
+        <div class="header-icon golden-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </div>
+        <h3 class="section-title">Audience Insights</h3>
+        <div class="title-underline golden"></div>
+      </div>
+      <div class="card-content">
+        <div class="insights-stats-grid">
+          <div class="stat-card-mini primary">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ audienceData.stats.subscribed }}</span>
+              <span class="stat-label">Subscribed</span>
+            </div>
+          </div>
+
+          <div class="stat-card-mini warning">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ audienceData.stats.unsubscribed }}</span>
+              <span class="stat-label">Unsubscribed</span>
+            </div>
+          </div>
+
+          <div class="stat-card-mini info">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ formatPercent(audienceData.stats.openRate) }}</span>
+              <span class="stat-label">Avg. Open Rate</span>
+            </div>
+          </div>
+
+          <div class="stat-card-mini success">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ formatPercent(audienceData.stats.clickRate) }}</span>
+              <span class="stat-label">Avg. Click Rate</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Recent Campaigns -->
-    <mat-card class="section-card recent-campaigns" *ngIf="dashboardData.recentCampaigns.length > 0">
-      <mat-card-header>
-        <mat-icon mat-card-avatar>history</mat-icon>
-        <mat-card-title>Recent Campaigns</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
+    <div class="section-card glass-card recent-campaigns" *ngIf="dashboardData.recentCampaigns.length > 0">
+      <div class="card-header">
+        <div class="header-icon variants-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <h3 class="section-title">Recent Campaigns</h3>
+        <div class="title-underline variants"></div>
+      </div>
+      <div class="card-content">
         <div class="campaigns-list">
           <div *ngFor="let campaign of dashboardData.recentCampaigns" class="campaign-item">
-            <div class="campaign-info">
-              <h3>{{ campaign.name }}</h3>
-              <p class="campaign-subject" *ngIf="campaign.subject">{{ campaign.subject }}</p>
-              <p class="campaign-meta">
-                <span>{{ campaign.recipientsCount }} recipients</span>
-                <span class="separator">•</span>
-                <span>{{ formatDate(campaign.createdAt) }}</span>
-              </p>
-            </div>
-            <div class="campaign-stats">
-              <mat-chip [ngClass]="getStatusClass(campaign.status)">
-                {{ campaign.status }}
-              </mat-chip>
-              <div class="metrics" *ngIf="campaign.status === 'sent'">
-                <span class="metric">
-                  <mat-icon>visibility</mat-icon>
-                  {{ formatPercent(campaign.metrics.openRate) }}
-                </span>
-                <span class="metric">
-                  <mat-icon>touch_app</mat-icon>
-                  {{ formatPercent(campaign.metrics.clickRate) }}
-                </span>
+            <div class="campaign-main">
+              <div class="campaign-info">
+                <h4 class="campaign-name">{{ campaign.name }}</h4>
+                <p class="campaign-subject" *ngIf="campaign.subject">{{ campaign.subject }}</p>
+                <div class="campaign-meta">
+                  <span class="meta-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                    {{ campaign.recipientsCount }} recipients
+                  </span>
+                  <span class="separator">•</span>
+                  <span class="meta-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    {{ formatDate(campaign.createdAt) }}
+                  </span>
+                </div>
               </div>
               <div class="campaign-actions">
+                <span class="status-badge" [ngClass]="getStatusClass(campaign.status)">
+                  {{ campaign.status }}
+                </span>
+                <div class="metrics" *ngIf="campaign.status === 'sent'">
+                  <span class="metric-badge open">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                      <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                    {{ formatPercent(campaign.metrics.openRate) }}
+                  </span>
+                  <span class="metric-badge click">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/>
+                    </svg>
+                    {{ formatPercent(campaign.metrics.clickRate) }}
+                  </span>
+                </div>
                 <button 
                   *ngIf="campaign.status === 'sent'"
-                  mat-raised-button 
-                  color="primary"
-                  class="view-report-btn"
+                  class="modern-btn small-btn primary-btn"
                   [routerLink]="['/organization/campaigns', campaign._id]"
                   matTooltip="View detailed campaign report">
-                  <mat-icon>analytics</mat-icon>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                  </svg>
                   View Report
                 </button>
                 <button 
-                  mat-icon-button 
-                  class="refresh-btn"
+                  class="icon-btn refresh-btn"
                   (click)="refreshCampaignMetrics(campaign._id); $event.stopPropagation()"
                   [disabled]="syncingCampaigns.has(campaign._id)"
+                  [class.spinning]="syncingCampaigns.has(campaign._id)"
                   matTooltip="Refresh metrics from Mailchimp">
-                  <mat-icon [class.spinning]="syncingCampaigns.has(campaign._id)">
-                    {{ syncingCampaigns.has(campaign._id) ? 'sync' : 'refresh' }}
-                  </mat-icon>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
                 </button>
               </div>
             </div>
           </div>
         </div>
-      </mat-card-content>
-    </mat-card>
-
-    <!-- Audience Insights -->
-    <mat-card class="section-card audience-insights" *ngIf="audienceData">
-      <mat-card-header>
-        <mat-icon mat-card-avatar>insights</mat-icon>
-        <mat-card-title>Audience Insights</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <div class="insights-grid">
-          <div class="insight-item">
-            <div class="insight-label">Subscribed</div>
-            <div class="insight-value">{{ audienceData.stats.subscribed }}</div>
-          </div>
-          <div class="insight-item">
-            <div class="insight-label">Unsubscribed</div>
-            <div class="insight-value">{{ audienceData.stats.unsubscribed }}</div>
-          </div>
-          <div class="insight-item">
-            <div class="insight-label">Avg. Open Rate</div>
-            <div class="insight-value">{{ formatPercent(audienceData.stats.openRate) }}</div>
-          </div>
-          <div class="insight-item">
-            <div class="insight-label">Avg. Click Rate</div>
-            <div class="insight-value">{{ formatPercent(audienceData.stats.clickRate) }}</div>
-          </div>
-        </div>
-      </mat-card-content>
-    </mat-card>
+      </div>
+    </div>
 
     <!-- Empty State -->
-    <div *ngIf="dashboardData.recentCampaigns.length === 0" class="empty-state">
-      <mat-icon>campaign</mat-icon>
+    <div *ngIf="dashboardData.recentCampaigns.length === 0 && !audienceData" class="empty-state glass-card">
+      <div class="empty-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+        </svg>
+      </div>
       <h2>No campaigns yet</h2>
       <p>Create your first email campaign to get started</p>
     </div>

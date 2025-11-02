@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { DebugLoggerService } from './debug-logger.service';
 
 /**
@@ -20,7 +20,8 @@ import { DebugLoggerService } from './debug-logger.service';
   providedIn: 'root'
 })
 export class TemplateStateService {
-  private debugLogger = inject(DebugLoggerService);
+  
+  constructor(private debugLogger: DebugLoggerService) {}
   
   // Storage Keys
   private readonly PREFIX = 'template_state_';

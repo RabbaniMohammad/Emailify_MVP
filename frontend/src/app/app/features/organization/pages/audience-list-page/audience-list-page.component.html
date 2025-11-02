@@ -1,173 +1,377 @@
-<div class="audience-container">
+<div class="audience-page-wrapper">
+  <!-- Animated Background -->
+  <div class="page-background">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+  </div>
+
   <!-- Loading State -->
-  <div *ngIf="loading" class="loading-container">
-    <mat-spinner></mat-spinner>
-    <p>Loading audience data...</p>
+  <div *ngIf="loading" class="loading-container glass-card">
+    <div class="loading-content">
+      <mat-spinner diameter="60" color="primary"></mat-spinner>
+      <p class="loading-text">Loading audience data...</p>
+    </div>
   </div>
 
   <!-- Error State -->
-  <div *ngIf="error && !loading" class="error-container">
-    <mat-icon color="warn">error</mat-icon>
-    <p>{{ error }}</p>
-    <button mat-raised-button color="primary" (click)="goBack()">
-      <mat-icon>arrow_back</mat-icon>
-      Back to Dashboard
-    </button>
+  <div *ngIf="error && !loading" class="error-container glass-card">
+    <div class="error-content">
+      <div class="error-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <h2>{{ error }}</h2>
+      <p>Please try again or go back to dashboard</p>
+      <button class="modern-btn primary-btn" (click)="goBack()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+        </svg>
+        Back to Dashboard
+      </button>
+    </div>
   </div>
 
-  <!-- Audience List -->
-  <div *ngIf="!loading && !error">
-    <!-- Header -->
-    <div class="audience-header">
-      <div class="header-left">
-        <button mat-icon-button (click)="goBack()" matTooltip="Back to Dashboard">
-          <mat-icon>arrow_back</mat-icon>
-        </button>
-        <h1>Audience List</h1>
+  <!-- Main Content -->
+  <div *ngIf="!loading && !error" class="audience-content">
+    
+    <!-- Page Header -->
+    <div class="page-header glass-card">
+      <div class="header-content">
+        <div class="header-left">
+          <button class="back-btn" (click)="goBack()" matTooltip="Back to Dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+          </button>
+          <div class="header-title-section">
+            <div class="header-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+              </svg>
+            </div>
+            <div class="header-text">
+              <h1>Audience Management</h1>
+              <p class="subtitle">Manage your email subscribers</p>
+            </div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="modern-btn primary-btn" (click)="toggleAddForm()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+            </svg>
+            <span>Add Subscriber</span>
+          </button>
+          <button class="modern-btn accent-btn" (click)="fileInput.click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <span>Import CSV</span>
+          </button>
+          <input #fileInput type="file" accept=".csv" style="display: none;" (change)="onFileSelected($event)">
+          <div class="total-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            <span class="badge-count">{{ totalSubscribers }}</span>
+            <span class="badge-label">Total</span>
+          </div>
+        </div>
       </div>
-      <div class="header-actions">
-        <mat-chip color="primary">
-          <mat-icon>people</mat-icon>
-          {{ totalSubscribers }} Subscribers
-        </mat-chip>
-        <button mat-raised-button color="primary" (click)="toggleAddForm()">
-          <mat-icon>person_add</mat-icon>
-          Add Subscriber
-        </button>
-        <button mat-stroked-button (click)="fileInput.click()">
-          <mat-icon>upload_file</mat-icon>
-          Import CSV
-        </button>
-        <input #fileInput type="file" accept=".csv" style="display: none;" (change)="onFileSelected($event)">
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+      <div class="stat-card glass-card subscribed-card">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ getStatusCount('subscribed') }}</div>
+          <div class="stat-label">Subscribed</div>
+        </div>
+      </div>
+
+      <div class="stat-card glass-card cleaned-card">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ getStatusCount('cleaned') }}</div>
+          <div class="stat-label">Cleaned</div>
+        </div>
+      </div>
+
+      <div class="stat-card glass-card unsubscribed-card">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ getStatusCount('unsubscribed') }}</div>
+          <div class="stat-label">Unsubscribed</div>
+        </div>
       </div>
     </div>
 
     <!-- Add Subscriber Form -->
-    <mat-card *ngIf="showAddForm" class="add-form">
-      <mat-card-content>
-        <h3>Add New Subscriber</h3>
-        <div class="form-row">
-          <mat-form-field appearance="outline">
-            <mat-label>Email</mat-label>
-            <input matInput [(ngModel)]="newSubscriber.email" type="email" required>
-          </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>First Name</mat-label>
-            <input matInput [(ngModel)]="newSubscriber.firstName">
-          </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Last Name</mat-label>
-            <input matInput [(ngModel)]="newSubscriber.lastName">
-          </mat-form-field>
+    <div *ngIf="showAddForm" class="add-form-container glass-card">
+      <div class="form-header">
+        <div class="header-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+          </svg>
+        </div>
+        <h3 class="section-title">Add New Subscriber</h3>
+        <div class="title-underline"></div>
+      </div>
+      <div class="form-content">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label">Email Address *</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+              <input 
+                type="email" 
+                class="modern-input" 
+                [(ngModel)]="newSubscriber.email" 
+                placeholder="subscriber@example.com"
+                required>
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="field-label">First Name</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+              <input 
+                type="text" 
+                class="modern-input" 
+                [(ngModel)]="newSubscriber.firstName" 
+                placeholder="John">
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="field-label">Last Name</label>
+            <div class="input-wrapper">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+              <input 
+                type="text" 
+                class="modern-input" 
+                [(ngModel)]="newSubscriber.lastName" 
+                placeholder="Doe">
+            </div>
+          </div>
         </div>
         <div class="form-actions">
-          <button mat-button (click)="toggleAddForm()">Cancel</button>
-          <button mat-raised-button color="primary" (click)="addSubscriber()" [disabled]="!newSubscriber.email">
+          <button class="modern-btn secondary-btn" (click)="toggleAddForm()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            Cancel
+          </button>
+          <button class="modern-btn primary-btn" (click)="addSubscriber()" [disabled]="!newSubscriber.email">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 4v16m8-8H4"/>
+            </svg>
             Add Subscriber
           </button>
         </div>
-      </mat-card-content>
-    </mat-card>
+      </div>
+    </div>
 
-    <!-- Search and Filter Bar -->
-    <div class="filter-bar">
-      <mat-form-field appearance="outline" class="search-field">
-        <mat-label>Search subscribers</mat-label>
-        <mat-icon matPrefix>search</mat-icon>
-        <input matInput [(ngModel)]="searchText" (ngModelChange)="filterMembers()" placeholder="Search by email or name">
-      </mat-form-field>
-      <mat-form-field appearance="outline" class="status-filter">
-        <mat-label>Status</mat-label>
-        <mat-select [(ngModel)]="selectedStatus" (selectionChange)="filterMembers()">
-          <mat-option value="all">All</mat-option>
-          <mat-option value="subscribed">Subscribed</mat-option>
-          <mat-option value="unsubscribed">Unsubscribed</mat-option>
-          <mat-option value="cleaned">Cleaned</mat-option>
-        </mat-select>
-      </mat-form-field>
+    <!-- Filters Section -->
+    <div class="filters-section glass-card">
+      <div class="filter-group">
+        <div class="filter-field search-filter">
+          <label class="filter-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            Search
+          </label>
+          <input 
+            type="text" 
+            class="filter-input" 
+            [(ngModel)]="searchText" 
+            (ngModelChange)="filterMembers()" 
+            placeholder="Search by email or name...">
+        </div>
+        <div class="filter-field status-filter">
+          <label class="filter-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+            </svg>
+            Status
+          </label>
+          <mat-form-field class="custom-mat-select" appearance="outline">
+            <mat-select [(ngModel)]="selectedStatus" (selectionChange)="filterMembers()" panelClass="custom-select-panel">
+              <mat-option value="all">
+                <div class="option-content">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 6h16M4 12h16M4 18h16"/>
+                  </svg>
+                  <span>All Statuses</span>
+                </div>
+              </mat-option>
+              <mat-option value="subscribed">
+                <div class="option-content">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  <span>Subscribed</span>
+                </div>
+              </mat-option>
+              <mat-option value="unsubscribed">
+                <div class="option-content">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                  </svg>
+                  <span>Unsubscribed</span>
+                </div>
+              </mat-option>
+              <mat-option value="cleaned">
+                <div class="option-content">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                  <span>Cleaned</span>
+                </div>
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+        <div class="filter-results">
+          <span class="results-text">Showing {{ filteredMembers.length }} of {{ audienceMembers.length }}</span>
+        </div>
+      </div>
     </div>
 
     <!-- Subscribers Table -->
-    <mat-card>
-      <mat-card-content>
-        <div *ngIf="audienceMembers.length === 0" class="empty-state">
-          <mat-icon>inbox</mat-icon>
-          <p>No subscribers found</p>
+    <div class="subscribers-table-container glass-card">
+      <div class="table-header">
+        <div class="header-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+          </svg>
+        </div>
+        <h3 class="section-title">Subscribers List</h3>
+        <div class="title-underline"></div>
+      </div>
+
+      <div class="table-content">
+        <!-- Empty State -->
+        <div *ngIf="filteredMembers.length === 0" class="empty-state">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+            </svg>
+          </div>
+          <h3>No subscribers found</h3>
+          <p>Try adjusting your filters or add new subscribers</p>
         </div>
 
-        <table mat-table [dataSource]="filteredMembers" *ngIf="filteredMembers.length > 0">
-          <!-- Email Column -->
-          <ng-container matColumnDef="email">
-            <th mat-header-cell *matHeaderCellDef>Email</th>
-            <td mat-cell *matCellDef="let member">
-              <div class="email-cell">
-                <mat-icon>email</mat-icon>
-                {{ member.email }}
-              </div>
-            </td>
-          </ng-container>
+        <!-- Table -->
+        <div *ngIf="filteredMembers.length > 0" class="responsive-table">
+          <table class="modern-table">
+            <thead>
+              <tr>
+                <th>
+                  <div class="th-content">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                    Email
+                  </div>
+                </th>
+                <th>
+                  <div class="th-content">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                    </svg>
+                    Name
+                  </div>
+                </th>
+                <th>
+                  <div class="th-content">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Status
+                  </div>
+                </th>
+                <th>
+                  <div class="th-content">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    Joined
+                  </div>
+                </th>
+                <th>
+                  <div class="th-content">Actions</div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let member of filteredMembers; let i = index" class="table-row">
+                <td data-label="Email">
+                  <div class="email-cell">
+                    <div class="avatar">{{ member.email.charAt(0).toUpperCase() }}</div>
+                    <span class="email-text">{{ member.email }}</span>
+                  </div>
+                </td>
+                <td data-label="Name">
+                  <span class="name-text">{{ member.firstName || member.lastName ? (member.firstName + ' ' + member.lastName).trim() : 'N/A' }}</span>
+                </td>
+                <td data-label="Status">
+                  <span class="status-badge" [ngClass]="'status-' + member.status">
+                    <span class="status-dot"></span>
+                    {{ member.status | titlecase }}
+                  </span>
+                </td>
+                <td data-label="Joined">
+                  <span class="date-text">{{ formatDate(member.joinedAt) }}</span>
+                </td>
+                <td data-label="Actions">
+                  <button class="action-btn" [matMenuTriggerFor]="menu">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/>
+                    </svg>
+                  </button>
+                  <mat-menu #menu="matMenu" class="modern-menu">
+                    <button mat-menu-item (click)="editSubscriber(member)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                      </svg>
+                      <span>Edit</span>
+                    </button>
+                    <button mat-menu-item (click)="deleteSubscriber(member.email)" class="delete-item">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                      </svg>
+                      <span>Delete</span>
+                    </button>
+                  </mat-menu>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
-          <!-- First Name Column -->
-          <ng-container matColumnDef="firstName">
-            <th mat-header-cell *matHeaderCellDef>First Name</th>
-            <td mat-cell *matCellDef="let member">
-              {{ member.firstName || 'N/A' }}
-            </td>
-          </ng-container>
-
-          <!-- Last Name Column -->
-          <ng-container matColumnDef="lastName">
-            <th mat-header-cell *matHeaderCellDef>Last Name</th>
-            <td mat-cell *matCellDef="let member">
-              {{ member.lastName || 'N/A' }}
-            </td>
-          </ng-container>
-
-          <!-- Status Column -->
-          <ng-container matColumnDef="status">
-            <th mat-header-cell *matHeaderCellDef>Status</th>
-            <td mat-cell *matCellDef="let member">
-              <mat-chip [color]="getStatusColor(member.status)" class="status-chip">
-                {{ member.status }}
-              </mat-chip>
-            </td>
-          </ng-container>
-
-          <!-- Joined Date Column -->
-          <ng-container matColumnDef="joinedAt">
-            <th mat-header-cell *matHeaderCellDef>Joined</th>
-            <td mat-cell *matCellDef="let member">
-              <div class="date-cell">
-                <mat-icon>calendar_today</mat-icon>
-                {{ formatDate(member.joinedAt) }}
-              </div>
-            </td>
-          </ng-container>
-
-          <!-- Actions Column -->
-          <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef>Actions</th>
-            <td mat-cell *matCellDef="let member">
-              <button mat-icon-button [matMenuTriggerFor]="menu">
-                <mat-icon>more_vert</mat-icon>
-              </button>
-              <mat-menu #menu="matMenu">
-                <button mat-menu-item (click)="editSubscriber(member)">
-                  <mat-icon>edit</mat-icon>
-                  <span>Edit</span>
-                </button>
-                <button mat-menu-item (click)="deleteSubscriber(member.email)">
-                  <mat-icon>delete</mat-icon>
-                  <span>Delete</span>
-                </button>
-              </mat-menu>
-            </td>
-          </ng-container>
-
-          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-        </table>
-      </mat-card-content>
-    </mat-card>
   </div>
 </div>

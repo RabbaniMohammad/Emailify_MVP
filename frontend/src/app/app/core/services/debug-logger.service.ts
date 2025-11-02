@@ -28,9 +28,9 @@ export class DebugLoggerService {
     // Generate unique session ID
     this.sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     
-    // Check if logging is enabled
+    // Check if logging is enabled - DISABLED BY DEFAULT for production
     const loggingEnabled = localStorage.getItem('debug_logging_enabled');
-    this.enabled = loggingEnabled !== 'false';
+    this.enabled = loggingEnabled === 'true'; // Only enable if explicitly set to 'true'
     
     // Start periodic flush
     this.startFlushTimer();
