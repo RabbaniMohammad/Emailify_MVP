@@ -119,11 +119,12 @@ print_success "Backend restarted"
 echo ""
 
 ##############################################################################
-# 7. RELOAD NGINX
+# 7. UPDATE NGINX CONFIGURATION
 ##############################################################################
-print_info "Reloading Nginx..."
+print_info "Updating Nginx configuration..."
+sudo cp $APP_DIR/deployment/nginx-lightsail.conf /etc/nginx/sites-available/default
 sudo nginx -t && sudo systemctl reload nginx
-print_success "Nginx reloaded"
+print_success "Nginx configuration updated and reloaded"
 echo ""
 
 ##############################################################################
