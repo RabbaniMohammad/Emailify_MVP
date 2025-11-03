@@ -11,7 +11,7 @@ export interface TemplateDetail { id: string; name: string; html?: string }
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
-  private readonly BASE_URL = 'http://localhost:3000'; // backend URL
+  private readonly BASE_URL = ''; // Use relative URLs (proxied by nginx)
 
   getTemplates(query = '', limit = 100, offset = 0) {
     let params = new HttpParams().set('limit', limit).set('offset', offset);

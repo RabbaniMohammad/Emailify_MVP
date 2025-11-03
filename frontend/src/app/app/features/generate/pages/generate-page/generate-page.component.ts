@@ -280,7 +280,7 @@ private sentImages: Array<{name: string, size: number}> = [];
       const formData = new FormData();
       formData.append('file', this.uploadedFile);
 
-      const response = await fetch('http://localhost:3000/api/csv-to-prompt', {
+      const response = await fetch('/api/csv-to-prompt', {
         method: 'POST',
         body: formData,
       });
