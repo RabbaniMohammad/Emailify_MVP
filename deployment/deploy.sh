@@ -122,7 +122,7 @@ echo ""
 # 7. UPDATE NGINX CONFIGURATION
 ##############################################################################
 print_info "Updating Nginx configuration..."
-sudo cp $APP_DIR/deployment/nginx-lightsail.conf /etc/nginx/sites-available/default
+sudo install -m 644 $APP_DIR/deployment/nginx-lightsail.conf /etc/nginx/sites-available/default
 sudo nginx -t && sudo systemctl reload nginx
 print_success "Nginx configuration updated and reloaded"
 echo ""
