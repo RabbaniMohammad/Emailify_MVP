@@ -1,3 +1,6 @@
+// Load environment variables first
+import 'dotenv/config';
+
 import logger from 'jet-logger';
 
 import ENV from '@src/common/constants/ENV';
