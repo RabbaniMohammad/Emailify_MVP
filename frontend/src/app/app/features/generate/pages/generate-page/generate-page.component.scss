@@ -32,11 +32,13 @@
 }
 
 
+.attach-btn.mat-mdc-icon-button,
 .add-image-btn.mat-mdc-icon-button {
   --mat-mdc-button-persistent-ripple-color: transparent !important;
   --mat-mdc-button-ripple-color: transparent !important;
 }
 
+.attach-btn .mat-mdc-button-persistent-ripple,
 .add-image-btn .mat-mdc-button-persistent-ripple {
   display: none !important;
 }
@@ -157,18 +159,12 @@
     box-shadow: 0 4px 12px rgba(109, 40, 217, 0.3);
     flex-shrink: 0;
     
-    // Excel SVG specific styling
-    &.excel-icon {
+    // Template icon (unclickable)
+    &.template-icon {
       background: var(--gradient-primary);
       box-shadow: 0 4px 12px rgba(109, 40, 217, 0.3);
-      cursor: pointer;
-      transition: all 0.3s ease;
+      cursor: default;
       padding: 6px;
-      
-      &:hover {
-        transform: scale(1.1);
-        box-shadow: 0 6px 16px rgba(109, 40, 217, 0.4);
-      }
       
       path {
         fill: white;
@@ -625,7 +621,7 @@
   padding-top: 0.5rem; // ✅ Add spacing
 }
 
-.add-image-btn {
+.attach-btn {
   flex-shrink: 0;
   color: var(--primary-purple);
   transition: all var(--transition-fast);
@@ -636,9 +632,10 @@
   justify-content: center !important;
   padding: 0 !important;
   
-  mat-icon {
-    margin: 0 auto !important;
-    display: block !important;
+  .attach-icon {
+    width: 24px;
+    height: 24px;
+    transition: all var(--transition-fast);
   }
   
   // ✅ Remove the circle
@@ -649,6 +646,11 @@
   
   &:hover:not(:disabled) {
     transform: scale(1.05);
+    color: var(--primary-purple-dark);
+    
+    .attach-icon {
+      transform: rotate(-15deg);
+    }
     
     ::ng-deep .mat-mdc-button-persistent-ripple {
       background-color: transparent !important;
@@ -659,6 +661,11 @@
     opacity: 0.4;
     cursor: not-allowed;
   }
+}
+
+// Keep old class for backward compatibility if needed
+.add-image-btn {
+  @extend .attach-btn;
 }
 
 .message-input {
@@ -884,10 +891,16 @@
     height: 50px;
   }
   
+  .attach-btn,
   .add-image-btn {
     width: 36px !important;
     height: 36px !important;
     min-width: 36px !important;
+    
+    .attach-icon {
+      width: 20px;
+      height: 20px;
+    }
     
     mat-icon {
       font-size: 20px;
@@ -1069,10 +1082,16 @@
     height: 70px;
   }
   
+  .attach-btn,
   .add-image-btn {
     width: 40px !important;
     height: 40px !important;
     min-width: 40px !important;
+    
+    .attach-icon {
+      width: 22px;
+      height: 22px;
+    }
     
     mat-icon {
       font-size: 22px;
@@ -1449,6 +1468,147 @@
 //     }
 //   }
 // }
+// Attach Choice Banner
+.attach-choice-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 1rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.attach-choice-content {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+  background: linear-gradient(
+    135deg,
+    rgba(109, 40, 217, 0.95) 0%,
+    rgba(139, 92, 246, 0.95) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 24px;
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  overflow: hidden;
+  animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.attach-choice-body {
+  padding: 2rem;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.attach-choice-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.attach-choice-subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.9;
+  text-align: center;
+}
+
+.attach-options {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+  justify-content: center;
+}
+
+.attach-option-btn {
+  flex: 1;
+  min-width: 150px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: var(--radius-lg);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all var(--transition-normal);
+  
+  mat-icon {
+    font-size: 2.5rem;
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  
+  &.image-option {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    }
+  }
+  
+  &.document-option {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    }
+  }
+}
+
+// Responsive styles for attach choice banner
+@media (max-width: 768px) {
+  .attach-choice-content {
+    max-width: 90%;
+  }
+  
+  .attach-options {
+    flex-direction: column;
+    
+    .attach-option-btn {
+      width: 100%;
+      min-width: unset;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .attach-choice-content {
+    max-width: 95%;
+  }
+  
+  .attach-choice-body {
+    padding: 1.5rem;
+  }
+  
+  .attach-choice-title {
+    font-size: 1.25rem;
+  }
+}
+
 // CSV/Excel Upload Banner
 .csv-banner-overlay {
   position: fixed;

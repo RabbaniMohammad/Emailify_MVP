@@ -95,6 +95,9 @@ private sentImages: Array<{name: string, size: number}> = [];
   private shouldAutoScroll = true;
   private isProgrammaticScroll = false; // Flag to ignore scroll events during auto-scroll
 
+  // Attach Choice Banner state
+  showAttachChoiceBanner = false;
+
   // CSV Banner state
   showCsvBanner = false;
   uploadedFile: File | null = null;
@@ -143,6 +146,25 @@ private sentImages: Array<{name: string, size: number}> = [];
 
   changeViewMode(mode: 'desktop' | 'tablet' | 'mobile'): void {
     this.viewMode = mode;
+  }
+
+  // Attach Choice Banner methods
+  openAttachChoiceBanner(): void {
+    this.showAttachChoiceBanner = true;
+  }
+
+  closeAttachChoiceBanner(): void {
+    this.showAttachChoiceBanner = false;
+  }
+
+  selectImageAttachment(): void {
+    this.closeAttachChoiceBanner();
+    this.triggerFileInput();
+  }
+
+  selectDocumentAttachment(): void {
+    this.closeAttachChoiceBanner();
+    this.openCsvBanner();
   }
 
   // CSV Banner methods

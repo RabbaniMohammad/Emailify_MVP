@@ -65,13 +65,11 @@
   <section class="chat-section">
     <div class="chat-header">
       <div class="header-content">
-        <!-- Excel Icon SVG -->
-        <svg class="header-icon excel-icon" 
-             matTooltip="Add Excel/CSV" 
+        <!-- Template Icon (Unclickable) -->
+        <svg class="header-icon template-icon" 
              viewBox="0 0 24 24" 
-             xmlns="http://www.w3.org/2000/svg"
-             (click)="openCsvBanner()">
-          <path fill="#217346" d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M12.9,14.5L15.8,19H14L12,15.6L10,19H8.2L11.1,14.5L8.2,10H10L12,13.4L14,10H15.8L12.9,14.5Z"/>
+             xmlns="http://www.w3.org/2000/svg">
+          <path fill="white" d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M12.9,14.5L15.8,19H14L12,15.6L10,19H8.2L11.1,14.5L8.2,10H10L12,13.4L14,10H15.8L12.9,14.5Z"/>
         </svg>
         <div class="header-text">
           <h3>Template Generator</h3>
@@ -240,16 +238,18 @@
     style="display: none;">
 
   <div class="composer-input-row">
-    <!-- Plus Button for Image Upload -->
+    <!-- Attach Button -->
     <button
       mat-icon-button
-      class="add-image-btn"
-      (click)="triggerFileInput()"
-      [disabled]="selectedImages.length >= maxImages || ((isGenerating$ | async) ?? false)"
-      [matTooltip]="selectedImages.length >= maxImages ? 'Maximum 2 images' : 'Add design reference images'"
+      class="attach-btn"
+      (click)="openAttachChoiceBanner()"
+      [disabled]="(isGenerating$ | async) ?? false"
+      matTooltip="Attach file"
       matTooltipPosition="above"
       type="button">
-      <mat-icon>add_photo_alternate</mat-icon>
+      <svg class="attach-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16.5 6V17.5C16.5 19.4891 14.9891 21 13 21C11.0109 21 9.5 19.4891 9.5 17.5V5C9.5 3.61929 10.6193 2.5 12 2.5C13.3807 2.5 14.5 3.61929 14.5 5V15.5C14.5 16.0523 14.0523 16.5 13.5 16.5C12.9477 16.5 12.5 16.0523 12.5 15.5V6H11V15.5C11 17.4891 12.5109 19 14.5 19C16.4891 19 18 17.4891 18 15.5V5C18 2.51472 15.9853 0.5 13.5 0.5C11.0147 0.5 9 2.51472 9 5V17.5C9 20.5376 11.4624 23 14.5 23C17.5376 23 20 20.5376 20 17.5V6H18.5Z" fill="currentColor"/>
+      </svg>
     </button>
 
     <textarea
@@ -272,6 +272,39 @@
   </div>
 </div>
   </section>
+</div>
+<!-- Attach Choice Banner -->
+<div class="attach-choice-overlay" *ngIf="showAttachChoiceBanner" (click)="closeAttachChoiceBanner()">
+  <div class="attach-choice-content" (click)="$event.stopPropagation()">
+    <!-- Close Button -->
+    <button mat-icon-button class="close-btn" (click)="closeAttachChoiceBanner()">
+      <mat-icon>close</mat-icon>
+    </button>
+    
+    <!-- Banner Body -->
+    <div class="attach-choice-body">
+      <h2 class="attach-choice-title">📎 Attach File</h2>
+      <p class="attach-choice-subtitle">Choose what you want to attach</p>
+      
+      <div class="attach-options">
+        <button 
+          mat-raised-button 
+          class="attach-option-btn image-option"
+          (click)="selectImageAttachment()">
+          <mat-icon>image</mat-icon>
+          <span>Image</span>
+        </button>
+        
+        <button 
+          mat-raised-button 
+          class="attach-option-btn document-option"
+          (click)="selectDocumentAttachment()">
+          <mat-icon>description</mat-icon>
+          <span>Document</span>
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 <!-- CSV/Excel Upload Banner -->
 <div class="csv-banner-overlay" *ngIf="showCsvBanner" (click)="closeCsvBanner()">
