@@ -36,6 +36,12 @@ body { margin: 0; font-family: Roboto, 'Helvetica Neue', sans-serif; }
   }
 }
 
+// Force all snackbars to appear above overlays/modals
+.mat-mdc-snack-bar-container,
+.mat-snack-bar-container {
+  z-index: 10003 !important; // Higher than all overlays
+}
+
 
 /* GrapesJS Styles */
 @import 'grapesjs/dist/css/grapes.min.css';

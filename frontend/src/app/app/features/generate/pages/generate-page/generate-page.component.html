@@ -302,10 +302,376 @@
           <mat-icon>description</mat-icon>
           <span>Document</span>
         </button>
+        
+        <button 
+          mat-raised-button 
+          class="attach-option-btn url-option"
+          (click)="selectUrlAttachment()">
+          <mat-icon>link</mat-icon>
+          <span>Website URL</span>
+        </button>
       </div>
     </div>
   </div>
 </div>
+<!-- Website URL Analyzer Banner -->
+<div class="url-analyzer-overlay" *ngIf="showUrlAnalyzer" (click)="closeUrlAnalyzer()">
+  <div class="url-analyzer-content" (click)="$event.stopPropagation()">
+    <!-- Close Button -->
+    <button mat-icon-button class="close-btn" (click)="closeUrlAnalyzer()">
+      <mat-icon>close</mat-icon>
+    </button>
+    
+    <!-- Banner Body -->
+    <div class="analyzer-body">
+      <h2 class="analyzer-title">🌐 Analyze Website</h2>
+      <p class="analyzer-subtitle">Enter a website URL to extract brand colors, fonts, images, and content</p>
+      
+      <!-- URL Input Section -->
+      <div *ngIf="!analyzedBrandDNA && !isAnalyzingWebsite" class="url-input-section">
+        <mat-form-field class="url-input-field" appearance="outline">
+          <mat-label>Website URL</mat-label>
+          <input 
+            matInput 
+            [(ngModel)]="websiteUrl" 
+            placeholder="https://example.com"
+            (keydown.enter)="analyzeWebsite()"
+            [disabled]="isAnalyzingWebsite">
+          <mat-icon matPrefix>link</mat-icon>
+        </mat-form-field>
+        
+        <button 
+          mat-raised-button 
+          class="analyze-btn"
+          (click)="analyzeWebsite()"
+          [disabled]="!websiteUrl || isAnalyzingWebsite">
+          <mat-icon>search</mat-icon>
+          <span>Analyze Website</span>
+        </button>
+      </div>
+      
+      <!-- Analyzing Indicator -->
+      <div *ngIf="isAnalyzingWebsite" class="analyzing-section">
+        <mat-spinner diameter="60"></mat-spinner>
+        <p class="analyzing-text">Analyzing website...</p>
+        <p class="analyzing-subtext">Extracting colors, fonts, images, and content</p>
+      </div>
+      
+      <!-- Brand DNA Review Section -->
+      <div *ngIf="analyzedBrandDNA && !isAnalyzingWebsite" class="brand-dna-section">
+        <div class="brand-dna-header">
+          <h3>✨ Brand DNA Extracted</h3>
+          <button mat-icon-button (click)="resetAnalyzer()" matTooltip="Analyze another website">
+            <mat-icon>refresh</mat-icon>
+          </button>
+        </div>
+        
+        <!-- Logo -->
+        <div class="dna-group" *ngIf="analyzedBrandDNA.logo">
+          <h4>🎨 Brand Logo</h4>
+          <div class="logo-display">
+            <img [src]="analyzedBrandDNA.logo" alt="Brand Logo" class="brand-logo-img" (error)="onImageError($event)" />
+            <div class="logo-url">
+              <mat-icon class="url-icon">link</mat-icon>
+              <span class="image-url" [title]="analyzedBrandDNA.logo">{{ getTruncatedUrl(analyzedBrandDNA.logo) }}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Colors -->
+        <div class="dna-group" *ngIf="analyzedBrandDNA.colors && analyzedBrandDNA.colors.length > 0">
+          <h4>🎨 Color Palette</h4>
+          <div class="color-palette">
+            <div 
+              *ngFor="let color of analyzedBrandDNA.colors; let i = index"
+              class="color-item"
+              [class.selected]="selectedColors.includes(color)"
+              (click)="toggleColorSelection(color)">
+              <div class="color-swatch" [style.background-color]="color"></div>
+              <span class="color-code">{{ color }}</span>
+              <mat-icon *ngIf="selectedColors.includes(color)" class="check-icon">check_circle</mat-icon>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Images -->
+        <div class="dna-group">
+          <h4 *ngIf="analyzedBrandDNA.images && analyzedBrandDNA.images.length > 0">
+            🖼️ Images Found: {{ analyzedBrandDNA.images.length }} (Click to select, max 3)
+          </h4>
+          <h4 *ngIf="!analyzedBrandDNA.images || analyzedBrandDNA.images.length === 0">
+            🖼️ Images
+          </h4>
+          
+          <div *ngIf="analyzedBrandDNA.images && analyzedBrandDNA.images.length > 0" class="image-gallery">
+            <div 
+              *ngFor="let image of analyzedBrandDNA.images; let i = index"
+              class="image-item-wrapper"
+              [class.selected]="selectedBrandImages.includes(image)"
+              (click)="toggleImageSelection(image)">
+              <div class="image-item">
+                <img [src]="image" [alt]="'Image ' + (i + 1)" (error)="onImageError($event)" />
+                <mat-icon *ngIf="selectedBrandImages.includes(image)" class="check-icon">check_circle</mat-icon>
+              </div>
+              <div class="image-url-display">
+                <mat-icon class="url-icon">link</mat-icon>
+                <span class="image-url" [title]="image">{{ getTruncatedUrl(image) }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div *ngIf="!analyzedBrandDNA.images || analyzedBrandDNA.images.length === 0" class="no-images-message">
+            <mat-icon>image_not_supported</mat-icon>
+            <p>No suitable images found on this page (min 100x100px)</p>
+          </div>
+        </div>
+        
+        <!-- Content Sections (Full Paragraphs) -->
+        <div class="dna-group" *ngIf="analyzedBrandDNA.contentSections && analyzedBrandDNA.contentSections.length > 0">
+          <h4>📄 Website Content Sections ({{ analyzedBrandDNA.contentSections.length }} sections found)</h4>
+          <div class="content-sections-list">
+            <div 
+              *ngFor="let section of analyzedBrandDNA.contentSections"
+              class="content-section-item">
+              <div class="section-header">
+                <h5 *ngIf="section.heading">{{ section.heading }}</h5>
+                <span class="section-context">{{ section.context }}</span>
+              </div>
+              <div class="section-paragraphs">
+                <p *ngFor="let para of section.paragraphs" class="section-paragraph">{{ para }}</p>
+              </div>
+              <ul *ngIf="section.listItems && section.listItems.length > 0" class="section-list">
+                <li *ngFor="let item of section.listItems" class="section-list-item">{{ item }}</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Content -->
+        <div class="dna-group" *ngIf="analyzedBrandDNA.content && analyzedBrandDNA.content.length > 0">
+          <h4>✍️ Brand Voice & Content Snippets</h4>
+          <div class="content-snippets">
+            <div 
+              *ngFor="let snippet of analyzedBrandDNA.content"
+              class="snippet-item"
+              [class.selected]="selectedContent.includes(snippet)"
+              (click)="toggleContentSelection(snippet)">
+              <p>{{ snippet }}</p>
+              <mat-icon *ngIf="selectedContent.includes(snippet)" class="check-icon">check_circle</mat-icon>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Fonts -->
+        <div class="dna-group" *ngIf="analyzedBrandDNA.fonts">
+          <h4>🔤 Typography</h4>
+          <div class="fonts-display">
+            <div class="font-item" *ngIf="analyzedBrandDNA.fonts.heading">
+              <strong>Heading:</strong> {{ analyzedBrandDNA.fonts.heading }}
+            </div>
+            <div class="font-item" *ngIf="analyzedBrandDNA.fonts.body">
+              <strong>Body:</strong> {{ analyzedBrandDNA.fonts.body }}
+            </div>
+          </div>
+        </div>
+        
+        <!-- Brand Info -->
+        <div class="dna-group" *ngIf="analyzedBrandDNA.brandInfo && (analyzedBrandDNA.brandInfo.tagline || analyzedBrandDNA.brandInfo.mission || analyzedBrandDNA.brandInfo.values?.length > 0)">
+          <h4>💡 Brand Identity</h4>
+          <div class="brand-info-display">
+            <div class="brand-info-item" *ngIf="analyzedBrandDNA.brandInfo.tagline">
+              <strong>Tagline:</strong>
+              <p>{{ analyzedBrandDNA.brandInfo.tagline }}</p>
+            </div>
+            <div class="brand-info-item" *ngIf="analyzedBrandDNA.brandInfo.mission">
+              <strong>Mission:</strong>
+              <p>{{ analyzedBrandDNA.brandInfo.mission }}</p>
+            </div>
+            <div class="brand-info-item" *ngIf="analyzedBrandDNA.brandInfo.values && analyzedBrandDNA.brandInfo.values.length > 0">
+              <strong>Values:</strong>
+              <div class="values-list">
+                <span *ngFor="let value of analyzedBrandDNA.brandInfo.values" class="value-badge">{{ value }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Products -->
+        <div class="dna-group" *ngIf="analyzedBrandDNA.products && analyzedBrandDNA.products.length > 0">
+          <h4>🛍️ Products ({{ analyzedBrandDNA.products.length }} found)</h4>
+          <div class="products-list">
+            <div 
+              *ngFor="let product of analyzedBrandDNA.products"
+              class="product-item">
+              <div class="product-image" *ngIf="product.image">
+                <img [src]="product.image" [alt]="product.name" (error)="onImageError($event)" />
+              </div>
+              <div class="product-details">
+                <h5 class="product-name">{{ product.name }}</h5>
+                <p class="product-price" *ngIf="product.price">{{ product.price }}</p>
+                <p class="product-desc" *ngIf="product.description">{{ product.description }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Testimonials -->
+        <div class="dna-group" *ngIf="analyzedBrandDNA.testimonials && analyzedBrandDNA.testimonials.length > 0">
+          <h4>💬 Testimonials ({{ analyzedBrandDNA.testimonials.length }} found)</h4>
+          <div class="testimonials-list">
+            <div 
+              *ngFor="let testimonial of analyzedBrandDNA.testimonials"
+              class="testimonial-item">
+              <p class="testimonial-text">"{{ testimonial.text }}"</p>
+              <div class="testimonial-meta" *ngIf="testimonial.author || testimonial.company">
+                <span *ngIf="testimonial.author" class="author">— {{ testimonial.author }}</span>
+                <span *ngIf="testimonial.company" class="company">{{ testimonial.company }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Contact Info -->
+        <div class="dna-group" *ngIf="analyzedBrandDNA.contact && (analyzedBrandDNA.contact.email || analyzedBrandDNA.contact.phone || analyzedBrandDNA.contact.address)">
+          <h4>📞 Contact Information</h4>
+          <div class="contact-display">
+            <div class="contact-item" *ngIf="analyzedBrandDNA.contact.email">
+              <mat-icon>email</mat-icon>
+              <span>{{ analyzedBrandDNA.contact.email }}</span>
+            </div>
+            <div class="contact-item" *ngIf="analyzedBrandDNA.contact.phone">
+              <mat-icon>phone</mat-icon>
+              <span>{{ analyzedBrandDNA.contact.phone }}</span>
+            </div>
+            <div class="contact-item" *ngIf="analyzedBrandDNA.contact.address">
+              <mat-icon>location_on</mat-icon>
+              <span>{{ analyzedBrandDNA.contact.address }}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- CTAs with Links -->
+        <div class="dna-group" *ngIf="analyzedBrandDNA.ctas && analyzedBrandDNA.ctas.length > 0">
+          <h4>🎯 Call-to-Actions ({{ analyzedBrandDNA.ctas.length }} found - Click to select)</h4>
+          <div class="ctas-list">
+            <div 
+              *ngFor="let cta of analyzedBrandDNA.ctas"
+              class="cta-item"
+              [class.selected]="selectedCTAs.includes(cta)"
+              (click)="toggleCTASelection(cta)">
+              <div class="cta-text-wrapper">
+                <mat-icon class="cta-icon">{{ cta.type === 'button' ? 'smart_button' : 'link' }}</mat-icon>
+                <span class="cta-text">{{ cta.text }}</span>
+              </div>
+              <div class="cta-url">
+                <mat-icon class="url-icon">link</mat-icon>
+                <span [title]="cta.url">{{ getTruncatedUrl(cta.url) }}</span>
+              </div>
+              <mat-icon *ngIf="selectedCTAs.includes(cta)" class="check-icon">check_circle</mat-icon>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Social Links -->
+        <div class="dna-group" *ngIf="analyzedBrandDNA.social && getSocialLinksCount(analyzedBrandDNA.social) > 0">
+          <h4>🔗 Social Media ({{ getSocialLinksCount(analyzedBrandDNA.social) }} found - Click to select)</h4>
+          <div class="social-links-display">
+            <div 
+              *ngIf="analyzedBrandDNA.social.facebook" 
+              class="social-link facebook"
+              [class.selected]="isSocialLinkSelected('facebook')"
+              (click)="toggleSocialLink('facebook', analyzedBrandDNA.social.facebook)">
+              <mat-icon>facebook</mat-icon>
+              <span>Facebook</span>
+              <mat-icon *ngIf="isSocialLinkSelected('facebook')" class="check-icon-small">check_circle</mat-icon>
+            </div>
+            <div 
+              *ngIf="analyzedBrandDNA.social.twitter" 
+              class="social-link twitter"
+              [class.selected]="isSocialLinkSelected('twitter')"
+              (click)="toggleSocialLink('twitter', analyzedBrandDNA.social.twitter)">
+              <mat-icon>close</mat-icon>
+              <span>Twitter</span>
+              <mat-icon *ngIf="isSocialLinkSelected('twitter')" class="check-icon-small">check_circle</mat-icon>
+            </div>
+            <div 
+              *ngIf="analyzedBrandDNA.social.instagram" 
+              class="social-link instagram"
+              [class.selected]="isSocialLinkSelected('instagram')"
+              (click)="toggleSocialLink('instagram', analyzedBrandDNA.social.instagram)">
+              <mat-icon>camera_alt</mat-icon>
+              <span>Instagram</span>
+              <mat-icon *ngIf="isSocialLinkSelected('instagram')" class="check-icon-small">check_circle</mat-icon>
+            </div>
+            <div 
+              *ngIf="analyzedBrandDNA.social.linkedin" 
+              class="social-link linkedin"
+              [class.selected]="isSocialLinkSelected('linkedin')"
+              (click)="toggleSocialLink('linkedin', analyzedBrandDNA.social.linkedin)">
+              <mat-icon>business</mat-icon>
+              <span>LinkedIn</span>
+              <mat-icon *ngIf="isSocialLinkSelected('linkedin')" class="check-icon-small">check_circle</mat-icon>
+            </div>
+            <div 
+              *ngIf="analyzedBrandDNA.social.youtube" 
+              class="social-link youtube"
+              [class.selected]="isSocialLinkSelected('youtube')"
+              (click)="toggleSocialLink('youtube', analyzedBrandDNA.social.youtube)">
+              <mat-icon>play_circle</mat-icon>
+              <span>YouTube</span>
+              <mat-icon *ngIf="isSocialLinkSelected('youtube')" class="check-icon-small">check_circle</mat-icon>
+            </div>
+            <div 
+              *ngIf="analyzedBrandDNA.social.tiktok" 
+              class="social-link tiktok"
+              [class.selected]="isSocialLinkSelected('tiktok')"
+              (click)="toggleSocialLink('tiktok', analyzedBrandDNA.social.tiktok)">
+              <mat-icon>music_note</mat-icon>
+              <span>TikTok</span>
+              <mat-icon *ngIf="isSocialLinkSelected('tiktok')" class="check-icon-small">check_circle</mat-icon>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Template Style Selection -->
+        <div class="template-style-group">
+          <h4>🎯 Select Template Style</h4>
+          <div class="style-options">
+            <button 
+              *ngFor="let style of templateStyles"
+              mat-stroked-button
+              class="style-btn"
+              [class.selected]="selectedTemplateStyle === style.value"
+              (click)="selectTemplateStyle(style.value)">
+              <mat-icon>{{ style.icon }}</mat-icon>
+              <span>{{ style.label }}</span>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="analyzer-actions">
+          <button 
+            mat-stroked-button 
+            class="cancel-btn"
+            (click)="resetAnalyzer()">
+            <mat-icon>close</mat-icon>
+            Cancel
+          </button>
+          <button 
+            mat-raised-button 
+            class="generate-prompt-btn"
+            (click)="generatePromptFromBrandDNA()"
+            [disabled]="!selectedTemplateStyle">
+            <mat-icon>auto_awesome</mat-icon>
+            Generate Prompt
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- CSV/Excel Upload Banner -->
 <div class="csv-banner-overlay" *ngIf="showCsvBanner" (click)="closeCsvBanner()">
   <div class="csv-banner-content" (click)="$event.stopPropagation()">

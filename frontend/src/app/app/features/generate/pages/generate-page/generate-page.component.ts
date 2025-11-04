@@ -98,6 +98,26 @@ private sentImages: Array<{name: string, size: number}> = [];
   // Attach Choice Banner state
   showAttachChoiceBanner = false;
 
+  // Website URL Analyzer state
+  showUrlAnalyzer = false;
+  websiteUrl = '';
+  isAnalyzingWebsite = false;
+  analyzedBrandDNA: any = null;
+  selectedColors: string[] = [];
+  selectedBrandImages: string[] = [];
+  selectedContent: string[] = [];
+  selectedCTAs: any[] = [];
+  selectedSocialLinks: any = {};
+  selectedTemplateStyle: string = '';
+  templateStyles = [
+    { value: 'modern', label: 'Modern & Minimal', icon: 'layers' },
+    { value: 'bold', label: 'Bold & Vibrant', icon: 'flash_on' },
+    { value: 'professional', label: 'Professional', icon: 'business_center' },
+    { value: 'creative', label: 'Creative', icon: 'palette' },
+    { value: 'mobile-first', label: 'Mobile-First', icon: 'smartphone' },
+    { value: 'ecommerce', label: 'E-commerce', icon: 'shopping_cart' }
+  ];
+
   // CSV Banner state
   showCsvBanner = false;
   uploadedFile: File | null = null;
@@ -165,6 +185,305 @@ private sentImages: Array<{name: string, size: number}> = [];
   selectDocumentAttachment(): void {
     this.closeAttachChoiceBanner();
     this.openCsvBanner();
+  }
+
+  selectUrlAttachment(): void {
+    this.closeAttachChoiceBanner();
+    this.openUrlAnalyzer();
+  }
+
+  // Website URL Analyzer methods
+  openUrlAnalyzer(): void {
+    this.showUrlAnalyzer = true;
+  }
+
+  closeUrlAnalyzer(): void {
+    this.showUrlAnalyzer = false;
+    this.resetAnalyzer();
+  }
+
+  resetAnalyzer(): void {
+    this.websiteUrl = '';
+    this.analyzedBrandDNA = null;
+    this.selectedColors = [];
+    this.selectedBrandImages = [];
+    this.selectedContent = [];
+    this.selectedCTAs = [];
+    this.selectedSocialLinks = {};
+    this.selectedTemplateStyle = '';
+    this.isAnalyzingWebsite = false;
+  }
+
+  async analyzeWebsite(): Promise<void> {
+    if (!this.websiteUrl || this.isAnalyzingWebsite) {
+      return;
+    }
+
+    // Validate URL format
+    const urlValidation = this.validateUrl(this.websiteUrl);
+    if (!urlValidation.valid) {
+      this.snackBar.open(
+        urlValidation.error || 'Invalid URL',
+        'Close',
+        { duration: 4000, panelClass: ['error-snackbar'] }
+      );
+      return;
+    }
+
+    this.isAnalyzingWebsite = true;
+
+    try {
+      const response = await fetch('/api/analyze-website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlValidation.normalizedUrl }),
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to analyze website';
+        try {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } catch (e) {
+          // If response is not JSON, use default message
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      this.analyzedBrandDNA = data;
+
+      // Auto-select first 3 colors, images, content snippets, and CTAs
+      if (data.colors && data.colors.length > 0) {
+        this.selectedColors = data.colors.slice(0, 3);
+      }
+      if (data.images && data.images.length > 0) {
+        this.selectedBrandImages = data.images.slice(0, 2);
+      }
+      if (data.content && data.content.length > 0) {
+        this.selectedContent = data.content.slice(0, 2);
+      }
+      if (data.ctas && data.ctas.length > 0) {
+        this.selectedCTAs = data.ctas.slice(0, 3);
+      }
+      if (data.social) {
+        // Auto-select all social links
+        this.selectedSocialLinks = { ...data.social };
+      }
+
+      this.snackBar.open(
+        '✨ Website analyzed successfully!',
+        'Close',
+        { duration: 3000, panelClass: ['success-snackbar'] }
+      );
+    } catch (error: any) {
+      console.error('Error analyzing website:', error);
+      this.snackBar.open(
+        error.message || 'Failed to analyze website. Please try again.',
+        'Close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+    } finally {
+      this.isAnalyzingWebsite = false;
+    }
+  }
+
+  validateUrl(url: string): { valid: boolean; error?: string; normalizedUrl?: string } {
+    try {
+      // Add protocol if missing
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+
+      const urlObj = new URL(url);
+
+      // Protocol check
+      if (!['http:', 'https:'].includes(urlObj.protocol)) {
+        return { valid: false, error: 'Only HTTP/HTTPS protocols supported' };
+      }
+
+      // Localhost/internal IP check
+      const hostname = urlObj.hostname;
+      if (
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname.startsWith('192.168.') ||
+        hostname.startsWith('10.') ||
+        hostname.startsWith('172.')
+      ) {
+        return { valid: false, error: 'Cannot analyze local or internal network URLs' };
+      }
+
+      return { valid: true, normalizedUrl: urlObj.toString() };
+    } catch (e) {
+      return { valid: false, error: 'Invalid URL format. Example: https://example.com' };
+    }
+  }
+
+  toggleColorSelection(color: string): void {
+    const index = this.selectedColors.indexOf(color);
+    if (index > -1) {
+      this.selectedColors.splice(index, 1);
+    } else {
+      if (this.selectedColors.length < 5) {
+        this.selectedColors.push(color);
+      } else {
+        this.snackBar.open(
+          'Maximum 5 colors allowed',
+          'Close',
+          { duration: 3000 }
+        );
+      }
+    }
+  }
+
+  toggleImageSelection(image: string): void {
+    const index = this.selectedBrandImages.indexOf(image);
+    if (index > -1) {
+      this.selectedBrandImages.splice(index, 1);
+    } else {
+      if (this.selectedBrandImages.length < 3) {
+        this.selectedBrandImages.push(image);
+      } else {
+        this.snackBar.open(
+          'Maximum 3 images allowed',
+          'Close',
+          { duration: 3000 }
+        );
+      }
+    }
+  }
+
+  toggleContentSelection(snippet: string): void {
+    const index = this.selectedContent.indexOf(snippet);
+    if (index > -1) {
+      this.selectedContent.splice(index, 1);
+    } else {
+      this.selectedContent.push(snippet);
+    }
+  }
+
+  selectTemplateStyle(style: string): void {
+    this.selectedTemplateStyle = style;
+  }
+
+  getTruncatedUrl(url: string): string {
+    if (url.length <= 50) return url;
+    const urlObj = new URL(url);
+    const filename = urlObj.pathname.split('/').pop() || 'image';
+    return `.../${filename}`;
+  }
+
+  onImageError(event: Event): void {
+    const img = event.target as HTMLImageElement;
+    img.style.display = 'none';
+  }
+
+  getSocialLinksCount(social: any): number {
+    if (!social) return 0;
+    return Object.keys(social).filter(key => social[key]).length;
+  }
+
+  toggleCTASelection(cta: any): void {
+    const index = this.selectedCTAs.findIndex(c => c.url === cta.url);
+    if (index > -1) {
+      this.selectedCTAs.splice(index, 1);
+    } else {
+      if (this.selectedCTAs.length < 5) {
+        this.selectedCTAs.push(cta);
+      } else {
+        this.snackBar.open(
+          'Maximum 5 CTAs allowed',
+          'Close',
+          { duration: 3000 }
+        );
+      }
+    }
+  }
+
+  toggleSocialLink(platform: string, url: string): void {
+    if (this.selectedSocialLinks[platform]) {
+      delete this.selectedSocialLinks[platform];
+    } else {
+      this.selectedSocialLinks[platform] = url;
+    }
+  }
+
+  isSocialLinkSelected(platform: string): boolean {
+    return !!this.selectedSocialLinks[platform];
+  }
+
+  async generatePromptFromBrandDNA(): Promise<void> {
+    if (!this.analyzedBrandDNA || !this.selectedTemplateStyle) {
+      return;
+    }
+
+    this.isGeneratingPrompt = true;
+
+    try {
+      const payload = {
+        colors: this.selectedColors,
+        images: this.selectedBrandImages,
+        content: this.selectedContent,
+        contentSections: this.analyzedBrandDNA.contentSections,
+        ctas: this.selectedCTAs,
+        fonts: this.analyzedBrandDNA.fonts,
+        templateStyle: this.selectedTemplateStyle,
+        url: this.websiteUrl,
+        logo: this.analyzedBrandDNA.logo,
+        products: this.analyzedBrandDNA.products,
+        brandInfo: this.analyzedBrandDNA.brandInfo,
+        testimonials: this.analyzedBrandDNA.testimonials,
+        contact: this.analyzedBrandDNA.contact,
+        social: this.selectedSocialLinks
+      };
+
+      const response = await fetch('/api/brand-dna-to-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to generate prompt';
+        try {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } catch (e) {
+          // If response is not JSON, use default message
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      const generatedPrompt = data.prompt || '';
+
+      // Set the prompt in the message input
+      this.userInput = generatedPrompt;
+
+      // Close the analyzer
+      this.closeUrlAnalyzer();
+
+      // Focus on the message input
+      setTimeout(() => {
+        this.messageInput?.nativeElement.focus();
+      }, 100);
+
+      this.snackBar.open(
+        '✨ Prompt generated from brand DNA!',
+        'Close',
+        { duration: 3000, panelClass: ['success-snackbar'] }
+      );
+    } catch (error) {
+      console.error('Error generating prompt:', error);
+      this.snackBar.open(
+        'Failed to generate prompt. Please try again.',
+        'Close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+    } finally {
+      this.isGeneratingPrompt = false;
+    }
   }
 
   // CSV Banner methods

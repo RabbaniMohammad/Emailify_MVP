@@ -23,6 +23,7 @@ import authRouter  from '@src/routes/auth';
 import adminRouter from '@src/routes/admin';
 import templateGenerationRouter from '@src/routes/templateGeneration'; // ✅ NEW
 import debugLogsRouter from '@src/routes/debug-logs'; // Debug logging endpoint
+import websiteAnalyzerRouter from '@src/routes/websiteAnalyzer'; // ✅ Website Analyzer
 
 import Paths from '@src/common/constants/Paths';
 import ENV from '@src/common/constants/ENV';
@@ -131,6 +132,9 @@ app.use('/api/admin', adminRouter);
 app.use('/api/generate', (req, res, next) => {
   next();
 }, templateGenerationRouter);
+
+// Website Analyzer Routes ✅ NEW
+app.use('/api', websiteAnalyzerRouter);
 
 // Core API routers
 app.use('/api/templates', templatesRouter);
