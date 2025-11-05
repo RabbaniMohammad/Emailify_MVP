@@ -330,14 +330,14 @@ router.get(
       // Set cookies
       res.cookie('accessToken', accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: false, // Set to false for HTTP, true only if using HTTPS
         sameSite: 'lax',
         maxAge: 60 * 60 * 1000, // 1 hour
       });
 
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: false, // Set to false for HTTP, true only if using HTTPS
         sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
@@ -479,7 +479,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     // ✅ Set new access token cookie
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: false, // Set to false for HTTP, true only if using HTTPS
       sameSite: 'lax',
       maxAge: 60 * 60 * 1000, // 1 hour
     });
@@ -487,7 +487,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     // ✅ Set new refresh token cookie (token rotation)
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: false, // Set to false for HTTP, true only if using HTTPS
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
