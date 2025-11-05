@@ -77,13 +77,7 @@ router.post('/brand-dna-to-prompt', async (req: Request, res: Response) => {
   try {
     const { colors, images, content, fonts, templateStyle, url } = req.body;
 
-    logger.info(`📥 Received brand DNA to prompt request`, {
-      colorsCount: colors?.length || 0,
-      imagesCount: images?.length || 0,
-      contentCount: content?.length || 0,
-      templateStyle,
-      url
-    });
+    logger.info(`📥 Received brand DNA to prompt request - Colors: ${colors?.length || 0}, Images: ${images?.length || 0}, Content: ${content?.length || 0}, Style: ${templateStyle}, URL: ${url}`);
 
     // Build structured prompt data
     const promptData = {

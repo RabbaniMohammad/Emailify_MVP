@@ -213,17 +213,7 @@ export async function analyzeWebsite(url: string, options: AnalyzeOptions = {}):
       social: await extractSocialLinks(page)
     };
 
-    logger.info('✅ Website analysis complete', {
-      colors: brandDNA.colors.length,
-      images: brandDNA.images.length,
-      content: brandDNA.content.length,
-      contentSections: brandDNA.contentSections.length,
-      ctas: brandDNA.ctas.length,
-      products: brandDNA.products.length,
-      testimonials: brandDNA.testimonials.length,
-      hasLogo: !!brandDNA.logo,
-      hasMission: !!brandDNA.brandInfo.mission
-    });
+    logger.info(`✅ Website analysis complete - Colors: ${brandDNA.colors.length}, Images: ${brandDNA.images.length}, Content: ${brandDNA.content.length}, CTAs: ${brandDNA.ctas.length}, Products: ${brandDNA.products.length}`);
 
     return brandDNA;
 
@@ -1245,7 +1235,7 @@ async function extractCTAs(page: Page, baseUrl: string, maxCTAs: number): Promis
     // ✅ Log any remaining relative URLs for debugging
     const stillRelative = absoluteCTAs.filter(c => !c.url.startsWith('http'));
     if (stillRelative.length > 0) {
-      logger.warn(`⚠️ Found ${stillRelative.length} CTAs with relative URLs:`, stillRelative.map(c => c.url));
+      logger.warn(`⚠️ Found ${stillRelative.length} CTAs with relative URLs: ${stillRelative.map(c => c.url).join(', ')}`);
     }
     
     return absoluteCTAs;

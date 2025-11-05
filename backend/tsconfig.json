@@ -5,6 +5,7 @@
     "lib": ["ES2020"],                   
     "strict": true,
     "baseUrl": "./",
+    "outDir": "./dist",
     "esModuleInterop": true,                 
     "skipLibCheck": true,                     
     "forceConsistentCasingInFileNames": true,
@@ -22,12 +23,12 @@
   },
   "include": [
     "src/**/*.ts",
-    "tests/**/*.ts",
-    "scripts",
-    "eslint.config.ts",
-    "vitest.config.mts"
+    "scripts"
   ],
   "exclude": [
-    "src/public/*"
+    "src/public/*",
+    "tests/**/*.ts",
+    "eslint.config.ts",
+    "vitest.config.mts"
   ]
 }
