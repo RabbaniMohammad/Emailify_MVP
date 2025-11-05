@@ -395,7 +395,7 @@
   
   // ✅ Also hide AI warning container icons on mobile
   .ai-warning-container {
-    .floating-ai-icon {
+    .ai-robot-icon {
       display: none;
     }
     
@@ -1411,56 +1411,60 @@
   background: transparent !important;
 }
 
-// Floating AI Icon with Pulse Rings
-.floating-ai-icon {
+// AI Robot Icon with Animations
+.ai-robot-icon {
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: 180px;
+  height: 180px;
   margin: 0 auto 2.5rem;
   animation: floatUpDown 3s ease-in-out infinite;
   
   svg {
     width: 100%;
     height: 100%;
-    stroke: #6d28d9;
+    color: #6d28d9;
     filter: drop-shadow(0 10px 30px rgba(109, 40, 217, 0.3));
     position: relative;
     z-index: 2;
+    
+    .eye-left,
+    .eye-right {
+      animation: blink 3s ease-in-out infinite;
+    }
+    
+    .eye-right {
+      animation-delay: 0.1s;
+    }
+    
+    .sparkle {
+      animation: sparkleRotate 2s ease-in-out infinite;
+      transform-origin: center;
+      opacity: 0.7;
+      
+      &.sparkle-1 {
+        animation-delay: 0s;
+      }
+      
+      &.sparkle-2 {
+        animation-delay: 0.6s;
+      }
+      
+      &.sparkle-3 {
+        animation-delay: 1.2s;
+      }
+    }
   }
   
-  .pulse-ring {
+  .glow-ring {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 100%;
-    height: 100%;
+    width: 120%;
+    height: 120%;
     transform: translate(-50%, -50%);
     border-radius: 50%;
-    border: 3px solid rgba(109, 40, 217, 0.4);
-    animation: pulseRing 2s ease-out infinite;
-    
-    &::before,
-    &::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      border-radius: 50%;
-      border: 3px solid rgba(109, 40, 217, 0.3);
-    }
-    
-    &::before {
-      width: 130%;
-      height: 130%;
-      animation: pulseRing 2s ease-out infinite 0.5s;
-    }
-    
-    &::after {
-      width: 160%;
-      height: 160%;
-      animation: pulseRing 2s ease-out infinite 1s;
-    }
+    background: radial-gradient(circle, rgba(109, 40, 217, 0.15) 0%, transparent 70%);
+    animation: glowPulse 2s ease-in-out infinite;
   }
 }
 
@@ -1567,6 +1571,39 @@
   }
 }
 
+@keyframes blink {
+  0%, 45%, 55%, 100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes sparkleRotate {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2) rotate(180deg);
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
 @keyframes fadeInScale {
   from {
     opacity: 0;
@@ -1587,9 +1624,9 @@
     padding: 1.5rem 1rem;
   }
   
-  .floating-ai-icon {
-    width: 90px;
-    height: 90px;
+  .ai-robot-icon {
+    width: 120px;
+    height: 120px;
     margin-bottom: 2rem;
   }
   
@@ -1606,9 +1643,9 @@
 }
 
 @media (max-width: 480px) {
-  .floating-ai-icon {
-    width: 70px;
-    height: 70px;
+  .ai-robot-icon {
+    width: 90px;
+    height: 90px;
     margin-bottom: 1.5rem;
   }
   
@@ -1633,7 +1670,7 @@
 // ============================================================================
 
 @media (prefers-reduced-motion: reduce) {
-  .floating-ai-icon,
+  .ai-robot-icon,
   .pulse-ring,
   .pulse-ring::before,
   .pulse-ring::after {
@@ -1980,7 +2017,7 @@
     
     // ✅ Show AI warning icons on desktop
     .ai-warning-container {
-      .floating-ai-icon {
+      .ai-robot-icon {
         display: block;
       }
       

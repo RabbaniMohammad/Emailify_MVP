@@ -3,10 +3,6 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import OpenAI from 'openai';
 
-// Use require for packages without proper type definitions
-const mammoth = require('mammoth');
-const pdfParse = require('pdf-parse');
-
 const router = Router();
 
 // Configure multer for file uploads
@@ -37,52 +33,140 @@ const upload = multer({
 
 // Helper function to extract text from Excel/CSV
 function extractFromExcel(buffer: Buffer): string {
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
-  let extractedText = '';
+  try {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    let extractedText = '';
 
-  workbook.SheetNames.forEach((sheetName) => {
-    const sheet = workbook.Sheets[sheetName];
-    
-    // Try to parse as objects with headers first
-    const jsonDataWithHeaders = XLSX.utils.sheet_to_json(sheet);
-    
-    // If we got structured data with headers, use that
-    if (jsonDataWithHeaders.length > 0) {
-      extractedText += `Sheet: ${sheetName}\n`;
-      extractedText += `Total Rows: ${jsonDataWithHeaders.length}\n`;
-      extractedText += `Structured Data:\n`;
-      extractedText += JSON.stringify(jsonDataWithHeaders, null, 2);
-      extractedText += '\n\n';
-    } else {
-      // Fallback to raw array data
-      const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-      extractedText += `Sheet: ${sheetName}\n`;
-      extractedText += JSON.stringify(jsonData, null, 2);
-      extractedText += '\n\n';
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+      throw new Error('No sheets found in Excel file');
     }
-  });
 
-  return extractedText;
+    workbook.SheetNames.forEach((sheetName) => {
+      const sheet = workbook.Sheets[sheetName];
+      
+      if (!sheet) {
+        console.warn(`Sheet "${sheetName}" is empty or invalid`);
+        return;
+      }
+      
+      // Try to parse as objects with headers first
+      const jsonDataWithHeaders = XLSX.utils.sheet_to_json(sheet);
+      
+      // If we got structured data with headers, use that
+      if (jsonDataWithHeaders.length > 0) {
+        extractedText += `Sheet: ${sheetName}\n`;
+        extractedText += `Total Rows: ${jsonDataWithHeaders.length}\n`;
+        extractedText += `Structured Data:\n`;
+        extractedText += JSON.stringify(jsonDataWithHeaders, null, 2);
+        extractedText += '\n\n';
+      } else {
+        // Fallback to raw array data
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        if (jsonData.length > 0) {
+          extractedText += `Sheet: ${sheetName}\n`;
+          extractedText += JSON.stringify(jsonData, null, 2);
+          extractedText += '\n\n';
+        }
+      }
+    });
+
+    if (!extractedText || extractedText.trim() === '') {
+      throw new Error('No data could be extracted from Excel file');
+    }
+
+    return extractedText;
+  } catch (error: any) {
+    console.error('Error extracting from Excel:', error);
+    throw new Error(`Failed to extract text from Excel: ${error.message}`);
+  }
 }
 
 // Helper function to extract text from Word documents
 async function extractFromWord(buffer: Buffer): Promise<string> {
-  const result = await mammoth.extractRawText({ buffer });
-  return result.value;
+  try {
+    // Use eval to bypass TypeScript's module resolution for CommonJS
+    const mammoth = eval('require')('mammoth');
+    const result = await mammoth.extractRawText({ buffer });
+    
+    if (!result || !result.value) {
+      throw new Error('Word document parsing succeeded but no text was extracted');
+    }
+    
+    return result.value;
+  } catch (error: any) {
+    console.error('Error extracting from Word:', error);
+    if (error.message.includes('Cannot find module')) {
+      throw new Error('Mammoth is not installed. Please run: npm install mammoth');
+    }
+    throw new Error(`Failed to extract text from Word document: ${error.message}`);
+  }
 }
 
 // Helper function to extract text from PDF
 async function extractFromPDF(buffer: Buffer): Promise<string> {
-  const data = await pdfParse(buffer);
-  return data.text;
+  try {
+    // For pdf-parse, we need to use a simple approach
+    // The library is CommonJS and should export a single function
+    const pdfParse = eval('require')('pdf-parse');
+    
+    console.log('📦 PDF module loaded');
+    console.log('📦 Type:', typeof pdfParse);
+    console.log('📦 Is function?', typeof pdfParse === 'function');
+    
+    if (typeof pdfParse !== 'function') {
+      console.log('📦 Module keys:', Object.keys(pdfParse));
+      console.log('📦 Checking for callable exports...');
+      
+      // Check if there's a default export
+      if (pdfParse.default && typeof pdfParse.default === 'function') {
+        console.log('✅ Found default export, using that');
+        const data = await pdfParse.default(buffer);
+        return data.text || '';
+      }
+      
+      throw new Error(`pdf-parse did not export a function. Type: ${typeof pdfParse}. You may have the wrong version installed. Try: npm install pdf-parse@1.1.1`);
+    }
+    
+    console.log('🔄 Calling pdf-parse with buffer...');
+    const data = await pdfParse(buffer);
+    
+    console.log('📄 PDF parse result:', {
+      hasData: !!data,
+      hasText: !!data?.text,
+      textLength: data?.text?.length || 0,
+      keys: data ? Object.keys(data) : []
+    });
+    
+    if (!data || !data.text) {
+      throw new Error('PDF parsing succeeded but no text was extracted from the document');
+    }
+    
+    console.log('✅ PDF text extracted successfully, length:', data.text.length);
+    return data.text;
+  } catch (error: any) {
+    console.error('❌ Error extracting from PDF:', error);
+    if (error.message.includes('Cannot find module')) {
+      throw new Error('pdf-parse is not installed. Please run: npm install pdf-parse@1.1.1');
+    }
+    throw new Error(`Failed to extract text from PDF: ${error.message}`);
+  }
 }
 
 // Main route handler
 router.post('/csv-to-prompt', upload.single('file'), async (req: Request, res: Response) => {
   try {
+    console.log('📄 Document upload request received');
+    
     if (!req.file) {
+      console.log('❌ No file in request');
       return res.status(400).json({ error: 'No file uploaded' });
     }
+
+    console.log('📁 File received:', {
+      name: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
 
     const fileExtension = req.file.originalname.split('.').pop()?.toLowerCase();
     let extractedText = '';
@@ -91,26 +175,44 @@ router.post('/csv-to-prompt', upload.single('file'), async (req: Request, res: R
     switch (fileExtension) {
       case 'xlsx':
       case 'xls':
+        console.log('📊 Extracting from Excel...');
         extractedText = extractFromExcel(req.file.buffer);
         break;
       case 'csv':
       case 'txt':
-        extractedText = req.file.buffer.toString('utf-8');
+        console.log('📝 Extracting from CSV/TXT...');
+        try {
+          extractedText = req.file.buffer.toString('utf-8');
+          if (!extractedText || extractedText.trim() === '') {
+            throw new Error('File is empty');
+          }
+        } catch (error: any) {
+          throw new Error(`Failed to read CSV/TXT file: ${error.message}`);
+        }
         break;
       case 'doc':
       case 'docx':
+        console.log('📄 Extracting from Word...');
         extractedText = await extractFromWord(req.file.buffer);
         break;
       case 'pdf':
+        console.log('📕 Extracting from PDF...');
         extractedText = await extractFromPDF(req.file.buffer);
         break;
       default:
-        return res.status(400).json({ error: 'Unsupported file type' });
+        console.log('❌ Unsupported file type:', fileExtension);
+        return res.status(400).json({ 
+          error: 'Unsupported file type',
+          message: `File type ".${fileExtension}" is not supported. Please upload Excel (.xlsx, .xls), CSV, TXT, Word (.doc, .docx), or PDF files.`
+        });
     }
 
     if (!extractedText || extractedText.trim() === '') {
+      console.log('❌ No text extracted from document');
       return res.status(400).json({ error: 'Could not extract text from the document' });
     }
+
+    console.log('✅ Text extracted, length:', extractedText.length);
 
     // Log extracted data for debugging
 
@@ -125,6 +227,14 @@ router.post('/csv-to-prompt', upload.single('file'), async (req: Request, res: R
     }
 
     // Initialize OpenAI client
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('❌ OPENAI_API_KEY not configured');
+      return res.status(500).json({ 
+        error: 'OpenAI API key not configured',
+        message: 'Please configure OPENAI_API_KEY in environment variables' 
+      });
+    }
+
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
@@ -143,6 +253,10 @@ router.post('/csv-to-prompt', upload.single('file'), async (req: Request, res: R
       16000  // Use almost full GPT-4o-mini capacity
     );
     
+    console.log('🤖 Calling OpenAI API...', {
+      inputTokensEstimate: estimatedInputTokens,
+      maxTokens: dynamicMaxTokens
+    });
 
     // Generate prompt using GPT-4o-mini
     const completion = await openai.chat.completions.create({
@@ -190,6 +304,18 @@ Format the prompt to be clear, structured, and actionable for an AI email templa
 
     const generatedPrompt = completion.choices[0]?.message?.content || '';
 
+    console.log('✅ OpenAI response received, prompt length:', generatedPrompt.length);
+
+    if (!generatedPrompt) {
+      console.error('❌ OpenAI returned empty prompt');
+      return res.status(500).json({
+        error: 'Failed to generate prompt',
+        message: 'OpenAI returned an empty response'
+      });
+    }
+
+    console.log('✅ Successfully generated prompt from document');
+
     res.json({
       success: true,
       prompt: generatedPrompt,
@@ -197,7 +323,8 @@ Format the prompt to be clear, structured, and actionable for an AI email templa
       fileName: req.file.originalname,
     });
   } catch (error: any) {
-    console.error('Error processing document:', error);
+    console.error('❌ Error processing document:', error);
+    console.error('Error stack:', error.stack);
     
     // Handle multer file size error
     if (error.code === 'LIMIT_FILE_SIZE') {
@@ -207,9 +334,18 @@ Format the prompt to be clear, structured, and actionable for an AI email templa
       });
     }
     
+    // Handle OpenAI API errors
+    if (error.response) {
+      console.error('OpenAI API error:', error.response.data);
+      return res.status(500).json({
+        error: 'OpenAI API error',
+        message: error.response.data?.error?.message || 'Failed to generate prompt using AI'
+      });
+    }
+    
     res.status(500).json({
       error: 'Failed to process document',
-      message: error.message,
+      message: error.message || 'An unknown error occurred',
     });
   }
 });

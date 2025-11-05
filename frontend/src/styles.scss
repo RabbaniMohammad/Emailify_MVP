@@ -5,41 +5,12 @@
 html, body { height: 100%; }
 body { margin: 0; font-family: Roboto, 'Helvetica Neue', sans-serif; }
 
-// Snackbar Custom Styles
-.success-snackbar {
-  background: #10b981 !important;
-  color: white !important;
-  font-weight: 600;
-  
-  .mat-simple-snack-bar-content {
-    font-size: 0.9375rem;
-  }
-}
-
-.error-snackbar {
-  background: #ef4444 !important;
-  color: white !important;
-  font-weight: 600;
-  
-  .mat-simple-snack-bar-content {
-    font-size: 0.9375rem;
-  }
-}
-
-.info-snackbar {
-  background: #3b82f6 !important;
-  color: white !important;
-  font-weight: 600;
-  
-  .mat-simple-snack-bar-content {
-    font-size: 0.9375rem;
-  }
-}
-
-// Force all snackbars to appear above overlays/modals
-.mat-mdc-snack-bar-container,
-.mat-snack-bar-container {
-  z-index: 10003 !important; // Higher than all overlays
+// Snackbar Custom Styles - Simple, no background
+.success-snackbar,
+.error-snackbar,
+.info-snackbar,
+.warning-snackbar {
+  // Remove all custom styling to use Material defaults
 }
 
 

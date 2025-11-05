@@ -263,12 +263,12 @@ router.delete('/organizations/:slug', authenticate, requireSuperAdmin, async (re
     // ✅ AUDIT LOG: Super admin attempting organization deletion
     logger.warn(`🚨 [SUPER ADMIN AUDIT] ${currentUser.email} (${currentUser._id}) attempting to delete organization: ${slug} (deleteData: ${deleteData})`);
 
-    // Prevent deleting the default organization
-    if (slug.toLowerCase() === 'default') {
-      logger.warn(`🚫 [SUPER ADMIN AUDIT] ${currentUser.email} blocked from deleting default organization`);
+    // Prevent deleting the camply organization
+    if (slug.toLowerCase() === 'camply') {
+      logger.warn(`🚫 [SUPER ADMIN AUDIT] ${currentUser.email} blocked from deleting camply organization`);
       return res.status(403).json({ 
-        error: 'Cannot delete default organization',
-        message: 'The default organization cannot be deleted for system integrity.'
+        error: 'Cannot delete camply organization',
+        message: 'The camply organization cannot be deleted for system integrity.'
       });
     }
 
@@ -278,13 +278,13 @@ router.delete('/organizations/:slug', authenticate, requireSuperAdmin, async (re
       return res.status(404).json({ error: 'Organization not found' });
     }
 
-    // Only super admins from the default org can delete other organizations
+    // Only super admins from the camply organization can delete other organizations
     const userOrg = await Organization.findById(currentUser.organizationId);
-    if (!userOrg || userOrg.slug !== 'default') {
+    if (!userOrg || userOrg.slug !== 'camply') {
       logger.warn(`🚫 [SUPER ADMIN AUDIT] ${currentUser.email} from ${userOrg?.slug} denied deleting org ${slug}`);
       return res.status(403).json({ 
         error: 'Insufficient permissions',
-        message: 'Only super admins from the default organization can delete organizations.'
+        message: 'Only super admins from the camply organization can delete organizations.'
       });
     }
 

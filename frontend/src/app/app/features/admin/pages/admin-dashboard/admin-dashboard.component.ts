@@ -268,10 +268,10 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   }
 
   isOwnerOrgSuperAdmin(currentUser: any): boolean {
-    // Check if user is super_admin AND belongs to default organization
-    const isDefaultOrg = currentUser?.organizationId?.slug === 'default' || 
+    // Check if user is super_admin AND belongs to camply organization
+    const isCamplyOrg = currentUser?.organizationId?.slug === 'camply' || 
                          currentUser?.organizationIsOwner === true;
-    return currentUser?.orgRole === 'super_admin' && isDefaultOrg;
+    return currentUser?.orgRole === 'super_admin' && isCamplyOrg;
   }
 
   isCurrentUser(user: AdminUser): boolean {

@@ -92,7 +92,7 @@
   class="usage-tips-btn"
   [matMenuTriggerFor]="usageMenu"
   matTooltip="How to use">
-  <mat-icon>info_outline</mat-icon>
+  <mat-icon>auto_awesome</mat-icon>
 </button>
 
 <!-- Usage Tips Menu -->
@@ -155,6 +155,19 @@
           [src]="'data:' + img.mediaType + ';base64,' + img.data"
           [alt]="img.fileName"
           class="message-image">
+      </div>
+      
+      <!-- File Attachment in sent messages -->
+      <div class="message-attachment" *ngIf="message.attachment">
+        <div class="attachment-card">
+          <div class="attachment-icon">
+            <mat-icon>{{ getFileIcon(message.attachment.fileName) }}</mat-icon>
+          </div>
+          <div class="attachment-info">
+            <span class="attachment-name">{{ message.attachment.fileName }}</span>
+            <span class="attachment-size">{{ formatFileSize(message.attachment.fileSize) }}</span>
+          </div>
+        </div>
       </div>
       
       <div class="bubble-content">
@@ -352,7 +365,18 @@
       
       <!-- Analyzing Indicator -->
       <div *ngIf="isAnalyzingWebsite" class="analyzing-section">
-        <mat-spinner diameter="60"></mat-spinner>
+        <div class="modern-loader">
+          <div class="loader-rings">
+            <div class="ring ring-1"></div>
+            <div class="ring ring-2"></div>
+            <div class="ring ring-3"></div>
+          </div>
+          <div class="loader-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+            </svg>
+          </div>
+        </div>
         <p class="analyzing-text">Analyzing website...</p>
         <p class="analyzing-subtext">Extracting colors, fonts, images, and content</p>
       </div>
@@ -662,9 +686,13 @@
             mat-raised-button 
             class="generate-prompt-btn"
             (click)="generatePromptFromBrandDNA()"
-            [disabled]="!selectedTemplateStyle">
-            <mat-icon>auto_awesome</mat-icon>
-            Generate Prompt
+            [disabled]="!selectedTemplateStyle || isGeneratingPrompt">
+            <div class="btn-loader" *ngIf="isGeneratingPrompt">
+              <div class="spinner-ring"></div>
+              <div class="spinner-ring ring-2"></div>
+            </div>
+            <mat-icon *ngIf="!isGeneratingPrompt">auto_awesome</mat-icon>
+            <span>{{ isGeneratingPrompt ? 'Generating...' : 'Generate Prompt' }}</span>
           </button>
         </div>
       </div>
@@ -706,6 +734,7 @@
           <mat-icon class="upload-icon">cloud_upload</mat-icon>
           <p class="drop-text">Drag & drop your file here</p>
           <p class="drop-subtext">or click to browse</p>
+          <p class="file-size-limit">Maximum size: 1MB</p>
           <div class="supported-formats">
             <span class="format-badge">Excel</span>
             <span class="format-badge">CSV</span>

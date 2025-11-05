@@ -339,7 +339,7 @@ router.get('/my/details', authenticate, async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/organizations/:slug
- * Delete an organization (only accessible by Default Organization super_admin)
+ * Delete an organization (only accessible by Camply Organization super_admin)
  * Query param: deleteData (true/false) - whether to cascade delete all org data
  */
 router.delete('/:slug', authenticate, async (req: Request, res: Response) => {
@@ -354,12 +354,12 @@ router.delete('/:slug', authenticate, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Check if user is in Default Organization (owner org)
+    // Check if user is in Camply Organization (owner org)
     const userOrg = currentUser.organizationId as any;
-    if (!userOrg || userOrg.slug !== 'default') {
+    if (!userOrg || userOrg.slug !== 'camply') {
       return res.status(403).json({
         error: 'Permission denied',
-        message: 'Only Default Organization can delete organizations'
+        message: 'Only Camply Organization can delete organizations'
       });
     }
 
@@ -380,11 +380,11 @@ router.delete('/:slug', authenticate, async (req: Request, res: Response) => {
       });
     }
 
-    // Prevent deleting the Default Organization itself
-    if (orgToDelete.slug === 'default') {
+    // Prevent deleting the Camply Organization itself
+    if (orgToDelete.slug === 'camply') {
       return res.status(403).json({
-        error: 'Cannot delete Default Organization',
-        message: 'The Default Organization cannot be deleted'
+        error: 'Cannot delete Camply Organization',
+        message: 'The Camply Organization cannot be deleted'
       });
     }
 

@@ -14,6 +14,11 @@ export interface GenerationMessage {
     mediaType: string;
     fileName: string;
   }>;
+  attachment?: {
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+  };
 }
 
 export interface ConversationState {

@@ -1112,15 +1112,13 @@ async function extractCTAs(page: Page, baseUrl: string, maxCTAs: number): Promis
           let url = '';
 
           // Try multiple methods to get URL
-          // 1. Direct href attribute
-          if (el.tagName === 'A') {
-            url = (el as HTMLAnchorElement).href;
-          } 
-          // 2. href attribute on button/element
-          else if (el.hasAttribute('href')) {
+          // ✅ IMPORTANT: Use getAttribute for ALL cases to get raw URL (will convert to absolute later)
+          
+          // 1. href attribute (anchor or any element)
+          if (el.hasAttribute('href')) {
             url = el.getAttribute('href') || '';
           } 
-          // 3. Angular routerLink (case-insensitive)
+          // 2. Angular routerLink (case-insensitive)
           else if (el.hasAttribute('routerlink')) {
             url = el.getAttribute('routerlink') || '';
           }
@@ -1130,37 +1128,58 @@ async function extractCTAs(page: Page, baseUrl: string, maxCTAs: number): Promis
           else if (el.hasAttribute('ng-reflect-router-link')) {
             url = el.getAttribute('ng-reflect-router-link') || '';
           }
-          // 4. Button wrapped in anchor tag or routerLink
+          // 3. Button wrapped in anchor tag or routerLink
           else if (el.closest('a')) {
             const anchor = el.closest('a') as HTMLAnchorElement;
-            url = anchor.href || anchor.getAttribute('routerlink') || anchor.getAttribute('routerLink') || '';
+            url = anchor.getAttribute('href') || anchor.getAttribute('routerlink') || anchor.getAttribute('routerLink') || '';
           }
-          // 5. data-href or data-url attributes
+          // 4. data-href or data-url attributes
           else if (el.hasAttribute('data-href')) {
             url = el.getAttribute('data-href') || '';
           }
           else if (el.hasAttribute('data-url')) {
             url = el.getAttribute('data-url') || '';
           }
-          // 6. formaction for submit buttons
+          else if (el.hasAttribute('data-link')) {
+            url = el.getAttribute('data-link') || '';
+          }
+          // 5. formaction for submit buttons
           else if (el.hasAttribute('formaction')) {
             url = el.getAttribute('formaction') || '';
           }
-          // 7. onclick with location/window.open
+          // 6. onclick with location/window.open/navigate
           else if (el.hasAttribute('onclick')) {
             const onclick = el.getAttribute('onclick') || '';
-            const urlMatch = onclick.match(/(?:location\.href|window\.open|navigate)\s*\(?\s*=?\s*['"]([^'"]+)['"]/);
+            // Match various patterns
+            const patterns = [
+              /(?:location\.href|window\.location\.href)\s*=\s*['"]([^'"]+)['"]/i,
+              /(?:location|window\.location)\s*=\s*['"]([^'"]+)['"]/i,
+              /window\.open\s*\(\s*['"]([^'"]+)['"]/i,
+              /navigate\s*\(\s*['"]([^'"]+)['"]/i,
+              /router\.navigate\s*\(\s*\[['"]([^'"]+)['"]\]/i
+            ];
+            
+            for (const pattern of patterns) {
+              const match = onclick.match(pattern);
+              if (match) {
+                url = match[1];
+                break;
+              }
+            }
+          }
+          // 7. Check for @click, v-on:click (Vue), (click) (Angular) in attributes
+          else if (el.hasAttribute('@click') || el.hasAttribute('v-on:click') || el.hasAttribute('(click)')) {
+            const clickAttr = el.getAttribute('@click') || el.getAttribute('v-on:click') || el.getAttribute('(click)') || '';
+            const urlMatch = clickAttr.match(/['"]([^'"]*\/[^'"]+)['"]/);
             if (urlMatch) {
               url = urlMatch[1];
             }
           }
 
-          // Convert relative URLs to absolute (if they don't start with http or /)
-          if (url && !url.startsWith('http') && !url.startsWith('/')) {
-            url = '/' + url;
-          }
+          // ✅ SKIP: Don't include relative URLs - they'll be converted after page.evaluate returns
+          // We can't convert to absolute inside page.evaluate because we don't have access to baseUrl there
 
-          // Validate
+          // Validate (allow relative URLs for now, will be converted later)
           if (
             text && 
             text.length > 2 && 
@@ -1174,7 +1193,7 @@ async function extractCTAs(page: Page, baseUrl: string, maxCTAs: number): Promis
           ) {
             ctaList.push({
               text,
-              url,
+              url, // Keep as-is (relative or absolute)
               type: el.tagName === 'BUTTON' ? 'button' : 'link'
             });
             processedUrls.add(url);
@@ -1185,8 +1204,51 @@ async function extractCTAs(page: Page, baseUrl: string, maxCTAs: number): Promis
       return ctaList.slice(0, max);
     }, maxCTAs);
 
-    logger.info(`🎯 Extracted ${ctas.length} CTAs with links`);
-    return ctas;
+    // ✅ Convert all relative URLs to absolute URLs
+    const absoluteCTAs = ctas.map(cta => {
+      const originalUrl = cta.url;
+      let absoluteUrl = cta.url;
+      
+      // If URL is relative (starts with / or doesn't have protocol)
+      if (absoluteUrl && !absoluteUrl.startsWith('http')) {
+        try {
+          // Create absolute URL from baseUrl
+          const base = new URL(baseUrl);
+          
+          // Handle different relative URL formats
+          if (absoluteUrl.startsWith('//')) {
+            // Protocol-relative URL: //example.com/path
+            absoluteUrl = base.protocol + absoluteUrl;
+          } else if (absoluteUrl.startsWith('/')) {
+            // Root-relative URL: /path
+            absoluteUrl = `${base.protocol}//${base.host}${absoluteUrl}`;
+          } else {
+            // Path-relative URL: path/to/page
+            absoluteUrl = `${base.protocol}//${base.host}/${absoluteUrl}`;
+          }
+          
+          logger.info(`🔗 Converted URL: "${originalUrl}" → "${absoluteUrl}"`);
+        } catch (error) {
+          logger.warn(`⚠️ Failed to convert relative URL to absolute: ${cta.url}`);
+          // Keep original URL if conversion fails
+        }
+      }
+      
+      return {
+        ...cta,
+        url: absoluteUrl
+      };
+    });
+
+    logger.info(`🎯 Extracted ${absoluteCTAs.length} CTAs with links (${absoluteCTAs.filter(c => !c.url.startsWith('http')).length} still relative)`);
+    
+    // ✅ Log any remaining relative URLs for debugging
+    const stillRelative = absoluteCTAs.filter(c => !c.url.startsWith('http'));
+    if (stillRelative.length > 0) {
+      logger.warn(`⚠️ Found ${stillRelative.length} CTAs with relative URLs:`, stillRelative.map(c => c.url));
+    }
+    
+    return absoluteCTAs;
   } catch (error) {
     logger.info('⚠️ CTA extraction failed');
     return [];

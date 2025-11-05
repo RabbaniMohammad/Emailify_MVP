@@ -274,7 +274,7 @@ private sentImages: Array<{name: string, size: number}> = [];
       this.snackBar.open(
         '✨ Website analyzed successfully!',
         'Close',
-        { duration: 3000, panelClass: ['success-snackbar'] }
+        { duration: 3000 }
       );
     } catch (error: any) {
       console.error('Error analyzing website:', error);
@@ -624,14 +624,20 @@ private sentImages: Array<{name: string, size: number}> = [];
       const response = await fetch('/api/csv-to-prompt', {
         method: 'POST',
         body: formData,
+        credentials: 'include',
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate prompt');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || 'Failed to generate prompt');
       }
 
       const data = await response.json();
       this.generatedPrompt = data.prompt || data.message || '';
+
+      if (!this.generatedPrompt) {
+        throw new Error('No prompt received from server');
+      }
 
       this.snackBar.open(
         '✨ Prompt generated successfully!',
@@ -640,8 +646,9 @@ private sentImages: Array<{name: string, size: number}> = [];
       );
     } catch (error) {
       console.error('Error generating prompt:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate prompt. Please try again.';
       this.snackBar.open(
-        'Failed to generate prompt. Please try again.',
+        errorMessage,
         'Close',
         { duration: 5000, panelClass: ['error-snackbar'] }
       );
@@ -983,13 +990,21 @@ async onSend(): Promise<void> {
     })
   );
   
-  // Add user message to UI immediately (before API call) WITH images
+  // Store file reference before clearing
+  const fileToSend = this.attachedFile;
+  
+  // Add user message to UI immediately (before API call) WITH images AND attachment
   const existingMessages = this.messages$.value;
   const userMessage: GenerationMessage = {
     role: 'user',
     content: finalMessage,
     timestamp: new Date(),
     images: imageAttachments.length > 0 ? imageAttachments : undefined,
+    attachment: fileToSend ? {
+      fileName: fileToSend.name,
+      fileSize: fileToSend.size,
+      fileType: fileToSend.type
+    } : undefined,
   };
   this.messages$.next([...existingMessages, userMessage]);
   
@@ -1005,9 +1020,6 @@ async onSend(): Promise<void> {
   
   // Scroll to show the new user message
   setTimeout(() => this.scrollToBottom(), 50);
-
-  // Store file reference before clearing
-  const fileToSend = this.attachedFile;
   
   // Clear input, images, and attached file AFTER storing metadata
   this.userInput = '';
