@@ -476,12 +476,13 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         }
       });
 
-      // ✅ CUSTOMIZE: Modify default "Button" block
       const editor = this.editor as Editor;
+
       editor.on('load', () => {
         const bm = editor.BlockManager;
-        const buttonBlock = bm.get('button');
       
+        // BUTTON BLOCK OVERRIDE
+        const buttonBlock = bm.get('button');
         if (buttonBlock) {
           buttonBlock.set({
             label: 'Button',
@@ -513,8 +514,114 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         } else {
           console.warn('No "button" block found in BlockManager.');
         }
+      
+        // QUOTE BLOCK OVERRIDE
+        const quoteBlock = bm.get('quote');
+        if (quoteBlock) {
+          quoteBlock.set({
+            label: 'Quote',
+            category: 'Basic',
+            content: `
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="
+                    background-color:#f9fafb;
+                    border-left:4px solid #2563eb;
+                    padding:20px 28px;
+                    font-family:Georgia, 'Times New Roman', serif;
+                    font-size:18px;
+                    line-height:1.6;
+                    color:#374151;
+                    text-align:left;
+                  ">
+                    <em style="display:block; color:#1f2937;">
+                      “The best way to predict the future is to invent it.”
+                    </em>
+                    <span style="
+                      display:block;
+                      margin-top:12px;
+                      font-size:15px;
+                      font-family:Arial, sans-serif;
+                      color:#6b7280;
+                      font-weight:600;
+                    ">
+                      — Alan Kay
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            `
+          });
+        } else {
+          console.warn('No "quote" block found in BlockManager.');
+        }
+
+          // LINK BLOCK OVERRIDE
+        const inlineLink = bm.get('link');
+        if (inlineLink) {
+          inlineLink.set({
+            label: 'Link',
+            category: 'Basic',
+            content: `
+              <a href="#" style="
+                color:#2563eb;
+                font-family:Arial, sans-serif;
+                font-size:16px;
+                line-height:1.6;
+                font-weight:500;
+                text-decoration:underline;
+                user-select:none;
+              ">
+                Visit our website →
+              </a>
+            `
+          });
+      } else {
+          console.warn('No "link" block found in BlockManager.');
+        }
+
+          // LINK-BLOCK OVERRIDE
+        const linkBlock = bm.get('link-block');
+        if (linkBlock) {
+          linkBlock.set({
+            label: 'Link Block',
+            category: 'Basic',
+            content: `
+              <a href="#" style="display:block; text-decoration:none;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    <td style="
+                      background-color:#f9fafb;
+                      padding:20px;
+                      text-align:center;
+                      border-radius:8px;
+                      border:1px solid #e5e7eb;
+                    ">
+                      <img 
+                        src="https://via.placeholder.com/200x100"
+                        alt="Banner"
+                        style="display:block; border:none; margin:0 auto 12px auto; max-width:100%; height:auto;"
+                      />
+                      <p style="
+                        font-family:Arial, sans-serif;
+                        font-size:16px;
+                        color:#111827;
+                        font-weight:500;
+                        margin:0;
+                      ">
+                        Click this entire block →
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </a>
+            `
+          });
+        } else {
+          console.warn('No "link-block" found in BlockManager.');
+        }
       });
-    
+      
       this.editor.on('load', () => {
         // ✅ Clear the timeout since editor loaded successfully
         clearTimeout(loadingTimeout);
