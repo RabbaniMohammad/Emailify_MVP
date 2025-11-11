@@ -15,6 +15,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { trigger, state, style, transition, animate } from '@angular/animations';
 import { BehaviorSubject, Observable, firstValueFrom } from 'rxjs';
 import { TemplateStateService } from '../../core/services/template-state.service';
+import type { Editor } from 'grapesjs';
 
 interface MatchOverlay {
   id: string;
@@ -475,6 +476,45 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         }
       });
 
+      // ✅ CUSTOMIZE: Modify default "Button" block
+      const editor = this.editor as Editor;
+      editor.on('load', () => {
+        const bm = editor.BlockManager;
+        const buttonBlock = bm.get('button');
+      
+        if (buttonBlock) {
+          buttonBlock.set({
+            label: 'Button',
+            category: 'Basic',
+            content: `
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="border-radius:6px; background:#2563eb; text-align:center;">
+                    <a href="#" style="
+                      display:inline-block;
+                      background:#2563eb;
+                      color:#ffffff;
+                      font-family:Arial,sans-serif;
+                      font-size:16px;
+                      font-weight:600;
+                      text-decoration:none;
+                      padding:12px 24px;
+                      border-radius:6px;
+                      text-align:center;
+                      user-select:none;
+                    ">
+                      Button
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            `,
+          });
+        } else {
+          console.warn('No "button" block found in BlockManager.');
+        }
+      });
+    
       this.editor.on('load', () => {
         // ✅ Clear the timeout since editor loaded successfully
         clearTimeout(loadingTimeout);
