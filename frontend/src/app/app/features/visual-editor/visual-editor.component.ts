@@ -515,6 +515,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
           console.warn('No "button" block found in BlockManager.');
         }
       
+
         // QUOTE BLOCK OVERRIDE
         const quoteBlock = bm.get('quote');
         if (quoteBlock) {
@@ -620,7 +621,270 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         } else {
           console.warn('No "link-block" found in BlockManager.');
         }
+
+        // DIVIDER BLOCK OVERRIDE
+        const dividerBlock = bm.get('divider');
+        if (dividerBlock) {
+          dividerBlock.set({
+            label: 'Divider',
+            category: 'Basic',
+            content: `
+              <div style="
+                width: 100%;
+                max-width: 600px;
+                min-height: 3px;
+                height: 3px;
+                background: #000000;
+                margin: 28px auto;
+                border-radius: 2px;
+                box-shadow: 0 0 3px rgba(0,0,0,0.05);
+                transition: all 0.2s ease;
+              "></div>
+            `,
+          });
+        } else {
+          console.warn('No "divider" block found in BlockManager.');
+        }
+
+        // TEXT BLOCK OVERRIDE
+        const textBlock = bm.get('text');
+        if (textBlock) {
+          textBlock.set({
+            label: 'Text',
+            category: 'Basic',
+            content: `
+              <div style="
+                font-family: Arial, sans-serif;
+                font-size: 16px;
+                line-height: 1.6;
+                color: #111827;
+                padding: 12px 16px;
+                margin: 0 auto;
+                text-align: left;
+              ">
+                Insert text here!
+              </div>
+            `,
+          });
+        } else {
+          console.warn('No "text" block found in BlockManager.');
+        }
+
+        //TEXT SECTION BLOCK OVERRIDE
+        console.log(bm.get('text-section'));
+
+        const textSection = bm.get('text-section');
+        
+        if (textSection) {
+          textSection.set({
+            label: 'Text Section',
+            category: 'Content',
+            content: `
+              <div style="
+                background-color: #ffffff;
+                border: 1px dashed #d1d5db;
+                border-radius: 8px;
+                padding: 20px;
+                min-height: 100px;
+                font-family: Arial, sans-serif;
+                font-size: 16px;
+                line-height: 1.6;
+                color: #111827;
+                text-align: left;
+              ">
+                <h2 style="
+                  font-size: 20px;
+                  font-weight: 700;
+                  margin-top: 0;
+                  margin-bottom: 8px;
+                  color: #111827;
+                ">Heading Here</h2>
+
+                <p style="
+                  margin: 0;
+                  color: #374151;
+                ">
+                  This is your text section. Add paragraphs, links, or images here.
+                </p>
+              </div>
+            `,
+          });
+        } else {
+          console.warn('No "text-section" block found in BlockManager.');
+        }
+
+
+
+        // IMAGE BLOCK OVERRIDE 
+        const imageBlock = bm.get('image');
+        if (imageBlock) {
+          imageBlock.set({
+            label: 'Image',
+            category: 'Basic',
+            content: {
+              type: 'image',
+              style: {
+                display: 'block',
+                width: '100%',
+                maxWidth: '600px',
+                height: 'auto',
+                aspectRatio: '16 / 9',
+                objectFit: 'cover',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                margin: '0 auto',
+                transition: 'all 0.2s ease',
+              },
+              attributes: {
+                alt: 'Uploaded Image',
+              },
+            },
+          });
+        } else {
+          console.warn('No "image" block found in BlockManager.');
+        }
+
+        // Enhance image behavior once added
+        editor.on('component:add', comp => {
+          if (comp.is('image')) {
+            // Image custom styling override
+            comp.addStyle({
+              display: 'block',
+              width: '100%',
+              maxWidth: '600px',
+              height: 'auto',
+              aspectRatio: '16 / 9',
+              objectFit: 'cover',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              margin: '0 auto',
+              transition: 'all 0.2s ease',
+            });
+
+            // Making image resizable
+            comp.set({
+              resizable: { ratioDefault: true, minDim: 50, maxDim: 1000 },
+            });
+
+
+          }
+        });
+
+        // GRID ITEMS BLOCK OVERRIDE 
+        const gridItems = bm.get('grid-items');
+        if (gridItems) {
+          gridItems.set({
+            label: 'Grid Items',
+            category: 'Layout',
+            content: `
+              <div style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 16px;
+                padding: 20px;
+                background-color: #fafafa;
+                border: 1px dashed #d1d5db;
+                border-radius: 8px;
+                min-height: 150px;
+              ">
+                <div style="
+                  min-height: 120px;
+                  border: 1px dashed rgba(0,0,0,0.1);
+                  border-radius: 6px;
+                  background: rgba(255,255,255,0.9);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-family: Arial, sans-serif;
+                  font-size: 13px;
+                  color: #9ca3af;
+                  transition: all 0.2s ease;
+                ">
+                  Drop content here
+                </div>
+                <div style="
+                  min-height: 120px;
+                  border: 1px dashed rgba(0,0,0,0.1);
+                  border-radius: 6px;
+                  background: rgba(255,255,255,0.9);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-family: Arial, sans-serif;
+                  font-size: 13px;
+                  color: #9ca3af;
+                  transition: all 0.2s ease;
+                ">
+                  Drop content here
+                </div>
+              </div>
+            `,
+          });
+        } else {
+          console.warn('No "grid-items" block found in BlockManager.');
+        }
+
+        // LIST ITEMS BLOCK OVERRIDE 
+        const listItems = bm.get('list-items');
+        if (listItems) {
+          listItems.set({
+            label: 'List Items',
+            category: 'Layout',
+            content: `
+              <div style="
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                padding: 20px;
+                background-color: #fafafa;
+                border: 1px dashed #d1d5db;
+                border-radius: 8px;
+                min-height: 150px;
+              ">
+                <div style="
+                  border: 1px dashed rgba(0,0,0,0.1);
+                  border-radius: 6px;
+                  background: rgba(255,255,255,0.9);
+                  padding: 12px 16px;
+                  font-family: Arial, sans-serif;
+                  font-size: 14px;
+                  color: #9ca3af;
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  transition: all 0.2s ease;
+                ">
+                  <span>Item label</span>
+                  <span style="font-size: 12px; color: #b0b0b0;">→</span>
+                </div>
+                <div style="
+                  border: 1px dashed rgba(0,0,0,0.1);
+                  border-radius: 6px;
+                  background: rgba(255,255,255,0.9);
+                  padding: 12px 16px;
+                  font-family: Arial, sans-serif;
+                  font-size: 14px;
+                  color: #9ca3af;
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  transition: all 0.2s ease;
+                ">
+                  <span>Item label</span>
+                  <span style="font-size: 12px; color: #b0b0b0;">→</span>
+                </div>
+              </div>
+            `,
+          });
+        } else {
+          console.warn('No "list-items" block found in BlockManager.');
+        }
+
+//Additional block overrides can be added here
+
       });
+
+      
       
       this.editor.on('load', () => {
         // ✅ Clear the timeout since editor loaded successfully
