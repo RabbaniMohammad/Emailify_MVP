@@ -2,6 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, tap } from 'rxjs';
 import { DatabaseService } from '../../../core/services/db.service';
+import { TemplatesService } from '../../core/services/templates.service';
+
 
 /* ----------------------------- Types ----------------------------- */
 
@@ -296,6 +298,17 @@ saveTemplate(
         
       } else {
       }
+      // Inject the TemplatesService
+    const templatesService = inject(TemplatesService);
+
+    // Push new template into UI list
+    templatesService.addTemplateToCache({
+      id: response.templateId,
+      name: response.templateName,
+      source: 'ai-generated',
+      templateType: 'AI Generated',
+      content: cached.currentHtml
+    });
     })
   );
 }
