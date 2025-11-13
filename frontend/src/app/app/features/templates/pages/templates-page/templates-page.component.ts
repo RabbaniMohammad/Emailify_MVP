@@ -179,6 +179,16 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
 
+// DEBUG: Watch every update from TemplatesService
+this.svc.state$
+.pipe(takeUntil(this.destroy$))
+.subscribe(state => {
+  console.log("%c COMPONENT RECEIVED STATE", "color: #4CAF50; font-weight: bold;");
+  console.log("State count:", state.items.length);
+  console.log("IDs:", state.items.map(i => i.id));
+});
+
+
     // Subscribe to selected item changes to load content
     this.selectedId$
       .pipe(
@@ -202,6 +212,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
     if (currentState.searchQuery) {
       this.searchQuery = currentState.searchQuery;
     }
+    console.log("%c COMPONENT INIT — triggering backend fetch", "color: #2196F3;");
 
     // Always load templates on init
     // ✅ ALWAYS call search to trigger reordering, even if items exist

@@ -285,6 +285,8 @@ export class TemplatesService {
       .pipe(
         tap(async response => {
           let items = response.items || [];
+          console.log(" BACKEND LIST RECEIVED:", items);
+
           
           // ✅ Filter efficiently
           if (query) {
@@ -353,9 +355,29 @@ export class TemplatesService {
   addTemplateToCache(template: TemplateItem): void {
     // Get current state
     const currentState = this.snapshot;
-    
-    // Add template to the beginning of items array (most recent first)
-    const updatedItems = [template, ...currentState.items];
+
+    // FIX: Prevent duplicates — check if template already exists
+    const exists = currentState.items.find(t => t.id === template.id);
+
+    let updatedItems: TemplateItem[];
+
+    if (exists) {
+      
+      // If exists, update it instead of adding duplicate
+      updatedItems = currentState.items.map(t =>
+        t.id === template.id ? { ...t, ...template } : t
+      );
+      console.log("FRONTEND STATE AFTER ADD:", updatedItems);
+
+    } else {
+      // Add template to the beginning of items array (most recent first)
+      updatedItems = [template, ...currentState.items];
+      console.log("addTemplateToCache() — updated global list:", {
+        total: updatedItems.length,
+        items: updatedItems.map(i => ({ id: i.id, name: i.name })),
+      });
+      
+    }
     
     // Update state
     this.updateState({ items: updatedItems });
@@ -378,4 +400,5 @@ export class TemplatesService {
     // Select the newly added template
     this.select(template.id, template.name);
   }
+
 }

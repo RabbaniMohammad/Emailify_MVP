@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of, tap } from 'rxjs';
 import { DatabaseService } from '../../../core/services/db.service';
-import { TemplatesService } from '../../core/services/templates.service';
+import { TemplatesService } from '../services/templates.service';
 
 
 /* ----------------------------- Types ----------------------------- */
@@ -261,6 +261,8 @@ continueConversation(
   }
 
   /* --------------------------- Save Template -------------------------- */
+// Inject the TemplatesService
+private templatesService = inject(TemplatesService);
 saveTemplate(
   conversationId: string,
   templateName: string
@@ -298,11 +300,9 @@ saveTemplate(
         
       } else {
       }
-      // Inject the TemplatesService
-    const templatesService = inject(TemplatesService);
 
     // Push new template into UI list
-    templatesService.addTemplateToCache({
+    this.templatesService.addTemplateToCache({
       id: response.templateId,
       name: response.templateName,
       source: 'ai-generated',
