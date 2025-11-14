@@ -62,16 +62,6 @@ export interface GrammarCheckResult {
     applied: number;
     failed: number;
   };
-  tagsNeedingRetry?: Array<{
-    tagId: number;
-    tag: string;
-    currentText: string;
-    failedChanges: Array<{
-      find: string;
-      replace: string;
-      reason: string;
-    }>;
-  }>;
 }
 
 interface TextNodeWithTag {
@@ -226,21 +216,13 @@ async function checkChunkWithGPT(chunk: TextNodeWithTag[]): Promise<GPTCorrectio
     }));
 
 
-    const prompt = `You are a multilingual grammar and spelling checker. Fix all errors in the provided text nodes.
-
-LANGUAGE DETECTION (CRITICAL):
-- FIRST, detect the language of each text node
-- Apply grammar/spelling rules for THAT SPECIFIC LANGUAGE ONLY
-- If text is English, use ENGLISH spelling (e.g., "industry" NOT "industrie")
-- If text is French, use FRENCH spelling (e.g., "industrie" is CORRECT)
-- If text is Spanish, use SPANISH spelling
-- Do NOT accept foreign language spellings in English text (e.g., "industrie" in English text is WRONG)
+    const prompt = `You are a grammar and spelling checker. Fix all errors in the provided text nodes.
 
 RULES:
-1. Only fix grammar, spelling, and typos FOR THE DETECTED LANGUAGE
+1. Only fix grammar, spelling, and typos
 2. Preserve HTML structure (don't modify tags)
 3. Maintain original meaning
-4. Don't change correct text IN THAT LANGUAGE
+4. Don't change correct text
 5. Return EXACT format as specified
 6. Find EVERY occurrence of each error - don't skip duplicates
 
@@ -316,86 +298,6 @@ CRITICAL: Return ONLY valid JSON, no other text.`;
 }
 
 // ========================
-// GPT RETRY FOR FAILED EDITS
-// ========================
-
-/**
- * Retry failed edits by sending partially-corrected text back to GPT
- * This gives GPT a second chance with clearer context
- */
-async function retryFailedEdits(
-  tagsNeedingRetry: Array<{
-    tagId: number;
-    tag: string;
-    currentText: string;
-    failedChanges: Array<{ find: string; replace: string; reason: string }>;
-  }>,
-  retryAttempt: number
-): Promise<GPTCorrectionResult[]> {
-  try {
-    console.log(`🔄 [RETRY ${retryAttempt}] Processing ${tagsNeedingRetry.length} tags with failures`);
-    
-    // Build focused retry input
-    const retryInput = tagsNeedingRetry.map(t => ({
-      id: t.tagId,
-      tag: t.tag,
-      text: t.currentText, // ← CRITICAL: Send partially-corrected text
-    }));
-
-    const prompt = `RETRY ATTEMPT ${retryAttempt}: Previous grammar corrections failed to apply.
-
-CRITICAL CONTEXT:
-- These texts were ALREADY partially corrected in a previous pass
-- Some corrections succeeded, but the ones below FAILED to apply
-- The text you see below is the CURRENT state (after partial corrections)
-- Your previous "find" strings didn't match the text EXACTLY
-
-YOUR TASK:
-Re-analyze the CURRENT text below and suggest corrections.
-The "find" field MUST be an EXACT substring from the current text - copy character-by-character.
-
-Previously failed suggestions (for reference - these didn't match):
-${JSON.stringify(tagsNeedingRetry.map(t => ({ tagId: t.tagId, failures: t.failedChanges })), null, 2)}
-
-CURRENT TEXT to analyze (after partial corrections):
-${JSON.stringify(retryInput, null, 2)}
-
-OUTPUT FORMAT: Same as before - return JSON with "corrections" array.
-Only suggest corrections if you find ACTUAL errors in the CURRENT text.
-If the text is now correct, return empty changes array.
-
-CRITICAL: The "find" field must be copy-pasted EXACTLY from the current text above.`;
-
-    const completion = await openai.chat.completions.create({
-      model: OPENAI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are retrying failed corrections. Be extremely precise with exact character matching.',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      temperature: 0.0, // ← Maximum determinism for retries
-      response_format: { type: 'json_object' },
-    });
-
-    const responseText = completion.choices[0]?.message?.content || '{}';
-    const parsed = JSON.parse(responseText);
-    const results = parsed.corrections || parsed.results || [];
-    
-    console.log(`✅ [RETRY ${retryAttempt}] GPT returned ${results.length} correction suggestions`);
-    return results;
-    
-  } catch (error) {
-    console.error(`❌ [RETRY ${retryAttempt}] Error:`, error);
-    return [];
-  }
-}
-
-// ========================
 // APPLY CORRECTIONS
 // ========================
 
@@ -410,7 +312,6 @@ function applyCorrections(
 ): GrammarCheckResult {
   const appliedEdits: GrammarCheckResult['appliedEdits'] = [];
   const failedEdits: GrammarCheckResult['failedEdits'] = [];
-  const tagsNeedingRetry: GrammarCheckResult['tagsNeedingRetry'] = [];
   
   // Create map of corrections by ID
   const correctionMap = new Map<number, GPTCorrectionResult>();
@@ -438,7 +339,6 @@ function applyCorrections(
     // This handles multiple errors in the same sentence better
     const contextSnippets: any[] = [];
     const appliedChanges: any[] = [];
-    const failedChangesForThisTag: any[] = [];
     
     correction.changes?.forEach(change => {
       if (change && change.find && change.replace) {
@@ -446,7 +346,6 @@ function applyCorrections(
         const wordExists = currentText.includes(change.find);
         
         if (!wordExists) {
-          // Track failed edit
           failedEdits.push({
             find: change.find,
             replace: change.replace,
@@ -457,14 +356,6 @@ function applyCorrections(
             status: 'failed',
             error: `Word not found in text`,
           });
-          
-          // Collect for retry
-          failedChangesForThisTag.push({
-            find: change.find,
-            replace: change.replace,
-            reason: change.reason || 'Unknown',
-          });
-          
           return;
         }
         
@@ -511,16 +402,6 @@ function applyCorrections(
       });
     } else if (correction.changes && correction.changes.length > 0) {
     }
-    
-    // If this tag had any failures, track it for retry
-    if (failedChangesForThisTag.length > 0) {
-      tagsNeedingRetry.push({
-        tagId: textNode.id,
-        tag: textNode.tag,
-        currentText: currentText, // Current state after any successful edits
-        failedChanges: failedChangesForThisTag,
-      });
-    }
   });
   
   const resultHtml = dom.serialize();
@@ -534,7 +415,6 @@ function applyCorrections(
       applied: appliedEdits.length,
       failed: failedEdits.length,
     },
-    tagsNeedingRetry: tagsNeedingRetry.length > 0 ? tagsNeedingRetry : undefined,
   };
 }
 
@@ -543,10 +423,9 @@ function applyCorrections(
 // ========================
 
 /**
- * Main grammar check function using GPT-4o-mini with chunking strategy + retry logic
+ * Main grammar check function using GPT-4o-mini with chunking strategy
  */
 export async function checkGrammarAdvanced(html: string): Promise<GrammarCheckResult> {
-  const startTime = Date.now();
   
   // Step 1: Extract text nodes with tags (and get the DOM instance)
   const { textNodes, dom } = extractTextNodesWithTags(html);
@@ -560,87 +439,20 @@ export async function checkGrammarAdvanced(html: string): Promise<GrammarCheckRe
     };
   }
   
-  console.log(`📊 [GRAMMAR CHECK] Processing ${textNodes.length} text nodes`);
-  
   // Step 2: Split into chunks
   const chunks = chunkTextNodes(textNodes, CHUNK_SIZE);
-  console.log(`📦 [GRAMMAR CHECK] Split into ${chunks.length} chunks`);
   
-  // Step 3: Process chunks in parallel (initial pass)
+  // Step 3: Process chunks in parallel
   const chunkResults = await Promise.all(
     chunks.map(chunk => checkChunkWithGPT(chunk))
   );
   
   // Step 4: Flatten results
   const allResults = chunkResults.flat();
-  console.log(`✅ [GRAMMAR CHECK] GPT returned ${allResults.length} correction suggestions`);
   
-  // Step 5: Apply corrections and collect failures
-  let result = applyCorrections(dom, textNodes, allResults);
-  console.log(`📊 [GRAMMAR CHECK] Initial pass: ${result.stats.applied} applied, ${result.stats.failed} failed`);
+  // Step 5: Apply corrections using the SAME DOM instance
+  const result = applyCorrections(dom, textNodes, allResults);
   
-  // Step 6: Retry logic (max 2 attempts)
-  const MAX_RETRIES = 2;
-  const permanentlyFailedEdits: typeof result.failedEdits = [];
-  
-  for (let retryAttempt = 1; retryAttempt <= MAX_RETRIES; retryAttempt++) {
-    // Check if we have tags needing retry
-    if (!result.tagsNeedingRetry || result.tagsNeedingRetry.length === 0) {
-      console.log(`✅ [GRAMMAR CHECK] No retries needed, all corrections successful`);
-      break;
-    }
-    
-    console.log(`🔄 [GRAMMAR CHECK] Retry attempt ${retryAttempt}/${MAX_RETRIES} for ${result.tagsNeedingRetry.length} tags`);
-    
-    // Batch retry all failed tags
-    const retryResults = await retryFailedEdits(result.tagsNeedingRetry, retryAttempt);
-    
-    if (retryResults.length === 0) {
-      console.log(`⚠️ [GRAMMAR CHECK] Retry ${retryAttempt} returned no results - GPT thinks text is correct`);
-      // Move current failed edits to permanent failures
-      permanentlyFailedEdits.push(...result.failedEdits);
-      break;
-    }
-    
-    // Clear failed edits before reapplying (we'll regenerate them)
-    const previousFailedCount = result.failedEdits.length;
-    
-    // Re-apply corrections with retry results
-    // NOTE: textNodes already have partially-corrected text from previous pass
-    const retryResult = applyCorrections(dom, textNodes, retryResults);
-    
-    console.log(`📊 [GRAMMAR CHECK] Retry ${retryAttempt}: ${retryResult.stats.applied} applied, ${retryResult.stats.failed} still failed`);
-    
-    // Check if same edits failed again (hallucination - unrecoverable)
-    if (retryResult.failedEdits.length > 0 && retryAttempt === MAX_RETRIES) {
-      console.log(`❌ [GRAMMAR CHECK] ${retryResult.failedEdits.length} edits failed after ${MAX_RETRIES} retries - marking as hallucinations`);
-      retryResult.failedEdits.forEach(edit => {
-        edit.error = `Hallucination - failed after ${MAX_RETRIES} retry attempts`;
-      });
-      permanentlyFailedEdits.push(...retryResult.failedEdits);
-    }
-    
-    // Merge results
-    result.appliedEdits.push(...retryResult.appliedEdits);
-    result.failedEdits = retryResult.failedEdits;
-    result.tagsNeedingRetry = retryResult.tagsNeedingRetry;
-    result.stats.applied += retryResult.stats.applied;
-    result.stats.failed = retryResult.stats.failed;
-    result.stats.total = result.stats.applied + result.stats.failed;
-  }
-  
-  // Add permanently failed edits to final result
-  if (permanentlyFailedEdits.length > 0) {
-    result.failedEdits = permanentlyFailedEdits;
-    result.stats.failed = permanentlyFailedEdits.length;
-    result.stats.total = result.stats.applied + result.stats.failed;
-  }
-  
-  // Remove tagsNeedingRetry from final result (internal only)
-  delete result.tagsNeedingRetry;
-  
-  const duration = Date.now() - startTime;
-  console.log(`✅ [GRAMMAR CHECK] Complete in ${duration}ms: ${result.stats.applied} applied, ${result.stats.failed} failed`);
   
   return result;
 }

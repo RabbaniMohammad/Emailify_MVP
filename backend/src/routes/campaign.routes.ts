@@ -11,6 +11,11 @@ import { authenticate } from '@src/middleware/auth';
 const router = Router();
 const MC: any = mailchimp as any;
 
+// Extend Express Request type to include file from multer
+interface MulterRequest extends Request {
+  file?: any;
+}
+
 
 // Configure Mailchimp
 MC.setConfig({
@@ -27,6 +32,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 type MasterDocRow = {
   audiences_list: string;
+  phone?: string;
   scheduled_time: string;
   test_emails: string;
   timezone?: string;
@@ -391,7 +397,7 @@ router.get('/mailchimp/audiences', authenticate, async (req: Request, res: Respo
  * Parse uploaded CSV/Excel master document
  * 🔒 SECURITY: Protected - requires authentication
  */
-router.post('/campaign/upload-master', authenticate, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/campaign/upload-master', authenticate, upload.single('file'), async (req: MulterRequest, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -417,8 +423,10 @@ router.post('/campaign/upload-master', authenticate, upload.single('file'), asyn
 
       const headers = rows[0].map((h: any) => String(h || '').trim().toLowerCase());
       const audienceIdx = headers.findIndex(h => h === 'audiences_list' || h === 'audiences list');
+      const phoneIdx = headers.findIndex(h => h === 'phone');
       const timeIdx = headers.findIndex(h => h === 'scheduled_time' || h === 'scheduled time');
       const testIdx = headers.findIndex(h => h === 'test_emails' || h === 'test emails');
+      const timezoneIdx = headers.findIndex(h => h === 'timezone');
 
       if (audienceIdx === -1) {
         return res.status(400).json({
@@ -430,8 +438,10 @@ router.post('/campaign/upload-master', authenticate, upload.single('file'), asyn
         const row = rows[i];
         data.push({
           audiences_list: String(row[audienceIdx] || '').trim(),
+          phone: phoneIdx >= 0 ? String(row[phoneIdx] || '').trim() : '',
           scheduled_time: timeIdx >= 0 ? String(row[timeIdx] || '').trim() : '',
-          test_emails: testIdx >= 0 ? String(row[testIdx] || '').trim() : ''
+          test_emails: testIdx >= 0 ? String(row[testIdx] || '').trim() : '',
+          timezone: timezoneIdx >= 0 ? String(row[timezoneIdx] || '').trim() : ''
         });
       }
     }
@@ -459,8 +469,10 @@ router.post('/campaign/upload-master', authenticate, upload.single('file'), asyn
 
       data = (parsed.data as any[]).map((row: any) => ({
         audiences_list: String(row.audiences_list || row['audiences list'] || '').trim(),
+        phone: String(row.phone || '').trim(),
         scheduled_time: String(row.scheduled_time || row['scheduled time'] || '').trim(),
-        test_emails: String(row.test_emails || row['test emails'] || '').trim()
+        test_emails: String(row.test_emails || row['test emails'] || '').trim(),
+        timezone: String(row.timezone || '').trim()
       }));
     } else {
       return res.status(400).json({
@@ -962,7 +974,7 @@ router.post('/campaign/submit', authenticate, async (req: Request, res: Response
  * Validate uploaded CSV against Mailchimp audience
  * Returns: new subscribers (orange), existing subscribers (green), excluded subscribers (red)
  */
-router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'), async (req: Request, res: Response) => {
+router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'), async (req: MulterRequest, res: Response) => {
   try {
     
     const userId = (req as any).tokenPayload?.userId;

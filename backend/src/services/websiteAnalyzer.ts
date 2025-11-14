@@ -1,8 +1,5 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
 import logger from 'jet-logger';
-import { browserPool } from './browserPool';
-import { websiteCache } from './websiteCache';
-import { scrapingQueue } from './scrapingQueue';
 
 export interface Product {
   name: string;
@@ -88,18 +85,8 @@ interface AnalyzeOptions {
   maxCTAs?: number;
 }
 
-const DEFAULT_TIMEOUT_MS = (() => {
-  const fromEnv = process.env.WEBSITE_ANALYZER_TIMEOUT_MS;
-  if (!fromEnv) {
-    return 60000;
-  }
-
-  const parsed = Number(fromEnv);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60000;
-})();
-
 const DEFAULT_OPTIONS: AnalyzeOptions = {
-  timeout: DEFAULT_TIMEOUT_MS,
+  timeout: 30000,
   maxImages: 50,
   maxContent: 30,
   maxColors: 10,
@@ -145,31 +132,8 @@ export function validateUrl(url: string): { valid: boolean; error?: string; norm
 
 /**
  * Main function to analyze a website and extract brand DNA
- * 
- * Now optimized with:
- * 1. Caching - Returns cached results if available (24hr TTL)
- * 2. Queue - Limits concurrent scrapes to 2 max
- * 3. Browser pooling - Reuses browser instances
- * 4. Memory optimization - Disabled images, optimized flags
  */
 export async function analyzeWebsite(url: string, options: AnalyzeOptions = {}): Promise<BrandDNA> {
-  // Check cache first
-  const cachedResult = websiteCache.get(url);
-  if (cachedResult) {
-    logger.info(`🎯 Returning cached result for: ${url}`);
-    return cachedResult;
-  }
-
-  // Add to queue to limit concurrency
-  return scrapingQueue.add(async () => {
-    return analyzeWebsiteInternal(url, options);
-  });
-}
-
-/**
- * Internal scraping function (uses browser pool)
- */
-async function analyzeWebsiteInternal(url: string, options: AnalyzeOptions = {}): Promise<BrandDNA> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   let browser: Browser | null = null;
   let page: Page | null = null;
@@ -177,8 +141,17 @@ async function analyzeWebsiteInternal(url: string, options: AnalyzeOptions = {})
   try {
     logger.info(`🌐 Starting website analysis for: ${url}`);
 
-    // Acquire browser from pool instead of launching new one
-    browser = await browserPool.acquire();
+    // Launch browser
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu'
+      ]
+    });
 
     page = await browser.newPage();
 
@@ -195,7 +168,7 @@ async function analyzeWebsiteInternal(url: string, options: AnalyzeOptions = {})
     page.setDefaultNavigationTimeout(opts.timeout!);
 
     // Navigate to page with retry logic
-    await navigateWithRetry(page, url, 3, opts.timeout!);
+    await navigateWithRetry(page, url, 3);
 
     // Wait for page to be ready
     await waitForPageReady(page);
@@ -242,9 +215,6 @@ async function analyzeWebsiteInternal(url: string, options: AnalyzeOptions = {})
 
     logger.info(`✅ Website analysis complete - Colors: ${brandDNA.colors.length}, Images: ${brandDNA.images.length}, Content: ${brandDNA.content.length}, CTAs: ${brandDNA.ctas.length}, Products: ${brandDNA.products.length}`);
 
-    // Cache the result before returning
-    websiteCache.set(url, brandDNA);
-
     return brandDNA;
 
   } catch (error: any) {
@@ -281,13 +251,12 @@ async function analyzeWebsiteInternal(url: string, options: AnalyzeOptions = {})
     throw new Error(`Failed to analyze website: ${error.message}`);
 
   } finally {
-    // Cleanup - Close page but return browser to pool
+    // Cleanup
     if (page) {
       await page.close().catch(() => {});
     }
     if (browser) {
-      // Return browser to pool instead of closing it
-      await browserPool.release(browser).catch(() => {});
+      await browser.close().catch(() => {});
     }
   }
 }
@@ -295,7 +264,7 @@ async function analyzeWebsiteInternal(url: string, options: AnalyzeOptions = {})
 /**
  * Navigate to URL with retry logic
  */
-async function navigateWithRetry(page: Page, url: string, maxRetries: number, timeoutMs: number): Promise<void> {
+async function navigateWithRetry(page: Page, url: string, maxRetries: number): Promise<void> {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -304,7 +273,7 @@ async function navigateWithRetry(page: Page, url: string, maxRetries: number, ti
       
       await page.goto(url, {
         waitUntil: 'networkidle2',
-        timeout: timeoutMs
+        timeout: 30000
       });
       
       logger.info('✅ Navigation successful');

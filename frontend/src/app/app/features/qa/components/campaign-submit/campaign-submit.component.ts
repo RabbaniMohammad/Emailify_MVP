@@ -126,6 +126,31 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
   // File upload
   uploadedFileName: string = '';
 
+  // ✅ Multi-Channel Support
+  selectedChannels: {
+    email: boolean;
+    sms: boolean;
+    whatsapp: boolean;
+  } = {
+    email: true,  // Default to email
+    sms: false,
+    whatsapp: false
+  };
+
+  recipientStats = {
+    email: 0,
+    sms: 0,
+    whatsapp: 0
+  };
+
+  // AI Preview
+  aiPreviewLoading = false;
+  aiPreview: {
+    sms?: { text: string; lineCount: number };
+    whatsapp?: { text: string; lineCount: number };
+    instagram?: { text: string; lineCount: number };
+  } | null = null;
+
   get isAnyLoading(): boolean {
     return (
       this.audiencesLoadingSubject.value === 'loading' ||
@@ -873,6 +898,7 @@ isSubjectSelected(subject: string): boolean {
           
           const newRow: MasterDocRow = {
             audiences_list: email,
+            phone: '', // ✅ No phone for added emails
             scheduled_time: scheduleInfo?.time || '',
             timezone: scheduleInfo?.timezone || '',
             test_emails: ''
@@ -885,6 +911,10 @@ isSubjectSelected(subject: string): boolean {
       }
 
       this.masterData = data;
+      
+      // ✅ Update recipient stats for multi-channel
+      this.updateRecipientStats();
+      
       this.uploadLoadingSubject.next('success');
       
       // Extract test emails
@@ -1057,6 +1087,128 @@ isSubjectSelected(subject: string): boolean {
   // FINAL SUBMISSION
   // ============================================
   async onSubmit(): Promise<void> {
+    if (!this.canSubmit) {
+      this.showError('Complete all steps before submitting');
+      return;
+    }
+
+    // Check if any multi-channel selected
+    const isMultiChannel = this.selectedChannels.sms || this.selectedChannels.whatsapp;
+    
+    if (isMultiChannel) {
+      // ✅ Multi-channel submission
+      return this.submitMultiChannelCampaign();
+    } else {
+      // ✅ Traditional email-only submission
+      return this.submitEmailCampaign();
+    }
+  }
+
+  // ✅ NEW: Multi-Channel Campaign Submission
+  async submitMultiChannelCampaign(): Promise<void> {
+    const hasNoTestEmails = this.testEmails.length === 0;
+
+    // Warning for no test emails
+    if (hasNoTestEmails) {
+      const noTestConfirm = confirm(
+        '🚨 WARNING 🚨\n\n' +
+        '❌ NO TEST EMAILS FOUND\n' +
+        '🔴 Click OK ONLY if you accept full responsibility.'
+      );
+      if (!noTestConfirm) return;
+    }
+
+    // Get selected channels
+    const selectedChannelList = Object.entries(this.selectedChannels)
+      .filter(([_, selected]) => selected)
+      .map(([channel, _]) => channel);
+    
+    if (selectedChannelList.length === 0) {
+      this.showError('Please select at least one channel');
+      return;
+    }
+
+    // Final confirmation with cost estimate
+    const cost = this.getEstimatedCost();
+    const costText = cost > 0 ? `\n💰 Estimated cost: $${cost.toFixed(2)}` : '';
+    const totalRecipients = this.scheduleGroups.reduce((total, group) => total + group.count, 0);
+    
+    if (!confirm(
+      `🚀 Send Multi-Channel Campaign?\n\n` +
+      `Channels: ${selectedChannelList.join(', ')}\n` +
+      `Email: ${this.recipientStats.email} recipients\n` +
+      `SMS: ${this.recipientStats.sms} recipients\n` +
+      `WhatsApp: ${this.recipientStats.whatsapp} recipients${costText}\n\n` +
+      `This cannot be undone.`
+    )) {
+      return;
+    }
+
+    this.submitLoadingSubject.next('loading');
+
+    try {
+      // Prepare recipients by channel
+      const recipients: any = {};
+      
+      if (this.selectedChannels.email) {
+        recipients.email = this.masterData
+          .filter(row => row.audiences_list?.trim())
+          .map(row => row.audiences_list.trim());
+      }
+      
+      if (this.selectedChannels.sms) {
+        recipients.sms = this.masterData
+          .filter(row => row.phone?.trim())
+          .map(row => ({
+            phone: row.phone!.trim(),
+            name: row.audiences_list?.split('@')[0] || 'Customer'
+          }));
+      }
+      
+      if (this.selectedChannels.whatsapp) {
+        recipients.whatsapp = this.masterData
+          .filter(row => row.phone?.trim())
+          .map(row => ({
+            phone: row.phone!.trim(),
+            name: row.audiences_list?.split('@')[0] || 'Customer'
+          }));
+      }
+
+      // Call multi-channel API
+      const result = await firstValueFrom(
+        this.http.post('/api/multi-channel/campaigns', {
+          name: `Campaign - ${new Date().toLocaleString()}`,
+          channels: selectedChannelList,
+          emailHtml: this.templateHtml,
+          emailSubject: this.subjectControl.value,
+          recipients,
+          useAIAdaptation: true,
+          scheduledFor: this.hasImmediateSends() ? undefined : new Date()
+        })
+      );
+
+      this.submitLoadingSubject.next('success');
+      this.clearSavedData();
+      
+      this.showSuccess(
+        `✅ Multi-channel campaign sent!\n` +
+        `${selectedChannelList.join(', ')} messages delivered.`
+      );
+
+      // Navigate to campaigns page or stay
+      setTimeout(() => {
+        this.router.navigate(['/organization']);
+      }, 2000);
+
+    } catch (error: any) {
+      console.error('Multi-channel campaign error:', error);
+      this.submitLoadingSubject.next('error');
+      this.showError(error?.error?.message || 'Campaign failed. Please try again.');
+    }
+  }
+
+  // ✅ Original Email-Only Campaign Submission
+  async submitEmailCampaign(): Promise<void> {
     if (!this.canSubmit) {
       this.showError('Complete all steps before submitting');
       return;
@@ -1310,6 +1462,86 @@ isSubjectSelected(subject: string): boolean {
   // ============================================
   // UTILITIES
   // ============================================
+
+  // ✅ Multi-Channel Helper Methods
+  updateRecipientStats(): void {
+    this.recipientStats = {
+      email: this.masterData.filter(row => row.audiences_list?.trim()).length,
+      sms: this.masterData.filter(row => row.phone?.trim()).length,
+      whatsapp: this.masterData.filter(row => row.phone?.trim()).length
+    };
+    
+    // Auto-disable channels with no recipients
+    if (this.recipientStats.sms === 0) {
+      this.selectedChannels.sms = false;
+    }
+    if (this.recipientStats.whatsapp === 0) {
+      this.selectedChannels.whatsapp = false;
+    }
+    
+    this.cdr.markForCheck();
+  }
+
+  getSelectedChannelsText(): string {
+    const channels = [];
+    if (this.selectedChannels.sms) channels.push('SMS');
+    if (this.selectedChannels.whatsapp) channels.push('WhatsApp');
+    if (channels.length === 0) return '';
+    if (channels.length === 1) return channels[0];
+    return channels.join(' and ');
+  }
+
+  getEstimatedCost(): number {
+    let total = 0;
+    
+    if (this.selectedChannels.sms) {
+      total += this.recipientStats.sms * 0.00645; // AWS SNS cost
+    }
+    
+    if (this.selectedChannels.whatsapp && this.recipientStats.whatsapp > 1000) {
+      total += (this.recipientStats.whatsapp - 1000) * 0.02; // WhatsApp after free tier
+    }
+    
+    return total;
+  }
+
+  // ✅ Generate AI Preview
+  async generateAIPreview(): Promise<void> {
+    if (!this.templateHtml || !this.subjectControl.value) {
+      this.showError('Template HTML and subject required for preview');
+      return;
+    }
+
+    this.aiPreviewLoading = true;
+    this.cdr.markForCheck();
+
+    try {
+      const response = await firstValueFrom(
+        this.http.post<any>('/api/content-adaptation/preview', {
+          emailHtml: this.templateHtml,
+          emailSubject: this.subjectControl.value
+        })
+      );
+
+      this.aiPreview = {
+        sms: response.sms,
+        whatsapp: response.whatsapp,
+        instagram: response.instagram
+      };
+
+      this.showSuccess('✅ AI preview generated!');
+    } catch (error: any) {
+      console.error('Failed to generate AI preview:', error);
+      this.showError('Failed to generate preview. Please try again.');
+    } finally {
+      this.aiPreviewLoading = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  formatWhatsAppText(text: string): string {
+    return text.replace(/\n/g, '<br>');
+  }
 
   private showSuccess(message: string): void {
     this.snackBar.open(message, 'Close', {
