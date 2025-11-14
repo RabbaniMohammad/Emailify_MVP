@@ -1,0 +1,287 @@
+### Multi-Channel Campaign API Tests
+### Base URL
+@baseUrl = http://localhost:3000/api/multi-channel
+@organizationId = your_organization_id_here
+@userId = your_user_id_here
+
+###############################################
+# 1. Check Channel Status (Which services are configured)
+###############################################
+
+GET {{baseUrl}}/channel-status
+Content-Type: application/json
+
+###############################################
+# 2. Adapt Email Content to All Channels (AI Conversion)
+###############################################
+
+POST {{baseUrl}}/adapt-content
+Content-Type: application/json
+
+{
+  "emailHtml": "<h1>🎉 Black Friday Sale - 70% OFF Everything!</h1><p>Dear Valued Customer,</p><p>We're excited to announce our biggest sale of the year! Get <strong>70% OFF</strong> on all products from November 15-20.</p><p>This is a limited-time offer - don't miss out on incredible savings across our entire collection.</p><p><a href='https://example.com/sale'>Shop Now</a> and transform your shopping experience!</p><p>Best regards,<br>Emailify Team</p>",
+  "campaignName": "Black Friday 2025",
+  "tone": "exciting"
+}
+
+###############################################
+# 3. Regenerate Content with Different Tone
+###############################################
+
+POST {{baseUrl}}/regenerate-content
+Content-Type: application/json
+
+{
+  "channel": "sms",
+  "originalEmail": "<h1>Sale Alert!</h1><p>Big discounts this week only.</p>",
+  "previousVersion": "SALE! 50% off everything this week only! Shop now: bit.ly/sale",
+  "tone": "professional"
+}
+
+###############################################
+# 4. Estimate Campaign Cost
+###############################################
+
+POST {{baseUrl}}/estimate-cost
+Content-Type: application/json
+
+{
+  "channels": ["sms", "whatsapp"],
+  "recipientCounts": {
+    "sms": 100,
+    "whatsapp": 50
+  }
+}
+
+###############################################
+# 5. Create and Send Multi-Channel Campaign
+###############################################
+
+POST {{baseUrl}}/campaigns
+Content-Type: application/json
+
+{
+  "name": "Black Friday Test Campaign",
+  "organizationId": "{{organizationId}}",
+  "createdBy": "{{userId}}",
+  "channels": ["sms"],
+  "content": {
+    "email": {
+      "subject": "Black Friday Sale!",
+      "html": "<h1>Big Sale!</h1>"
+    },
+    "sms": "🎉 BLACK FRIDAY! 70% OFF EVERYTHING Nov 15-20! Shop now: bit.ly/bf2025 Don't miss out! 🛍️"
+  },
+  "recipients": {
+    "sms": [
+      "+15133065946"
+    ]
+  },
+  "scheduledFor": null
+}
+
+###############################################
+# 6. Send Campaign with WhatsApp
+###############################################
+
+POST {{baseUrl}}/campaigns
+Content-Type: application/json
+
+{
+  "name": "WhatsApp Test Campaign",
+  "organizationId": "{{organizationId}}",
+  "createdBy": "{{userId}}",
+  "channels": ["whatsapp"],
+  "content": {
+    "whatsapp": "Hey! 👋\n\nHuge Black Friday alert! 🎉\n\nGet 70% OFF everything from Nov 15-20! ⏰\n\nThis is THE sale you've been waiting for.\n\nShop here: bit.ly/bf2025\n\nDon't let this amazing deal slip away! 🛍️✨"
+  },
+  "recipients": {
+    "whatsapp": [
+      "+15133065946"
+    ]
+  }
+}
+
+###############################################
+# 7. Multi-Channel Campaign (SMS + WhatsApp)
+###############################################
+
+POST {{baseUrl}}/campaigns
+Content-Type: application/json
+
+{
+  "name": "Multi-Channel Black Friday",
+  "organizationId": "{{organizationId}}",
+  "createdBy": "{{userId}}",
+  "channels": ["sms", "whatsapp"],
+  "content": {
+    "sms": "🎉 BLACK FRIDAY! 70% OFF Nov 15-20! bit.ly/bf2025 🛍️",
+    "whatsapp": "Hey! 👋\n\nBlack Friday is HERE! 🎉\n70% OFF everything Nov 15-20!\n\nShop: bit.ly/bf2025\n\nDon't miss out! 🛍️"
+  },
+  "recipients": {
+    "sms": ["+15133065946"],
+    "whatsapp": ["+15133065946"]
+  }
+}
+
+###############################################
+# 8. Get All Campaigns (List)
+###############################################
+
+GET {{baseUrl}}/campaigns?organizationId={{organizationId}}
+Content-Type: application/json
+
+###############################################
+# 9. Get Specific Campaign Details
+###############################################
+
+@campaignId = your_campaign_id_here
+
+GET {{baseUrl}}/campaigns/{{campaignId}}
+Content-Type: application/json
+
+###############################################
+# 10. Complete Workflow Test - Email to SMS Conversion
+###############################################
+
+POST {{baseUrl}}/adapt-content
+Content-Type: application/json
+
+{
+  "emailHtml": "<div style='font-family: Arial;'><h1>🎁 Special Offer Just for You!</h1><p>Hi there!</p><p>As a valued customer, you're getting <strong>exclusive early access</strong> to our new collection.</p><p>✨ New arrivals<br>🚚 Free shipping<br>💎 Premium quality</p><p>Visit our store before November 20 and get an extra 10% off with code: <strong>EARLY10</strong></p><p>See you soon!<br>The Emailify Team</p></div>",
+  "campaignName": "VIP Early Access",
+  "tone": "friendly"
+}
+
+###############################################
+# TESTING SCENARIOS
+###############################################
+
+### Scenario 1: Simple SMS Blast
+POST {{baseUrl}}/campaigns
+Content-Type: application/json
+
+{
+  "name": "Quick SMS Test",
+  "organizationId": "test-org",
+  "createdBy": "test-user",
+  "channels": ["sms"],
+  "content": {
+    "sms": "Hello from Emailify! This is a test SMS. Reply STOP to unsubscribe."
+  },
+  "recipients": {
+    "sms": ["+15133065946"]
+  }
+}
+
+### Scenario 2: Promotional Email → All Channels
+POST {{baseUrl}}/adapt-content
+Content-Type: application/json
+
+{
+  "emailHtml": "<h1>Weekend Flash Sale! ⚡</h1><p>48 hours only! Everything must go! Up to 80% off selected items. Shop categories: Electronics, Fashion, Home & Garden. Ends Sunday midnight!</p>",
+  "campaignName": "Weekend Flash Sale",
+  "tone": "urgent"
+}
+
+### Scenario 3: Professional Announcement
+POST {{baseUrl}}/adapt-content
+Content-Type: application/json
+
+{
+  "emailHtml": "<h2>Important Service Update</h2><p>Dear Customer,</p><p>We will be performing scheduled maintenance on our platform from 2:00 AM to 4:00 AM EST on November 15, 2025.</p><p>During this time, services may be temporarily unavailable. We apologize for any inconvenience.</p><p>Thank you for your understanding.</p>",
+  "campaignName": "Maintenance Notice",
+  "tone": "professional"
+}
+
+###############################################
+# ERROR TESTING
+###############################################
+
+### Test 1: Missing required fields
+POST {{baseUrl}}/campaigns
+Content-Type: application/json
+
+{
+  "name": "Incomplete Campaign"
+}
+
+### Test 2: Invalid phone number format
+POST {{baseUrl}}/campaigns
+Content-Type: application/json
+
+{
+  "name": "Invalid Phone Test",
+  "channels": ["sms"],
+  "content": {
+    "sms": "Test"
+  },
+  "recipients": {
+    "sms": ["1234567890"]
+  }
+}
+
+### Test 3: Empty email HTML
+POST {{baseUrl}}/adapt-content
+Content-Type: application/json
+
+{
+  "emailHtml": "",
+  "campaignName": "Empty Test"
+}
+
+###############################################
+# ADVANCED TESTS
+###############################################
+
+### Test: Batch SMS (Multiple Recipients)
+POST {{baseUrl}}/campaigns
+Content-Type: application/json
+
+{
+  "name": "Batch SMS Campaign",
+  "organizationId": "test-org",
+  "createdBy": "test-user",
+  "channels": ["sms"],
+  "content": {
+    "sms": "🎉 Limited Time Offer! Get 50% OFF with code: SAVE50. Valid until midnight. Shop now!"
+  },
+  "recipients": {
+    "sms": [
+      "+15133065946",
+      "+15551234567",
+      "+15559876543"
+    ]
+  }
+}
+
+### Test: Long Email to Concise SMS
+POST {{baseUrl}}/adapt-content
+Content-Type: application/json
+
+{
+  "emailHtml": "<html><body><div style='max-width: 600px; margin: 0 auto; padding: 20px;'><h1>Welcome to Our Community! 🎊</h1><p>Dear New Member,</p><p>We're absolutely thrilled to have you join our community of over 50,000 satisfied customers worldwide!</p><h2>What's Next?</h2><ul><li>Complete your profile to get personalized recommendations</li><li>Explore our extensive product catalog</li><li>Join our rewards program and earn points</li><li>Follow us on social media for exclusive deals</li></ul><p>As a welcome gift, here's a special 25% discount code: <strong>WELCOME25</strong></p><p>This code is valid for your first three purchases and expires in 30 days.</p><h3>Need Help?</h3><p>Our customer support team is available 24/7 to assist you with any questions. Feel free to reach out anytime!</p><p>Happy shopping!<br><strong>The Emailify Team</strong></p><p style='color: #666; font-size: 12px;'>You're receiving this email because you signed up at emailify.com</p></div></body></html>",
+  "campaignName": "Welcome Email Campaign",
+  "tone": "friendly"
+}
+
+###############################################
+# NOTES
+###############################################
+
+# Before running these tests:
+# 1. Make sure backend server is running: npm run dev
+# 2. Update organizationId and userId variables at the top
+# 3. Replace phone numbers with YOUR verified numbers
+# 4. For WhatsApp tests, you need WhatsApp API credentials
+# 5. For Instagram tests, you need Instagram API credentials
+
+# Cost estimates (approximate):
+# - SMS: $0.00645 per message (USA)
+# - WhatsApp: Free for first 1,000 conversations/month
+# - Instagram: Free (always)
+
+# AWS SNS Sandbox Mode:
+# - You can only send to verified phone numbers
+# - Verify your number first in AWS Console or use verify-phone.js script
+# - OR request production access (takes 24 hours)

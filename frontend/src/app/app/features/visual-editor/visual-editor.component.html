@@ -1,0 +1,316 @@
+<div class="visual-editor-page">
+  <!-- Header -->
+  <div class="editor-header">
+    <button mat-button class="back-btn" (click)="goBack()">
+      <mat-icon>arrow_back</mat-icon>
+      <span>Back to Dashboard</span>
+    </button>
+    
+    <div class="header-title">
+      <mat-icon>design_services</mat-icon>
+      <h1>Visual Template Editor</h1>
+    </div>
+    
+    <div class="header-actions">
+      <button mat-stroked-button class="action-btn" (click)="openImportModal()">
+        <mat-icon>file_upload</mat-icon>
+        Import HTML
+      </button>
+      <button mat-stroked-button class="action-btn" (click)="saveTemplate()">
+        <mat-icon>save</mat-icon>
+        Save
+      </button>
+      
+      <!-- Check Preview Button -->
+     <button 
+  mat-raised-button 
+  color="primary"
+  [disabled]="loading"
+  (click)="onCheckPreview()">
+  <mat-icon>preview</mat-icon>
+  Check Preview
+</button>
+      
+      <button mat-raised-button class="action-btn primary" (click)="exportHTML()">
+        <mat-icon>file_download</mat-icon>
+        Export HTML
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-container" *ngIf="loading">
+    <mat-progress-spinner diameter="48" mode="indeterminate"></mat-progress-spinner>
+    <p>Loading Visual Editor...</p>
+  </div>
+
+  <!-- Editor Container -->
+  <div class="editor-wrapper" [class.hidden]="loading">
+    <div #editorContainer id="gjs" class="grapesjs-editor"></div>
+  </div>
+
+  <!-- Import HTML Modal -->
+  <div class="import-modal" *ngIf="showImportModal">
+    <div class="modal-backdrop" (click)="closeImportModal()"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>
+          <mat-icon>file_upload</mat-icon>
+          Import HTML
+        </h2>
+        <button mat-icon-button (click)="closeImportModal()">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <!-- Import Method Tabs -->
+      <div class="import-tabs">
+        <button 
+          class="tab-btn" 
+          [class.active]="importMethod === 'file'"
+          (click)="setImportMethod('file')">
+          <mat-icon>upload_file</mat-icon>
+          <span>Upload File</span>
+        </button>
+        <button 
+          class="tab-btn" 
+          [class.active]="importMethod === 'paste'"
+          (click)="setImportMethod('paste')">
+          <mat-icon>content_paste</mat-icon>
+          <span>Paste Code</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <!-- File Upload View -->
+        <div class="file-upload-container" *ngIf="importMethod === 'file'">
+          <div class="upload-area">
+            <input 
+              type="file" 
+              #fileInput
+              accept=".html,.htm"
+              (change)="onFileSelected($event)"
+              style="display: none">
+            
+            <div class="upload-content" (click)="fileInput.click()">
+              <div class="upload-icon">
+                <mat-icon>cloud_upload</mat-icon>
+              </div>
+              <h3>Drop your HTML file here</h3>
+              <p>or click to browse</p>
+              <div class="file-types">
+                <span class="file-badge">.html</span>
+                <span class="file-badge">.htm</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paste Code View -->
+        <div class="paste-code-container" *ngIf="importMethod === 'paste'">
+          <textarea 
+            [(ngModel)]="importHtmlCode"
+            placeholder="Paste your HTML code here..."
+            rows="15"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button mat-button (click)="closeImportModal()">Cancel</button>
+        <button 
+          mat-raised-button 
+          color="primary"
+          (click)="importHTML()"
+          [disabled]="importMethod === 'paste' && !importHtmlCode.trim()"
+          *ngIf="importMethod === 'paste'">
+          <mat-icon>check</mat-icon>
+          Import Code
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING SUGGESTIONS WIDGET -->
+  <div class="floating-widget-container" 
+    *ngIf="showFloatingWidget"
+    [class.modal-drag-enabled]="modalDragEnabled"
+    [style.left.px]="widgetPosition.x"
+    [style.top.px]="widgetPosition.y">
+    
+    <!-- Floating Button -->
+    <div 
+      class="floating-button"
+      [class.open]="isWidgetOpen"
+      [class.pulse-animate]="!hasShownPulseAnimation"
+      [class.drag-enabled]="dragEnabled"
+      (mousedown)="onButtonMouseDown($event)"
+      (click)="onButtonClick($event)"
+      (touchstart)="onTouchStart($event)"
+      (touchmove)="onTouchMove($event)"
+      (touchend)="onTouchEnd($event)">
+      
+      <!-- Icon (+ or ×) -->
+      <mat-icon class="widget-icon">{{ isWidgetOpen ? 'close' : 'add' }}</mat-icon>
+      
+      <!-- Count Badge -->
+      <div class="count-badge" *ngIf="getPendingEditsCount() > 0 && !isWidgetOpen">
+        {{ getPendingEditsCount() }}
+      </div>
+      
+      <!-- Drag Mode Indicator -->
+      <div class="drag-indicator" *ngIf="dragEnabled && !isDragging">
+        <mat-icon>open_with</mat-icon>
+      </div>
+    </div>
+    
+    <!-- Dropdown Panel -->
+    <div 
+      class="widget-dropdown" 
+      *ngIf="isWidgetOpen"
+      [class.modal-dragging]="isModalDragging"
+      [class.modal-drag-enabled]="modalDragEnabled"
+      [style.left.px]="modalPosition.x"
+      [style.top.px]="modalPosition.y"
+      [@slideIn]>
+      
+      <!-- Header -->
+      <div 
+        class="dropdown-header"
+        (mousedown)="onModalHeaderMouseDown($event)"
+        [class.draggable-header]="modalDragEnabled">
+        <h3>
+          <mat-icon>report_problem</mat-icon>
+          Failed Edits
+        </h3>
+        <span class="edit-count">{{ getPendingEditsCount() }} pending</span>
+      </div>
+      
+      <!-- Scrollable List -->
+      <div class="dropdown-content">
+        <div 
+          class="suggestion-item"
+          *ngFor="let edit of failedEdits; let i = index"
+          [class.applied]="isEditApplied(i)">
+          
+
+          <div 
+            class="status-indicator"
+            [class.pending]="!isEditApplied(i)"
+            [class.success]="isEditApplied(i)"
+            [class.failed]="false">
+            <mat-icon *ngIf="!isEditApplied(i)">autorenew</mat-icon>
+            <mat-icon *ngIf="isEditApplied(i)">check_circle</mat-icon>
+          </div>
+          
+          <!-- Text Content -->
+          <div class="suggestion-content">
+            <!-- Find Text -->
+<!-- Find Text -->
+<div class="text-block find-text">
+  <span class="label">Find:</span>
+  <code 
+    class="searchable"
+    (click)="searchAndReplaceText(edit.find || '', edit.replace || '', $event)"
+    title="Click to find and replace">
+    {{ edit.find }}
+  </code>
+</div>
+
+<!-- Replace Text -->
+<div class="text-block replace-text">
+  <span class="label">Replace:</span>
+  <code 
+    class="copyable"
+    (click)="copyTextToClipboard(edit.replace || '', $event)"
+    title="Click to copy">
+    {{ edit.replace }}
+  </code>
+</div>
+            
+            <!-- Reason -->
+            <div class="reason" *ngIf="edit.reason">
+              <mat-icon>info</mat-icon>
+              {{ edit.reason }}
+            </div>
+            
+          </div>
+        </div>
+        
+        <!-- Empty State -->
+        <div class="empty-state" *ngIf="getPendingEditsCount() === 0">
+          <mat-icon>check_circle</mat-icon>
+          <p>All edits applied!</p>
+        </div>
+      </div>
+      
+      <!-- Footer -->
+      <div class="dropdown-footer">
+        <button mat-button (click)="closeWidget()">
+          <mat-icon>close</mat-icon>
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- 🆕 TEMPLATE NAME DIALOG -->
+<!-- 🆕 TEMPLATE NAME DIALOG -->
+<div *ngIf="showNameDialog" class="name-dialog-overlay" @slideIn>
+  <div class="name-dialog-container">
+    <div class="name-dialog-content">
+      <div class="dialog-header">
+        <h2>📝 Name Your Template</h2>
+        <p>Give your template a memorable name before saving</p>
+      </div>
+      
+      <div class="dialog-body">
+        <div class="template-name-field">
+          <label class="field-label">Template Name</label>
+          <input 
+            type="text"
+            class="template-input"
+            [(ngModel)]="newTemplateName"
+            placeholder="e.g., Welcome Email, Newsletter Template"
+            maxlength="100"
+            (keyup.enter)="isValidName() && confirmTemplateName()"
+            autofocus>
+          <div class="field-hint">
+            <span *ngIf="newTemplateName.length > 0" class="char-count">
+              {{ newTemplateName.length }} / 100 characters
+            </span>
+            <span *ngIf="newTemplateName.length === 0" class="hint-text">
+              Minimum 3 characters required
+            </span>
+          </div>
+          <div *ngIf="newTemplateName.length > 0 && newTemplateName.trim().length < 3" class="field-error">
+            ⚠ Name must be at least 3 characters
+          </div>
+        </div>
+      </div>
+      
+      <div class="dialog-actions">
+        <button 
+          mat-button 
+          class="cancel-btn"
+          (click)="cancelNameDialog()"
+          [disabled]="isSavingTemplate">
+          Cancel
+        </button>
+        <button 
+          mat-raised-button 
+          color="primary" 
+          class="save-btn"
+          (click)="confirmTemplateName()"
+          [disabled]="!isValidName() || isSavingTemplate">
+          <mat-icon *ngIf="!isSavingTemplate">save</mat-icon>
+          <mat-spinner 
+            *ngIf="isSavingTemplate" 
+            diameter="20" 
+            class="spinner-inline">
+          </mat-spinner>
+          {{ isSavingTemplate ? 'Saving...' : 'Save & Continue' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>

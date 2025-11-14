@@ -1,0 +1,103 @@
+<div class="editor-wrapper">
+  <!-- Loading Spinner -->
+  <div class="editor-loading" *ngIf="isLoading">
+    <mat-spinner diameter="48"></mat-spinner>
+    <p>Loading Editor...</p>
+  </div>
+
+  <!-- Editor Container -->
+  <div class="editor-container" [class.hidden]="isLoading">
+    <!-- Header -->
+    <div class="editor-header">
+      <div class="editor-title">
+        <div class="title-icon">
+          <mat-icon>code</mat-icon>
+        </div>
+        <div class="title-content">
+          <h4>HTML Editor</h4>
+          <span class="subtitle">Make quick changes to your template</span>
+        </div>
+        <span class="warning-badge" *ngIf="hasUnsavedChanges">
+          <mat-icon>circle</mat-icon>
+          Unsaved
+        </span>
+      </div>
+
+      <div class="editor-actions">
+        <button
+          mat-icon-button
+          class="theme-toggle"
+          (click)="toggleTheme()"
+          [matTooltip]="isDarkTheme ? 'Switch to Light Theme' : 'Switch to Dark Theme'">
+          <mat-icon>{{ isDarkTheme ? 'light_mode' : 'dark_mode' }}</mat-icon>
+        </button>
+
+        <button
+          mat-icon-button
+          class="format-btn"
+          (click)="formatDocument()"
+          matTooltip="Format Document (Ctrl+Shift+F)">
+          <mat-icon>auto_fix_high</mat-icon>
+        </button>
+
+        <button
+          mat-button
+          class="revert-btn"
+          (click)="onRevert()"
+          [disabled]="!hasUnsavedChanges || isLoading">
+          <mat-icon>undo</mat-icon>
+          Revert
+        </button>
+
+        <button
+          mat-raised-button
+          color="primary"
+          class="save-btn"
+          (click)="onSave()"
+          [disabled]="!hasUnsavedChanges || isLoading">
+          <mat-icon>save</mat-icon>
+          Save Changes
+        </button>
+
+        <button
+          mat-icon-button
+          class="close-btn"
+          (click)="onClose()"
+          matTooltip="Close Editor (Esc)">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+    </div>
+
+    <!-- Monaco Editor Mount Point -->
+    <div class="editor-body" #editorContainer></div>
+
+    <!-- Footer / Status Bar -->
+    <div class="editor-footer">
+      <div class="footer-left">
+        <span class="footer-item">
+          <mat-icon>description</mat-icon>
+          HTML
+        </span>
+        <span class="footer-item">
+          <mat-icon>format_list_numbered</mat-icon>
+          {{ currentLineCount }} lines
+        </span>
+        <span class="footer-item cursor-info">
+          {{ getCursorInfo() }}
+        </span>
+      </div>
+
+      <div class="footer-right">
+        <span class="footer-hint" *ngIf="!hasUnsavedChanges">
+          <mat-icon>check_circle</mat-icon>
+          All changes saved
+        </span>
+        <span class="footer-hint unsaved" *ngIf="hasUnsavedChanges">
+          <mat-icon>edit</mat-icon>
+          Unsaved changes • Ctrl+S to save
+        </span>
+      </div>
+    </div>
+  </div>
+</div>

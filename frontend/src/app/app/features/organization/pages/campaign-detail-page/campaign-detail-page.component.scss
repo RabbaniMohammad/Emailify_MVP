@@ -1,0 +1,258 @@
+.campaign-detail-page {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+
+  .loading-container,
+  .error-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    gap: 1rem;
+
+    mat-icon {
+      font-size: 48px;
+      width: 48px;
+      height: 48px;
+      color: #f44336;
+    }
+  }
+
+  .report-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 2rem;
+
+    .back-btn {
+      margin-top: 0.5rem;
+    }
+
+    .campaign-title {
+      flex: 1;
+
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 2rem;
+        font-weight: 600;
+      }
+
+      .campaign-subject {
+        color: #666;
+        font-size: 1.125rem;
+        margin: 0 0 0.5rem;
+      }
+
+      .campaign-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #999;
+        font-size: 0.875rem;
+        margin: 0;
+        flex-wrap: wrap;
+
+        mat-chip {
+          min-height: 24px;
+          font-size: 0.75rem;
+
+          &.status-sent {
+            background: #e8f5e9;
+            color: #388e3c;
+          }
+        }
+
+        .separator {
+          margin: 0 0.25rem;
+        }
+      }
+    }
+  }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+
+    .metric-card {
+      mat-card-content {
+        text-align: center;
+        padding: 1.5rem;
+
+        .metric-icon {
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 1rem;
+
+          mat-icon {
+            font-size: 28px;
+            width: 28px;
+            height: 28px;
+            color: white;
+          }
+
+          &.opens-icon {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          }
+
+          &.clicks-icon {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+          }
+
+          &.delivery-icon {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+          }
+
+          &.bounces-icon {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+          }
+        }
+
+        .metric-value {
+          font-size: 2.5rem;
+          font-weight: 700;
+          margin: 0.5rem 0;
+          color: #333;
+        }
+
+        .metric-label {
+          font-size: 1rem;
+          color: #666;
+          margin-bottom: 0.5rem;
+          font-weight: 500;
+        }
+
+        .metric-detail {
+          font-size: 0.875rem;
+          color: #999;
+        }
+      }
+    }
+  }
+
+  .report-tabs {
+    margin-top: 2rem;
+
+    .tab-content {
+      padding: 1.5rem 0;
+
+      mat-card {
+        mat-card-header {
+          margin-bottom: 1rem;
+
+          mat-card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+          }
+        }
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+
+        mat-card-content {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 1rem;
+
+          mat-icon {
+            font-size: 64px;
+            width: 64px;
+            height: 64px;
+            color: #ccc;
+          }
+
+          p {
+            color: #999;
+            font-size: 1.125rem;
+            margin: 0;
+
+            &.detail {
+              font-size: 0.875rem;
+              color: #bbb;
+            }
+          }
+        }
+      }
+
+      .chart-container {
+        position: relative;
+        height: 400px;
+        width: 100%;
+        padding: 1rem 0;
+      }
+    }
+  }
+
+  .links-table,
+  .locations-table,
+  .activity-table {
+    width: 100%;
+
+    th {
+      font-weight: 600;
+      color: #666;
+    }
+
+    td {
+      padding: 1rem;
+    }
+
+    .url-cell {
+      max-width: 400px;
+      
+      a {
+        color: #1976d2;
+        text-decoration: none;
+        word-break: break-all;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+    }
+
+    .status-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: #ccc;
+
+      &.success {
+        color: #4caf50;
+      }
+    }
+  }
+
+  .loading-small {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    color: #666;
+  }
+
+  @media (max-width: 768px) {
+    padding: 1rem;
+
+    .metrics-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .report-header {
+      .campaign-title h1 {
+        font-size: 1.5rem;
+      }
+    }
+  }
+}

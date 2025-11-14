@@ -1,0 +1,543 @@
+<div
+  class="layout"
+  *ngIf="{
+    status: (status$ | async),
+    items: (items$ | async) ?? [],
+    selectedId: (selectedId$ | async),
+    selectedName: (selectedName$ | async),
+    error: (error$ | async)
+  } as vm"
+>
+  <!-- LEFT SIDEBAR: Search + Template List -->
+  <section class="left">
+    <!-- Search Bar -->
+    <div class="search-bar-container">
+      <div class="search-wrapper">
+        <div class="search-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+        </div>
+        <input
+          type="text"
+          class="search-input"
+          placeholder="Search templates..."
+          [(ngModel)]="searchQuery"
+          (input)="onSearch(searchQuery)"
+          (keyup.enter)="onSearch(searchQuery)"
+        />
+        <div class="search-actions">
+          <button class="search-btn" (click)="onSearch(searchQuery)" *ngIf="searchQuery">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+          </button>
+          <button class="clear-btn" (click)="searchQuery = ''; onSearch('')" *ngIf="searchQuery">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <ng-container *ngIf="vm.status === 'loading'; else listTpl">
+      <div class="loading"><mat-spinner diameter="40"></mat-spinner></div>
+    </ng-container>
+
+    <!-- Template List -->
+    <ng-template #listTpl>
+      <div class="modern-list-wrapper">
+        <!-- Template Count Badge and Category Filter -->
+        <div class="list-header">
+          <!-- Template Count Badge -->
+          <div class="count-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span class="count-number">{{ vm.items.length }}</span>
+            <span class="count-label">templates</span>
+          </div>
+
+          <!-- Category Dropdown Filter -->
+          <div class="category-filter-wrapper">
+            <button 
+              class="category-filter-btn" 
+              [class.open]="categoryDropdownOpen"
+              (click)="toggleCategoryDropdown()">
+              <svg class="category-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3" *ngIf="selectedCategory === 'all'"/>
+                <path d="M12 2v20M2 12h20" *ngIf="selectedCategory === 'all'"/>
+                
+                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" *ngIf="selectedCategory === 'ai-generated'"/>
+                
+                <path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9-9 9-9-1.8-9-9 1.8-9 9-9Z" *ngIf="selectedCategory === 'visual-editor'"/>
+                <path d="M12 15V9M15 12H9" *ngIf="selectedCategory === 'visual-editor'"/>
+                
+                <rect x="3" y="4" width="18" height="18" rx="2" *ngIf="selectedCategory === 'esp'"/>
+                <polyline points="22,6 12,13 2,6" *ngIf="selectedCategory === 'esp'"/>
+              </svg>
+              <span class="category-label">{{ getCategoryLabel() }}</span>
+              <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+
+            <!-- Dropdown Menu -->
+            <div class="category-dropdown" *ngIf="categoryDropdownOpen">
+              <button 
+                class="category-option" 
+                [class.active]="selectedCategory === 'all'"
+                (click)="selectCategory('all')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M12 2v20M2 12h20"/>
+                </svg>
+                <span>All</span>
+                <div class="check-mark" *ngIf="selectedCategory === 'all'">✓</div>
+              </button>
+              
+              <button 
+                class="category-option" 
+                [class.active]="selectedCategory === 'ai-generated'"
+                (click)="selectCategory('ai-generated')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+                </svg>
+                <span>AI Generated</span>
+                <div class="check-mark" *ngIf="selectedCategory === 'ai-generated'">✓</div>
+              </button>
+              
+              <button 
+                class="category-option" 
+                [class.active]="selectedCategory === 'visual-editor'"
+                (click)="selectCategory('visual-editor')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 3c7.2 0 9 1.8 9 9s-1.8 9-9 9-9-1.8-9-9 1.8-9 9-9Z"/>
+                  <path d="M12 15V9M15 12H9"/>
+                </svg>
+                <span>Visual Editor</span>
+                <div class="check-mark" *ngIf="selectedCategory === 'visual-editor'">✓</div>
+              </button>
+              
+              <button 
+                class="category-option" 
+                [class.active]="selectedCategory === 'esp'"
+                (click)="selectCategory('esp')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+                <span>ESP</span>
+                <div class="check-mark" *ngIf="selectedCategory === 'esp'">✓</div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- FIXED HEIGHT SCROLL CONTAINER -->
+        <div class="scroll-container" #scrollContainer>
+          <mat-nav-list class="tpl-list">
+            <mat-list-item
+              *ngFor="let item of vm.items; trackBy: trackById"
+              (click)="onClick(item)"
+              [class.selected]="item.id === vm.selectedId"
+              [attr.data-item-id]="item.id"
+              class="template-item">
+              <div class="item-wrapper">
+                <div class="item-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="9" cy="9" r="2"/>
+                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                  </svg>
+                </div>
+
+                <div class="item-content">
+                  <span class="name">{{ item.name || 'Untitled template' }}</span>
+
+                  <button
+                    *ngIf="item.id === runButtonItemId"
+                    mat-raised-button
+                    color="primary"
+                    class="run-btn"
+                    (click)="onAction(item, $event)"
+                    aria-label="QA Check"
+                  >
+                    <mat-icon>visibility</mat-icon>
+                    <span>QA Check</span>
+                  </button>
+                </div>
+
+                <div class="selection-indicator" *ngIf="item.id === vm.selectedId"></div>
+              </div>
+            </mat-list-item>
+          </mat-nav-list>
+        </div>
+      </div>
+
+      <!-- Error State for List -->
+      <div *ngIf="vm.status === 'error'" class="error">
+        {{ vm.error }}
+      </div>
+    </ng-template>
+  </section>
+
+  <!-- RIGHT SIDEBAR: Template Preview -->
+  <aside class="right">
+    <div class="preview-root" [class.fullscreen]="isFullscreen">
+      <!-- Ultra Modern Glassmorphic Header -->
+      <div class="preview-header" *ngIf="vm.selectedName && !hideHeader">
+        <div class="header-content">
+          <div class="header-left">
+            <h3 class="template-title">{{ vm.selectedName }}</h3>
+            <div class="template-meta">
+              <span class="template-id">ID: {{ vm.selectedId }}</span>
+            </div>
+          </div>
+          <div class="header-actions">
+            <div class="action-buttons">
+              <!-- Info Button -->
+              <button 
+                class="action-btn info-btn" 
+                [class.active]="showInfoBanner"
+                (click)="toggleInfoBanner()" 
+                title="Template Info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <circle cx="12" cy="8" r="0.7" fill="currentColor"/> <!-- ✅ Dot as circle -->
+              </svg>
+                <span>Info</span>
+              </button>
+
+              <!-- Delete Button -->
+              <button 
+                class="action-btn delete-btn" 
+                (click)="deleteTemplate()" 
+                [disabled]="isDeleting"
+                title="Delete Template">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  <line x1="10" y1="11" x2="10" y2="17"/>
+                  <line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+                <span>Delete</span>
+              </button>
+
+              <!-- Refresh Button -->
+              <button class="action-btn refresh-btn" (click)="refresh()" title="Refresh Preview">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                  <path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                  <path d="M3 21v-5h5"/>
+                </svg>
+                <span>Refresh</span>
+              </button>
+              
+              <!-- Fullscreen Button -->
+              <button class="action-btn fullscreen-btn" (click)="toggleFullscreen()" title="Toggle Fullscreen">
+                <svg *ngIf="!isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
+                  <path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
+                  <path d="M3 16v3a2 2 0 0 0 2 2h3"/>
+                  <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+                </svg>
+                <svg *ngIf="isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M8 3v3a2 2 0 0 1-2 2H3"/>
+                  <path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
+                  <path d="M3 16h3a2 2 0 0 1 2 2v3"/>
+                  <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+                </svg>
+                <span>{{ isFullscreen ? 'Exit' : 'Fullscreen' }}</span>
+              </button>
+            </div>
+
+            <!-- View Mode Toggle -->
+            <div class="view-mode-toggle">
+              <button 
+                class="mode-btn" 
+                [class.active]="viewMode === 'desktop'" 
+                (click)="changeViewMode('desktop')"
+                title="Desktop View">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                <span>Desktop</span>
+              </button>
+              <button 
+                class="mode-btn" 
+                [class.active]="viewMode === 'tablet'" 
+                (click)="changeViewMode('tablet')"
+                title="Tablet View">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
+                  <line x1="12" y1="18" x2="12.01" y2="18"/>
+                </svg>
+                <span>Tablet</span>
+              </button>
+              <button 
+                class="mode-btn" 
+                [class.active]="viewMode === 'mobile'" 
+                (click)="changeViewMode('mobile')"
+                title="Mobile View">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                  <line x1="12" y1="18" x2="12.01" y2="18"/>
+                </svg>
+                <span>Mobile</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Next-Gen Empty State -->
+      <div *ngIf="!vm.selectedId" class="modern-placeholder">
+        <div class="placeholder-background">
+          <div class="floating-shapes">
+            <div class="shape shape-1"></div>
+            <div class="shape shape-2"></div>
+            <div class="shape shape-3"></div>
+            <div class="shape shape-4"></div>
+          </div>
+          <div class="grid-pattern"></div>
+        </div>
+        <div class="placeholder-content">
+          <div class="placeholder-icon-container">
+            <div class="icon-backdrop"></div>
+            <div class="icon-ring"></div>
+            <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="m15 10 4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14"/>
+              <rect x="3" y="6" width="12" height="12" rx="2"/>
+            </svg>
+          </div>
+          <div class="placeholder-text">
+            <h2>Ready for Preview</h2>
+          </div>
+          <div class="feature-pills">
+            <div class="pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+              Real-time Updates
+            </div>
+            <div class="pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+              Multi-Device
+            </div>
+            <div class="pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+              Lightning Fast
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modern Preview Container -->
+      <div class="preview-container" *ngIf="vm.selectedId">
+        <!-- Advanced Loading State -->
+        <div class="advanced-loader" *ngIf="loading" [@fadeInOut]="loading ? 'in' : 'out'">
+          <div class="loader-background">
+            <div class="neural-network">
+              <div class="node node-1"></div>
+              <div class="node node-2"></div>
+              <div class="node node-3"></div>
+              <div class="node node-4"></div>
+              <div class="connection connection-1"></div>
+              <div class="connection connection-2"></div>
+              <div class="connection connection-3"></div>
+            </div>
+          </div>
+          <div class="loader-content">
+            <div class="loader-spinner">
+              <div class="spinner-outer"></div>
+              <div class="spinner-inner"></div>
+              <div class="spinner-core"></div>
+            </div>
+            <div class="loader-text">
+              <h4>Rendering Preview</h4>
+              <p>Optimizing your template for the best experience</p>
+              <div class="progress-indicator">
+                <div class="progress-bar">
+                  <div class="progress-fill"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Enhanced iframe Container with View Modes -->
+        <div class="iframe-wrapper" 
+          [class.loading]="loading"
+          [ngClass]="{
+          'desktop-mode': viewMode === 'desktop',
+          'tablet-mode': viewMode === 'tablet',
+          'mobile-mode': viewMode === 'mobile'
+        }">
+          <div class="iframe-container">
+            <iframe
+              *ngIf="allowScripts && safeSrcdoc; else safeIframe"
+              class="preview-frame"
+              [attr.srcdoc]="safeSrcdoc"
+              sandbox="allow-same-origin allow-forms allow-scripts"
+              referrerpolicy="no-referrer"
+              (load)="onIframeLoad()">
+            </iframe>
+
+            <ng-template #safeIframe>
+              <iframe
+                *ngIf="safeSrcdoc"
+                class="preview-frame"
+                [attr.srcdoc]="safeSrcdoc"
+                sandbox="allow-same-origin allow-forms"
+                referrerpolicy="no-referrer"
+                (load)="onIframeLoad()">
+              </iframe>
+            </ng-template>
+          </div>
+        </div>
+
+        <!-- Premium Error State -->
+        <div *ngIf="previewError" class="premium-error" [@bounceIn]>
+          <div class="error-background">
+            <div class="error-pattern"></div>
+          </div>
+          <div class="error-content">
+            <div class="error-icon-container">
+              <div class="error-icon-backdrop"></div>
+              <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <div class="error-text">
+              <h3>Preview Unavailable</h3>
+              <p>{{ previewError }}</p>
+              <div class="error-details">
+                <span>This usually resolves quickly. Try refreshing the preview.</span>
+              </div>
+            </div>
+            <div class="error-actions">
+              <button class="retry-btn" (click)="refresh()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                  <path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                  <path d="M3 21v-5h5"/>
+                </svg>
+                Try Again
+              </button>
+              <button class="support-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                Get Support
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- ✅ NEW: Modal Popup for Template Info -->
+<div class="info-modal-backdrop" *ngIf="showInfoBanner" (click)="toggleInfoBanner()">
+  <div class="info-modal-content" (click)="$event.stopPropagation()">
+    <div class="info-modal-header">
+      <h3>Template Information</h3>
+      <button class="close-btn" (click)="toggleInfoBanner()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="info-grid" *ngIf="templateMetadata">
+      <div class="info-item">
+        <span class="info-label">Type</span>
+        <span class="info-value">{{ templateMetadata.type || 'N/A' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Category</span>
+        <span class="info-value">{{ templateMetadata.category }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Created By</span>
+        <span class="info-value">{{ templateMetadata.createdBy || 'N/A' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Created Date</span>
+        <span class="info-value">{{ templateMetadata.dateCreated | date:'short' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Last Edited</span>
+        <span class="info-value">{{ templateMetadata.dateEdited | date:'short' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Active</span>
+        <span class="info-value">
+          <span class="status-badge" [class.active]="templateMetadata.active">
+            {{ templateMetadata.active ? 'Yes' : 'No' }}
+          </span>
+        </span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Drag & Drop</span>
+        <span class="info-value">{{ templateMetadata.dragAndDrop ? 'Yes' : 'No' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Responsive</span>
+        <span class="info-value">{{ templateMetadata.responsive ? 'Yes' : 'No' }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Folder ID</span>
+        <span class="info-value">{{ templateMetadata.folderId }}</span>
+      </div>
+      
+      <div class="info-item">
+        <span class="info-label">Source</span>
+        <span class="info-value">{{ templateMetadata.source }}</span>
+      </div>
+      
+      <div class="info-item full-width" *ngIf="templateMetadata.thumbnail">
+        <span class="info-label">Thumbnail</span>
+        <a [href]="templateMetadata.thumbnail" target="_blank" class="info-link">
+          View Thumbnail →
+        </a>
+      </div>
+      
+      <div class="info-item full-width" *ngIf="templateMetadata.screenshotUrl">
+        <span class="info-label">Screenshot</span>
+        <a [href]="templateMetadata.screenshotUrl" target="_blank" class="info-link">
+          View Screenshot →
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

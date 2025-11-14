@@ -1,0 +1,7 @@
+{
+  "plugins": { "html": true },
+  "rules": {
+    "common-misspellings": true,
+    "write-good": { "weasel": true, "passive": true, "tooWordy": true }
+  }
+}

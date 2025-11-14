@@ -1,0 +1,780 @@
+<div class="qa-page-wrapper" *ngIf="id$ | async as id">
+  <!-- Animated Background -->
+  <div class="page-background">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+  </div>
+
+  <div class="qa-grid" style="margin-top: 2rem;">
+    <!-- Column 1: Original Template -->
+    <section class="col col-1 glass-card" [@fadeInUp] style="height: 800px !important; min-height: 800px !important; display: flex; flex-direction: column;">
+      <div class="card-header">
+        <!-- ✅ NEW: Clickable Edit Icon (replaces document icon) -->
+        <button 
+          class="header-icon clickable-icon"
+          *ngIf="!templateLoading"
+          (click)="onEditOriginalTemplate()"
+          matTooltip="Edit in Visual Editor"
+          mat-icon-button>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+          </svg>
+        </button>
+        
+        <!-- Loading state icon (shows when template is loading) -->
+        <div class="header-icon" *ngIf="templateLoading">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        
+        <h3 class="section-title">Original Template</h3>
+        <div class="title-underline"></div>
+        
+        <!-- Keep the skip button on the right -->
+        <button 
+          *ngIf="templateId"
+          mat-icon-button 
+          class="skip-btn"
+          (click)="onSkipToChat()"
+          matTooltip="Skip Golden & Variants Generation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 17l5-5m0 0l-5-5m5 5H6"/>
+          </svg>
+        </button>
+      </div>
+      <div class="card-content" style="flex: 1; overflow: hidden; min-height: 0; display: flex; flex-direction: column;">
+        <div class="template-preview-container" style="flex: 1; height: 100%; min-height: 500px; background: white; border-radius: 8px; overflow: hidden;">
+          <app-html-preview
+            [html]="templateHtml"
+            [loading]="templateLoading"
+            [allowScripts]="true"
+            (iframeLoaded)="onTemplatePreviewLoaded()"
+            style="flex: 1; height: 100%; min-height: 500px;">
+          </app-html-preview>
+        </div>
+      </div>
+    </section>
+
+    <!-- Column 2: Actions + Results -->
+    <section class="col col-2 glass-card" [@fadeInUp] style="height: 800px !important; min-height: 800px !important; display: flex; flex-direction: column;">
+      <div class="card-header sticky-header">
+        <div class="header-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+          </svg>
+        </div>
+        <h3 class="section-title">AI Tools & Analysis</h3>
+        <div class="title-underline"></div>
+        
+        <!-- Info Icon Button -->
+        <button 
+          mat-icon-button 
+          class="qa-info-btn"
+          [matMenuTriggerFor]="qaInfoMenu"
+          matTooltip="Important Information">
+          <mat-icon>info_outline</mat-icon>
+        </button>
+
+        <!-- Info Menu -->
+        <mat-menu #qaInfoMenu="matMenu" class="qa-info-menu">
+          <div class="qa-info-content" (click)="$event.stopPropagation()">
+            <h4>⚠️ Important Notice</h4>
+            
+            <div class="info-section">
+              <p>AI will make mistakes due to its unpredictable nature and text replacement using AI will only happen under manual supervision.</p>
+            </div>
+
+            <div class="info-section">
+              <p>Editing HTML using AI is astonishingly difficult due to the HTML complexity, poorly written HTML, and not following best practices.</p>
+            </div>
+
+            <div class="info-note">
+              Always review AI changes before applying! and use editor if required.
+            </div>
+          </div>
+        </mat-menu>
+      </div>
+
+      <div class="scrollable-content" style="flex: 1; overflow-y: auto; min-height: 0;">
+        <!-- Primary Actions -->
+        <div class="actions-group">
+          <!-- Run Test Button -->
+          <button 
+            mat-raised-button 
+            class="modern-btn primary-btn"
+            (click)="goldenLoading ? cancelGolden() : onGenerateGolden(id)"
+            [class.loading]="goldenLoading">
+            <span class="btn-content" *ngIf="!goldenLoading">
+              <span class="btn-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+              </span>
+              <span class="btn-text">Run Test</span>
+              <span class="btn-shimmer"></span>
+            </span>
+            <span class="spinner-container" *ngIf="goldenLoading">
+              <span class="modern-spinner"></span>
+              <span class="btn-text-loading cancel-text">Cancel</span>
+            </span>
+          </button>
+
+          <!-- Failed Edits Button -->
+          <button 
+            mat-raised-button 
+            class="modern-btn visual-editor-btn"
+            [class.orange]="visualEditorButtonColor === 'orange'"
+            [class.red]="visualEditorButtonColor === 'red'"
+            [class.green]="visualEditorButtonColor === 'green'"
+            (click)="openVisualEditorModal(); $event.stopPropagation()">
+            <span class="btn-content">
+              <span class="btn-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+              </span>
+              <span class="btn-text">Failed Edits</span>
+              <span class="btn-shimmer"></span>
+            </span>
+            <!-- ✅ Failed Edits Counter Badge -->
+            <span 
+              *ngIf="(golden$ | async)?.failedEdits?.length" 
+              class="failed-edits-badge">
+              {{ (golden$ | async)?.failedEdits?.length }}
+            </span>
+          </button>
+        </div>
+
+        <!-- Variants Action -->
+        <div class="variants-action">
+          <button 
+            mat-raised-button 
+            class="modern-btn accent-btn"
+            (click)="variantsGenerating ? cancelVariants() : onGenerateVariants(id)"
+            [disabled]="!variantsGenerating && (goldenLoading || !(golden$ | async)?.html)"
+            [class.loading]="variantsGenerating">
+            <span class="btn-content" *ngIf="!variantsGenerating">
+              <span class="btn-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+                </svg>
+              </span>
+              <span class="btn-text">Generate Variants</span>
+              <span class="btn-glow"></span>
+            </span>
+            <span class="spinner-container" *ngIf="variantsGenerating">
+              <span class="modern-spinner"></span>
+              <span class="btn-text-loading cancel-text">Cancel</span>
+            </span>
+          </button>
+        </div>
+
+        <!-- Stats Summary Card -->
+        <ng-container *ngIf="golden$ | async as golden">
+          <div class="info-panel stats-panel" *ngIf="golden?.stats" [@slideIn]>
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+              </div>
+              <h4>QA Statistics</h4>
+              <button 
+                class="debug-toggle-btn"
+                (click)="toggleDebugInfo()"
+                [class.active]="showDebugInfo"
+                matTooltip="Toggle Performance Info">
+                <mat-icon>info</mat-icon>
+              </button>
+            </div>
+
+            <div class="stats-grid">
+              <div class="stat-card total">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                  </svg>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-value">{{ golden.stats?.total || 0 }}</span>
+                  <span class="stat-label">Total</span>
+                </div>
+              </div>
+
+              <div class="stat-card success">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-value">{{ golden.stats?.applied || 0 }}</span>
+                  <span class="stat-label">Applied</span>
+                </div>
+              </div>
+
+              <div class="stat-card error" *ngIf="(golden.stats?.failed || 0) > 0">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-value">{{ golden.stats?.failed || 0 }}</span>
+                  <span class="stat-label">Failed</span>
+                </div>
+              </div>
+
+              <div class="stat-card blocked" *ngIf="(golden.stats?.blocked || 0) > 0">
+                <div class="stat-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                  </svg>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-value">{{ golden.stats?.blocked || 0 }}</span>
+                  <span class="stat-label">Blocked</span>
+                </div>
+              </div>
+
+              <!-- ✅ Removed Skipped stat card -->
+            </div>
+
+            <!-- ✅ Perfect Template Message (when total is 0) -->
+            <div class="perfect-template-message" *ngIf="(golden.stats?.total || 0) === 0" [@fadeIn]>
+              <div class="perfect-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+              <h4>🎉 Perfect Template!</h4>
+              <p>Your template is already optimized. No edits needed!</p>
+            </div>
+
+            <!-- Timings (Debug Mode) -->
+            <div class="debug-section" *ngIf="showDebugInfo && golden?.timings" [@expandIn]>
+              <div class="debug-header">
+                <mat-icon>schedule</mat-icon>
+                <span>Performance Metrics</span>
+              </div>
+              <div class="timings-grid">
+                <div class="timing-item">
+                  <span class="timing-label">Total:</span>
+                  <span class="timing-value">{{ formatTime(golden.timings?.total || 0) }}</span>
+                </div>
+                <div class="timing-item">
+                  <span class="timing-label">Parsing:</span>
+                  <span class="timing-value">{{ formatTime(golden.timings?.parsing || 0) }}</span>
+                </div>
+                <div class="timing-item">
+                  <span class="timing-label">Processing:</span>
+                  <span class="timing-value">{{ formatTime(golden.timings?.processing || 0) }}</span>
+                </div>
+                <div class="timing-item">
+                  <span class="timing-label">Verification:</span>
+                  <span class="timing-value">{{ formatTime(golden.timings?.verification || 0) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ng-container>
+
+        <!-- Subjects Panel -->
+        <!-- <ng-container *ngIf="subjects$ | async as subjects">
+          <div class="info-panel subjects-panel" *ngIf="subjects?.length" [@slideIn]>
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+              </div>
+              <h4>Subject Ideas</h4>
+              <span class="count-badge">{{ subjects.length }}</span>
+            </div>
+            <div class="chip-container">
+              <div class="modern-chip" *ngFor="let s of subjects; trackBy: trackByIndex" [@chipAnimation]>
+                <span class="chip-dot"></span>
+                <span class="chip-text">{{ s }}</span>
+              </div>
+            </div>
+          </div>
+        </ng-container> -->
+
+        <!-- Edits Panel -->
+        <ng-container *ngIf="golden$ | async as golden">
+          <div class="info-panel edits-panel" *ngIf="golden?.changes?.length" [@slideIn]>
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+              </div>
+              <h4>Applied Edits</h4>
+              <span class="count-badge">{{ golden.changes?.length || 0 }}</span>
+            </div>
+            <ul class="edits-list">
+              <li *ngFor="let c of golden.changes; trackBy: trackByEdit" class="edit-item" [@listAnimation]>
+                <div class="edit-change-row">
+                  <code class="error-word">{{ c.before }}</code>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon">
+                    <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                  </svg>
+                  <code class="correction-word">{{ c.after }}</code>
+                </div>
+                <div class="edit-info-row">
+                  <span class="reason-badge" *ngIf="c.reason">{{ c.reason }}</span>
+                  <span class="context-text" *ngIf="c.fullSentence" [innerHTML]="getHighlightedSentence(c)"></span>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </ng-container>
+
+        <!-- Suggestions Panel -->
+        <ng-container *ngIf="suggestions$ | async as sug">
+          <div class="info-panel suggestions-panel" *ngIf="(sug?.gibberish?.length || sug?.suggestions?.length)" [@slideIn]>
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+              <h4>AI Suggestions</h4>
+            </div>
+
+            <div *ngIf="sug.gibberish?.length" class="suggestion-section">
+              <h5 class="section-subtitle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                Possible Issues
+              </h5>
+              <ul class="suggestion-list">
+                <li *ngFor="let g of sug.gibberish" class="suggestion-item warning" [@listAnimation]>
+                  <span class="warning-icon">⚠</span>
+                  <div class="suggestion-content">
+                    <code class="gibberish-text">{{ g.text }}</code>
+                    <span class="suggestion-reason" *ngIf="g.reason">{{ g.reason }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <div *ngIf="sug.suggestions?.length" class="suggestion-section">
+              <h5 class="section-subtitle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                Improvements
+              </h5>
+              <ul class="suggestion-list">
+                <li *ngFor="let s of sug.suggestions" class="suggestion-item success" [@listAnimation]>
+                  <span class="success-icon">✓</span>
+                  <span class="suggestion-text">{{ s }}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="loading-panel" *ngIf="suggestionsLoading" [@pulse]>
+            <div class="loading-spinner"></div>
+            <span>Analyzing suggestions...</span>
+          </div>
+        </ng-container>
+      </div>
+    </section>
+
+    <!-- Column 3: Golden Preview -->
+    <section 
+      class="col col-3 glass-card" 
+      [class.shake-animation]="shouldShake"
+      (click)="onGoldenTemplateClick()"
+      [@fadeInUp] 
+      style="height: 800px !important; min-height: 800px !important; display: flex; flex-direction: column; cursor: pointer;">
+
+      <div class="card-header">
+        <div class="header-icon golden-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+          </svg>
+        </div>
+        <h3 class="section-title">Golden Preview</h3>
+        <div class="title-underline golden"></div>
+        
+        <button 
+          *ngIf="(golden$ | async)?.html"
+          mat-icon-button 
+          class="skip-btn"
+          (click)="onBypassVariants(); $event.stopPropagation()"
+          matTooltip="Bypass Variants - Use Golden Template">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 17l5-5m0 0l-5-5m5 5H6"/>
+          </svg>
+        </button>
+      </div>
+      <div class="card-content preview-content" style="flex: 1; overflow-y: auto; min-height: 0; display: flex; flex-direction: column;">
+        <div *ngIf="goldenLoading" class="golden-loading-state" [@fadeIn] style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem;">
+          <div class="golden-loader">
+            <div class="golden-spinner">
+              <div class="spinner-ring"></div>
+              <div class="spinner-ring"></div>
+              <div class="spinner-ring"></div>
+            </div>
+            <div class="golden-icon-container">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="loading-text">
+            <h4>Generating Golden Template</h4>
+            <p>AI is optimizing your template for the best user experience</p>
+          </div>
+        </div>
+
+        <ng-container *ngIf="!goldenLoading">
+          <ng-container *ngIf="golden$ | async as golden; else noGoldenYet">
+            <app-html-preview
+              *ngIf="golden?.html; else noGoldenYet"
+              [html]="golden.html"
+              [loading]="false"
+              [allowScripts]="true"
+              style="flex: 1; min-height: 0; height: 100%;">
+            </app-html-preview>
+          </ng-container>
+          
+          <ng-template #noGoldenYet>
+            <div class="empty-state golden-empty" [@fadeIn] style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem;">
+              <div class="empty-icon-animated">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+                </svg>
+              </div>
+              <h4>No Golden Template Yet</h4>
+              <p>Click "Run Test" to generate the optimized Golden Template with AI improvements</p>
+              <div class="empty-hint">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                <span>The Golden Template shows your template after AI optimization</span>
+              </div>
+            </div>
+          </ng-template>
+        </ng-container>
+      </div>
+    </section>
+  </div>
+
+  <!-- Variants Section -->
+  <section class="variants-section" *ngIf="variants$ | async as vr" [@expandIn]>
+    <div class="variants-header-main">
+      <div class="variants-title-group">
+        <div class="header-icon variants-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <h3 class="section-title">Generated Variants</h3>
+        <div class="title-underline variants"></div>
+      </div>
+      <div class="variants-progress" *ngIf="variantsGenerating || vr?.items?.length">
+        <span class="progress-text">{{ vr.items.length }} / {{ vr.target || 5 }}</span>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" [style.width.%]="(vr.items.length / (vr.target || 5)) * 100"></div>
+        </div>
+        <div class="spinner-small" *ngIf="variantsGenerating"></div>
+      </div>
+    </div>
+
+    <div class="variants-grid">
+      <div class="variant-card glass-card" *ngFor="let v of vr.items; trackBy: trackByIndex" [@variantAnimation]>
+        <div class="variant-left">
+          <div class="variant-header">
+            <span class="variant-number">Variant {{ v.no }}</span>
+            <div class="variant-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 13l4 4L19 7"/>
+              </svg>
+              Ready
+            </div>
+          </div>
+          
+          <div class="variant-preview">
+            <app-html-preview
+              [html]="v.html"
+              [loading]="false"
+              [allowScripts]="true">
+            </app-html-preview>
+          </div>
+
+          <div class="variant-actions">
+            <button 
+              mat-raised-button 
+              class="modern-btn use-btn"
+              (click)="onUseVariant(id, vr.runId, v.no)">
+              <span style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 13l4 4L19 7"/>
+                </svg>
+                <span>Use This Template</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div class="variant-right">
+          <div class="info-panel changes-panel">
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M8 7h12M8 12h12M8 17h12M3 7h.01M3 12h.01M3 17h.01"/>
+                </svg>
+              </div>
+              <h4>What Changed</h4>
+                <button 
+                  class="variant-edit-btn"
+                  [class.has-failed-edits]="hasFailedEdits(v)"
+                  (click)="onEditVariant(vr.runId, v.no, v)"
+                  [matTooltip]="getEditTooltip(v)">
+                  <mat-icon>edit</mat-icon>
+                  <span class="edit-badge" *ngIf="hasFailedEdits(v)">{{ getFailedEditsCount(v) }}</span>
+                </button>
+            </div>
+            <ul class="changes-list">
+              <li *ngFor="let c of v.changes; trackBy: trackByEdit" class="change-item">
+                <div class="change-content">
+                  <code class="change-before">{{ c.before }}</code>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="change-arrow">
+                    <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                  </svg>
+                  <code class="change-after">{{ c.after }}</code>
+                </div>
+                <div class="change-reason" *ngIf="c.reason">{{ c.reason }}</div>
+              </li>
+            </ul>
+          </div>
+
+          <div class="info-panel benefits-panel" *ngIf="v.why?.length">
+            <div class="panel-header">
+              <div class="panel-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+              </div>
+              <h4>Why This Helps</h4>
+            </div>
+            <ul class="benefits-list">
+              <li *ngFor="let w of v.why; trackBy: trackByIndex" class="benefit-item">
+                <span class="benefit-icon">✓</span>
+                <span>{{ w }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- ✅ ONLY show skeletons when ACTIVELY generating (not when loaded from cache) -->
+      <div class="variant-skeleton glass-card" 
+           *ngFor="let placeholder of getSkeletonArray(variantsGenerating ? (vr?.target || 5) : 0, vr?.items?.length || 0); trackBy: trackByIndex" 
+           [@variantAnimation]>
+        <div class="skeleton-content">
+          <div class="skeleton-header">
+            <div class="skeleton-title"></div>
+            <div class="skeleton-badge"></div>
+          </div>
+          <div class="skeleton-preview">
+            <div class="skeleton-lines">
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line short"></div>
+            </div>
+          </div>
+          <div class="skeleton-button"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Visual Editor Modal -->
+  <div class="visual-editor-modal" *ngIf="showVisualEditorModal">
+    <div class="modal-backdrop" (click)="closeVisualEditorModal()"></div>
+    
+    <div class="modal-container" [@modalContentAnimation]>
+      <!-- Header for Orange State (No Tests Run) -->
+      <div class="modal-header" *ngIf="visualEditorButtonColor === 'orange'">
+        <div class="modal-title">
+          <mat-icon>pending</mat-icon>
+          <h3>No Tests Run Yet</h3>
+        </div>
+        <button mat-icon-button (click)="closeVisualEditorModal()" class="modal-close-btn">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <!-- Header for Red State (Failed Edits) -->
+      <div class="modal-header" *ngIf="visualEditorButtonColor === 'red'">
+        <div class="modal-title">
+          <mat-icon>warning</mat-icon>
+          <h3>Failed Edits Detected</h3>
+        </div>
+        <span class="failed-count-badge" *ngIf="(golden$ | async)?.failedEdits?.length">
+          {{ (golden$ | async)?.failedEdits?.length }}
+        </span>
+        <button mat-icon-button (click)="closeVisualEditorModal()" class="modal-close-btn">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+
+      <!-- Header for Green State (All Success or Perfect Template) -->
+      <div class="modal-header" *ngIf="visualEditorButtonColor === 'green'">
+        <div class="modal-title">
+          <mat-icon>check_circle</mat-icon>
+          <h3>{{ (golden$ | async)?.stats?.total === 0 ? 'Perfect Template' : 'All Edits Applied' }}</h3>
+        </div>
+        <button mat-icon-button (click)="closeVisualEditorModal()" class="modal-close-btn">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        <!-- Orange State: No tests run yet -->
+        <ng-container *ngIf="visualEditorButtonColor === 'orange'">
+          <div class="info-state">
+            <mat-icon>info</mat-icon>
+            <h4>Template Not Tested</h4>
+            <p>This template hasn't been tested yet. Click "Run Test" to check for issues and validate all edits.</p>
+            <div class="action-hint">
+              <span>Click the "Run Test" button below to begin</span>
+              <mat-icon>arrow_downward</mat-icon>
+            </div>
+          </div>
+        </ng-container>
+
+        <!-- Red State: Failed edits exist -->
+        <ng-container *ngIf="visualEditorButtonColor === 'red' && (golden$ | async)?.failedEdits?.length">
+          <div class="modal-message">
+            <mat-icon>info</mat-icon>
+            <p>The following edits could not be applied automatically. Please use the Visual Editor to fix them manually.</p>
+          </div>
+          
+          <div class="failed-edits-preview">
+            <ul class="failed-edits-list">
+              <li *ngFor="let edit of (golden$ | async)?.failedEdits" class="failed-edit-item">
+                
+                <div class="status-badge" [class]="getStatusColor(edit.status || 'not_found')">
+                  <mat-icon>{{ getStatusIcon(edit.status || 'not_found') }}</mat-icon>
+                  <span>{{ getStatusLabel(edit.status || 'not_found') }}</span>
+                </div>
+                
+                <div class="edit-preview">
+                  <code class="preview-find">"{{ edit.find }}"</code>
+                  <mat-icon class="arrow-icon">arrow_forward</mat-icon>
+                  <code class="preview-replace">"{{ edit.replace }}"</code>
+                </div>
+
+                <div *ngIf="edit.diagnostics?.manualFixGuidance" class="manual-fix-guidance">
+                  <div class="guidance-icon">
+                    <mat-icon>lightbulb</mat-icon>
+                  </div>
+                  <div class="guidance-content">
+                    <strong>How to Fix:</strong>
+                    <p>{{ edit.diagnostics?.manualFixGuidance?.recommendation }}</p>
+                    
+                    <div *ngIf="edit.diagnostics?.manualFixGuidance?.searchHints?.length" class="search-hints">
+                      <strong>Try searching for:</strong>
+                      <ul>
+                        <li *ngFor="let hint of edit.diagnostics?.manualFixGuidance?.searchHints?.slice(0, 3)">
+                          <code>{{ hint }}</code>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div *ngIf="edit.diagnostics?.manualFixGuidance?.affectedElements?.length" 
+                         class="affected-elements">
+                      <strong>Split across these elements:</strong>
+                      <div class="element-chain">
+                        <span *ngFor="let el of edit.diagnostics?.manualFixGuidance?.affectedElements; let last = last">
+                          <code>&lt;{{ el.tag }}&gt;</code> "{{ el.textContent }}"
+                          <mat-icon *ngIf="!last" class="chain-arrow">arrow_forward</mat-icon>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div *ngIf="showDebugInfo && edit.diagnostics" class="debug-info">
+                  <button mat-button class="debug-toggle" (click)="$event.stopPropagation()">
+                    <mat-icon>bug_report</mat-icon>
+                    <span>Show Diagnostics</span>
+                  </button>
+                  <div class="debug-details">
+                    <div class="debug-row">
+                      <span>Raw Occurrences:</span>
+                      <strong>{{ edit.diagnostics.rawOccurrences || 0 }}</strong>
+                    </div>
+                    <div class="debug-row">
+                      <span>Normalized:</span>
+                      <strong>{{ edit.diagnostics.normalizedOccurrences || 0 }}</strong>
+                    </div>
+                    <div class="debug-row">
+                      <span>Context Match:</span>
+                      <strong>{{ edit.diagnostics.contextMatched ? '✓ Yes' : '✗ No' }}</strong>
+                    </div>
+                    <div class="debug-row">
+                      <span>Crosses Boundary:</span>
+                      <strong>{{ edit.diagnostics.crossesBoundary ? '✓ Yes' : '✗ No' }}</strong>
+                    </div>
+                  </div>
+                </div>
+
+              </li>
+            </ul>
+          </div>
+        </ng-container>
+
+        <!-- ✅ Removed Skipped Edits Section -->
+        
+        <!-- Green State: All edits successful OR Perfect template -->
+        <ng-container *ngIf="visualEditorButtonColor === 'green'">
+          <div class="success-state">
+            <mat-icon>check_circle</mat-icon>
+            
+            <!-- Perfect Template (0 edits needed) -->
+            <ng-container *ngIf="((golden$ | async)?.stats?.total || 0) === 0">
+              <h4>Perfect Template!</h4>
+              <p>Your template is already optimized and doesn't need any edits. You can still use the Visual Editor for additional customizations if needed.</p>
+            </ng-container>
+            
+            <!-- All Edits Applied Successfully -->
+            <ng-container *ngIf="((golden$ | async)?.stats?.total || 0) > 0">
+              <h4>All Edits Applied Successfully</h4>
+              <p>All automated edits have been applied successfully. You can use the Visual Editor for additional customizations if needed.</p>
+            </ng-container>
+          </div>
+        </ng-container>
+      </div>
+      
+      <div class="modal-footer">
+        <button mat-button (click)="closeVisualEditorModal()">Cancel</button>
+        <button 
+          mat-raised-button 
+          class="primary" 
+          (click)="navigateToVisualEditor()"
+          *ngIf="visualEditorButtonColor !== 'orange'">
+          <mat-icon>edit</mat-icon>
+          Open Visual Editor
+        </button>
+        <button 
+          mat-raised-button 
+          class="primary" 
+          (click)="closeVisualEditorModal(); onGenerateGolden(templateId!)"
+          *ngIf="visualEditorButtonColor === 'orange'">
+          <mat-icon>play_arrow</mat-icon>
+          Run Test Now
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

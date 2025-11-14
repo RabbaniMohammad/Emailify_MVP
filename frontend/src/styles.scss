@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { height: 100%; }
+body { margin: 0; font-family: Roboto, 'Helvetica Neue', sans-serif; }
+
+// Snackbar Custom Styles - Simple, no background
+.success-snackbar,
+.error-snackbar,
+.info-snackbar,
+.warning-snackbar {
+  // Remove all custom styling to use Material defaults
+}
+
+
+/* GrapesJS Styles */
+@import 'grapesjs/dist/css/grapes.min.css';
+
+/* GrapesJS Canvas Centering */
+.gjs-cv-canvas {
+  background-color: #f8fafc;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px;
+  overflow: auto !important; /* ← ADD THIS */
+}
+
+.gjs-frame-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  height: 100%;
+}
+
+.gjs-frame {
+  margin: 0 auto !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+}
+
+/* Performance Dashboard Dialog */
+.performance-dashboard-dialog {
+  .mat-mdc-dialog-container {
+    padding: 0;
+    overflow: hidden;
+    border-radius: 16px;
+    
+    .mat-mdc-dialog-surface {
+      border-radius: 16px;
+      overflow: hidden;
+    }
+  }
+}
+
+// ============================================
+// MODERN GLASSY DIALOG STYLES
+// ============================================
+.modern-dialog-backdrop {
+  backdrop-filter: blur(8px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(180%) !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  animation: fadeInBackdrop 0.3s ease !important;
+}
+
+.modern-glass-dialog {
+  .mat-mdc-dialog-container {
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.5) !important;
+    padding: 0 !important;
+    max-width: 95vw !important;
+    max-height: 95vh !important;
+    animation: slideInDialog 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+
+    .mat-mdc-dialog-surface {
+      background: transparent !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .mat-mdc-dialog-container {
+      max-width: 96vw !important;
+      margin: 1rem !important;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .mat-mdc-dialog-container {
+      max-width: 98vw !important;
+      margin: 0.5rem !important;
+      border-radius: 12px !important;
+    }
+  }
+
+  @media (max-height: 600px) and (orientation: landscape) {
+    .mat-mdc-dialog-container {
+      max-height: 98vh !important;
+      margin: 0.25rem !important;
+    }
+  }
+}
+
+@keyframes fadeInBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInDialog {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+// ============================================
+// HIDE TOOLBAR WHEN MODAL IS OPEN
+// ============================================
+// ✅ HIDE TOOLBAR ONLY FOR VALIDATION MODAL (not all modals!)
+// ============================================
+body.validation-modal-open {
+  // Hide the toolbar component
+  app-toolbar,
+  app-toolbar > *,
+  mat-toolbar,
+  .mat-toolbar {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+  
+  // Adjust main content to fill the space
+  router-outlet + *,
+  app-root > *:not(app-toolbar) {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+  }
+}

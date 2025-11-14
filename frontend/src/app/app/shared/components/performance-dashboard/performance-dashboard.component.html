@@ -1,0 +1,303 @@
+<div class="performance-dashboard" @fadeIn>
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="header-content">
+      <div class="header-icon">
+        <mat-icon class="pulse">speed</mat-icon>
+      </div>
+      <div class="header-text">
+        <h2>App Performance</h2>
+        <p class="subtitle">Real-time cache & storage monitoring</p>
+      </div>
+    </div>
+    <button mat-icon-button class="close-btn" (click)="close()" matTooltip="Close">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <!-- Main Content -->
+  <div class="dashboard-content" *ngIf="cacheStats && storageQuota">
+    
+    <!-- Overall Health Status -->
+    <div class="health-card" @slideIn>
+      <div class="card-header">
+        <mat-icon [style.color]="cacheHealthColor">
+          {{ cacheHealthStatus === 'healthy' ? 'check_circle' : 
+             cacheHealthStatus === 'warning' ? 'warning' : 'error' }}
+        </mat-icon>
+        <h3>Cache Health</h3>
+      </div>
+      <div class="health-status" [style.color]="cacheHealthColor">
+        {{ cacheHealthStatus === 'healthy' ? '✨ Excellent' : 
+           cacheHealthStatus === 'warning' ? '⚠️ Fair' : 
+           '🚨 Needs Attention' }}
+      </div>
+      <p class="health-description">
+        {{ cacheHealthStatus === 'healthy' ? 
+           'Your cache is running smoothly. Enjoy lightning-fast performance! ⚡' : 
+           cacheHealthStatus === 'warning' ? 
+           'Cache is getting full. Consider clearing old data for optimal performance.' : 
+           'Cache is critically full! Clear cache to prevent slowdowns.' }}
+      </p>
+    </div>
+
+    <!-- Storage Quota -->
+    <div class="stat-card" @slideIn>
+      <div class="card-header">
+        <mat-icon>storage</mat-icon>
+        <h3>Browser Storage</h3>
+      </div>
+      <div class="progress-section">
+        <div class="progress-header">
+          <span class="progress-label">Used Storage</span>
+          <span class="progress-value" [style.color]="storageColor">
+            {{ formatBytes(storageQuota.used) }} / {{ formatBytes(storageQuota.total) }}
+          </span>
+        </div>
+        <mat-progress-bar 
+          mode="determinate" 
+          [value]="storagePercentage"
+          [color]="storagePercentage > 90 ? 'warn' : storagePercentage > 70 ? 'accent' : 'primary'">
+        </mat-progress-bar>
+        <div class="progress-percentage" [style.color]="storageColor">
+          {{ storagePercentage.toFixed(1) }}%
+        </div>
+      </div>
+      <div class="info-box">
+        <mat-icon class="info-icon">info</mat-icon>
+        <span>Browser allocates storage dynamically. Typical limit: 50-500 MB</span>
+      </div>
+    </div>
+
+    <!-- Cache Statistics Grid -->
+    <div class="stats-grid">
+      
+      <!-- Templates Cache -->
+      <div class="metric-card" @slideIn>
+        <div class="metric-icon">
+          <mat-icon>article</mat-icon>
+        </div>
+        <div class="metric-content">
+          <div class="metric-label">Cached Templates</div>
+          <div class="metric-value">{{ cacheStats.templateCount }}</div>
+          <div class="metric-bar">
+            <div class="bar-fill" 
+                 [style.width.%]="templatePercentage"
+                 [style.background]="templatePercentage > 80 ? '#f59e0b' : '#6366f1'">
+            </div>
+          </div>
+          <div class="metric-footer">
+            {{ cacheStats.templateCount }} / {{ MAX_TEMPLATES }} max
+          </div>
+        </div>
+      </div>
+
+      <!-- Conversations Cache -->
+      <div class="metric-card" @slideIn>
+        <div class="metric-icon">
+          <mat-icon>chat</mat-icon>
+        </div>
+        <div class="metric-content">
+          <div class="metric-label">Conversations</div>
+          <div class="metric-value">{{ cacheStats.conversationCount }}</div>
+          <div class="metric-bar">
+            <div class="bar-fill" 
+                 [style.width.%]="conversationPercentage"
+                 [style.background]="conversationPercentage > 80 ? '#f59e0b' : '#8b5cf6'">
+            </div>
+          </div>
+          <div class="metric-footer">
+            {{ cacheStats.conversationCount }} / {{ MAX_CONVERSATIONS }} max
+          </div>
+        </div>
+      </div>
+
+      <!-- Links Cache -->
+      <div class="metric-card" @slideIn>
+        <div class="metric-icon">
+          <mat-icon>link</mat-icon>
+        </div>
+        <div class="metric-content">
+          <div class="metric-label">Valid Links</div>
+          <div class="metric-value">{{ cacheStats.validLinksCount }}</div>
+          <div class="metric-bar">
+            <div class="bar-fill" 
+                 [style.width.%]="cacheStats.validLinksCount > 0 ? 100 : 0"
+                 [style.background]="'#10b981'">
+            </div>
+          </div>
+          <div class="metric-footer">
+            Link validation cache
+          </div>
+        </div>
+      </div>
+
+      <!-- Cache Size -->
+      <div class="metric-card" @slideIn>
+        <div class="metric-icon">
+          <mat-icon>data_usage</mat-icon>
+        </div>
+        <div class="metric-content">
+          <div class="metric-label">Cache Size</div>
+          <div class="metric-value">{{ cacheStats.estimatedSizeMB.toFixed(2) }} MB</div>
+          <div class="metric-bar">
+            <div class="bar-fill" 
+                 [style.width.%]="cacheSizePercentage"
+                 [style.background]="cacheSizePercentage > 90 ? '#ef4444' : cacheSizePercentage > 70 ? '#f59e0b' : '#10b981'">
+            </div>
+          </div>
+          <div class="metric-footer">
+            {{ cacheStats.estimatedSizeMB.toFixed(2) }} / {{ MAX_CACHE_SIZE_MB }} MB max
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cache Lifecycle Info -->
+    <div class="lifecycle-card" @slideIn>
+      <div class="card-header">
+        <mat-icon>schedule</mat-icon>
+        <h3>Cache Lifecycle</h3>
+      </div>
+      <div class="lifecycle-timeline">
+        <div class="timeline-item">
+          <div class="timeline-icon created">
+            <mat-icon>add_circle</mat-icon>
+          </div>
+          <div class="timeline-content">
+            <h4>Created</h4>
+            <p>Cache is created automatically when you visit pages and load data</p>
+          </div>
+        </div>
+        
+        <div class="timeline-item">
+          <div class="timeline-icon active">
+            <mat-icon>bolt</mat-icon>
+          </div>
+          <div class="timeline-content">
+            <h4>Active Use</h4>
+            <p>Provides instant page loads (10-50ms) instead of API calls (500-1000ms)</p>
+          </div>
+        </div>
+        
+        <div class="timeline-item">
+          <div class="timeline-icon expired">
+            <mat-icon>schedule</mat-icon>
+          </div>
+          <div class="timeline-content">
+            <h4>Auto-Deletion</h4>
+            <p>Cache expires after <strong>{{ CACHE_EXPIRY_DAYS }} days</strong> and is automatically cleaned</p>
+          </div>
+        </div>
+        
+        <div class="timeline-item">
+          <div class="timeline-icon restored">
+            <mat-icon>refresh</mat-icon>
+          </div>
+          <div class="timeline-content">
+            <h4>Restored</h4>
+            <p>Fresh data is fetched from server and cached again for future use</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Performance Tips -->
+    <div class="tips-card" @slideIn>
+      <div class="card-header">
+        <mat-icon>lightbulb</mat-icon>
+        <h3>Performance Tips</h3>
+      </div>
+      <ul class="tips-list">
+        <li>
+          <mat-icon>check_circle</mat-icon>
+          <span><strong>Navigation:</strong> Use back/forward buttons for instant page loads</span>
+        </li>
+        <li>
+          <mat-icon>check_circle</mat-icon>
+          <span><strong>Cache Clear:</strong> Only clear when experiencing issues or storage is full</span>
+        </li>
+        <li>
+          <mat-icon>check_circle</mat-icon>
+          <span><strong>Auto-Cleanup:</strong> Old data is cleaned automatically on app startup</span>
+        </li>
+        <li>
+          <mat-icon>check_circle</mat-icon>
+          <span><strong>Logout:</strong> All cache is cleared on logout for security</span>
+        </li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-state" *ngIf="!cacheStats || !storageQuota">
+    <mat-icon class="spin">sync</mat-icon>
+    <p>Loading performance data...</p>
+  </div>
+
+  <!-- Footer Actions -->
+  <div class="dashboard-footer" *ngIf="cacheStats && storageQuota">
+    <div class="footer-info">
+      <mat-icon>info</mat-icon>
+      <span>Cache monitoring • Auto-refresh every 3 hours</span>
+    </div>
+    
+    <div class="footer-actions">
+      <button 
+        mat-stroked-button 
+        color="warn"
+        (click)="showClearConfirmation()"
+        [disabled]="isClearing || !cacheStats || cacheStats.estimatedSizeMB === 0">
+        <mat-icon>delete_sweep</mat-icon>
+        Clear Cache
+      </button>
+      
+      <button 
+        mat-raised-button 
+        color="primary"
+        (click)="close()">
+        Done
+      </button>
+    </div>
+  </div>
+
+  <!-- Clear Warning Modal -->
+  <div class="warning-overlay" *ngIf="showClearWarning" @fadeIn>
+    <div class="warning-modal" @slideIn>
+      <div class="warning-header">
+        <mat-icon class="warning-icon">warning</mat-icon>
+        <h3>Clear All Cache?</h3>
+      </div>
+      <p class="warning-message">
+        This will delete all cached data including:
+      </p>
+      <ul class="warning-list">
+        <li>• {{ cacheStats?.templateCount || 0 }} cached templates</li>
+        <li>• {{ cacheStats?.conversationCount || 0 }} conversation threads</li>
+        <li>• {{ cacheStats?.validLinksCount || 0 }} link validations</li>
+        <li>• Total: {{ (cacheStats?.estimatedSizeMB || 0).toFixed(2) }} MB</li>
+      </ul>
+      <p class="warning-note">
+        ⚠️ <strong>Note:</strong> Data will be re-fetched from the server on your next visit. This won't delete any data from the server.
+      </p>
+      <div class="warning-actions">
+        <button 
+          mat-stroked-button 
+          (click)="cancelClear()"
+          [disabled]="isClearing">
+          Cancel
+        </button>
+        <button 
+          mat-raised-button 
+          color="warn"
+          (click)="confirmClearCache()"
+          [disabled]="isClearing">
+          <mat-icon *ngIf="!isClearing">delete_forever</mat-icon>
+          <mat-icon *ngIf="isClearing" class="spin">sync</mat-icon>
+          {{ isClearing ? 'Clearing...' : 'Yes, Clear Cache' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

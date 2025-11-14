@@ -1,0 +1,717 @@
+<!-- Animated Background -->
+<div class="page-background">
+  <div class="gradient-orb orb-1"></div>
+  <div class="gradient-orb orb-2"></div>
+  <div class="gradient-orb orb-3"></div>
+</div>
+
+<div class="use-variant-wrapper" [class.editor-mode]="editorOpen$ | async">
+  <div class="use-grid">
+    <!-- Left: live preview -->
+    <section class="use-left glass-card" [class.minimized]="editorOpen$ | async">
+      <div class="section-header">
+        <h3>Selected Variant</h3>
+        <!-- NEW: Open Editor Button -->
+        <button 
+          mat-icon-button 
+          class="editor-toggle-btn"
+          (click)="openEditor()" 
+          *ngIf="!(editorOpen$ | async)"
+          matTooltip="Use this editor for minor updates. For major changes, use Figma"
+          matTooltipPosition="below">
+          <mat-icon>edit_note</mat-icon>
+        </button>
+      </div>
+      <div class="preview-wrapper">
+        <app-html-preview
+          [html]="(html$ | async) || ''"
+          [loading]="loadingVariant"
+          (iframeLoaded)="onPreviewLoaded()">
+        </app-html-preview>
+      </div>
+    </section>
+
+    <!-- Right: Chat OR Editor -->
+    <section class="use-right glass-card" [class.editor-expanded]="editorOpenSync">
+      <!-- Chat Interface -->
+      <ng-container *ngIf="!editorOpenSync">
+        <div class="chat-section" @fadeInOut>
+          <div class="section-header">
+            <h3>QA Assistant</h3>
+            <button
+              mat-raised-button
+              class="finalize-btn"
+              (click)="onFinalize()"
+              [disabled]="finalizing$ | async">
+              <!-- <mat-progress-spinner
+                *ngIf="finalizing$ | async"
+                diameter="16"
+                mode="indeterminate"
+                class="btnspinner-">
+              </mat-progress-spinner> -->
+              <span>{{ (finalizing$ | async) ? 'Finalizing...' : 'Finalize' }}</span>
+            </button>
+          </div>
+
+          <div class="chat-container">
+            <div class="chat-messages" #chatMessages>
+              <div
+                class="chat-msg"
+                *ngFor="let m of (messages$ | async) ?? []; let i = index; trackBy: trackByMsg">
+                <div class="bubble" [class.me]="m.role === 'user'">
+                  <div class="who">{{ m.role === 'user' ? 'YOU' : 'QA ASSISTANT' }}</div>
+                  <div class="text" [innerText]="m.text"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="composer">
+              <textarea
+                class="message-input"
+                [formControl]="input"
+                placeholder="Ask for changes or ideas..."
+                rows="2"
+                (keydown)="handleKeyDown($event)">
+              </textarea>
+              <button
+                mat-raised-button
+                class="send-btn"
+                (click)="onSend()"
+                [disabled]="sending || !input.value.trim()">
+                <mat-progress-spinner
+                  *ngIf="sending"
+                  diameter="18"
+                  mode="indeterminate">
+                </mat-progress-spinner>
+                <svg *ngIf="!sending" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- HTML Editor (shown when editor open) -->
+      <ng-container *ngIf="editorOpen$ | async">
+        <app-html-editor 
+          [initialHtml]="(html$ | async) || ''"
+          (htmlChanged)="onEditorSave($event)"
+          (editorClosed)="onEditorClose()">
+        </app-html-editor>
+      </ng-container>
+    </section>
+  </div>
+
+  <!-- Finalize section -->
+  <section id="finalize" class="finalize-section glass-card">
+    <div class="finalize-header">
+      <div class="header-content">
+        <h3>Finalize & Validate</h3>
+        <p>Capture screenshots and validate links against your source file</p>
+      </div>
+    </div>
+
+    <div class="finalize-grid">
+      <!-- Left: Screenshots -->
+      <div class="screenshots-col">
+        <!-- FIND AND REPLACE this entire section in screenshots-col -->
+<div class="col-header">
+  <h4>
+    <span class="header-text-full">Link Screenshots</span>
+    <span class="header-text-short">Link</span>
+  </h4>
+  
+  <div class="submit-template-wrapper">
+<button
+  mat-raised-button
+  class="submit-template-btn"
+  (click)="openTemplateModal()" 
+  [disabled]="(finalizing$ | async) || !canSubmitTemplate()"
+  [class.needs-finalize]="!canSubmitTemplate()"
+  [matTooltip]="!canSubmitTemplate() ? 'Finalize template first' : ''"
+  matTooltipPosition="left">
+  <span class="btn-text-full">Submit Template</span>
+  <span class="btn-text-short">Submit</span>
+</button>
+  </div>
+</div>
+
+        <!-- Loading state wrapper -->
+        <div class="snaps-list-wrapper" [class.loading]="finalizing$ | async">
+          <!-- Loading overlay -->
+          <div class="loading-overlay" *ngIf="finalizing$ | async" @fadeInOut>
+            <div class="loading-content">
+              <!-- Animated Camera Icon -->
+              <div class="loading-icon">
+                <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <!-- Camera body -->
+                  <rect x="8" y="18" width="48" height="36" rx="6" 
+                    stroke="url(#gradient-camera)" stroke-width="2.5" fill="rgba(139, 92, 246, 0.1)"/>
+                  
+                  <!-- Lens outer circle -->
+                  <circle cx="32" cy="36" r="12" 
+                    stroke="url(#gradient-camera)" stroke-width="2.5" fill="rgba(236, 72, 153, 0.1)"/>
+                  
+                  <!-- Lens inner circle -->
+                  <circle cx="32" cy="36" r="7" 
+                    fill="url(#gradient-camera)" opacity="0.8"/>
+                  
+                  <!-- Flash indicator -->
+                  <circle cx="48" cy="24" r="2.5" 
+                    fill="url(#gradient-camera)">
+                    <animate attributeName="opacity" 
+                      values="0.3;1;0.3" 
+                      dur="2s" 
+                      repeatCount="indefinite"/>
+                  </circle>
+                  
+                  <!-- Viewfinder top -->
+                  <rect x="24" y="12" width="16" height="4" rx="2" 
+                    fill="url(#gradient-camera)"/>
+                  
+                  <!-- Capture effect (expanding circle) -->
+                  <circle cx="32" cy="36" r="6" 
+                    stroke="url(#gradient-camera)" 
+                    stroke-width="1.5" 
+                    fill="none" 
+                    opacity="0">
+                    <animate attributeName="r" 
+                      values="6;18;6" 
+                      dur="2s" 
+                      repeatCount="indefinite"/>
+                    <animate attributeName="opacity" 
+                      values="0.8;0;0.8" 
+                      dur="2s" 
+                      repeatCount="indefinite"/>
+                  </circle>
+                  
+                  <!-- Gradient definitions -->
+                  <defs>
+                    <linearGradient id="gradient-camera" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" style="stop-color:#6d28d9;stop-opacity:1" />
+                      <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+              
+              <p class="loading-text">Testing Links...</p>
+              <small class="loading-subtext">This may take a moment</small>
+            </div>
+          </div>
+
+          <!-- Existing snaps list - HIDE while finalizing -->
+          <div class="snaps-list" *ngIf="(snaps$ | async) as snaps" [style.display]="(finalizing$ | async) ? 'none' : 'block'">
+            <div *ngIf="!snaps.length && !(finalizing$ | async)" class="empty-state">
+  <ng-container *ngIf="hasValidLinks(); else noLinksTemplate">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+      <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+    </svg>
+    <p>No links tested yet</p>
+    <small>{{ getValidLinkCount() }} link(s) detected - Click "Finalize" to capture</small>
+  </ng-container>
+  
+  <ng-template #noLinksTemplate>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+      <line x1="3" y1="3" x2="21" y2="21" stroke-width="2"/>
+    </svg>
+    <p>No links to capture</p>
+    <small>This template contains no valid HTTP/HTTPS links</small>
+  </ng-template>
+</div>
+
+            <div class="snap-item" *ngFor="let s of snaps; trackBy: trackBySnap">
+              <div class="snap-preview" (click)="openImageModal(s)" style="cursor: pointer;">
+                <ng-container *ngIf="s.dataUrl; else snapLoading">
+                  <img [src]="s.dataUrl" alt="Screenshot" />
+                </ng-container>
+                <ng-template #snapLoading>
+                  <div class="snap-loading" *ngIf="!s.error">
+                    <mat-progress-spinner diameter="24" mode="indeterminate"></mat-progress-spinner>
+                  </div>
+                  <div class="snap-error" *ngIf="s.error">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <span>Failed</span>
+                  </div>
+                </ng-template>
+              </div>
+              <div class="snap-info">
+                <div class="snap-url-container">
+                  <div class="snap-url-row">
+                    <a [href]="getOriginalUrl(s)" target="_blank" class="snap-url">
+                      {{ getOriginalUrl(s) }}
+                    </a>
+
+                  
+                    <button 
+                      class="edit-snap-btn"
+                      (click)="onEditSnap(s)"
+                      matTooltip="Edit URL">
+                      <mat-icon>edit</mat-icon>
+                    </button>
+                  </div>
+                  
+                  <!-- ✅ FIXED: Only show status when loaded (has dataUrl) or errored (has error) -->
+                  <div class="snap-meta" *ngIf="s.dataUrl || s.error">
+                    <span class="status-badge" [class.ok]="s.ok" [class.fail]="!s.ok">
+                      {{ s.ok ? 'OK' : 'Failed' }}
+                      <ng-container *ngIf="s.status"> · {{ s.status }}</ng-container>
+                    </span>
+                  </div>
+                </div>
+                
+                <!-- ✅ Inline edit input with Replace (dummy) and Retest buttons + Enter key support -->
+                <div class="snap-edit-input" *ngIf="isSnapInEditMode(s)">
+  <!-- URL Info Labels -->
+  <div class="url-info-labels">
+    <div class="url-label-row">
+      <span class="url-label-title">Original Link:</span>
+      <span class="url-label-value">{{ getOriginalUrl(s) }}</span>
+    </div>
+    <div class="url-label-row" *ngIf="hasBeenRetested(s)">
+      <span class="url-label-title">Latest Tested Link:</span>
+      <span class="url-label-value success">{{ getLatestTestedUrl(s) }}</span>
+    </div>
+  </div>
+  
+  <input 
+  type="text"
+  placeholder="Paste or type new URL here"
+  [(ngModel)]="editInputValue"
+  (keydown)="onEditInputKeyDown($event, s, editUrlInput)"
+  #editUrlInput />
+  
+  <!-- ✅ Replace button - NOW FUNCTIONAL -->
+  <button 
+    mat-stroked-button 
+    class="replace-btn"
+    (click)="onReplaceSnap(s, editUrlInput)"
+    [disabled]="!canReplace(s)">
+    Replace
+  </button>
+  
+  <!-- ✅ Retest button -->
+<!-- ✅ Retest button -->
+<!-- ✅ Retest button -->
+<button
+  class="retest-btn-inline"
+  (click)="onRetestUrl(s, editUrlInput.value)"
+  [disabled]="isSnapping(s)">
+  <mat-progress-spinner
+    *ngIf="isSnapping(s)"
+    diameter="16"
+    mode="indeterminate">
+  </mat-progress-spinner>
+  <span *ngIf="!isSnapping(s)">Test</span>
+</button>
+
+      <button 
+      mat-stroked-button
+      class="cancel-btn"
+      (click)="onCancelEdit(s)"
+      color="warn">
+      Cancel
+    </button>
+</div>
+
+
+                
+                <!-- Regular Retest button (when not in edit mode) -->
+<!-- Regular Retest button (when not in edit mode) -->
+<!-- Regular Retest button (when not in edit mode) -->
+<button
+  *ngIf="!isSnapInEditMode(s)"
+  class="retest-btn"
+  (click)="onRetestUrl(s)"
+  [disabled]="isSnapping(s)">
+  <mat-progress-spinner
+    *ngIf="isSnapping(s)"
+    diameter="16"
+    mode="indeterminate">
+  </mat-progress-spinner>
+  <span *ngIf="!isSnapping(s)">Retest</span>
+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Validation -->
+      <div class="validation-col">
+        <!-- REPLACE the .col-header div in screenshots-col with this: -->
+<div class="col-header">
+  <h4>
+    <span class="header-text-full">Link Integrity Check</span>
+    <span class="header-text-short">Matrix</span>
+  </h4>
+  
+  <!-- Move submit button INSIDE col-header
+  <div class="submit-template-wrapper">
+    <button
+      mat-raised-button
+      class="submit-template-btn"
+      (click)="openTemplateModal()"
+      [disabled]="finalizing$ | async">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <span class="btn-text-full">Submit Template</span>
+      <span class="btn-text-short">Submit</span>
+    </button>
+  </div> -->
+</div> 
+
+        <div class="upload-section">
+          <label class="upload-label">
+            <input type="file" accept=".csv,.xlsx,.xls" (change)="onValidLinksUpload($event)" hidden />
+            <div class="upload-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              <span>Upload CSV/Excel</span>
+              <small>Must have "valid_links" column</small>
+            </div>
+          </label>
+
+          <div *ngIf="(validLinks$ | async) as vlinks" class="upload-status">
+            <div *ngIf="vlinks.length" class="status-success">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              {{ vlinks.length }} valid link(s) loaded
+            </div>
+          </div>
+        </div>
+
+        <div class="validation-results" *ngIf="(linkChecks$ | async) as checks">
+          <div *ngIf="checks.length" class="results-header">
+            <h5>Validation Results</h5>
+            <span class="count">{{ checks.length }} link(s)</span>
+          </div>
+
+          <div class="validation-grid" *ngIf="checks.length">
+            <div class="validation-item" *ngFor="let c of checks"
+                 [class.valid]="c.inHtml && c.inFile"
+                 [class.invalid]="!c.inHtml || !c.inFile">
+              <div class="validation-status">
+                <svg *ngIf="c.inHtml && c.inFile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <svg *ngIf="!c.inHtml && c.inFile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <svg *ngIf="c.inHtml && !c.inFile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+              </div>
+              <div class="validation-content">
+                <a [href]="c.url" target="_blank" class="validation-url">{{ c.url }}</a>
+                <div class="validation-reason" *ngIf="c.inFile && !c.inHtml">Missing from HTML</div>
+                <div class="validation-reason" *ngIf="!c.inFile && c.inHtml">Extra link in HTML</div>
+              </div>
+            </div>
+          </div>
+
+          <div *ngIf="!checks.length" class="no-results">
+            Upload a file to see validation results
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Fullscreen Image Modal -->
+  <div class="image-modal" *ngIf="selectedImage" (click)="closeImageModal()">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <button class="modal-close" (click)="closeImageModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <img [src]="selectedImage.dataUrl" [alt]="selectedImage.url" />
+      <div class="modal-info">
+        <a [href]="selectedImage.url" target="_blank">{{ selectedImage.url }}</a>
+      </div>
+    </div>
+  </div>
+  <!-- Template Information Modal -->
+<!-- Template Information Modal -->
+<div class="template-modal" *ngIf="templateModalOpen$ | async" @fadeInOut>
+  <div class="template-modal-backdrop"></div>
+  <div class="template-modal-content">
+    <button class="template-modal-close" (click)="closeTemplateModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+    
+    <div class="template-modal-header">
+      <h2>Template Pre-Launch Review</h2>
+      <p>Comprehensive validation before sending to Mailchimp</p>
+    </div>
+    
+    <div class="template-modal-body">
+      <!-- Two Column Grid -->
+      <div class="modal-grid">
+        
+        <!-- ✅ LEFT SECTION: Content Review -->
+        <div class="modal-left-section">
+          <div class="section-card">
+            <div class="card-header">
+              <div class="header-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+              <div class="header-text">
+                <h3>Content Review</h3>
+                <p>AI-powered validation</p>
+              </div>
+            </div>
+
+            <!-- Loading State -->
+            <div class="check-loading" *ngIf="grammarCheckLoading$ | async">
+              <div class="rocket-animation">
+                <div class="rocket">
+  <svg viewBox="0 0 64 64" fill="currentColor">
+    <!-- Rocket body -->
+    <path d="M32 4 L32 4 C32 4 40 12 40 24 L40 44 C40 48 36 52 32 52 C28 52 24 48 24 44 L24 24 C24 12 32 4 32 4 Z" fill="white"/>
+    
+    <!-- Window -->
+    <circle cx="32" cy="20" r="6" fill="#a855f7"/>
+    
+    <!-- Left fin -->
+    <path d="M24 36 L18 48 L24 44 Z" fill="#d8b4fe"/>
+    
+    <!-- Right fin -->
+    <path d="M40 36 L46 48 L40 44 Z" fill="#d8b4fe"/>
+    
+    <!-- Fire/exhaust -->
+    <path d="M28 52 L28 58 L32 62 L36 58 L36 52" fill="#fbbf24" opacity="0.8"/>
+    <path d="M30 52 L30 56 L32 60 L34 56 L34 52" fill="#f59e0b" opacity="0.9"/>
+  </svg>
+</div>
+                <div class="stars">
+                  <span class="star star-1">✨</span>
+                  <span class="star star-2">✨</span>
+                  <span class="star star-3">✨</span>
+                  <span class="star star-4">⭐</span>
+                  <span class="star star-5">💫</span>
+                </div>
+              </div>
+              <div class="loading-text">
+                <h4>Analyzing your template...</h4>
+                <p>Our AI is checking content quality and accuracy</p>
+              </div>
+            </div>
+
+            <!-- Results State -->
+            <div class="check-results" *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) as result">
+              
+              <!-- No Errors -->
+              <div class="result-success" *ngIf="!result.hasErrors">
+                <div class="success-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <h4>Perfect! No grammar issues found</h4>
+                <p>Your template is ready to launch 🎉</p>
+              </div>
+
+              <!-- Has Errors -->
+              <div class="result-errors" *ngIf="result.hasErrors">
+                <div class="error-header">
+                  <div class="error-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                  </div>
+                  <div class="error-text">
+                    <h4>Found {{ result.count }} grammar issue{{ result.count > 1 ? 's' : '' }}</h4>
+                    <p class="error-message">Please use the chatbot or editor to fix these issues</p>
+                  </div>
+                </div>
+
+                <!-- Mistakes List -->
+                <div class="mistakes-list">
+                  <div class="mistake-item" *ngFor="let mistake of result.mistakes; let i = index">
+                    <div class="mistake-number">{{ i + 1 }}</div>
+                    <div class="mistake-content">
+                      <div class="mistake-word">
+                        <span class="wrong-word">{{ mistake.word }}</span>
+                        <svg class="arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                        </svg>
+                        <span class="correct-word">{{ mistake.suggestion }}</span>
+                      </div>
+                      <div class="mistake-context">{{ mistake.context }}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                  <button mat-stroked-button class="use-chatbot-btn" (click)="closeTemplateModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                    </svg>
+                    Use AI Chatbot
+                  </button>
+                  <button mat-stroked-button class="use-editor-btn" (click)="navigateToVisualEditorWithGrammar()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                    Open Editor
+                  </button>
+                </div>
+              </div>
+
+              <!-- Retry Button -->
+              <button mat-button class="retry-btn" (click)="retryGrammarCheck()">
+                <!-- <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 4v6h6M23 20v-6h-6"/>
+                  <path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
+                </svg> -->
+                Re-check
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ✅ RIGHT SECTION: Placeholder -->
+        <!-- âœ… RIGHT SECTION: Campaign Submit Trigger -->
+<div class="modal-right-section">
+  <div class="section-card campaign-trigger-card">
+    <div class="card-header">
+      <div class="header-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h3>Ready to Submit?</h3>
+        <p>Send your template to Mailchimp</p>
+      </div>
+    </div>
+
+    <div class="campaign-trigger-content">
+<div class="trigger-info">
+  <!-- ✅ Content Validation Status -->
+  <div class="info-item" 
+       [class.completed]="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && !(grammarCheckResult$ | async)!.hasErrors"
+       [class.pending]="(grammarCheckLoading$ | async) || !(grammarCheckResult$ | async)"
+       [class.error]="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors">
+    <!-- Success Icon -->
+    <svg *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === false" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <!-- Warning Icon -->
+    <svg *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === true" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+    <!-- Loading Icon -->
+    <svg *ngIf="(grammarCheckLoading$ | async) || !(grammarCheckResult$ | async)" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10" opacity="0.3"/>
+    </svg>
+    <span>
+      <ng-container *ngIf="grammarCheckLoading$ | async">Validating content...</ng-container>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === false">Content validated</ng-container>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors === true">
+        Grammar issues ({{ (grammarCheckResult$ | async)!.count }})
+      </ng-container>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && !(grammarCheckResult$ | async)">Validation pending</ng-container>
+    </span>
+  </div>
+
+  <!-- ✅ Template Ready Status -->
+  <div class="info-item" 
+       [class.completed]="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && !(grammarCheckResult$ | async)!.hasErrors"
+       [class.pending]="(grammarCheckLoading$ | async) || !(grammarCheckResult$ | async)"
+       [class.error]="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors">
+    <!-- Success Icon -->
+    <svg *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && !(grammarCheckResult$ | async)!.hasErrors" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <!-- Warning Icon -->
+    <svg *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+    <!-- Loading Icon -->
+    <svg *ngIf="(grammarCheckLoading$ | async) || !(grammarCheckResult$ | async)" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10" opacity="0.3"/>
+    </svg>
+    <span>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && !(grammarCheckResult$ | async)!.hasErrors">Template ready</ng-container>
+      <ng-container *ngIf="!(grammarCheckLoading$ | async) && (grammarCheckResult$ | async) && (grammarCheckResult$ | async)!.hasErrors">Template needs fixes</ng-container>
+      <ng-container *ngIf="(grammarCheckLoading$ | async) || !(grammarCheckResult$ | async)">Checking template...</ng-container>
+    </span>
+  </div>
+
+  <!-- ✅ Link Validation Status -->
+  <div class="info-item" 
+       [class.completed]="hasValidLinks() && (snaps$ | async) && (snaps$ | async)!.length > 0"
+       [class.pending]="hasValidLinks() && (!(snaps$ | async) || (snaps$ | async)!.length === 0)"
+       [class.not-applicable]="!hasValidLinks()">
+    <!-- Success Icon -->
+    <svg *ngIf="hasValidLinks() && (snaps$ | async) && (snaps$ | async)!.length > 0" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <!-- Pending Icon -->
+    <svg *ngIf="hasValidLinks() && (!(snaps$ | async) || (snaps$ | async)!.length === 0)" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10" opacity="0.3"/>
+    </svg>
+    <!-- Not Applicable Icon -->
+    <svg *ngIf="!hasValidLinks()" 
+         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+    </svg>
+    <span>
+      <ng-container *ngIf="!hasValidLinks()">
+        No links to validate
+      </ng-container>
+      <ng-container *ngIf="hasValidLinks() && (snaps$ | async) && (snaps$ | async)!.length > 0">
+        Links captured ({{ (snaps$ | async)!.length }})
+      </ng-container>
+      <ng-container *ngIf="hasValidLinks() && (!(snaps$ | async) || (snaps$ | async)!.length === 0)">
+        Links not validated ({{ getValidLinkCount() }} detected)
+      </ng-container>
+    </span>
+  </div>
+</div>
+      <button 
+        mat-raised-button
+        class="proceed-to-campaign-btn"
+        (click)="proceedToCampaignSubmit()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+        </svg>
+        <span>Proceed to Campaign Setup</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</div>

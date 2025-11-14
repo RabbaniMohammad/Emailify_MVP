@@ -1,0 +1,461 @@
+<div class="admin-dashboard">
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="header-content">
+      <div class="header-text">
+        <h1>
+          Admin Dashboard
+          <!-- Red Dot Notification for Pending Approvals -->
+          <span class="notification-dot-header" *ngIf="(pendingCount$ | async) as count" [attr.data-count]="count"></span>
+        </h1>
+        <p>Manage users and oversee system operations</p>
+      </div>
+      <div class="header-actions" *ngIf="currentUser$ | async as currentUser">
+        <div class="current-user">
+          <img 
+            [src]="getAvatarSrc(currentUser)" 
+            [alt]="currentUser.name" 
+            (error)="handleImageError($event, currentUser.name)" 
+            loading="lazy"
+            referrerpolicy="no-referrer"
+            crossorigin="anonymous"
+            class="user-avatar">
+          <div class="user-info">
+            <span class="user-name">{{ currentUser.name }}</span>
+            <span class="user-role" [ngClass]="getRoleBadgeClass(currentUser.orgRole)">
+              {{ currentUser.orgRole === 'super_admin' ? 'Super Admin' : currentUser.orgRole === 'admin' ? 'Admin' : 'Member' }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <mat-tab-group class="admin-tabs" animationDuration="300ms">
+    <!-- Pending Approvals Tab -->
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <mat-icon>pending_actions</mat-icon>
+        <span>Pending Approvals</span>
+        <span class="tab-count" *ngIf="(pendingUsers$ | async)?.length as count">{{ count }}</span>
+      </ng-template>
+
+      <div class="tab-content">
+        <div *ngIf="loading" class="loading-state">
+          <mat-spinner diameter="48"></mat-spinner>
+          <p>Loading users...</p>
+        </div>
+
+        <div *ngIf="!loading && (pendingUsers$ | async) as users" class="users-table-container">
+          <div *ngIf="users.length === 0" class="empty-state">
+            <mat-icon>check_circle</mat-icon>
+            <h3>No Pending Approvals</h3>
+            <p>All users have been reviewed</p>
+          </div>
+
+          <table mat-table [dataSource]="users" *ngIf="users.length > 0" class="users-table">
+            <!-- Picture Column -->
+            <ng-container matColumnDef="picture">
+              <th mat-header-cell *matHeaderCellDef></th>
+              <td mat-cell *matCellDef="let user">
+                <img 
+                  [src]="getAvatarSrc(user)" 
+                  [alt]="user.name" 
+                  (error)="handleImageError($event, user.name)" 
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                  crossorigin="anonymous"
+                  class="table-avatar">
+              </td>
+            </ng-container>
+
+            <!-- Name Column -->
+            <ng-container matColumnDef="name">
+              <th mat-header-cell *matHeaderCellDef>Name</th>
+              <td mat-cell *matCellDef="let user">
+                <div class="user-cell">
+                  <span class="user-name-text">
+                    {{ user.name }}
+                    <span class="you-badge" *ngIf="isCurrentUser(user)">(you)</span>
+                  </span>
+                </div>
+              </td>
+            </ng-container>
+
+            <!-- Email Column -->
+            <ng-container matColumnDef="email">
+              <th mat-header-cell *matHeaderCellDef>Email</th>
+              <td mat-cell *matCellDef="let user">{{ user.email }}</td>
+            </ng-container>
+
+            <!-- Role Column -->
+            <ng-container matColumnDef="role">
+              <th mat-header-cell *matHeaderCellDef>Role</th>
+              <td mat-cell *matCellDef="let user">
+                <mat-chip [ngClass]="getRoleBadgeClass(user.orgRole)">
+                  {{ user.orgRole === 'super_admin' ? 'Super Admin' : user.orgRole === 'admin' ? 'Admin' : 'Member' }}
+                </mat-chip>
+              </td>
+            </ng-container>
+
+            <!-- Status Column -->
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>Status</th>
+              <td mat-cell *matCellDef="let user">
+                <mat-chip class="status-chip pending">
+                  Pending Approval
+                </mat-chip>
+              </td>
+            </ng-container>
+
+            <!-- Created At Column -->
+            <ng-container matColumnDef="createdAt">
+              <th mat-header-cell *matHeaderCellDef>Requested</th>
+              <td mat-cell *matCellDef="let user">{{ formatDate(user.createdAt) }}</td>
+            </ng-container>
+
+            <!-- Actions Column -->
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>Actions</th>
+              <td mat-cell *matCellDef="let user">
+                <div class="approval-actions">
+                  <button 
+                    mat-raised-button 
+                    color="primary" 
+                    (click)="approveUser(user)" 
+                    class="approve-action">
+                    <mat-icon>check</mat-icon>
+                    Approve
+                  </button>
+                  <button 
+                    mat-stroked-button 
+                    color="warn" 
+                    (click)="rejectUser(user)"
+                    class="reject-action">
+                    <mat-icon>close</mat-icon>
+                    Reject
+                  </button>
+                </div>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          </table>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- All Users Tab -->
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <mat-icon>people</mat-icon>
+        <span>All Users</span>
+        <span class="tab-count" *ngIf="(allUsers$ | async)?.length as count">{{ count }}</span>
+      </ng-template>
+
+      <div class="tab-content">
+        <div *ngIf="loading" class="loading-state">
+          <mat-spinner diameter="48"></mat-spinner>
+          <p>Loading users...</p>
+        </div>
+
+        <div *ngIf="!loading && (allUsers$ | async) as users" class="users-table-container">
+          <table mat-table [dataSource]="users" class="users-table">
+            <!-- Picture Column -->
+            <ng-container matColumnDef="picture">
+              <th mat-header-cell *matHeaderCellDef></th>
+              <td mat-cell *matCellDef="let user">
+                <img 
+                  [src]="getAvatarSrc(user)" 
+                  [alt]="user.name" 
+                  (error)="handleImageError($event, user.name)" 
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                  crossorigin="anonymous"
+                  class="table-avatar">
+              </td>
+            </ng-container>
+
+            <!-- Name Column -->
+            <ng-container matColumnDef="name">
+              <th mat-header-cell *matHeaderCellDef>Name</th>
+              <td mat-cell *matCellDef="let user">
+                <div class="user-cell">
+                  <span class="user-name-text">
+                    {{ user.name }}
+                    <span class="you-badge" *ngIf="isCurrentUser(user)">(you)</span>
+                  </span>
+                </div>
+              </td>
+            </ng-container>
+
+            <!-- Email Column -->
+            <ng-container matColumnDef="email">
+              <th mat-header-cell *matHeaderCellDef>Email</th>
+              <td mat-cell *matCellDef="let user">{{ user.email }}</td>
+            </ng-container>
+
+            <!-- Role Column -->
+            <ng-container matColumnDef="role">
+              <th mat-header-cell *matHeaderCellDef>Role</th>
+              <td mat-cell *matCellDef="let user">
+                <mat-chip [ngClass]="getRoleBadgeClass(user.orgRole)">
+                  {{ user.orgRole === 'super_admin' ? 'Super Admin' : user.orgRole === 'admin' ? 'Admin' : 'Member' }}
+                </mat-chip>
+              </td>
+            </ng-container>
+
+            <!-- Status Column -->
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>Status</th>
+              <td mat-cell *matCellDef="let user">
+                <mat-chip [ngClass]="getStatusBadgeClass(user)">
+                  {{ getStatusText(user) }}
+                </mat-chip>
+              </td>
+            </ng-container>
+
+            <!-- Created At Column -->
+            <ng-container matColumnDef="createdAt">
+              <th mat-header-cell *matHeaderCellDef>Joined</th>
+              <td mat-cell *matCellDef="let user">{{ formatDate(user.createdAt) }}</td>
+            </ng-container>
+
+            <!-- Actions Column -->
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>Actions</th>
+              <td mat-cell *matCellDef="let user">
+                <!-- For super admin - show dash only -->
+                <div class="action-menu" *ngIf="user.orgRole === 'super_admin'">
+                  <span class="no-actions">—</span>
+                </div>
+
+                <!-- For all other users - show dropdown menu -->
+                <ng-container *ngIf="user.orgRole !== 'super_admin'">
+                  <div class="action-menu" *ngIf="currentUser$ | async as currentUser">
+                    <button 
+                      mat-icon-button 
+                      [matMenuTriggerFor]="menu"
+                      class="menu-trigger">
+                      <mat-icon>more_vert</mat-icon>
+                    </button>
+                    
+                    <mat-menu #menu="matMenu" class="user-actions-menu">
+                      <!-- Approve (if pending) -->
+                      <button 
+                        mat-menu-item 
+                        *ngIf="!user.isApproved"
+                        (click)="approveUser(user)">
+                        <mat-icon class="menu-icon success">check_circle</mat-icon>
+                        <span>Approve User</span>
+                      </button>
+
+                      <!-- Promote (super admin only) -->
+                      <button 
+                        mat-menu-item
+                        *ngIf="isSuperAdmin(currentUser) && user.orgRole === 'member' && user.isApproved"
+                        (click)="promoteToAdmin(user)">
+                        <mat-icon class="menu-icon primary">arrow_upward</mat-icon>
+                        <span>Promote to Admin</span>
+                      </button>
+
+                      <!-- Demote (super admin only) -->
+                      <button 
+                        mat-menu-item
+                        *ngIf="isSuperAdmin(currentUser) && user.orgRole === 'admin'"
+                        (click)="demoteAdmin(user)">
+                        <mat-icon class="menu-icon secondary">arrow_downward</mat-icon>
+                        <span>Demote to Member</span>
+                      </button>
+
+                      <!-- Reactivate (if inactive) -->
+                      <button 
+                        mat-menu-item
+                        *ngIf="!user.isActive"
+                        (click)="reactivateUser(user)">
+                        <mat-icon class="menu-icon success">check_circle</mat-icon>
+                        <span>Reactivate</span>
+                      </button>
+
+                      <!-- Deactivate -->
+                      <button 
+                        mat-menu-item
+                        *ngIf="user.isActive"
+                        (click)="deactivateUser(user)">
+                        <mat-icon class="menu-icon warning">block</mat-icon>
+                        <span>Deactivate</span>
+                      </button>
+
+                      <!-- Delete (super admin only) -->
+                      <button 
+                        mat-menu-item
+                        *ngIf="isSuperAdmin(currentUser)"
+                        (click)="deleteUser(user)"
+                        class="danger-action">
+                        <mat-icon class="menu-icon danger">delete_forever</mat-icon>
+                        <span>Delete User</span>
+                      </button>
+                    </mat-menu>
+                  </div>
+                </ng-container>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          </table>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- Organization Settings Tab (Super Admin & Admin only) -->
+    <mat-tab *ngIf="(currentUser$ | async)?.orgRole === 'super_admin' || (currentUser$ | async)?.orgRole === 'admin'">
+      <ng-template mat-tab-label>
+        <mat-icon>settings</mat-icon>
+        <span>Organization Settings</span>
+      </ng-template>
+
+      <div class="tab-content settings-tab">
+        <div class="settings-section">
+          <div class="section-header">
+            <h2>
+              <mat-icon>email</mat-icon>
+              Email Sender Configuration
+            </h2>
+            <p class="section-description">
+              Configure the sender email and name that will appear in all campaigns sent from this organization.
+            </p>
+          </div>
+
+          <div class="sender-settings-card">
+            <div *ngIf="loadingSenderSettings" class="loading-state">
+              <mat-spinner diameter="32"></mat-spinner>
+              <p>Loading settings...</p>
+            </div>
+
+            <!-- Display Mode (when configured and not editing) -->
+            <div *ngIf="!loadingSenderSettings && senderSettingsConfigured && !editingSenderSettings" class="display-mode">
+              <div class="settings-display">
+                <div class="display-item">
+                  <div class="display-label">
+                    <mat-icon>alternate_email</mat-icon>
+                    <span>Sender Email Address</span>
+                  </div>
+                  <div class="display-value">{{ fromEmail }}</div>
+                </div>
+
+                <div class="display-item">
+                  <div class="display-label">
+                    <mat-icon>person</mat-icon>
+                    <span>Sender Name</span>
+                  </div>
+                  <div class="display-value">{{ fromName }}</div>
+                </div>
+              </div>
+
+              <div class="display-actions">
+                <button 
+                  mat-raised-button 
+                  color="primary" 
+                  (click)="enableEditSenderSettings()"
+                  class="edit-button">
+                  <mat-icon>edit</mat-icon>
+                  Edit Sender Settings
+                </button>
+              </div>
+
+              <div class="info-box success">
+                <mat-icon>check_circle</mat-icon>
+                <div class="info-content">
+                  <h4>✅ Sender Settings Configured</h4>
+                  <p>Your organization's sender email and name are set up. Make sure your email domain is verified before sending campaigns.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Edit Mode (when not configured or editing) -->
+            <form *ngIf="!loadingSenderSettings && (!senderSettingsConfigured || editingSenderSettings)" class="sender-form">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Sender Email Address</mat-label>
+                <input 
+                  matInput 
+                  type="email" 
+                  [(ngModel)]="fromEmail" 
+                  name="fromEmail"
+                  placeholder="marketing@yourcompany.com"
+                  required>
+                <mat-icon matPrefix>alternate_email</mat-icon>
+                <mat-hint>Use your organization's domain email (not Gmail, Yahoo, etc.)</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Sender Name</mat-label>
+                <input 
+                  matInput 
+                  type="text" 
+                  [(ngModel)]="fromName" 
+                  name="fromName"
+                  placeholder="Your Company Name"
+                  required>
+                <mat-icon matPrefix>person</mat-icon>
+                <mat-hint>This name will appear as the sender in recipient inboxes</mat-hint>
+              </mat-form-field>
+
+              <div class="info-box warning">
+                <mat-icon>warning</mat-icon>
+                <div class="info-content">
+                  <h4>⚠️  Domain Verification Required</h4>
+                  <p>
+                    Your email domain must be verified before you can send campaigns. 
+                    <br>Contact your system administrator or check your email service provider settings.
+                  </p>
+                  <ul>
+                    <li>Cannot use generic providers (Gmail, Yahoo, Hotmail, etc.)</li>
+                    <li>Domain verification typically takes 24-48 hours</li>
+                    <li>You may need to add DNS TXT or CNAME records to your domain</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button 
+                  mat-raised-button 
+                  color="primary" 
+                  (click)="saveSenderSettings()"
+                  [disabled]="savingSenderSettings || !fromEmail || !fromName"
+                  class="save-button">
+                  <mat-icon *ngIf="!savingSenderSettings">save</mat-icon>
+                  <mat-spinner *ngIf="savingSenderSettings" diameter="20"></mat-spinner>
+                  {{ savingSenderSettings ? 'Saving...' : 'Save Sender Settings' }}
+                </button>
+                
+                <button 
+                  *ngIf="senderSettingsConfigured"
+                  mat-button 
+                  (click)="cancelEditSenderSettings()"
+                  [disabled]="savingSenderSettings"
+                  class="cancel-button">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- Organization Management Tab (Only for Camply Organization Super Admin) -->
+    <mat-tab *ngIf="isOwnerOrgSuperAdmin(currentUser$ | async)">
+      <ng-template mat-tab-label>
+        <mat-icon>business</mat-icon>
+        <span>Organizations</span>
+      </ng-template>
+
+      <div class="tab-content org-management-tab">
+        <app-organization-management></app-organization-management>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</div>

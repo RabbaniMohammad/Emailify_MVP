@@ -1,0 +1,289 @@
+<div class="campaign-detail-page">
+  <!-- Loading State -->
+  <div *ngIf="loading" class="loading-container">
+    <mat-spinner diameter="50"></mat-spinner>
+    <p>Loading campaign report...</p>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="error && !loading" class="error-container">
+    <mat-icon>error_outline</mat-icon>
+    <h2>{{ error }}</h2>
+    <button mat-raised-button (click)="goBack()">
+      <mat-icon>arrow_back</mat-icon>
+      Back to Dashboard
+    </button>
+  </div>
+
+  <!-- Report Content -->
+  <div *ngIf="reportData && !loading" class="report-content">
+    
+    <!-- Header -->
+    <div class="report-header">
+      <button mat-icon-button (click)="goBack()" class="back-btn">
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+      <div class="campaign-title">
+        <h1>{{ reportData.campaign.name }}</h1>
+        <p class="campaign-subject" *ngIf="reportData.campaign.subject">
+          {{ reportData.campaign.subject }}
+        </p>
+        <p class="campaign-meta">
+          <mat-chip class="status-sent">{{ reportData.campaign.status }}</mat-chip>
+          <span class="separator">•</span>
+          <span>Sent {{ formatDate(reportData.campaign.sentAt) }}</span>
+          <span class="separator">•</span>
+          <span>{{ formatNumber(reportData.campaign.recipientsCount) }} recipients</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Key Metrics Cards -->
+    <div class="metrics-grid">
+      <!-- Opens Card -->
+      <mat-card class="metric-card">
+        <mat-card-content>
+          <div class="metric-icon opens-icon">
+            <mat-icon>visibility</mat-icon>
+          </div>
+          <div class="metric-value">{{ formatPercent(reportData.performance.opens.rate) }}</div>
+          <div class="metric-label">Open Rate</div>
+          <div class="metric-detail">
+            {{ formatNumber(reportData.performance.opens.unique) }} unique opens
+            ({{ formatNumber(reportData.performance.opens.total) }} total)
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- Clicks Card -->
+      <mat-card class="metric-card">
+        <mat-card-content>
+          <div class="metric-icon clicks-icon">
+            <mat-icon>touch_app</mat-icon>
+          </div>
+          <div class="metric-value">{{ formatPercent(reportData.performance.clicks.rate) }}</div>
+          <div class="metric-label">Click Rate</div>
+          <div class="metric-detail">
+            {{ formatNumber(reportData.performance.clicks.unique) }} unique clicks
+            ({{ formatNumber(reportData.performance.clicks.total) }} total)
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- Delivery Card -->
+      <mat-card class="metric-card">
+        <mat-card-content>
+          <div class="metric-icon delivery-icon">
+            <mat-icon>send</mat-icon>
+          </div>
+          <div class="metric-value">{{ formatNumber(reportData.performance.delivered) }}</div>
+          <div class="metric-label">Delivered</div>
+          <div class="metric-detail">
+            of {{ formatNumber(reportData.performance.emailsSent) }} sent
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- Bounces Card -->
+      <mat-card class="metric-card">
+        <mat-card-content>
+          <div class="metric-icon bounces-icon">
+            <mat-icon>report_problem</mat-icon>
+          </div>
+          <div class="metric-value">{{ formatPercent(reportData.performance.bounces.rate) }}</div>
+          <div class="metric-label">Bounce Rate</div>
+          <div class="metric-detail">
+            {{ formatNumber(reportData.performance.bounces.total) }} bounces
+            ({{ formatNumber(reportData.performance.bounces.hard) }} hard)
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+
+    <!-- Tabs for Detailed Data -->
+    <mat-tab-group class="report-tabs">
+      
+      <!-- Performance Over Time Tab -->
+      <mat-tab label="Performance Over Time">
+        <div class="tab-content">
+          <mat-card *ngIf="lineChartData.datasets && lineChartData.datasets.length > 0">
+            <mat-card-header>
+              <mat-card-title>24 Hour Performance Snapshot</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="chart-container">
+                <canvas baseChart
+                  [data]="lineChartData"
+                  [options]="lineChartOptions"
+                  [type]="lineChartType">
+                </canvas>
+              </div>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card *ngIf="!lineChartData.datasets || lineChartData.datasets.length === 0" class="empty-state">
+            <mat-card-content>
+              <mat-icon>show_chart</mat-icon>
+              <p>Performance data over time is not available yet</p>
+              <p class="detail">Chart data will be available after the campaign has been running for some time</p>
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </mat-tab>
+
+      <!-- Click Performance Tab -->
+      <mat-tab label="Click Performance">
+        <div class="tab-content">
+          <mat-card *ngIf="reportData.clickedLinks.length > 0">
+            <mat-card-header>
+              <mat-card-title>Top Clicked Links</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <table mat-table [dataSource]="reportData.clickedLinks" class="links-table">
+                
+                <ng-container matColumnDef="url">
+                  <th mat-header-cell *matHeaderCellDef>URL</th>
+                  <td mat-cell *matCellDef="let link" class="url-cell">
+                    <a [href]="link.url" target="_blank">{{ link.url }}</a>
+                  </td>
+                </ng-container>
+
+                <ng-container matColumnDef="uniqueClicks">
+                  <th mat-header-cell *matHeaderCellDef>Unique Clicks</th>
+                  <td mat-cell *matCellDef="let link">{{ formatNumber(link.uniqueClicks) }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="totalClicks">
+                  <th mat-header-cell *matHeaderCellDef>Total Clicks</th>
+                  <td mat-cell *matCellDef="let link">{{ formatNumber(link.totalClicks) }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="percentage">
+                  <th mat-header-cell *matHeaderCellDef>Click %</th>
+                  <td mat-cell *matCellDef="let link">{{ formatPercent(link.clickPercentage) }}</td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="linkColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: linkColumns;"></tr>
+              </table>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card *ngIf="reportData.clickedLinks.length === 0" class="empty-state">
+            <mat-card-content>
+              <mat-icon>link_off</mat-icon>
+              <p>No clicks recorded yet</p>
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </mat-tab>
+
+      <!-- Geographic Data Tab -->
+      <mat-tab label="Top Locations">
+        <div class="tab-content">
+          <mat-card *ngIf="reportData.topLocations.length > 0">
+            <mat-card-header>
+              <mat-card-title>Opens by Location</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <table mat-table [dataSource]="reportData.topLocations" class="locations-table">
+                
+                <ng-container matColumnDef="country">
+                  <th mat-header-cell *matHeaderCellDef>Country</th>
+                  <td mat-cell *matCellDef="let loc">
+                    {{ loc.countryName || loc.country }}
+                  </td>
+                </ng-container>
+
+                <ng-container matColumnDef="region">
+                  <th mat-header-cell *matHeaderCellDef>Region</th>
+                  <td mat-cell *matCellDef="let loc">
+                    {{ loc.regionName || loc.region || 'N/A' }}
+                  </td>
+                </ng-container>
+
+                <ng-container matColumnDef="opens">
+                  <th mat-header-cell *matHeaderCellDef>Opens</th>
+                  <td mat-cell *matCellDef="let loc">{{ formatNumber(loc.opens) }}</td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="locationColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: locationColumns;"></tr>
+              </table>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card *ngIf="reportData.topLocations.length === 0" class="empty-state">
+            <mat-card-content>
+              <mat-icon>location_off</mat-icon>
+              <p>No location data available</p>
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </mat-tab>
+
+      <!-- Subscriber Activity Tab -->
+      <mat-tab label="Subscriber Activity">
+        <div class="tab-content">
+          <div *ngIf="loadingActivity" class="loading-small">
+            <mat-spinner diameter="30"></mat-spinner>
+            <p>Loading subscriber activity...</p>
+          </div>
+
+          <mat-card *ngIf="!loadingActivity && subscriberActivity.length > 0">
+            <mat-card-header>
+              <mat-card-title>Who Opened & Clicked</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <table mat-table [dataSource]="subscriberActivity" class="activity-table">
+                
+                <ng-container matColumnDef="email">
+                  <th mat-header-cell *matHeaderCellDef>Email</th>
+                  <td mat-cell *matCellDef="let activity">{{ activity.email }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="opened">
+                  <th mat-header-cell *matHeaderCellDef>Opened</th>
+                  <td mat-cell *matCellDef="let activity">
+                    <mat-icon *ngIf="activity.opened" class="status-icon success">check_circle</mat-icon>
+                    <mat-icon *ngIf="!activity.opened" class="status-icon">cancel</mat-icon>
+                  </td>
+                </ng-container>
+
+                <ng-container matColumnDef="clicked">
+                  <th mat-header-cell *matHeaderCellDef>Clicked</th>
+                  <td mat-cell *matCellDef="let activity">
+                    <mat-icon *ngIf="activity.clicked" class="status-icon success">check_circle</mat-icon>
+                    <mat-icon *ngIf="!activity.clicked" class="status-icon">cancel</mat-icon>
+                  </td>
+                </ng-container>
+
+                <ng-container matColumnDef="openCount">
+                  <th mat-header-cell *matHeaderCellDef>Opens</th>
+                  <td mat-cell *matCellDef="let activity">{{ activity.openCount }}</td>
+                </ng-container>
+
+                <ng-container matColumnDef="clickCount">
+                  <th mat-header-cell *matHeaderCellDef>Clicks</th>
+                  <td mat-cell *matCellDef="let activity">{{ activity.clickCount }}</td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="activityColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: activityColumns;"></tr>
+              </table>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card *ngIf="!loadingActivity && subscriberActivity.length === 0" class="empty-state">
+            <mat-card-content>
+              <mat-icon>people_outline</mat-icon>
+              <p>No subscriber activity recorded</p>
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </mat-tab>
+
+    </mat-tab-group>
+
+  </div>
+</div>

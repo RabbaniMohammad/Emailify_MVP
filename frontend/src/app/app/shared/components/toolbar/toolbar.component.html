@@ -1,0 +1,178 @@
+<mat-toolbar class="modern-toolbar">
+  <div class="toolbar-container">
+    <!-- Left: Brand -->
+    <div class="brand-section" (click)="navigateToHome()" title="Go to Home">
+      <div class="brand-icon">
+        <!-- Camply Logo - Brain-Envelope FUSION (WHITE, BIGGER, BOLDER) -->
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 40px; height: 40px;">
+          <defs>
+            <clipPath id="left-half">
+              <rect x="0" y="0" width="24" height="48"/>
+            </clipPath>
+            <clipPath id="right-half">
+              <rect x="24" y="0" width="24" height="48"/>
+            </clipPath>
+          </defs>
+          
+          <!-- Left Side: AI Neural Network (WHITE, BOLDER) -->
+          <g clip-path="url(#left-half)">
+            <path d="M12 16 Q8 18 8 24 Q8 30 12 32" stroke="white" stroke-width="2.5" fill="none"/>
+            <circle cx="14" cy="20" r="1.5" fill="white"/>
+            <circle cx="12" cy="24" r="2" fill="white"/>
+            <circle cx="14" cy="28" r="1.5" fill="white"/>
+            <circle cx="18" cy="22" r="1.3" fill="white" opacity="0.8"/>
+            <circle cx="18" cy="26" r="1.3" fill="white" opacity="0.8"/>
+            <line x1="14" y1="20" x2="18" y2="22" stroke="white" stroke-width="1.2" opacity="0.6"/>
+            <line x1="12" y1="24" x2="18" y2="22" stroke="white" stroke-width="1.2" opacity="0.6"/>
+            <line x1="12" y1="24" x2="18" y2="26" stroke="white" stroke-width="1.2" opacity="0.6"/>
+            <line x1="14" y1="28" x2="18" y2="26" stroke="white" stroke-width="1.2" opacity="0.6"/>
+          </g>
+          
+          <!-- Right Side: Envelope (WHITE, BOLDER) -->
+          <g clip-path="url(#right-half)">
+            <path d="M24 16 L40 16 L40 32 L24 32" stroke="white" stroke-width="2.5" fill="none"/>
+            <path d="M24 16 L32 23 L40 16" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+          
+          <!-- Center fusion point (WHITE, BIGGER) -->
+          <circle cx="24" cy="24" r="2.5" fill="white" opacity="0.4"/>
+          <circle cx="24" cy="24" r="1.5" fill="white"/>
+        </svg>
+      </div>
+      <span class="brand-name">Camply</span>
+    </div>
+
+    <div class="toolbar-spacer"></div>
+
+    <!-- Right: Navigation Arrows + User Menu -->
+    <div class="right-section">
+      <!-- Navigation Arrows -->
+      <div class="nav-arrows">
+        <button class="arrow-btn" (click)="goBack()" [disabled]="!canGoBack()" title="Previous">
+          <mat-icon>arrow_back_ios</mat-icon>
+        </button>
+        <button class="arrow-btn" (click)="goForward()" [disabled]="!canGoForward()" title="Next">
+          <mat-icon>arrow_forward_ios</mat-icon>
+        </button>
+      </div>
+
+      <!-- User Menu -->
+      <div class="user-section" *ngIf="currentUser$ | async as user">
+        <button class="user-menu-btn" [matMenuTriggerFor]="userMenu" #menuTrigger="matMenuTrigger">
+          <div class="user-avatar">
+            <img *ngIf="user.picture" 
+                 [src]="user.picture" 
+                 [alt]="user.name" 
+                 (error)="handleImageError($event, user.name)"
+                 loading="lazy"
+                 referrerpolicy="no-referrer"
+                 crossorigin="anonymous">
+            <div *ngIf="!user.picture" class="avatar-initials">
+              {{ getInitials(user.name) }}
+            </div>
+            <!-- Red Dot Notification for Pending Approvals -->
+            <span class="notification-dot" *ngIf="isAdmin() && (pendingCount$ | async) as count" [attr.data-count]="count"></span>
+          </div>
+          <span class="user-name">{{ user.name }}</span>
+          <mat-icon class="dropdown-icon" [class.open]="menuTrigger.menuOpen">expand_more</mat-icon>
+        </button>
+
+        <mat-menu #userMenu="matMenu" class="modern-user-dropdown" xPosition="before">
+          <!-- Admin Button -->
+          <button 
+            *ngIf="isAdmin()" 
+            mat-menu-item 
+            class="menu-item admin-item"
+            (click)="navigateToAdmin()">
+            <div class="menu-item-icon admin-icon">
+              <mat-icon>admin_panel_settings</mat-icon>
+            </div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">Admin Dashboard</span>
+              <span class="menu-item-subtitle">Manage Users</span>
+            </div>
+            <span class="pending-badge" *ngIf="(pendingCount$ | async) as count">
+              {{ count }}
+            </span>
+          </button>
+
+          <mat-divider *ngIf="isAdmin()"></mat-divider>
+
+            <!-- Generate Template Button ✅ NEW -->
+          <button 
+            mat-menu-item 
+            class="menu-item generate-item"
+            (click)="navigateToGenerate()">
+            <div class="menu-item-icon generate-icon">
+              <mat-icon>auto_awesome</mat-icon>
+            </div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">Generate Template</span>
+              <span class="menu-item-subtitle">Create with AI</span>
+            </div>
+          </button>
+
+          <mat-divider></mat-divider>
+
+          <!-- Visual Editor Button ✅ NEW -->
+        <button 
+          mat-menu-item 
+          class="menu-item visual-editor-item"
+          (click)="navigateTo('/visual-editor')">
+          <div class="menu-item-icon visual-editor-icon">
+            <mat-icon>design_services</mat-icon>
+          </div>
+          <div class="menu-item-content">
+            <span class="menu-item-title">Visual Editor</span>
+            <span class="menu-item-subtitle">Drag & drop designer</span>
+          </div>
+        </button>
+
+        <mat-divider></mat-divider>
+
+          <!-- App Performance Button ✨ NEW -->
+          <button 
+            mat-menu-item 
+            class="menu-item performance-item"
+            (click)="openPerformanceDashboard()">
+            <div class="menu-item-icon performance-icon">
+              <mat-icon>speed</mat-icon>
+            </div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">App Performance</span>
+              <span class="menu-item-subtitle">Cache & storage stats</span>
+            </div>
+          </button>
+
+          <mat-divider></mat-divider>
+
+          <!-- Organization Info Section -->
+          <button 
+            mat-menu-item 
+            class="menu-item org-info-item"
+            (click)="navigateToOrganization()">
+            <div class="menu-item-icon org-icon">
+              <mat-icon>business</mat-icon>
+            </div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">{{ (currentUser$ | async)?.organizationId?.name || 'Unknown Org' }}</span>
+              <span class="menu-item-subtitle">Organization</span>
+            </div>
+          </button>
+
+          <mat-divider></mat-divider>
+
+          <!-- Logout Button -->
+          <button mat-menu-item class="menu-item logout-item" (click)="logout()">
+            <div class="menu-item-icon logout-icon">
+              <mat-icon>logout</mat-icon>
+            </div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">Logout</span>
+            </div>
+          </button>
+        </mat-menu>
+      </div>
+    </div>
+  </div>
+</mat-toolbar>

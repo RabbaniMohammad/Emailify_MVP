@@ -1,0 +1,804 @@
+<div class="campaign-submit-wrapper">
+  
+  <!-- ============================================ -->
+  <!-- BLOCKING OVERLAY FOR MISSING SENDER SETTINGS -->
+  <!-- ============================================ -->
+  <div class="blocking-overlay" *ngIf="!senderSettingsConfigured">
+    <div class="blocking-modal">
+      
+      <!-- Loading State -->
+      <div *ngIf="checkingSenderSettings" class="checking-state">
+        <mat-spinner diameter="48"></mat-spinner>
+        <p class="checking-message">Checking sender settings...</p>
+      </div>
+      
+      <!-- Not Configured State -->
+      <div *ngIf="!checkingSenderSettings" class="not-configured-state">
+        <div class="modal-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </div>
+        <h2>⚠️ Configuration Required</h2>
+        <p class="modal-message">
+          Your organization's <strong>sender email and name</strong> must be configured before you can submit campaigns.
+        </p>
+        <div class="modal-instructions">
+          <h3>What to do:</h3>
+          <ol>
+            <li>Contact your <strong>Organization Administrator</strong></li>
+            <li>Ask them to configure sender settings in the <strong>Admin Dashboard → Organization Settings</strong> tab</li>
+            <li>Once configured, click "Check Again" below</li>
+          </ol>
+        </div>
+        <div class="modal-actions">
+          <button mat-raised-button color="primary" (click)="checkSenderSettings()">
+            <mat-icon>refresh</mat-icon>
+            Check Again
+          </button>
+          <button mat-button (click)="goBackFromBlockedPage()">
+            <mat-icon>arrow_back</mat-icon>
+            Go Back
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Content (disabled when settings not configured) -->
+  <div class="content-wrapper" [class.disabled]="!senderSettingsConfigured">
+  
+  <!-- ============================================ -->
+  <!-- STEP 1: MAILCHIMP AUDIENCE SELECTION -->
+  <!-- ============================================ -->
+  <div class="section-card">
+    <div class="card-header">
+      <div class="header-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h3>Select Audience</h3>
+        <p>Choose your Mailchimp audience list</p>
+      </div>
+      <div class="step-badge">Step 1</div>
+    </div>
+
+    <!-- Loading State -->
+    <div class="loading-state" *ngIf="(audiencesLoading$ | async) === 'loading'">
+      <mat-progress-spinner diameter="32" mode="indeterminate"></mat-progress-spinner>
+      <p>Loading Mailchimp audiences...</p>
+    </div>
+
+    <!-- Error State -->
+    <div class="error-state" *ngIf="(audiencesLoading$ | async) === 'error'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <p>Failed to load audiences</p>
+      <button mat-button (click)="loadMailchimpAudiences()">Retry</button>
+    </div>
+
+    <!-- Audience List -->
+    <div class="audience-list" *ngIf="(audiencesLoading$ | async) === 'success' && audiences.length">
+      <div 
+        class="audience-item"
+        *ngFor="let audience of audiences"
+        [class.selected]="selectedAudience?.id === audience.id"
+        (click)="selectAudience(audience)">
+        <div class="audience-info">
+          <div class="audience-name">{{ audience.name }}</div>
+          <div class="audience-count">{{ audience.memberCount | number }} members</div>
+        </div>
+        <div class="check-icon" *ngIf="selectedAudience?.id === audience.id">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" *ngIf="(audiencesLoading$ | async) === 'success' && !audiences.length">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <p>No audiences found</p>
+      <small>Create an audience in Mailchimp first</small>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- STEP 2: MASTER DOCUMENT UPLOAD -->
+  <!-- ============================================ -->
+  <div class="section-card">
+    <div class="card-header">
+      <div class="header-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h3>Upload Master Document</h3>
+        <p>CSV/Excel with: audiences_list, scheduled_time, test_emails, and timezones</p>
+      </div>
+      <div class="step-badge">Step 2</div>
+    </div>
+
+    <!-- Upload Box -->
+    <label class="upload-box" [class.disabled]="!selectedAudience">
+      <input 
+        type="file" 
+        accept=".csv,.xlsx,.xls" 
+        (change)="onFileUpload($event)" 
+        [disabled]="!selectedAudience"
+        hidden />
+      
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/>
+        <polyline points="13 2 13 9 20 9"/>
+      </svg>
+      
+      <div class="upload-text">
+        <span class="primary">{{ uploadedFileName || 'Click to upload' }}</span>
+        <small>Supports CSV, Excel (.xlsx, .xls)</small>
+      </div>
+
+      <!-- Loading Spinner -->
+      <mat-progress-spinner 
+        *ngIf="(uploadLoading$ | async) === 'loading'"
+        diameter="24" 
+        mode="indeterminate">
+      </mat-progress-spinner>
+    </label>
+
+    <!-- Upload Status -->
+    <div class="upload-status" *ngIf="(uploadLoading$ | async) === 'success' && masterData.length">
+      <div class="status-success">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <div class="status-text">
+          <strong>{{ masterData.length | number }} rows uploaded</strong>
+          <small>{{ testEmails.length }} test email(s) • {{ scheduleGroups.length }} time slot(s)</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Error -->
+    <div class="upload-error" *ngIf="(uploadLoading$ | async) === 'error'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="15" y1="9" x2="9" y2="15"/>
+        <line x1="9" y1="9" x2="15" y2="15"/>
+      </svg>
+      <p>Upload failed. Check file format.</p>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- STEP 2.5: CHANNEL SELECTION (Multi-Channel) -->
+  <!-- ============================================ -->
+  <div class="section-card channel-selection" *ngIf="masterData.length > 0">
+    <div class="card-header">
+      <div class="header-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h3>📢 Select Channels</h3>
+        <p>Choose which channels to send your campaign</p>
+      </div>
+      <div class="step-badge">Channels</div>
+    </div>
+
+    <div class="channels-grid">
+      <!-- Email Channel -->
+      <label class="channel-box" [class.selected]="selectedChannels.email" [class.disabled]="recipientStats.email === 0">
+        <input type="checkbox" [(ngModel)]="selectedChannels.email" [disabled]="recipientStats.email === 0" />
+        <div class="channel-icon email-icon">📧</div>
+        <div class="channel-info">
+          <h4>Email</h4>
+          <p class="channel-count">{{ recipientStats.email | number }} recipients</p>
+          <p class="channel-cost">Free</p>
+        </div>
+        <div class="check-mark" *ngIf="selectedChannels.email">✓</div>
+      </label>
+
+      <!-- SMS Channel -->
+      <label class="channel-box" [class.selected]="selectedChannels.sms" [class.disabled]="recipientStats.sms === 0">
+        <input type="checkbox" [(ngModel)]="selectedChannels.sms" [disabled]="recipientStats.sms === 0" />
+        <div class="channel-icon sms-icon">💬</div>
+        <div class="channel-info">
+          <h4>SMS</h4>
+          <p class="channel-count">{{ recipientStats.sms | number }} recipients</p>
+          <p class="channel-cost">${{ (recipientStats.sms * 0.00645).toFixed(2) }}</p>
+        </div>
+        <div class="check-mark" *ngIf="selectedChannels.sms">✓</div>
+      </label>
+
+      <!-- WhatsApp Channel -->
+      <label class="channel-box" [class.selected]="selectedChannels.whatsapp" [class.disabled]="recipientStats.whatsapp === 0">
+        <input type="checkbox" [(ngModel)]="selectedChannels.whatsapp" [disabled]="recipientStats.whatsapp === 0" />
+        <div class="channel-icon whatsapp-icon">📱</div>
+        <div class="channel-info">
+          <h4>WhatsApp</h4>
+          <p class="channel-count">{{ recipientStats.whatsapp | number }} recipients</p>
+          <p class="channel-cost">Free (first 1,000/month)</p>
+        </div>
+        <div class="check-mark" *ngIf="selectedChannels.whatsapp">✓</div>
+      </label>
+    </div>
+
+    <!-- AI Adaptation Notice -->
+    <div class="ai-notice" *ngIf="selectedChannels.sms || selectedChannels.whatsapp">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="16" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12.01" y2="8"/>
+      </svg>
+      <div>
+        <p>
+          <strong>🤖 AI Content Adaptation Enabled</strong><br>
+          Your email content will be automatically optimized for {{ getSelectedChannelsText() }}.
+        </p>
+        <button 
+          mat-stroked-button 
+          color="primary" 
+          (click)="generateAIPreview()" 
+          [disabled]="aiPreviewLoading || !templateHtml || !subjectControl.value"
+          style="margin-top: 0.5rem;">
+          <mat-icon *ngIf="!aiPreviewLoading">visibility</mat-icon>
+          <mat-progress-spinner *ngIf="aiPreviewLoading" diameter="20" mode="indeterminate"></mat-progress-spinner>
+          {{ aiPreviewLoading ? 'Generating...' : 'Preview AI Messages' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- AI Preview Results -->
+    <div class="ai-preview-results" *ngIf="aiPreview">
+      <div class="preview-header">
+        <h4>🤖 AI-Generated Messages Preview</h4>
+        <p>This is how your email will be adapted for each channel:</p>
+      </div>
+
+      <div class="preview-grid">
+        <!-- SMS Preview -->
+        <div class="preview-card" *ngIf="aiPreview.sms && selectedChannels.sms">
+          <div class="preview-card-header">
+            <span class="preview-icon">💬</span>
+            <h5>SMS Message</h5>
+            <span class="preview-badge">{{ aiPreview.sms.text.length }} chars</span>
+          </div>
+          <div class="preview-content sms-preview">
+            <p>{{ aiPreview.sms.text }}</p>
+          </div>
+          <div class="preview-footer">
+            <small>✓ Optimized for 160-character SMS limit</small>
+          </div>
+        </div>
+
+        <!-- WhatsApp Preview -->
+        <div class="preview-card" *ngIf="aiPreview.whatsapp && selectedChannels.whatsapp">
+          <div class="preview-card-header">
+            <span class="preview-icon">📱</span>
+            <h5>WhatsApp Message</h5>
+            <span class="preview-badge">{{ aiPreview.whatsapp.lineCount }} lines</span>
+          </div>
+          <div class="preview-content whatsapp-preview">
+            <p [innerHTML]="formatWhatsAppText(aiPreview.whatsapp.text)"></p>
+          </div>
+          <div class="preview-footer">
+            <small>✓ Will be sent using template: <code>emailify_campaign</code></small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cost Summary -->
+    <div class="cost-summary" *ngIf="getEstimatedCost() > 0">
+      <div class="cost-row">
+        <span>Estimated Total Cost:</span>
+        <strong>${{ getEstimatedCost().toFixed(2) }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- STEP 3: RECONCILIATION RESULTS -->
+  <!-- ============================================ -->
+  <div class="section-card" *ngIf="reconciliation">
+    <div class="card-header">
+      <div class="header-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h3>Audience Reconciliation</h3>
+        <p>Comparison with Mailchimp data</p>
+      </div>
+      <div class="step-badge">Step 3</div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-state" *ngIf="(reconcileLoading$ | async) === 'loading'">
+      <mat-progress-spinner diameter="32" mode="indeterminate"></mat-progress-spinner>
+      <p>Reconciling audiences...</p>
+    </div>
+
+    <!-- Results -->
+    <div class="reconcile-results" *ngIf="(reconcileLoading$ | async) === 'success'">
+      <div class="result-grid">
+        <!-- Existing -->
+        <div class="result-item existing">
+          <div class="result-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div class="result-content">
+            <div class="result-count">{{ reconciliation.summary.existingCount | number }}</div>
+            <div class="result-label">Existing</div>
+          </div>
+        </div>
+
+        <!-- New -->
+        <div class="result-item new">
+          <div class="result-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 4v16m8-8H4"/>
+            </svg>
+          </div>
+          <div class="result-content">
+            <div class="result-count">{{ reconciliation.summary.newCount | number }}</div>
+            <div class="result-label">New</div>
+          </div>
+        </div>
+
+        <!-- Ignored -->
+        <div class="result-item ignored">
+          <div class="result-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </div>
+          <div class="result-content">
+            <div class="result-count">{{ reconciliation.summary.ignoredCount | number }}</div>
+            <div class="result-label">Ignored</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ NEW: Add Members Toggle (Only show if new members exist) -->
+<div class="add-members-section" *ngIf="reconciliation && reconciliation.summary.newCount > 0">
+  <div class="toggle-container">
+    <input 
+      type="checkbox"
+      id="addNewMembers"
+      class="toggle-checkbox"
+      [(ngModel)]="addNewMembersToAudience" />
+    <label for="addNewMembers" class="toggle-label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+        <circle cx="8.5" cy="7" r="4"/>
+        <line x1="20" y1="8" x2="20" y2="14"/>
+        <line x1="23" y1="11" x2="17" y2="11"/>
+      </svg>
+      <small class="toggle-hint">
+        Checked: New members saved permanently<br>
+        Unchecked: New members archived after campaign sent
+        </small>
+    </label>
+  </div>
+  <!-- <small class="toggle-hint">
+    If unchecked, emails will only be used for this campaign and not saved to your audience.
+  </small> -->
+</div>
+
+  <!-- ============================================ -->
+  <!-- STEP 4: CAMPAIGN CONFIGURATION -->
+  <!-- ============================================ -->
+  <div class="section-card" *ngIf="masterData.length">
+    <div class="card-header">
+      <div class="header-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h3>Campaign Details</h3>
+        <p>Subject line and additional content</p>
+      </div>
+      <div class="step-badge">Step 4</div>
+    </div>
+
+    <!-- ✅ Subject Line Generator Section -->
+<div class="subject-generator-section">
+  <div class="generator-header">
+    <div class="header-content">
+      <div class="icon-wrapper">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h4>AI Subject Line Generator</h4>
+        <p>Generate engaging subject lines for your campaign</p>
+      </div>
+    </div>
+    
+    <button 
+      class="generate-subjects-btn"
+      (click)="onGenerateSubjects()"
+      [disabled]="subjectsLoading">
+      <mat-progress-spinner
+        *ngIf="subjectsLoading"
+        diameter="18"
+        mode="indeterminate">
+      </mat-progress-spinner>
+      <svg *ngIf="!subjectsLoading" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+      </svg>
+      <span>{{ subjectsLoading ? 'Generating...' : 'Generate' }}</span>
+    </button>
+  </div>
+  
+    <!-- ✅ Subject Suggestions Grid -->
+<!-- ✅ Subject Suggestions Grid - ONLY show when NOT loading AND has subjects -->
+<!-- ✅ Subject Suggestions Grid - ONLY show when NOT loading AND has subjects -->
+<div class="subjects-grid" 
+     *ngIf="!subjectsLoading && (subjects$ | async) as subjects">
+  <div 
+    class="subject-chip"
+    *ngFor="let subject of subjects; let i = index; trackBy: trackByIndex"
+    (click)="onSelectSubject(subject)"
+    [class.selected]="isSubjectSelected(subject)">
+    <div class="chip-content">
+      <span class="chip-text">{{ subject }}</span>
+      <!-- <span class="chip-length">{{ subject.length }}/150</span> -->
+    </div>
+    <div class="chip-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 5l7 7-7 7"/>
+      </svg>
+    </div>
+  </div>
+  
+  <!-- Empty State -->
+  <div class="empty-subjects" *ngIf="subjects.length === 0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+    </svg>
+    <p>Click "Generate" to create subject line suggestions</p>
+  </div>
+</div>
+
+<!-- ✅ Loading state indicator - OUTSIDE subjects-grid -->
+<div class="subjects-loading" *ngIf="subjectsLoading">
+  <mat-progress-spinner diameter="32" mode="indeterminate"></mat-progress-spinner>
+  <p>Generating subject lines...</p>
+</div>
+
+<!-- 👇 YOUR EXISTING SUBJECT INPUT GOES HERE -->
+    <!-- Subject Line -->
+    <div class="input-group">
+      <label class="input-label">
+        Subject Line <span class="required">*</span>
+      </label>
+      <div class="input-wrapper">
+        <input 
+          type="text"
+          class="text-input"
+          placeholder="Enter email subject..."
+          [formControl]="subjectControl"
+          maxlength="150" />
+        <span class="char-count">{{ getSubjectCharCount() }}</span>
+      </div>
+      <div class="input-error" *ngIf="subjectControl.touched && subjectControl.invalid">
+        Subject line is required
+      </div>
+    </div>
+
+<!-- Schedule Preview with Timezone Info -->
+<!-- Schedule Preview with Scroll -->
+<div class="schedule-preview" *ngIf="scheduleGroups.length">
+  <div class="preview-header">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+    <span>Schedule Summary</span>
+  </div>
+  
+  <!-- ✅ SCHEDULE SUMMARY BOX -->
+  <div class="schedule-summary-box">
+    <div class="summary-item" *ngFor="let group of scheduleGroups">
+      <div class="summary-count">
+        <span class="count-badge">{{ group.count }}</span>
+        <span class="count-label">{{ group.count === 1 ? 'recipient' : 'recipients' }}</span>
+      </div>
+      <div class="summary-details">
+        <ng-container *ngIf="group.isImmediate">
+          <div class="summary-time immediate">
+            <mat-icon>bolt</mat-icon>
+            <strong>Immediate Send</strong>
+          </div>
+          <div class="summary-note">Will be sent immediately when you submit</div>
+        </ng-container>
+        <ng-container *ngIf="!group.isImmediate">
+          <div class="summary-time">
+            <mat-icon>schedule</mat-icon>
+            <strong>{{ group.scheduledTime | date:'short' }}</strong>
+          </div>
+          <div class="summary-timezone" *ngIf="group.timezone">
+            <mat-icon>public</mat-icon>
+            <span>{{ group.timezone }}</span>
+            <span class="timezone-badge" *ngIf="group.timezoneSource === 'customer'">Customer Timezone</span>
+            <span class="timezone-badge local" *ngIf="group.timezoneSource === 'local'">Local Timezone</span>
+          </div>
+          <div class="summary-timezone warning" *ngIf="!group.timezone">
+            <mat-icon>warning</mat-icon>
+            <span>No timezone specified - using local time</span>
+          </div>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+  
+  <!-- ✅ TIMEZONE INFORMATION BANNER WITH SCROLL -->
+  <div class="timezone-info-banner" *ngIf="timezoneAnalysis" style="display: none;">
+    <!-- Warning State: No timezone or mixed -->
+    <div class="timezone-warning" *ngIf="shouldShowTimezoneWarning()">
+      <!-- <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg> -->
+      <div class="warning-content">
+        <strong>⏰ Timezone Notice</strong>
+        <p>{{ getTimezoneWarningMessage() }}</p>
+      </div>
+    </div>
+    
+    <!-- Info State: Single or multiple timezones properly configured -->
+    <div class="timezone-info" *ngIf="shouldShowTimezoneInfo()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 16v-4m0-4h.01"/>
+      </svg>
+      <div class="info-content">
+        <strong>🌍 Timezone Configuration</strong>
+        <p>{{ getTimezoneWarningMessage() }}</p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- OLD SECTIONS - HIDDEN -->
+  <div style="display: none;">
+  <!-- ✅ IMMEDIATE SEND WARNING -->
+  <div class="immediate-warning" *ngIf="hasImmediateSends()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+    </svg>
+    <div class="warning-text">
+      <strong>⚡ Immediate Send</strong>
+      <p>{{ getImmediateSendCount() }} recipient(s) have <strong>no schedule time</strong> and will be sent <strong>immediately</strong> when you click "Submit Campaign"</p>
+    </div>
+  </div>
+  
+  <!-- ✅ SCROLLABLE Schedule List -->
+  <div class="schedule-list-container">
+    <div class="schedule-list">
+      <div class="schedule-item" 
+           *ngFor="let group of scheduleGroups"
+           [class.immediate]="group.isImmediate"
+           [class.local-timezone]="group.timezoneSource === 'local'">
+        
+        <div class="schedule-time">
+          <!-- Immediate Send -->
+          <ng-container *ngIf="group.isImmediate">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+            <strong>Send Immediately</strong>
+          </ng-container>
+          
+          <!-- Scheduled Send -->
+          <ng-container *ngIf="!group.isImmediate">
+            <div class="time-with-zone">
+              <span class="time">{{ group.scheduledTime | date:'short' }}</span>
+              <span class="zone" *ngIf="group.timezone">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                {{ group.timezone }}
+              </span>
+              <span class="zone local-indicator" *ngIf="group.timezoneSource === 'local'">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                Local Time
+              </span>
+            </div>
+          </ng-container>
+        </div>
+        
+        <div class="schedule-count">
+          {{ group.count }} recipient(s)
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+  <!-- END HIDDEN SECTIONS -->
+
+  <!-- ============================================ -->
+  <!-- STEP 5: TEST EMAIL -->
+  <!-- ============================================ -->
+<!-- ============================================ -->
+<!-- STEP 5: TEST EMAIL -->
+<!-- ============================================ -->
+<div class="section-card" *ngIf="masterData.length">
+  <div class="card-header">
+    <div class="header-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+      </svg>
+    </div>
+    <div class="header-text">
+      <h3>Test Email</h3>
+      <p>{{ testEmails.length }} test recipient(s)</p>
+    </div>
+    <div class="step-badge">Step 5</div>
+  </div>
+
+  <!-- ✅ SHOW WARNING IF NO TEST EMAILS -->
+  <div class="no-test-emails-warning" *ngIf="testEmails.length === 0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+    <div class="warning-content">
+      <strong>⚠️ No Test Emails Found</strong>
+      <p>Your uploaded file has no test emails in the <code>test_emails</code> column. You can still submit, but testing is highly recommended.</p>
+    </div>
+  </div>
+
+  <!-- ✅ TEST EMAIL SECTION (ONLY IF EMAILS EXIST) -->
+  <div class="test-email-section" *ngIf="testEmails.length > 0">
+    <!-- Test Email List Preview -->
+    <div class="test-emails-preview">
+      <div class="preview-label">Test Recipients:</div>
+      <div class="email-chips">
+        <span class="email-chip" *ngFor="let email of testEmails.slice(0, 5)">
+          {{ email }}
+        </span>
+        <span class="email-chip more" *ngIf="testEmails.length > 5">
+          +{{ testEmails.length - 5 }} more
+        </span>
+      </div>
+    </div>
+
+    <!-- ✅ TEST EMAIL BUTTON WITH TOOLTIP -->
+   <!-- TEST EMAIL BUTTON WITH WRAPPER -->
+<div class="button-wrapper"
+     [matTooltip]="getTestEmailTooltip()"
+     [matTooltipDisabled]="canSendTest"
+     matTooltipPosition="above"
+     matTooltipShowDelay="300">
+  <button 
+    mat-raised-button
+    class="test-email-btn"
+    (click)="sendTestEmail()"
+    [disabled]="!canSendTest || (testEmailLoading$ | async) === 'loading'">
+    <div class="button-content">
+      <mat-progress-spinner
+        *ngIf="(testEmailLoading$ | async) === 'loading'"
+        diameter="18"
+        mode="indeterminate">
+      </mat-progress-spinner>
+      <span>{{ (testEmailLoading$ | async) === 'loading' ? 'Sending...' : 'Send Test Email' }}</span>
+    </div>
+  </button>
+</div>
+
+    <!-- Test Email Status -->
+    <div class="test-status" *ngIf="testEmailSent">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <span>Test email sent {{ getTestEmailsSentTime() }}</span>
+    </div>
+  </div>
+
+  <!-- ✅ DISABLED TEST BUTTON IF NO EMAILS -->
+  <div class="test-email-section" *ngIf="testEmails.length === 0">
+    <button 
+      mat-raised-button
+      class="test-email-btn disabled"
+      disabled
+      matTooltip="No test emails found in uploaded file">
+      <div class="button-content">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+        <span>Test Email Unavailable</span>
+      </div>
+    </button>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- STEP 6: FINAL SUBMIT -->
+<!-- ============================================ -->
+<div class="submit-section">
+  
+  <!-- ============================================ -->
+  <!-- SUBMISSION SUMMARY BANNER -->
+  <!-- ============================================ -->
+  <div class="submission-summary-banner" *ngIf="getSubmissionSummary().length > 0">
+    <div class="summary-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      <h4>SUBMISSION SUMMARY:</h4>
+    </div>
+    
+    <ul class="summary-list">
+      <li *ngFor="let item of getSubmissionSummary(); let i = index" [class]="'summary-item-' + item.type">
+        <span class="item-icon">{{ item.icon }}</span>
+        <span class="item-text">{{ item.text }}</span>
+      </li>
+    </ul>
+    
+    <p class="summary-footer">
+      <strong>Proceed with submission?</strong>
+    </p>
+  </div>
+
+  <!-- SUBMIT CAMPAIGN BUTTON WITH WRAPPER -->
+<div class="button-wrapper"
+     [matTooltip]="getSubmitTooltip()"
+     [matTooltipDisabled]="canSubmit"
+     matTooltipPosition="above"
+     matTooltipShowDelay="300">
+  <button 
+    mat-raised-button
+    class="submit-btn"
+    (click)="onSubmit()"
+    [disabled]="!canSubmit || (submitLoading$ | async) === 'loading'">
+    <div class="button-content">
+      <mat-progress-spinner
+        *ngIf="(submitLoading$ | async) === 'loading'"
+        diameter="20"
+        mode="indeterminate">
+      </mat-progress-spinner>
+      <span>{{ (submitLoading$ | async) === 'loading' ? 'Submitting...' : 'Submit Campaign' }}</span>
+    </div>
+  </button>
+</div>
+
+  <!-- ⚠️ Warning Banner -->
+  <div class="warning-banner" *ngIf="testEmails.length === 0 && masterData.length > 0">
+    <span>⚠️ No test emails available - Campaign will be submitted untested</span>
+  </div>
+
+  <div class="warning-banner" *ngIf="!testEmailSent && testEmails.length > 0">
+    <span>⚠️ Test email not sent - Extra confirmation will be required</span>
+  </div>
+</div>
+
+  </div> <!-- Close content-wrapper -->
+</div> <!-- Close campaign-submit-wrapper -->

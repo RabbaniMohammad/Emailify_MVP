@@ -1,0 +1,7 @@
+audiences_list,phone,scheduled_time,test_emails,timezone
+john.doe@example.com,+14155552671,2024-02-15 10:00,test@example.com,America/New_York
+jane.smith@example.com,+14155552672,2024-02-15 10:00,test@example.com,America/New_York
+bob.wilson@example.com,+14155552673,2024-02-15 10:00,,America/New_York
+alice.brown@example.com,+14155552674,2024-02-15 14:00,,America/Los_Angeles
+charlie.davis@example.com,+14155552675,2024-02-15 14:00,,America/Los_Angeles
+vemulala0310@gmail.com,+15133065946,2024-02-15 10:00,test@example.com,America/New_York
