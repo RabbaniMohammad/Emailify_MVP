@@ -8,6 +8,7 @@ import qaRouter from './qa';
 import qaAdvancedRouter from './qa-advanced';
 import organizationRouter from './organization.routes';
 import documentToPromptRouter from './documentToPrompt';
+import ideogramRouter from './ideogram.routes';
 // templateGenerationRouter is mounted directly in server.ts, not here
 
 /******************************************************************************
@@ -31,6 +32,7 @@ apiRouter.use('/qa', qaRouter);                      // → /api/qa/...
 apiRouter.use('/qa-advanced', qaAdvancedRouter);     // → /api/qa-advanced/...
 apiRouter.use('/organizations', organizationRouter); // → /api/organizations/...
 apiRouter.use('/', documentToPromptRouter);          // → /api/csv-to-prompt
+apiRouter.use('/ideogram', ideogramRouter);          // → /api/ideogram/...
 // Note: /generate router is mounted directly in server.ts
 
 /******************************************************************************

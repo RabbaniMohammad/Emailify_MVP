@@ -755,6 +755,28 @@ isSubjectSelected(subject: string): boolean {
     try {
       await firstValueFrom(this.campaignService.fetchMailchimpAudiences());
       this.audiencesLoadingSubject.next('success');
+      
+      // ✅ Auto-select the user's organization audience if not already selected
+      if (!this.selectedAudience && this.audiences.length > 0) {
+        // If there's only one audience, auto-select it
+        if (this.audiences.length === 1) {
+          this.selectAudience(this.audiences[0]);
+        } else {
+          // Get user's organization audience ID
+          const currentUser = await firstValueFrom(this.authService.currentUser$);
+          const orgAudienceId = typeof currentUser?.organizationId === 'object'
+            ? (currentUser?.organizationId as any)?.mailchimpAudienceId
+            : null;
+          
+          if (orgAudienceId) {
+            // Find and auto-select the organization's audience
+            const orgAudience = this.audiences.find(a => a.id === orgAudienceId);
+            if (orgAudience) {
+              this.selectAudience(orgAudience);
+            }
+          }
+        }
+      }
     } catch (error) {
 
       this.audiencesLoadingSubject.next('error');

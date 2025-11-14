@@ -127,7 +127,14 @@ export class OrganizationPageComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           console.error('❌ Failed to load data:', err);
-          this.error = 'Failed to load dashboard data';
+
+          const audienceError = err?.status === 400 && (err.error?.error === 'No audience list' || err.error?.message?.toLowerCase().includes('audience'));
+          if (audienceError) {
+            this.error = 'Please create a sender email for your organization from the admin panel or contact your administrator.';
+          } else {
+            this.error = 'Failed to load dashboard data';
+          }
+
           this.loading = false;
         }
       });
@@ -287,10 +294,11 @@ export class OrganizationPageComponent implements OnInit, OnDestroy {
           
           // Show user-friendly error message
           const errorMessage = err.error?.message || err.message || 'Failed to setup audience';
+          const errorMessageLower = errorMessage?.toLowerCase?.() || '';
           
-          if (errorMessage.includes('sender email')) {
+          if (errorMessageLower.includes('sender email')) {
             this.snackBar.open(
-              '⚠️ Please configure sender email and name in Organization Settings before setting up audience',
+              '⚠️ Add a sender email in Organization Settings or contact your administrator before setting up an audience.',
               'Got it',
               {
                 duration: 8000,

@@ -32,6 +32,9 @@ export class CampaignSetupPageComponent implements OnInit, OnDestroy {
   no: string = '';
 
   ngOnInit(): void {
+    // ✅ Scroll to top when page loads
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    
     // Get route parameters
     this.templateId = this.route.snapshot.paramMap.get('id') || '';
     this.runId = this.route.snapshot.paramMap.get('runId') || '';

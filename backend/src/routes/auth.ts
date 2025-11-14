@@ -401,7 +401,7 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
     
     const user = await User.findById(tokenPayload.userId)
       .select('-__v')
-      .populate('organizationId', 'name slug domain isActive');
+      .populate('organizationId', 'name slug domain isActive mailchimpAudienceId');
     
     if (!user) {
       return res.status(404).json({ error: 'User not found', code: 'USER_NOT_FOUND' });

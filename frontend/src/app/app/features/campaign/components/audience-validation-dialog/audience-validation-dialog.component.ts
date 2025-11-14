@@ -217,7 +217,9 @@ export class AudienceValidationDialogComponent implements OnInit {
 
     // Open schedule dialog
     const dialogRef = this.dialog.open(ScheduleEmailDialogComponent, {
-      width: '600px',
+      width: '700px',
+      maxWidth: '90vw',
+      panelClass: 'schedule-email-dialog-container',
       data: { email }
     });
 
@@ -241,7 +243,9 @@ export class AudienceValidationDialogComponent implements OnInit {
 
     // Open schedule dialog for all excluded subscribers
     const dialogRef = this.dialog.open(ScheduleEmailDialogComponent, {
-      width: '600px',
+      width: '700px',
+      maxWidth: '90vw',
+      panelClass: 'schedule-email-dialog-container',
       data: { email: `All ${this.validationResult.excludedFromCampaign.total} excluded subscribers` }
     });
 

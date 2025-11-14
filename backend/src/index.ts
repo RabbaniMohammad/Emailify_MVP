@@ -5,6 +5,7 @@ import logger from 'jet-logger';
 
 import ENV from '@src/common/constants/ENV';
 import server from './server';
+import { memoryMonitor } from '@src/services/memoryMonitor';
 
 
 /******************************************************************************
@@ -26,5 +27,8 @@ server.listen(ENV.Port, err => {
     logger.err(err.message);
   } else {
     logger.info(SERVER_START_MSG);
+    
+    // Start memory monitoring (always enabled for safety)
+    memoryMonitor.start();
   }
 });

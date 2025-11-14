@@ -44,8 +44,9 @@
 
   <!-- Preview Wrapper -->
   <div class="preview-wrapper">
-    <!-- ⭐ FIXED: Always show component, use loading state instead of hiding -->
+    <!-- Template Preview (when generationType is 'template') -->
     <app-template-preview-panel
+      *ngIf="generationType === 'template'"
       [html]="(currentHtml$ | async) || ''"
       [(templateName)]="templateName"
       [loading]="(isGenerating$ | async) ?? false"
@@ -58,6 +59,45 @@
       (saveTemplate)="onSaveTemplate()"
       (runTests)="onRunTests()">
     </app-template-preview-panel>
+
+    <!-- Image Gallery (when generationType is 'image') -->
+    <div *ngIf="generationType === 'image'" class="image-gallery-wrapper">
+      <div class="image-gallery-header">
+        <h3>Generated Images</h3>
+        <p class="subtitle">Powered by Ideogram 2.0</p>
+      </div>
+
+      <!-- Loading State -->
+      <div *ngIf="isGeneratingImage" class="image-loading-state">
+        <mat-spinner diameter="60"></mat-spinner>
+        <p>Generating your image...</p>
+      </div>
+
+      <!-- Generated Images Grid -->
+      <div *ngIf="!isGeneratingImage && generatedImages.length > 0" class="image-gallery-grid">
+        <div *ngFor="let image of generatedImages" class="image-card">
+          <img [src]="image.url" [alt]="image.prompt" class="generated-image">
+          <div class="image-card-footer">
+            <p class="image-prompt">{{ image.prompt }}</p>
+            <div class="image-actions">
+              <button mat-icon-button matTooltip="Download">
+                <mat-icon>download</mat-icon>
+              </button>
+              <button mat-icon-button matTooltip="Copy URL">
+                <mat-icon>content_copy</mat-icon>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="!isGeneratingImage && generatedImages.length === 0" class="image-empty-state">
+        <mat-icon>image</mat-icon>
+        <h4>No Images Yet</h4>
+        <p>Describe the image you want to generate in the chat below</p>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -65,14 +105,14 @@
   <section class="chat-section">
     <div class="chat-header">
       <div class="header-content">
-        <!-- Template Icon (Unclickable) -->
+        <!-- Email Template Icon -->
         <svg class="header-icon template-icon" 
              viewBox="0 0 24 24" 
              xmlns="http://www.w3.org/2000/svg">
-          <path fill="white" d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M12.9,14.5L15.8,19H14L12,15.6L10,19H8.2L11.1,14.5L8.2,10H10L12,13.4L14,10H15.8L12.9,14.5Z"/>
+          <path fill="white" d="M20,8L12,13L4,8V6L12,11L20,6M20,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6C22,4.89 21.1,4 20,4Z"/>
         </svg>
         <div class="header-text">
-          <h3>Template Generator</h3>
+          <h3>AI Generator</h3>
           <p>Powered by AI</p>
         </div>
       </div>
@@ -127,6 +167,39 @@
     </div>
   </div>
 </mat-menu>
+    </div>
+
+    <!-- Generation Type Selector -->
+    <div class="generation-type-selector">
+      <div class="selector-wrapper">
+        <label class="radio-option" [class.selected]="generationType === 'template'">
+          <input 
+            type="radio" 
+            name="generationType" 
+            value="template" 
+            [(ngModel)]="generationType"
+            (change)="onGenerationTypeChange('template')"
+            [disabled]="(isGenerating$ | async) ?? false">
+          <div class="option-content">
+            <mat-icon>description</mat-icon>
+            <span>Email Template</span>
+          </div>
+        </label>
+        
+        <label class="radio-option" [class.selected]="generationType === 'image'">
+          <input 
+            type="radio" 
+            name="generationType" 
+            value="image" 
+            [(ngModel)]="generationType"
+            (change)="onGenerationTypeChange('image')"
+            [disabled]="(isGenerating$ | async) ?? false">
+          <div class="option-content">
+            <mat-icon>image</mat-icon>
+            <span>AI Image</span>
+          </div>
+        </label>
+      </div>
     </div>
 
     <!-- Messages Container -->

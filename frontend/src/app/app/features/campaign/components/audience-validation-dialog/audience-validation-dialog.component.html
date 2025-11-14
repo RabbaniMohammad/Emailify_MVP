@@ -1,196 +1,237 @@
 <div class="audience-validation-dialog">
-  <h2 mat-dialog-title>
-    <mat-icon>groups</mat-icon>
-    Audience Validation
-  </h2>
+  <!-- Modern Header -->
+  <div class="dialog-header">
+    <div class="header-content">
+      <div class="header-icon">
+        <mat-icon>groups</mat-icon>
+      </div>
+      <h2>Audience Validation</h2>
+    </div>
+    <button mat-icon-button class="close-btn" (click)="cancel()" matTooltip="Close">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
 
-  <mat-dialog-content>
+  <mat-dialog-content class="dialog-body">
     <!-- Loading State -->
     <div *ngIf="loading" class="loading-container">
-      <mat-spinner diameter="50"></mat-spinner>
-      <p>Validating your audience list...</p>
+      <div class="loading-spinner">
+        <mat-spinner diameter="50"></mat-spinner>
+      </div>
+      <p class="loading-text">Validating your audience list...</p>
     </div>
 
     <!-- Error State -->
     <div *ngIf="error && !loading" class="error-container">
-      <mat-icon color="warn">error</mat-icon>
-      <p>{{ error }}</p>
-      <button mat-raised-button (click)="validateAudience()">
+      <div class="error-icon">
+        <mat-icon>error_outline</mat-icon>
+      </div>
+      <p class="error-text">{{ error }}</p>
+      <button mat-raised-button color="primary" (click)="validateAudience()">
         <mat-icon>refresh</mat-icon>
-        Retry
+        Retry Validation
       </button>
     </div>
 
     <!-- Validation Results -->
     <div *ngIf="validationResult && !loading" class="validation-results">
-      <!-- Summary Stats -->
-      <div class="summary-stats">
-        <div class="stat-card">
-          <div class="stat-value">{{ validationResult.summary.totalInCsv }}</div>
-          <div class="stat-label">Total in CSV</div>
+      <!-- Summary Cards -->
+      <div class="summary-cards">
+        <div class="summary-card csv-card">
+          <div class="card-icon">
+            <mat-icon>description</mat-icon>
+          </div>
+          <div class="card-content">
+            <div class="card-value">{{ validationResult.summary.totalInCsv }}</div>
+            <div class="card-label">Total in CSV</div>
+          </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ validationResult.summary.totalInMailchimp }}</div>
-          <div class="stat-label">Total in {{ data.organizationName || 'Audience' }}</div>
+        <div class="summary-card audience-card">
+          <div class="card-icon">
+            <mat-icon>people</mat-icon>
+          </div>
+          <div class="card-content">
+            <div class="card-value">{{ validationResult.summary.totalInMailchimp }}</div>
+            <div class="card-label">Total in {{ data.organizationName || 'Camply' }}</div>
+          </div>
         </div>
       </div>
 
-      <!-- Two-Pane Layout -->
-      <div class="two-pane-layout">
-        <!-- LEFT PANE: Master Document -->
-        <div class="left-pane">
-          <h3>
+      <!-- Content Sections -->
+      <div class="content-grid">
+        <!-- Master Document Section -->
+        <div class="section-card master-doc-card">
+          <div class="section-title">
             <mat-icon>upload_file</mat-icon>
-            Master Document ({{ validationResult.masterDocument.total + addedToMaster.size }})
-          </h3>
+            <h3>Master Document ({{ validationResult.masterDocument.total + addedToMaster.size }})</h3>
+          </div>
 
-          <!-- ORANGE: New Subscribers (Show First) -->
-          <div class="subscriber-section new-section" *ngIf="validationResult.masterDocument.new.length > 0">
-            <div class="section-header orange">
-              <div class="header-left">
-                <mat-icon>person_add</mat-icon>
+          <!-- New Subscribers -->
+          <div class="subsection new-subsection" *ngIf="validationResult.masterDocument.new.length > 0">
+            <div class="subsection-header">
+              <div class="subsection-title">
+                <mat-icon class="new-icon">person_add</mat-icon>
                 <h4>New Subscribers ({{ validationResult.masterDocument.new.length }})</h4>
               </div>
               <button 
-                mat-raised-button 
+                mat-flat-button 
                 color="primary" 
                 (click)="addAllNewSubscribers()"
                 [disabled]="addingSubscribers"
-                class="add-all-btn">
+                class="action-btn">
                 <mat-icon>add_circle</mat-icon>
-                {{ addingSubscribers ? 'Adding...' : 'Add All to Audience' }}
+                <span class="btn-text">{{ addingSubscribers ? 'Adding...' : 'Add All to Audience' }}</span>
               </button>
             </div>
             
-            <mat-list class="subscriber-list">
-              <mat-list-item *ngFor="let email of paginatedNew" class="orange-item">
-                <mat-icon matListItemIcon class="orange-icon">new_releases</mat-icon>
-                <span matListItemTitle>{{ email }}</span>
-              </mat-list-item>
-            </mat-list>
+            <div class="email-list">
+              <div *ngFor="let email of paginatedNew" class="email-item new-item">
+                <mat-icon class="email-icon">fiber_new</mat-icon>
+                <span class="email-address">{{ email }}</span>
+              </div>
+            </div>
 
-            <!-- Pagination for New -->
+            <!-- Pagination -->
             <div class="pagination" *ngIf="validationResult.masterDocument.new.length > pageSize">
-              <button mat-button [disabled]="newPage === 0" (click)="prevNewPage()">
+              <button mat-icon-button [disabled]="newPage === 0" (click)="prevNewPage()">
                 <mat-icon>chevron_left</mat-icon>
               </button>
-              <span>{{ newPage * pageSize + 1 }} - {{ Math.min((newPage + 1) * pageSize, validationResult.masterDocument.new.length) }} of {{ validationResult.masterDocument.new.length }}</span>
-              <button mat-button [disabled]="!hasMoreNew" (click)="nextNewPage()">
+              <span class="page-info">
+                {{ newPage * pageSize + 1 }}-{{ Math.min((newPage + 1) * pageSize, validationResult.masterDocument.new.length) }} 
+                of {{ validationResult.masterDocument.new.length }}
+              </span>
+              <button mat-icon-button [disabled]="!hasMoreNew" (click)="nextNewPage()">
                 <mat-icon>chevron_right</mat-icon>
               </button>
             </div>
           </div>
 
-          <!-- GREEN: Existing Subscribers (Show Second) -->
-          <div class="subscriber-section existing-section" *ngIf="validationResult.masterDocument.existing.length > 0">
-            <div class="section-header green">
-              <mat-icon>check_circle</mat-icon>
-              <h4>Existing Subscribers ({{ validationResult.masterDocument.existing.length }})</h4>
+          <!-- Existing Subscribers -->
+          <div class="subsection existing-subsection" *ngIf="validationResult.masterDocument.existing.length > 0">
+            <div class="subsection-header">
+              <div class="subsection-title">
+                <mat-icon class="existing-icon">check_circle</mat-icon>
+                <h4>Existing Subscribers ({{ validationResult.masterDocument.existing.length }})</h4>
+              </div>
             </div>
             
-            <mat-list class="subscriber-list">
-              <mat-list-item *ngFor="let email of paginatedExisting" class="green-item">
-                <mat-icon matListItemIcon class="green-icon">verified</mat-icon>
-                <span matListItemTitle>{{ email }}</span>
-              </mat-list-item>
-            </mat-list>
+            <div class="email-list">
+              <div *ngFor="let email of paginatedExisting" class="email-item existing-item">
+                <mat-icon class="email-icon">verified</mat-icon>
+                <span class="email-address">{{ email }}</span>
+              </div>
+            </div>
 
-            <!-- Pagination for Existing -->
+            <!-- Pagination -->
             <div class="pagination" *ngIf="validationResult.masterDocument.existing.length > pageSize">
-              <button mat-button [disabled]="existingPage === 0" (click)="prevExistingPage()">
+              <button mat-icon-button [disabled]="existingPage === 0" (click)="prevExistingPage()">
                 <mat-icon>chevron_left</mat-icon>
               </button>
-              <span>{{ existingPage * pageSize + 1 }} - {{ Math.min((existingPage + 1) * pageSize, validationResult.masterDocument.existing.length) }} of {{ validationResult.masterDocument.existing.length }}</span>
-              <button mat-button [disabled]="!hasMoreExisting" (click)="nextExistingPage()">
+              <span class="page-info">
+                {{ existingPage * pageSize + 1 }}-{{ Math.min((existingPage + 1) * pageSize, validationResult.masterDocument.existing.length) }} 
+                of {{ validationResult.masterDocument.existing.length }}
+              </span>
+              <button mat-icon-button [disabled]="!hasMoreExisting" (click)="nextExistingPage()">
                 <mat-icon>chevron_right</mat-icon>
               </button>
             </div>
+          </div>
+
+          <!-- Empty state for Master Document -->
+          <div *ngIf="validationResult.masterDocument.new.length === 0 && validationResult.masterDocument.existing.length === 0" class="empty-placeholder">
+            <mat-icon>inbox</mat-icon>
+            <p>No subscribers in master document</p>
           </div>
         </div>
 
-        <!-- RIGHT PANE: Excluded from Campaign -->
-        <div class="right-pane">
-          <h3>
+        <!-- Excluded Section -->
+        <div class="section-card excluded-card">
+          <div class="section-title">
             <mat-icon>block</mat-icon>
-            Excluded from Campaign ({{ validationResult.excludedFromCampaign.total - addedToMaster.size }})
-          </h3>
+            <h3>Excluded from Campaign ({{ validationResult.excludedFromCampaign.total - addedToMaster.size }})</h3>
+          </div>
 
-          <!-- RED: Excluded Subscribers -->
-          <div class="subscriber-section excluded-section" *ngIf="validationResult.excludedFromCampaign.total > 0">
-            <div class="section-header red">
-              <div class="header-left">
-                <mat-icon>warning</mat-icon>
+          <div *ngIf="validationResult.excludedFromCampaign.total > 0" class="subsection excluded-subsection">
+            <div class="subsection-header">
+              <div class="subsection-title">
+                <mat-icon class="excluded-icon">warning</mat-icon>
                 <h4>Won't Receive Email</h4>
               </div>
               <button 
-                mat-raised-button 
+                mat-flat-button 
                 color="warn" 
                 (click)="addAllExcludedToMaster()"
                 [disabled]="addingToMaster"
-                class="add-all-btn">
+                class="action-btn">
                 <mat-icon>add_circle</mat-icon>
-                {{ addingToMaster ? 'Adding...' : 'Add All to Master Document' }}
+                <span class="btn-text">{{ addingToMaster ? 'Adding...' : 'Add to Docs' }}</span>
               </button>
             </div>
-            <p class="info-text">These are in {{ data.organizationName || 'your audience' }} but not in your master document</p>
+            <p class="info-message">These are in {{ data.organizationName || 'your audience' }} but not in your master document</p>
             
-            <mat-list class="subscriber-list">
-              <mat-list-item 
+            <div class="email-list">
+              <div 
                 *ngFor="let email of paginatedExcluded" 
-                class="red-item clickable"
-                [class.added-to-master]="addedToMaster.has(email)"
+                class="email-item excluded-item"
+                [class.added]="addedToMaster.has(email)"
                 (click)="addExcludedToMaster(email)">
-                <mat-icon matListItemIcon [class.red-icon]="!addedToMaster.has(email)" [class.green-icon]="addedToMaster.has(email)">
+                <mat-icon class="email-icon">
                   {{ addedToMaster.has(email) ? 'check_circle' : 'cancel' }}
                 </mat-icon>
-                <span matListItemTitle>{{ email }}</span>
+                <span class="email-address">{{ email }}</span>
                 <button 
                   mat-icon-button 
-                  matListItemMeta 
                   *ngIf="!addedToMaster.has(email)"
                   (click)="addExcludedToMaster(email); $event.stopPropagation()"
-                  matTooltip="Add to master document">
+                  matTooltip="Add to master document"
+                  class="add-btn">
                   <mat-icon>add_circle_outline</mat-icon>
                 </button>
                 <mat-icon 
-                  matListItemMeta 
                   *ngIf="addedToMaster.has(email)"
                   class="added-badge"
                   matTooltip="Added to master">
                   done
                 </mat-icon>
-              </mat-list-item>
-            </mat-list>
+              </div>
+            </div>
 
-            <!-- Pagination for Excluded -->
+            <!-- Pagination -->
             <div class="pagination" *ngIf="validationResult.excludedFromCampaign.subscribers.length > pageSize">
-              <button mat-button [disabled]="excludedPage === 0" (click)="prevExcludedPage()">
+              <button mat-icon-button [disabled]="excludedPage === 0" (click)="prevExcludedPage()">
                 <mat-icon>chevron_left</mat-icon>
               </button>
-              <span>{{ excludedPage * pageSize + 1 }} - {{ Math.min((excludedPage + 1) * pageSize, validationResult.excludedFromCampaign.subscribers.length) }} of {{ validationResult.excludedFromCampaign.subscribers.length }}</span>
-              <button mat-button [disabled]="!hasMoreExcluded" (click)="nextExcludedPage()">
+              <span class="page-info">
+                {{ excludedPage * pageSize + 1 }}-{{ Math.min((excludedPage + 1) * pageSize, validationResult.excludedFromCampaign.subscribers.length) }} 
+                of {{ validationResult.excludedFromCampaign.subscribers.length }}
+              </span>
+              <button mat-icon-button [disabled]="!hasMoreExcluded" (click)="nextExcludedPage()">
                 <mat-icon>chevron_right</mat-icon>
               </button>
             </div>
           </div>
 
-          <!-- Empty state -->
-          <div *ngIf="validationResult.excludedFromCampaign.total === 0" class="empty-state">
+          <!-- Empty state for Excluded -->
+          <div *ngIf="validationResult.excludedFromCampaign.total === 0" class="empty-placeholder success">
             <mat-icon>check_circle_outline</mat-icon>
-            <p>All {{ data.organizationName || 'audience' }} subscribers are in your master document!</p>
+            <p>Perfect! All subscribers are in your master document</p>
           </div>
         </div>
       </div>
     </div>
   </mat-dialog-content>
 
-  <mat-dialog-actions align="end">
-    <button mat-button (click)="cancel()">Cancel</button>
+  <!-- Modern Footer -->
+  <mat-dialog-actions class="dialog-footer">
+    <button mat-stroked-button (click)="cancel()" class="cancel-btn">
+      Cancel
+    </button>
     <button 
-      mat-raised-button 
+      mat-flat-button 
       color="primary" 
       (click)="proceed()"
-      [disabled]="!validationResult || loading">
+      [disabled]="!validationResult || loading"
+      class="proceed-btn">
       <mat-icon>send</mat-icon>
       Proceed with Campaign
     </button>
