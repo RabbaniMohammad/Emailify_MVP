@@ -85,7 +85,7 @@ private sentImages: Array<{name: string, size: number}> = [];
   isRegenerating = false; // Track if it's a regeneration
   private justCreatedConversationId: string | null = null; // Track conversation we just created
   userInput = '';
-  templateName = 'Generated Template';
+  templateName = '';
 
   // Image upload state
     selectedImages: File[] = [];
@@ -141,7 +141,7 @@ private sentImages: Array<{name: string, size: number}> = [];
 
 
     ngOnInit(): void {
-    this.templateName = 'Generated Template';
+    this.templateName = '';
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
         const conversationId = params.get('conversationId');
         
@@ -876,7 +876,7 @@ canDeactivate(): boolean {
           console.log('🔵 [GENERATE PAGE] Messages history:', conversation.messages);
           this.messages$.next(conversation.messages);
           this.currentHtml$.next(conversation.currentHtml);
-          this.templateName = conversation.templateName || 'Generated Template';
+          this.templateName = conversation.templateName || '';
           
           // ✅ Set isRegenerating based on whether there's already generated HTML
           this.isRegenerating = !!conversation.currentHtml;

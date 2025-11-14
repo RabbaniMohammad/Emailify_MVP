@@ -61,43 +61,17 @@
     </app-template-preview-panel>
 
     <!-- Image Gallery (when generationType is 'image') -->
-    <div *ngIf="generationType === 'image'" class="image-gallery-wrapper">
-      <div class="image-gallery-header">
-        <h3>Generated Images</h3>
-        <p class="subtitle">Powered by Ideogram 2.0</p>
-      </div>
-
-      <!-- Loading State -->
-      <div *ngIf="isGeneratingImage" class="image-loading-state">
-        <mat-spinner diameter="60"></mat-spinner>
-        <p>Generating your image...</p>
-      </div>
-
-      <!-- Generated Images Grid -->
-      <div *ngIf="!isGeneratingImage && generatedImages.length > 0" class="image-gallery-grid">
-        <div *ngFor="let image of generatedImages" class="image-card">
-          <img [src]="image.url" [alt]="image.prompt" class="generated-image">
-          <div class="image-card-footer">
-            <p class="image-prompt">{{ image.prompt }}</p>
-            <div class="image-actions">
-              <button mat-icon-button matTooltip="Download">
-                <mat-icon>download</mat-icon>
-              </button>
-              <button mat-icon-button matTooltip="Copy URL">
-                <mat-icon>content_copy</mat-icon>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Empty State -->
-      <div *ngIf="!isGeneratingImage && generatedImages.length === 0" class="image-empty-state">
-        <mat-icon>image</mat-icon>
-        <h4>No Images Yet</h4>
-        <p>Describe the image you want to generate in the chat below</p>
-      </div>
-    </div>
+    <app-template-preview-panel
+      *ngIf="generationType === 'image'"
+      [html]="'<!DOCTYPE html><html><head><meta charset=&quot;utf-8&quot;><style>*{margin:0;padding:0;box-sizing:border-box}body,html{width:100%;height:100%;overflow:hidden}body{display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,&quot;Segoe UI&quot;,Roboto,&quot;Helvetica Neue&quot;,Arial,sans-serif;background:#f8fafc;text-align:center;padding:2rem}.icon{font-size:5rem;margin-bottom:1.5rem}h1{font-size:2.5rem;font-weight:700;color:#1e293b;margin-bottom:1rem;letter-spacing:-0.025em}p{font-size:1.25rem;color:#64748b;max-width:600px}</style></head><body><div class=&quot;icon&quot;>🚧</div><h1>Under Development</h1><p>AI Image Generation feature is coming soon!</p></body></html>'"
+      [loading]="false"
+      [showHeader]="false"
+      [allowRefresh]="false"
+      [allowFullscreen]="true"
+      [allowViewModes]="true"
+      [showGenerateActions]="false"
+      [isGeneratePage]="false">
+    </app-template-preview-panel>
   </div>
 </section>
 
