@@ -176,7 +176,7 @@ export class CampaignDetailPageComponent implements OnInit, OnDestroy {
 
   // Table columns
   locationColumns = ['country', 'region', 'opens'];
-  linkColumns = ['url', 'uniqueClicks', 'totalClicks', 'percentage'];
+  linkColumns = ['url', 'totalClicks', 'uniqueClicks', 'percentage'];
   activityColumns = ['email', 'opened', 'clicked', 'openCount', 'clickCount'];
 
   ngOnInit(): void {

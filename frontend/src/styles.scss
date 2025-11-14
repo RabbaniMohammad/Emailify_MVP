@@ -5,13 +5,20 @@
 html, body { height: 100%; }
 body { margin: 0; font-family: Roboto, 'Helvetica Neue', sans-serif; }
 
-// Snackbar Custom Styles - Simple, no background
-.success-snackbar,
-.error-snackbar,
-.info-snackbar,
-.warning-snackbar {
-  // Remove all custom styling to use Material defaults
+// ============================================
+// TOOLBAR HEIGHT CONSISTENCY FIX
+// ============================================
+// Ensure toolbar has consistent height across all pages
+app-toolbar,
+app-toolbar > mat-toolbar,
+.modern-toolbar {
+  min-height: 70px !important;
+  max-height: 70px !important;
+  height: 70px !important;
+  box-sizing: border-box !important;
 }
+
+// Snackbar uses Material default styles
 
 
 /* GrapesJS Styles */
