@@ -1,0 +1,148 @@
+<div class="dialog-container">
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="header-content">
+      <mat-icon class="header-icon">schedule_send</mat-icon>
+      <h2 class="header-title">Schedule Email</h2>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="dialog-body">
+    <!-- Email Badge -->
+    <div class="email-badge">
+      <mat-icon>email</mat-icon>
+      <span class="email-text">{{ data.email }}</span>
+    </div>
+
+    <!-- Send Options -->
+    <div class="send-options">
+      <div 
+        class="option-card send-now"
+        [class.selected]="sendImmediately"
+        (click)="setSendImmediately(true)">
+        <div class="option-icon-wrapper">
+          <mat-icon>flash_on</mat-icon>
+        </div>
+        <h3 class="option-title">Send Immediately</h3>
+        <p class="option-description">Send as soon as you submit</p>
+      </div>
+
+      <div 
+        class="option-card schedule-later"
+        [class.selected]="!sendImmediately"
+        (click)="setSendImmediately(false)">
+        <div class="option-icon-wrapper">
+          <mat-icon>schedule</mat-icon>
+        </div>
+        <h3 class="option-title">Schedule for Later</h3>
+        <p class="option-description">Pick a specific time</p>
+      </div>
+    </div>
+
+    <!-- Time Input Section -->
+    <div class="time-section" *ngIf="!sendImmediately">
+      <div class="section-header">
+        <mat-icon>access_time</mat-icon>
+        <h3>Enter Time</h3>
+      </div>
+
+      <div class="time-inputs">
+        <div class="input-group">
+          <label class="input-label">Hour</label>
+          <input 
+            type="number" 
+            [(ngModel)]="hourInput"
+            (input)="validateHour()"
+            (blur)="formatHour()"
+            placeholder="09"
+            min="0"
+            max="23"
+            class="time-input"
+            [class.error]="hourError">
+          <span class="input-hint">0-23</span>
+          <span class="input-error" *ngIf="hourError">{{ hourError }}</span>
+        </div>
+
+        <span class="time-separator">:</span>
+
+        <div class="input-group">
+          <label class="input-label">Minute</label>
+          <input 
+            type="number" 
+            [(ngModel)]="minuteInput"
+            (input)="validateMinute()"
+            (blur)="formatMinute()"
+            placeholder="00"
+            min="0"
+            max="59"
+            class="time-input"
+            [class.error]="minuteError">
+          <span class="input-hint">0-59</span>
+          <span class="input-error" *ngIf="minuteError">{{ minuteError }}</span>
+        </div>
+      </div>
+
+      <!-- Time Preview -->
+      <div class="time-preview" *ngIf="isTimeValid()">
+        <mat-icon>schedule</mat-icon>
+        <span class="preview-time">{{ getFormattedTime() }}</span>
+      </div>
+    </div>
+
+    <!-- Timezone Section -->
+    <div class="timezone-section" *ngIf="!sendImmediately">
+      <div class="section-header">
+        <mat-icon>public</mat-icon>
+        <h3>Select Timezone <span class="optional">(Optional)</span></h3>
+      </div>
+
+      <div class="timezone-grid">
+        <div 
+          class="timezone-chip local"
+          [class.selected]="selectedTimezone === ''"
+          (click)="selectTimezone('')">
+          <mat-icon>my_location</mat-icon>
+          <div class="chip-content">
+            <span class="chip-label">Local Time</span>
+            <span class="chip-sublabel">Your timezone</span>
+          </div>
+        </div>
+
+        <div 
+          *ngFor="let tz of timezones"
+          class="timezone-chip"
+          [class.selected]="selectedTimezone === tz.value"
+          (click)="selectTimezone(tz.value)">
+          <mat-icon>language</mat-icon>
+          <div class="chip-content">
+            <span class="chip-label">{{ tz.label }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info Message -->
+    <div class="info-message" [ngClass]="getMessageClass()">
+      <mat-icon>{{ getMessageIcon() }}</mat-icon>
+      <p>{{ getMessage() }}</p>
+    </div>
+  </div>
+
+  <!-- Footer Actions -->
+  <div class="dialog-footer">
+    <button mat-stroked-button class="cancel-btn" (click)="cancel()">
+      <mat-icon>close</mat-icon>
+      <span>Cancel</span>
+    </button>
+    <button 
+      mat-raised-button 
+      color="primary" 
+      class="confirm-btn"
+      (click)="confirm()"
+      [disabled]="!canConfirm()">
+      <mat-icon>check_circle</mat-icon>
+      <span>Add to Master</span>
+    </button>
+  </div>
+</div>

@@ -16,6 +16,7 @@ import { MatMenuModule } from '@angular/material/menu';
 
 import { TemplateGenerationService, GenerationMessage } from '../../../../core/services/template-generation.service';
 import { TemplatesService } from '../../../../core/services/templates.service';
+import { IdeogramImageService } from '../../../../core/services/ideogram-image.service';
 
 import { PreviewCacheService } from '../../../templates/components/template-preview/preview-cache.service';
 
@@ -55,6 +56,7 @@ interface ImageAttachment {
 export class GeneratePageComponent implements OnInit, OnDestroy, AfterViewInit, CanComponentDeactivate {
   private generationService = inject(TemplateGenerationService);
   private templatesService = inject(TemplatesService);
+  private ideogramService = inject(IdeogramImageService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private location = inject(Location);
@@ -83,7 +85,7 @@ private sentImages: Array<{name: string, size: number}> = [];
   isRegenerating = false; // Track if it's a regeneration
   private justCreatedConversationId: string | null = null; // Track conversation we just created
   userInput = '';
-  templateName = 'Generated Template';
+  templateName = '';
 
   // Image upload state
     selectedImages: File[] = [];
@@ -97,6 +99,11 @@ private sentImages: Array<{name: string, size: number}> = [];
 
   // Attach Choice Banner state
   showAttachChoiceBanner = false;
+
+  // Generation Type Selection
+  generationType: 'template' | 'image' = 'template';
+  generatedImages: Array<{url: string, prompt: string}> = [];
+  isGeneratingImage = false;
 
   // Website URL Analyzer state
   showUrlAnalyzer = false;
@@ -134,7 +141,7 @@ private sentImages: Array<{name: string, size: number}> = [];
 
 
     ngOnInit(): void {
-    this.templateName = 'Generated Template';
+    this.templateName = '';
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
         const conversationId = params.get('conversationId');
         
@@ -166,6 +173,18 @@ private sentImages: Array<{name: string, size: number}> = [];
 
   changeViewMode(mode: 'desktop' | 'tablet' | 'mobile'): void {
     this.viewMode = mode;
+  }
+
+  // Generation Type Selection
+  onGenerationTypeChange(type: 'template' | 'image'): void {
+    this.generationType = type;
+    // Clear any previous generation state when switching
+    if (type === 'image') {
+      // Optionally clear template-related state
+    } else {
+      // Optionally clear image-related state
+      this.generatedImages = [];
+    }
   }
 
   // Attach Choice Banner methods
@@ -857,7 +876,7 @@ canDeactivate(): boolean {
           console.log('🔵 [GENERATE PAGE] Messages history:', conversation.messages);
           this.messages$.next(conversation.messages);
           this.currentHtml$.next(conversation.currentHtml);
-          this.templateName = conversation.templateName || 'Generated Template';
+          this.templateName = conversation.templateName || '';
           
           // ✅ Set isRegenerating based on whether there's already generated HTML
           this.isRegenerating = !!conversation.currentHtml;
@@ -971,6 +990,12 @@ async onSend(): Promise<void> {
   
   if ((!message && !this.attachedFile) || this.isGenerating$.value) {
     console.log('🔵 [GENERATE PAGE] onSend blocked - empty message/no file or already generating');
+    return;
+  }
+
+  // Route to image generation if image mode is selected
+  if (this.generationType === 'image') {
+    this.generateImage(message);
     return;
   }
 
@@ -1328,6 +1353,82 @@ private async continueConversation(message: string, imageAttachments: ImageAttac
         this.isGenerating$.next(false);
       },
     });
+}
+
+// Image Generation Method
+async generateImage(prompt: string): Promise<void> {
+  if (!prompt.trim()) {
+    this.snackBar.open('Please enter a prompt to generate an image', 'Close', {
+      duration: 3000,
+      panelClass: ['error-snackbar']
+    });
+    return;
+  }
+
+  this.isGeneratingImage = true;
+  this.userInput = '';
+
+  // Add user message to chat
+  const userMessage: GenerationMessage = {
+    role: 'user',
+    content: prompt,
+    timestamp: new Date()
+  };
+  this.messages$.next([...this.messages$.value, userMessage]);
+  this.scrollToBottom();
+
+  try {
+    const response = await this.ideogramService.generateImage({
+      prompt: prompt,
+      aspectRatio: '1:1',
+      model: 'V_2',
+      magicPromptOption: 'AUTO',
+      styleType: 'GENERAL'
+    }).toPromise();
+
+    if (response && response.data && response.data.length > 0) {
+      // Add generated images to the gallery
+      response.data.forEach(img => {
+        this.generatedImages.push({
+          url: img.url,
+          prompt: img.prompt || prompt
+        });
+      });
+
+      // Add assistant response to chat
+      const assistantMessage: GenerationMessage = {
+        role: 'assistant',
+        content: `✅ Generated ${response.data.length} image(s) successfully!`,
+        timestamp: new Date()
+      };
+      this.messages$.next([...this.messages$.value, assistantMessage]);
+
+      this.snackBar.open('Image generated successfully!', 'Close', {
+        duration: 3000,
+        panelClass: ['success-snackbar']
+      });
+    } else {
+      throw new Error('No images were generated');
+    }
+
+  } catch (error: any) {
+    console.error('Image generation error:', error);
+    
+    const assistantMessage: GenerationMessage = {
+      role: 'assistant',
+      content: `❌ Failed to generate image: ${error.message || 'Unknown error'}`,
+      timestamp: new Date()
+    };
+    this.messages$.next([...this.messages$.value, assistantMessage]);
+
+    this.snackBar.open('Failed to generate image', 'Close', {
+      duration: 4000,
+      panelClass: ['error-snackbar']
+    });
+  } finally {
+    this.isGeneratingImage = false;
+    this.scrollToBottom();
+  }
 }
 
 onRunTests(): void {

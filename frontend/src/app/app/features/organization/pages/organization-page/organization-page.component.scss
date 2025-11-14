@@ -95,13 +95,9 @@
       justify-content: center;
       background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
       border-radius: 50%;
-      
-      svg {
-        width: 40px;
-        height: 40px;
-        color: var(--error-red);
-        stroke-width: 2.5;
-      }
+      color: var(--error-red);
+      font-size: 2.5rem;
+      font-weight: 700;
     }
     
     h2 {

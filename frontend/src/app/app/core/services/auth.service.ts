@@ -20,6 +20,7 @@ export interface User {
     name: string;
     slug: string;
     isOwner?: boolean; // Owner organization flag
+    mailchimpAudienceId?: string; // Organization's Mailchimp audience ID
   }; // Populated organization data
   organizationIsOwner?: boolean; // Flat field for easy access
   createdAt: string;

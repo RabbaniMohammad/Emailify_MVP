@@ -6,6 +6,10 @@ import Organization from '@src/models/Organization';
 import GeneratedTemplate from '@src/models/GeneratedTemplate';
 import TemplateConversation from '@src/models/TemplateConversation';
 import logger from 'jet-logger';
+import { browserPool } from '@src/services/browserPool';
+import { websiteCache } from '@src/services/websiteCache';
+import { scrapingQueue } from '@src/services/scrapingQueue';
+import { memoryMonitor } from '@src/services/memoryMonitor';
 
 const router = Router();
 
@@ -329,6 +333,38 @@ router.delete('/organizations/:slug', authenticate, requireSuperAdmin, async (re
   } catch (error) {
     logger.err('Delete organization error:', error);
     res.status(500).json({ error: 'Failed to delete organization' });
+  }
+});
+
+// Get scraping system stats (admin only)
+router.get('/scraping-stats', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const stats = memoryMonitor.getStats();
+    res.json({
+      ...stats,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.err('Get scraping stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch scraping stats' });
+  }
+});
+
+// Clear cache (admin only)
+router.post('/clear-cache', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const statsBefore = websiteCache.getStats();
+    websiteCache.flush();
+    
+    logger.info(`🧹 [ADMIN] Cache cleared by user: ${(req as any).currentUser.email}`);
+    
+    res.json({ 
+      message: 'Cache cleared successfully',
+      clearedEntries: statsBefore.keys,
+    });
+  } catch (error) {
+    logger.err('Clear cache error:', error);
+    res.status(500).json({ error: 'Failed to clear cache' });
   }
 });
 

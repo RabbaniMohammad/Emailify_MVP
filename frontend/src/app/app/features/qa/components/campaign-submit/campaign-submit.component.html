@@ -186,6 +186,135 @@
   </div>
 
   <!-- ============================================ -->
+  <!-- STEP 2.5: CHANNEL SELECTION (Multi-Channel) -->
+  <!-- ============================================ -->
+  <div class="section-card channel-selection" *ngIf="masterData.length > 0">
+    <div class="card-header">
+      <div class="header-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h3>📢 Select Channels</h3>
+        <p>Choose which channels to send your campaign</p>
+      </div>
+      <div class="step-badge">Channels</div>
+    </div>
+
+    <div class="channels-grid">
+      <!-- Email Channel -->
+      <label class="channel-box" [class.selected]="selectedChannels.email" [class.disabled]="recipientStats.email === 0">
+        <input type="checkbox" [(ngModel)]="selectedChannels.email" [disabled]="recipientStats.email === 0" />
+        <div class="channel-icon email-icon">📧</div>
+        <div class="channel-info">
+          <h4>Email</h4>
+          <p class="channel-count">{{ recipientStats.email | number }} recipients</p>
+          <p class="channel-cost">Free</p>
+        </div>
+        <div class="check-mark" *ngIf="selectedChannels.email">✓</div>
+      </label>
+
+      <!-- SMS Channel -->
+      <label class="channel-box" [class.selected]="selectedChannels.sms" [class.disabled]="recipientStats.sms === 0">
+        <input type="checkbox" [(ngModel)]="selectedChannels.sms" [disabled]="recipientStats.sms === 0" />
+        <div class="channel-icon sms-icon">💬</div>
+        <div class="channel-info">
+          <h4>SMS</h4>
+          <p class="channel-count">{{ recipientStats.sms | number }} recipients</p>
+          <p class="channel-cost">${{ (recipientStats.sms * 0.00645).toFixed(2) }}</p>
+        </div>
+        <div class="check-mark" *ngIf="selectedChannels.sms">✓</div>
+      </label>
+
+      <!-- WhatsApp Channel -->
+      <label class="channel-box" [class.selected]="selectedChannels.whatsapp" [class.disabled]="recipientStats.whatsapp === 0">
+        <input type="checkbox" [(ngModel)]="selectedChannels.whatsapp" [disabled]="recipientStats.whatsapp === 0" />
+        <div class="channel-icon whatsapp-icon">📱</div>
+        <div class="channel-info">
+          <h4>WhatsApp</h4>
+          <p class="channel-count">{{ recipientStats.whatsapp | number }} recipients</p>
+          <p class="channel-cost">Free (first 1,000/month)</p>
+        </div>
+        <div class="check-mark" *ngIf="selectedChannels.whatsapp">✓</div>
+      </label>
+    </div>
+
+    <!-- AI Adaptation Notice -->
+    <div class="ai-notice" *ngIf="selectedChannels.sms || selectedChannels.whatsapp">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="16" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12.01" y2="8"/>
+      </svg>
+      <div>
+        <p>
+          <strong>🤖 AI Content Adaptation Enabled</strong><br>
+          Your email content will be automatically optimized for {{ getSelectedChannelsText() }}.
+        </p>
+        <button 
+          mat-stroked-button 
+          color="primary" 
+          (click)="generateAIPreview()" 
+          [disabled]="aiPreviewLoading || !templateHtml || !subjectControl.value"
+          style="margin-top: 0.5rem;">
+          <mat-icon *ngIf="!aiPreviewLoading">visibility</mat-icon>
+          <mat-progress-spinner *ngIf="aiPreviewLoading" diameter="20" mode="indeterminate"></mat-progress-spinner>
+          {{ aiPreviewLoading ? 'Generating...' : 'Preview AI Messages' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- AI Preview Results -->
+    <div class="ai-preview-results" *ngIf="aiPreview">
+      <div class="preview-header">
+        <h4>🤖 AI-Generated Messages Preview</h4>
+        <p>This is how your email will be adapted for each channel:</p>
+      </div>
+
+      <div class="preview-grid">
+        <!-- SMS Preview -->
+        <div class="preview-card" *ngIf="aiPreview.sms && selectedChannels.sms">
+          <div class="preview-card-header">
+            <span class="preview-icon">💬</span>
+            <h5>SMS Message</h5>
+            <span class="preview-badge">{{ aiPreview.sms.text.length }} chars</span>
+          </div>
+          <div class="preview-content sms-preview">
+            <p>{{ aiPreview.sms.text }}</p>
+          </div>
+          <div class="preview-footer">
+            <small>✓ Optimized for 160-character SMS limit</small>
+          </div>
+        </div>
+
+        <!-- WhatsApp Preview -->
+        <div class="preview-card" *ngIf="aiPreview.whatsapp && selectedChannels.whatsapp">
+          <div class="preview-card-header">
+            <span class="preview-icon">📱</span>
+            <h5>WhatsApp Message</h5>
+            <span class="preview-badge">{{ aiPreview.whatsapp.lineCount }} lines</span>
+          </div>
+          <div class="preview-content whatsapp-preview">
+            <p [innerHTML]="formatWhatsAppText(aiPreview.whatsapp.text)"></p>
+          </div>
+          <div class="preview-footer">
+            <small>✓ Will be sent using template: <code>emailify_campaign</code></small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cost Summary -->
+    <div class="cost-summary" *ngIf="getEstimatedCost() > 0">
+      <div class="cost-row">
+        <span>Estimated Total Cost:</span>
+        <strong>${{ getEstimatedCost().toFixed(2) }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
   <!-- STEP 3: RECONCILIATION RESULTS -->
   <!-- ============================================ -->
   <div class="section-card" *ngIf="reconciliation">

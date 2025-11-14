@@ -1,5 +1,8 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
 import logger from 'jet-logger';
+import { browserPool } from './browserPool';
+import { websiteCache } from './websiteCache';
+import { scrapingQueue } from './scrapingQueue';
 
 export interface Product {
   name: string;
@@ -132,8 +135,31 @@ export function validateUrl(url: string): { valid: boolean; error?: string; norm
 
 /**
  * Main function to analyze a website and extract brand DNA
+ * 
+ * Now optimized with:
+ * 1. Caching - Returns cached results if available (24hr TTL)
+ * 2. Queue - Limits concurrent scrapes to 2 max
+ * 3. Browser pooling - Reuses browser instances
+ * 4. Memory optimization - Disabled images, optimized flags
  */
 export async function analyzeWebsite(url: string, options: AnalyzeOptions = {}): Promise<BrandDNA> {
+  // Check cache first
+  const cachedResult = websiteCache.get(url);
+  if (cachedResult) {
+    logger.info(`📦 Returning cached result for: ${url}`);
+    return cachedResult;
+  }
+
+  // Add to queue to limit concurrency
+  return scrapingQueue.add(async () => {
+    return analyzeWebsiteInternal(url, options);
+  });
+}
+
+/**
+ * Internal scraping function (uses browser pool)
+ */
+async function analyzeWebsiteInternal(url: string, options: AnalyzeOptions = {}): Promise<BrandDNA> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   let browser: Browser | null = null;
   let page: Page | null = null;
@@ -141,17 +167,8 @@ export async function analyzeWebsite(url: string, options: AnalyzeOptions = {}):
   try {
     logger.info(`🌐 Starting website analysis for: ${url}`);
 
-    // Launch browser
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu'
-      ]
-    });
+    // Acquire browser from pool instead of launching new one
+    browser = await browserPool.acquire();
 
     page = await browser.newPage();
 
@@ -215,6 +232,9 @@ export async function analyzeWebsite(url: string, options: AnalyzeOptions = {}):
 
     logger.info(`✅ Website analysis complete - Colors: ${brandDNA.colors.length}, Images: ${brandDNA.images.length}, Content: ${brandDNA.content.length}, CTAs: ${brandDNA.ctas.length}, Products: ${brandDNA.products.length}`);
 
+    // Cache the successful result
+    websiteCache.set(url, brandDNA);
+
     return brandDNA;
 
   } catch (error: any) {
@@ -256,7 +276,8 @@ export async function analyzeWebsite(url: string, options: AnalyzeOptions = {}):
       await page.close().catch(() => {});
     }
     if (browser) {
-      await browser.close().catch(() => {});
+      // Return browser to pool instead of closing it
+      await browserPool.release(browser).catch(() => {});
     }
   }
 }

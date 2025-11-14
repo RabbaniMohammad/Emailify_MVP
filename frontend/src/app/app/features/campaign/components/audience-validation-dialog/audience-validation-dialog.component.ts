@@ -8,6 +8,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatListModule } from '@angular/material/list';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { CampaignService } from '../../../../core/services/campaign.service';
 import { OrganizationService } from '../../../../core/services/organization.service';
 import { ScheduleEmailDialogComponent } from '../schedule-email-dialog/schedule-email-dialog.component';
@@ -85,7 +86,8 @@ export class AudienceValidationDialogComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: ValidationData,
     private campaignService: CampaignService,
     private orgService: OrganizationService,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
@@ -179,31 +181,67 @@ export class AudienceValidationDialogComponent implements OnInit {
     }
 
     const orgName = this.data.organizationName || 'audience';
-    const confirmMsg = `Add ${this.validationResult.masterDocument.new.length} new subscribers to ${orgName}?`;
-    if (!confirm(confirmMsg)) return;
-
-    this.addingSubscribers = true;
-
-    const subscribers = this.validationResult.masterDocument.new.map(email => ({
-      email,
-      firstName: '',
-      lastName: ''
-    }));
-
-    this.orgService.bulkImportSubscribers(this.data.organizationId, subscribers).subscribe({
-      next: (result: any) => {
-        console.log('✅ Added subscribers:', result);
-        alert(`Successfully added ${result.addedCount} subscribers to ${orgName}!`);
-        
-        // Re-validate to update the UI
-        this.validateAudience();
-        this.addingSubscribers = false;
-      },
-      error: (err: any) => {
-        console.error('❌ Failed to add subscribers:', err);
-        alert('Failed to add subscribers: ' + (err.error?.error || 'Unknown error'));
-        this.addingSubscribers = false;
+    const count = this.validationResult.masterDocument.new.length;
+    
+    // Use Material snackbar with action instead of confirm()
+    const snackBarRef = this.snackBar.open(
+      `Add ${count} new subscribers to ${orgName}?`,
+      'Add',
+      {
+        duration: 10000,
+        horizontalPosition: 'center',
+        verticalPosition: 'top',
+        panelClass: ['confirm-snackbar']
       }
+    );
+
+    snackBarRef.onAction().subscribe(() => {
+      this.addingSubscribers = true;
+
+      const subscribers = this.validationResult!.masterDocument.new.map(email => ({
+        email,
+        firstName: '',
+        lastName: ''
+      }));
+
+      this.orgService.bulkImportSubscribers(this.data.organizationId, subscribers).subscribe({
+        next: (result: any) => {
+          console.log('✅ Added subscribers:', result);
+          
+          // Show success snackbar instead of alert()
+          this.snackBar.open(
+            `Successfully added ${result.addedCount} subscribers to ${orgName}!`,
+            'Close',
+            {
+              duration: 5000,
+              horizontalPosition: 'center',
+              verticalPosition: 'top',
+              panelClass: ['success-snackbar']
+            }
+          );
+          
+          // Re-validate to update the UI
+          this.validateAudience();
+          this.addingSubscribers = false;
+        },
+        error: (err: any) => {
+          console.error('❌ Failed to add subscribers:', err);
+          
+          // Show error snackbar instead of alert()
+          this.snackBar.open(
+            'Failed to add subscribers: ' + (err.error?.error || 'Unknown error'),
+            'Close',
+            {
+              duration: 7000,
+              horizontalPosition: 'center',
+              verticalPosition: 'top',
+              panelClass: ['error-snackbar']
+            }
+          );
+          
+          this.addingSubscribers = false;
+        }
+      });
     });
   }
 
@@ -217,7 +255,9 @@ export class AudienceValidationDialogComponent implements OnInit {
 
     // Open schedule dialog
     const dialogRef = this.dialog.open(ScheduleEmailDialogComponent, {
-      width: '600px',
+      width: '700px',
+      maxWidth: '90vw',
+      panelClass: 'schedule-email-dialog-container',
       data: { email }
     });
 
@@ -241,7 +281,9 @@ export class AudienceValidationDialogComponent implements OnInit {
 
     // Open schedule dialog for all excluded subscribers
     const dialogRef = this.dialog.open(ScheduleEmailDialogComponent, {
-      width: '600px',
+      width: '700px',
+      maxWidth: '90vw',
+      panelClass: 'schedule-email-dialog-container',
       data: { email: `All ${this.validationResult.excludedFromCampaign.total} excluded subscribers` }
     });
 
