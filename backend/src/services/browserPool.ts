@@ -49,24 +49,41 @@ class BrowserPoolManager {
       create: async (): Promise<Browser> => {
         logger.info('🚀 Creating new browser instance...');
         
-        const browser = await puppeteer.launch({
-          headless: true,  // Headless mode
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',  // Use /tmp instead of /dev/shm (prevents crashes)
-            '--disable-accelerated-2d-canvas',
-            '--disable-gpu',
-          ],
-          // Memory limits
-          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-        });
+        try {
+          // Add timeout to prevent hanging
+          const launchPromise = puppeteer.launch({
+            headless: true,  // Headless mode
+            timeout: 60000,  // 60 second timeout for browser launch
+            args: [
+              '--no-sandbox',
+              '--disable-setuid-sandbox',
+              '--disable-dev-shm-usage',  // Use /tmp instead of /dev/shm (prevents crashes)
+              '--disable-accelerated-2d-canvas',
+              '--disable-gpu',
+              '--disable-software-rasterizer',
+              '--single-process',  // Run in single process (uses less memory)
+            ],
+            // Memory limits
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+          });
 
-        browser.on('disconnected', () => {
-          logger.warn('⚠️ Browser disconnected unexpectedly');
-        });
+          const browser = await launchPromise;
+          logger.info('✅ Browser instance created successfully');
 
-        return browser;
+          browser.on('disconnected', () => {
+            logger.warn('⚠️ Browser disconnected unexpectedly');
+          });
+
+          return browser;
+        } catch (error: any) {
+          logger.err('❌ Failed to create browser instance:');
+          logger.err(`Error message: ${error?.message || 'Unknown error'}`);
+          logger.err(`Error name: ${error?.name || 'Unknown'}`);
+          if (error?.stack) {
+            logger.err(`Stack trace: ${error.stack}`);
+          }
+          throw error;  // Re-throw to let pool handle retry logic
+        }
       },
 
       destroy: async (browser: Browser): Promise<void> => {
