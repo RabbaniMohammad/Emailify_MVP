@@ -4,6 +4,7 @@ import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
 import { tap, catchError, finalize } from 'rxjs/operators';
 import { CacheService } from './cache.service';
 import { DatabaseService } from '../../../core/services/db.service';
+import { PreviewCacheService } from '../../features/templates/components/template-preview/preview-cache.service';
 
 // Interfaces
 export interface TemplateItem {
@@ -57,6 +58,7 @@ export class TemplatesService {
   private http = inject(HttpClient);
   private cache = inject(CacheService);
   private db = inject(DatabaseService); // 🔥 ADD IndexedDB
+  private previewCache = inject(PreviewCacheService); // ✅ For caching template HTML
 
   private state = new BehaviorSubject<TemplatesState>(INITIAL_STATE);
   public readonly state$ = this.state.asObservable();
@@ -388,6 +390,11 @@ export class TemplatesService {
       : CACHE_KEYS.TEMPLATES_LIST;
     
     this.cache.set(cacheKey, updatedItems, CACHE_TTL.LIST, 'session');
+    
+    // ✅ Cache HTML content in PreviewCacheService for immediate loading
+    if (template.content) {
+      this.previewCache.set(template.id, template.content);
+    }
     
     // Save to IndexedDB (async but we don't wait)
     this.db.cacheTemplate({

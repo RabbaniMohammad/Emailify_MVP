@@ -1526,6 +1526,24 @@
       background: linear-gradient(135deg, rgba(239, 68, 68, 0.02) 0%, rgba(220, 38, 38, 0.02) 100%);
     }
   }
+  
+  // ✅ Case 2: Missing from HTML - Red border
+  &.missing-from-html {
+    &::before {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    }
+  }
+  
+  // ✅ Case 3: Extra in HTML - Orange/Yellow border
+  &.extra-in-html {
+    &::before {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+    
+    &:hover {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.02) 0%, rgba(217, 119, 6, 0.02) 100%);
+    }
+  }
 }
 
 .validation-status {
@@ -1601,6 +1619,39 @@
   margin-top: 0.25rem; // Reduced margin
   font-style: italic;
   word-break: break-word; // Ensure wrapping
+  
+  // ✅ Case 1: Matched (success)
+  &.success {
+    color: #059669;
+    font-weight: 600;
+    font-style: normal;
+    background: rgba(16, 185, 129, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  
+  // ✅ Case 2: Missing from HTML (error)
+  &.error {
+    color: #dc2626;
+    font-weight: 600;
+    font-style: normal;
+    background: rgba(239, 68, 68, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  
+  // ✅ Case 3: Extra in HTML (warning)
+  &.warning {
+    color: #d97706;
+    font-weight: 600;
+    font-style: normal;
+    background: rgba(245, 158, 11, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+  }
 }
 
 .no-results {

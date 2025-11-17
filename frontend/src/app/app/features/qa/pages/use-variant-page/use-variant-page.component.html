@@ -396,26 +396,56 @@
           </div>
 
           <div class="validation-grid" *ngIf="checks.length">
-            <div class="validation-item" *ngFor="let c of checks"
-                 [class.valid]="c.inHtml && c.inFile"
-                 [class.invalid]="!c.inHtml || !c.inFile">
-              <div class="validation-status">
-                <svg *ngIf="c.inHtml && c.inFile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                <svg *ngIf="!c.inHtml && c.inFile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                <svg *ngIf="c.inHtml && !c.inFile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
+            <!-- Case 1: Matched (HTML + Document) -->
+            <ng-container *ngFor="let c of checks">
+              <div class="validation-item matched" 
+                   *ngIf="c.status === 'matched'"
+                   [class.valid]="true">
+                <div class="validation-status">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <div class="validation-content">
+                  <a [href]="c.url" target="_blank" class="validation-url">{{ c.url }}</a>
+                  <div class="validation-reason success">Link matched</div>
+                </div>
               </div>
-              <div class="validation-content">
-                <a [href]="c.url" target="_blank" class="validation-url">{{ c.url }}</a>
-                <div class="validation-reason" *ngIf="c.inFile && !c.inHtml">Missing from HTML</div>
-                <div class="validation-reason" *ngIf="!c.inFile && c.inHtml">Extra link in HTML</div>
+            </ng-container>
+            
+            <!-- Case 2: Missing from HTML (Document++, HTML--) -->
+            <ng-container *ngFor="let c of checks">
+              <div class="validation-item missing-from-html" 
+                   *ngIf="c.status === 'missing-from-html'"
+                   [class.invalid]="true">
+                <div class="validation-status">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <div class="validation-content">
+                  <a [href]="c.url" target="_blank" class="validation-url">{{ c.url }}</a>
+                  <div class="validation-reason error">Missing from the html</div>
+                </div>
               </div>
-            </div>
+            </ng-container>
+            
+            <!-- Case 3: Extra in HTML (HTML++, Document--) -->
+            <ng-container *ngFor="let c of checks">
+              <div class="validation-item extra-in-html" 
+                   *ngIf="c.status === 'extra-in-html'"
+                   [class.invalid]="true">
+                <div class="validation-status">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                </div>
+                <div class="validation-content">
+                  <a [href]="c.url" target="_blank" class="validation-url">{{ c.url }}</a>
+                  <div class="validation-reason warning">Additional link in html missing in docs</div>
+                </div>
+              </div>
+            </ng-container>
           </div>
 
           <div *ngIf="!checks.length" class="no-results">

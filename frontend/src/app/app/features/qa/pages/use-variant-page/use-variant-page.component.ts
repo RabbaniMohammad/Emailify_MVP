@@ -33,7 +33,12 @@ type AssistantPayload = {
   json: ChatAssistantJson;
 };
 
-type LinkCheck = { url: string; inFile: boolean; inHtml: boolean };
+type LinkCheck = { 
+  url: string; 
+  inFile: boolean; 
+  inHtml: boolean;
+  status: 'matched' | 'missing-from-html' | 'extra-in-html'; // ✅ Clear case categorization
+};
 
 @Component({
   selector: 'app-use-variant-page',
@@ -204,17 +209,31 @@ readonly linkChecks$ = combineLatest([this.validLinks$, this.htmlLinks$]).pipe(
 
       const checks: LinkCheck[] = union.map(u => {
         const normalized = this.normalizeUrl(u);
+        const inFile = fset.has(normalized);
+        const inHtml = hset.has(normalized);
+        
+        // ✅ Categorize into three clear cases
+        let status: 'matched' | 'missing-from-html' | 'extra-in-html';
+        if (inHtml && inFile) {
+          status = 'matched'; // Case 1: HTML + Document (matched)
+        } else if (!inHtml && inFile) {
+          status = 'missing-from-html'; // Case 2: Document++, HTML-- (missing from HTML)
+        } else {
+          status = 'extra-in-html'; // Case 3: HTML++, Document-- (extra link in HTML)
+        }
+        
         return {
           url: u,
-          inFile: fset.has(normalized),
-          inHtml: hset.has(normalized),
+          inFile,
+          inHtml,
+          status,
         };
       });
       
+      // ✅ Sort: matched first, then missing-from-html, then extra-in-html
       checks.sort((a, b) => {
-        const aw = (a.inFile && a.inHtml) ? 1 : 0;
-        const bw = (b.inFile && b.inHtml) ? 1 : 0;
-        return aw - bw;
+        const order = { 'matched': 0, 'missing-from-html': 1, 'extra-in-html': 2 };
+        return order[a.status] - order[b.status];
       });
       return checks;
     } catch (error) {

@@ -564,6 +564,31 @@ this.svc.state$
     this.loading = true;
     this.cdr.markForCheck();
 
+    // ✅ Check TemplatesService state first (for newly added templates)
+    const currentState = this.svc.snapshot;
+    const templateFromState = currentState.items.find(t => t.id === id);
+    if (templateFromState?.content) {
+      // Template content is in state (e.g., newly saved template)
+      const wrapped = this.ensureDoc(templateFromState.content);
+      const cleaned = this.stripDangerousBits(wrapped);
+      this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(cleaned);
+      
+      // Cache it for future use
+      this.cache.set(id, templateFromState.content);
+      
+      // Set fallback timeout
+      this.loadingTimer = setTimeout(() => {
+        if (this.svc.snapshot.selectedId === id) {
+          this.loading = false;
+          this.showRunButton(id);
+          this.cdr.markForCheck();
+        }
+      }, 100);
+      
+      this.cdr.markForCheck();
+      return;
+    }
+
     // Check cache first
     const cached = this.cache.get(id) || this.cache.getPersisted(id);
     if (cached) {
