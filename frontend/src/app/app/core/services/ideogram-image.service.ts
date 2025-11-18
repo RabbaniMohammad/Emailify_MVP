@@ -27,7 +27,11 @@ export interface IdeogramGenerationResponse {
 })
 export class IdeogramImageService {
   private http = inject(HttpClient);
-  private apiUrl = '/api/ideogram'; // Backend proxy endpoint
+  // Prefer using the existing backend Ideogram routes if available (/api/ideogram).
+  // We previously used a separate proxy at /api/ai-image to experiment with v3.
+  // If your Ideogram API key is for v2 (or the app already has working /api/ideogram routes),
+  // switch to '/api/ideogram' so we reuse the existing handlers.
+  private apiUrl = '/api/ideogram'; // use existing backend ideogram routes by default
 
   /**
    * Generate images using Ideogram 2.0 API
@@ -39,7 +43,7 @@ export class IdeogramImageService {
         aspect_ratio: request.aspectRatio || '1:1',
         model: request.model || 'V_2',
         magic_prompt_option: request.magicPromptOption || 'AUTO',
-        style_type: request.styleType || 'GENERAL',
+  style_type: request.styleType || 'REALISTIC',
         ...(request.negativePrompt && { negative_prompt: request.negativePrompt })
       }
     };
@@ -48,6 +52,12 @@ export class IdeogramImageService {
       `${this.apiUrl}/generate`,
       payload
     ).pipe(
+      // Our backend proxies Ideogram and wraps responses as { success: true, data: <ideogramResponse> }
+      // Normalize so callers receive the inner Ideogram response directly.
+      map((res: any) => {
+        if (res && res.data) return res.data as IdeogramGenerationResponse;
+        return res as IdeogramGenerationResponse;
+      }),
       catchError(error => {
         console.error('Ideogram API Error:', error);
         return throwError(() => new Error(
@@ -105,7 +115,7 @@ export class IdeogramImageService {
         aspect_ratio: options?.aspectRatio || '1:1',
         model: options?.model || 'V_2',
         magic_prompt_option: options?.magicPromptOption || 'AUTO',
-        style_type: options?.styleType || 'GENERAL',
+  style_type: options?.styleType || 'REALISTIC',
         ...(options?.negativePrompt && { negative_prompt: options.negativePrompt })
       }
     };
@@ -114,6 +124,11 @@ export class IdeogramImageService {
       `${this.apiUrl}/remix`,
       payload
     ).pipe(
+      map((res: any) => {
+        // Backend wraps Ideogram responses as { success: true, data: <ideogramResponse> }
+        if (res && res.data) return res.data as IdeogramGenerationResponse;
+        return res as IdeogramGenerationResponse;
+      }),
       catchError(error => {
         console.error('Ideogram Remix Error:', error);
         return throwError(() => new Error(
