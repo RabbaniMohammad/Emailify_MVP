@@ -173,20 +173,32 @@
       [style.top.px]="modalPosition.y"
       [@slideIn]>
       
-      <!-- Header -->
+      <!-- Header with Tabs -->
       <div 
         class="dropdown-header"
         (mousedown)="onModalHeaderMouseDown($event)"
         [class.draggable-header]="modalDragEnabled">
-        <h3>
-          <mat-icon>report_problem</mat-icon>
-          Failed Edits
-        </h3>
-        <span class="edit-count">{{ getPendingEditsCount() }} pending</span>
+        <div class="widget-tabs">
+          <button 
+            class="widget-tab" 
+            [class.active]="activeWidgetTab === 'edits'"
+            (click)="switchWidgetTab('edits')">
+            <mat-icon>report_problem</mat-icon>
+            <span>Failed Edits</span>
+            <span class="tab-badge" *ngIf="getPendingEditsCount() > 0">{{ getPendingEditsCount() }}</span>
+          </button>
+          <button 
+            class="widget-tab" 
+            [class.active]="activeWidgetTab === 'chat'"
+            (click)="switchWidgetTab('chat')">
+            <mat-icon>chat</mat-icon>
+            <span>QA Assistant</span>
+          </button>
+        </div>
       </div>
       
-      <!-- Scrollable List -->
-      <div class="dropdown-content">
+      <!-- Failed Edits Content -->
+      <div class="dropdown-content" *ngIf="activeWidgetTab === 'edits'">
         <div 
           class="suggestion-item"
           *ngFor="let edit of failedEdits; let i = index"
@@ -240,6 +252,44 @@
         <div class="empty-state" *ngIf="getPendingEditsCount() === 0">
           <mat-icon>check_circle</mat-icon>
           <p>All edits applied!</p>
+        </div>
+      </div>
+
+      <!-- Chat Content (QA Assistant) -->
+      <div class="chat-container" *ngIf="activeWidgetTab === 'chat'">
+        <div class="chat-messages" #chatMessages>
+          <div
+            class="chat-msg"
+            *ngFor="let m of (messages$ | async) ?? []; let i = index; trackBy: trackByMsg">
+            <div class="bubble" [class.me]="m.role === 'user'">
+              <div class="who">{{ m.role === 'user' ? 'YOU' : 'QA ASSISTANT' }}</div>
+              <div class="text" [innerText]="m.text"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="composer">
+          <textarea
+            class="message-input"
+            [formControl]="chatInput"
+            placeholder="Ask for changes or ideas..."
+            rows="2"
+            (keydown)="handleChatKeyDown($event)">
+          </textarea>
+          <button
+            mat-raised-button
+            class="send-btn"
+            (click)="onSendChat()"
+            [disabled]="sendingChat || !chatInput.value.trim()">
+            <mat-progress-spinner
+              *ngIf="sendingChat"
+              diameter="18"
+              mode="indeterminate">
+            </mat-progress-spinner>
+            <svg *ngIf="!sendingChat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
+          </button>
         </div>
       </div>
       

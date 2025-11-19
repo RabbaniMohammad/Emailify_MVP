@@ -6,15 +6,16 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { Router, ActivatedRoute } from '@angular/router';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import grapesjs from 'grapesjs';
 import grapesjsPresetNewsletter from 'grapesjs-preset-newsletter';
 import { CacheService } from '../../core/services/cache.service';
 import { AuthService } from '../../core/services/auth.service';
 import { trigger, state, style, transition, animate } from '@angular/animations';
-import { BehaviorSubject, Observable, firstValueFrom } from 'rxjs';
+import { BehaviorSubject, Observable, firstValueFrom, Subscription } from 'rxjs';
 import { TemplateStateService } from '../../core/services/template-state.service';
+import { QaService, ChatTurn, ChatThread, ChatAssistantJson, ChatIntent } from '../../features/qa/services/qa.service';
 import type { Editor } from 'grapesjs';
 
 interface MatchOverlay {
@@ -34,6 +35,7 @@ interface MatchOverlay {
   imports: [
     CommonModule,
     FormsModule,
+    ReactiveFormsModule,
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
@@ -76,6 +78,7 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private http = inject(HttpClient);
   private cdr = inject(ChangeDetectorRef);
   private templateState = inject(TemplateStateService);
+  private qa = inject(QaService);
   private longPressTimer: any;
 
   // Auto-save throttling
@@ -109,6 +112,7 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   showFloatingWidget = false;
   isWidgetOpen = false;
   hasShownPulseAnimation = false;
+  activeWidgetTab: 'edits' | 'chat' = 'edits'; // Tab switcher for widget
 
   // Widget Position (draggable) - now in pixels
   widgetPosition = { x: 20, y: 100 };
@@ -142,6 +146,16 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   templateId: string | null = null;
   originalGoldenHtml: string = '';
+
+  // Chat State (QA Assistant)
+  private messagesSubject = new BehaviorSubject<ChatTurn[]>([]);
+  readonly messages$ = this.messagesSubject.asObservable();
+  chatInput = new FormControl<string>('', { nonNullable: true });
+  sendingChat = false;
+  @ViewChild('chatMessages', { static: false }) chatMessagesRef?: ElementRef<HTMLDivElement>;
+  private scrollAnimation: number | null = null;
+  private draftMessageKey = '';
+  private chatInputSubscription?: Subscription;
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
@@ -226,6 +240,16 @@ export class VisualEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     
     if (this.autoSaveTimer) {
       clearTimeout(this.autoSaveTimer);
+    }
+
+    // ✅ Cleanup chat subscription
+    if (this.chatInputSubscription) {
+      this.chatInputSubscription.unsubscribe();
+    }
+
+    // ✅ Cancel scroll animation
+    if (this.scrollAnimation) {
+      cancelAnimationFrame(this.scrollAnimation);
     }
     
     // ✅ CLEANUP: Remove validation-modal-open class to restore navbar
@@ -1478,6 +1502,10 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
           x: this.widgetPosition.x,
           y: this.widgetPosition.y + 70  // Position modal below button
         };
+        // Initialize chat if switching to chat tab
+        if (this.activeWidgetTab === 'chat') {
+          this.initializeChat();
+        }
       }
       
       if (this.isWidgetOpen && !this.hasShownPulseAnimation) {
@@ -1495,6 +1523,10 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
           x: this.widgetPosition.x,
           y: this.widgetPosition.y + 70  // Position modal below button
         };
+        // Initialize chat if switching to chat tab
+        if (this.activeWidgetTab === 'chat') {
+          this.initializeChat();
+        }
       }
       
       if (this.isWidgetOpen && !this.hasShownPulseAnimation) {
@@ -2521,5 +2553,291 @@ async onCheckPreview(): Promise<void> {
       selection?.removeAllRanges();
       selection?.addRange(range);
     }
+  }
+
+  // ============================================
+  // CHAT METHODS (QA Assistant)
+  // ============================================
+
+  switchWidgetTab(tab: 'edits' | 'chat'): void {
+    this.activeWidgetTab = tab;
+    if (tab === 'chat' && this.isWidgetOpen) {
+      this.initializeChat();
+    }
+    this.cdr.markForCheck();
+  }
+
+  private initializeChat(): void {
+    if (!this.templateId) return;
+
+    // ✅ If failed edits exist, we're already editing a variant (context is available)
+    const hasFailedEdits = this.failedEdits.length > 0;
+
+    // Check if we have variant metadata (runId/no) for chat
+    const variantMeta = localStorage.getItem(`visual_editor_${this.templateId}_variant_meta`);
+    if (!variantMeta) {
+      // If failed edits exist but no variant metadata, that's an error state
+      if (hasFailedEdits) {
+        const errorMsg: ChatTurn = {
+          role: 'assistant',
+          text: 'Unable to initialize chat: variant context is missing. Please navigate back to the variant page and try again.',
+          json: null,
+          ts: Date.now(),
+        };
+        this.messagesSubject.next([errorMsg]);
+        this.cdr.markForCheck();
+        return;
+      }
+
+      // No variant context and no failed edits - show message that chat requires variant editing
+      const message: ChatTurn = {
+        role: 'assistant',
+        text: "I'm here to help! However, the QA Assistant chat works best when editing a variant. If you're editing the original or golden template, please navigate to a variant to use the chat feature.",
+        json: null,
+        ts: Date.now(),
+      };
+      this.messagesSubject.next([message]);
+      this.cdr.markForCheck();
+      return;
+    }
+
+    try {
+      const meta = JSON.parse(variantMeta);
+      const { runId, no } = meta;
+
+      // Set up draft message key
+      this.draftMessageKey = `draft_message_${runId}_${no}`;
+
+      // Unsubscribe from previous subscription if exists
+      if (this.chatInputSubscription) {
+        this.chatInputSubscription.unsubscribe();
+      }
+
+      // Subscribe to input changes for draft saving
+      this.chatInputSubscription = this.chatInput.valueChanges.subscribe(value => {
+        this.saveDraft(value);
+      });
+
+      // Restore draft message
+      const draft = this.restoreDraft();
+      if (draft) {
+        this.chatInput.setValue(draft);
+      }
+
+      // Set up scroll event listeners
+      setTimeout(() => {
+        const chatElement = this.chatMessagesRef?.nativeElement;
+        if (chatElement) {
+          chatElement.addEventListener('wheel', () => {
+            if (this.scrollAnimation) {
+              cancelAnimationFrame(this.scrollAnimation);
+              this.scrollAnimation = null;
+            }
+          });
+          
+          chatElement.addEventListener('touchmove', () => {
+            if (this.scrollAnimation) {
+              cancelAnimationFrame(this.scrollAnimation);
+              this.scrollAnimation = null;
+            }
+          });
+        }
+      }, 0);
+
+      // Try to load cached chat thread
+      const cachedThread = this.qa.getChatCached(runId, no);
+      if (cachedThread && cachedThread.messages.length > 0) {
+        this.messagesSubject.next(cachedThread.messages);
+        setTimeout(() => this.scrollChatToBottom(), 50);
+        return;
+      }
+
+      // Initialize with intro message
+      const intro: ChatTurn = {
+        role: 'assistant',
+        text: "Hi! I'm here to help refine your email template. Here's what I can do:\n\n• Design Ideas – Ask for layout, color, or content suggestions\n\n• SEO Tips – Get recommendations for better deliverability and engagement\n\n• QA Review – Get feedback on tone, clarity, and professional quality\n\n• Content Strategy – Discuss improvements to structure and messaging\n\nWhat would you like to improve?",
+        json: null,
+        ts: Date.now(),
+      };
+      this.messagesSubject.next([intro]);
+
+      // Get HTML from editor
+      const html = this.editor?.getHtml() || '';
+      const thread: ChatThread = { html, messages: [intro] };
+      this.qa.saveChat(runId, no, thread);
+      
+      setTimeout(() => this.scrollChatToBottom(), 50);
+    } catch (error) {
+      const errorMsg: ChatTurn = {
+        role: 'assistant',
+        text: 'Failed to initialize chat. Please try refreshing the page.',
+        json: null,
+        ts: Date.now(),
+      };
+      this.messagesSubject.next([errorMsg]);
+    }
+  }
+
+  async onSendChat(): Promise<void> {
+    const message = (this.chatInput.value || '').trim();
+    if (!message || this.sendingChat || !this.templateId) return;
+    
+    this.chatInput.setValue('');
+    this.saveDraft('');
+    this.sendingChat = true;
+
+    // Get variant metadata for chat
+    const variantMeta = localStorage.getItem(`visual_editor_${this.templateId}_variant_meta`);
+    if (!variantMeta) {
+      this.sendingChat = false;
+      return;
+    }
+
+    try {
+      const meta = JSON.parse(variantMeta);
+      const { runId, no } = meta;
+
+      // Get HTML from editor
+      const html = this.editor?.getHtml() || '';
+
+      // Get message history (last 6 messages)
+      const hist = (this.messagesSubject.value || []).slice(-6).map(t => ({
+        role: t.role,
+        content: t.text,
+      }));
+
+      // Add user message
+      const userTurn: ChatTurn = { role: 'user', text: message, ts: Date.now() };
+      const msgs = [...this.messagesSubject.value, userTurn];
+      this.messagesSubject.next(msgs);
+      this.persistThread(runId, no, html, msgs);
+      
+      setTimeout(() => this.scrollChatToBottom(), 50);
+
+      // Send to backend
+      type AssistantPayload = {
+        assistantText: string;
+        json: ChatAssistantJson;
+      };
+
+      const resp = await firstValueFrom(
+        this.qa.sendChatMessage(runId, no, html, hist, message)
+      ) as AssistantPayload;
+
+      const processedJson = this.toAssistantJson(resp.json);
+      const assistantTurn: ChatTurn = {
+        role: 'assistant',
+        text: resp.assistantText || 'Okay.',
+        json: processedJson,
+        ts: Date.now(),
+      };
+      const msgs2 = [...this.messagesSubject.value, assistantTurn];
+      this.messagesSubject.next(msgs2);
+      this.persistThread(runId, no, html, msgs2);
+      
+      setTimeout(() => this.scrollChatToBottom(), 50);
+    } catch (e) {
+    } finally {
+      this.sendingChat = false;
+    }
+  }
+
+  handleChatKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.onSendChat();
+    }
+  }
+
+  scrollChatToBottom(): void {
+    const element = this.chatMessagesRef?.nativeElement || document.querySelector('.chat-messages');
+    if (element) {
+      this.smoothScrollTo(element.scrollHeight);
+    }
+  }
+
+  private smoothScrollTo(targetPosition: number): void {
+    const element = this.chatMessagesRef?.nativeElement || document.querySelector('.chat-messages');
+    if (!element) return;
+
+    if (this.scrollAnimation) {
+      cancelAnimationFrame(this.scrollAnimation);
+    }
+
+    const startPosition = element.scrollTop;
+    const distance = targetPosition - startPosition;
+    const duration = 800;
+    let startTime: number | null = null;
+
+    const animateScroll = (currentTime: number) => {
+      if (startTime === null) startTime = currentTime;
+      const timeElapsed = currentTime - startTime;
+      const progress = Math.min(timeElapsed / duration, 1);
+
+      const ease = progress < 0.5 
+        ? 2 * progress * progress 
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+      element.scrollTop = startPosition + distance * ease;
+
+      if (progress < 1) {
+        this.scrollAnimation = requestAnimationFrame(animateScroll);
+      } else {
+        this.scrollAnimation = null;
+      }
+    };
+
+    this.scrollAnimation = requestAnimationFrame(animateScroll);
+  }
+
+  private saveDraft(message: string): void {
+    try {
+      if (this.draftMessageKey) {
+        if (message.trim()) {
+          sessionStorage.setItem(this.draftMessageKey, message);
+        } else {
+          sessionStorage.removeItem(this.draftMessageKey);
+        }
+      }
+    } catch (error) {
+    }
+  }
+
+  private restoreDraft(): string {
+    try {
+      if (this.draftMessageKey) {
+        return sessionStorage.getItem(this.draftMessageKey) || '';
+      }
+    } catch (error) {
+    }
+    return '';
+  }
+
+  trackByMsg = (_: number, m: ChatTurn): number => m?.ts ?? _;
+
+  private persistThread(runId: string, no: number, html: string, messages: ChatTurn[]): void {
+    const thread: ChatThread = { html, messages };
+    this.qa.saveChat(runId, no, thread);
+  }
+
+  private toAssistantJson(raw: any): ChatAssistantJson {
+    const intents: ChatIntent[] = ['suggest', 'edit', 'both', 'clarify'];
+    const intent: ChatIntent = intents.includes(raw?.intent) ? (raw.intent as ChatIntent) : 'suggest';
+
+    const ideas = Array.isArray(raw?.ideas) ? raw.ideas.map((s: any) => String(s ?? '')) : [];
+    const notes = Array.isArray(raw?.notes) ? raw.notes.map((s: any) => String(s ?? '')) : [];
+    const targets = Array.isArray(raw?.targets) ? raw.targets.map((s: any) => String(s ?? '')) : [];
+
+    const edits = Array.isArray(raw?.edits)
+      ? raw.edits.map((e: any) => ({
+          find: String(e?.find ?? ''),
+          replace: String(e?.replace ?? ''),
+          before_context: String(e?.before_context ?? ''),
+          after_context: String(e?.after_context ?? ''),
+          reason: e?.reason != null ? String(e.reason) : undefined,
+        })).filter((e: any) => e.find && e.replace)
+      : [];
+
+    return { intent, ideas, edits, targets, notes };
   }
 }
