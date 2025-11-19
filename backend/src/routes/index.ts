@@ -9,6 +9,7 @@ import qaAdvancedRouter from './qa-advanced';
 import organizationRouter from './organization.routes';
 import documentToPromptRouter from './documentToPrompt';
 import ideogramRouter from './ideogram.routes';
+import generatedImagesRouter from './generatedImages';
 import multiChannelRouter from './multiChannel.routes';
 import contentAdaptationRouter from './contentAdaptation.routes';
 import testRouter from './test.routes';
@@ -40,6 +41,7 @@ apiRouter.use('/content-adaptation', contentAdaptationRouter); // → /api/conte
 apiRouter.use('/test', testRouter);                  // → /api/test/... (NO AUTH)
 apiRouter.use('/', documentToPromptRouter);          // → /api/csv-to-prompt
 apiRouter.use('/ideogram', ideogramRouter);          // → /api/ideogram/...
+apiRouter.use('/images', generatedImagesRouter);     // → /api/images/...
 apiRouter.use('/', websiteAnalyzerRouter);           // → /api/analyze-website
 // Note: /generate router is mounted directly in server.ts
 

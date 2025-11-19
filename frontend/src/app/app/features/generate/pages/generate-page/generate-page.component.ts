@@ -75,6 +75,7 @@ private sentImages: Array<{name: string, size: number}> = [];
 
   @ViewChild('messagesContainer') messagesContainer?: ElementRef;
   @ViewChild('messageInput') messageInput?: ElementRef;
+  @ViewChild(TemplatePreviewPanelComponent) previewPanel?: TemplatePreviewPanelComponent;
 
   // State
   conversationId: string | null = null;
@@ -104,6 +105,48 @@ private sentImages: Array<{name: string, size: number}> = [];
   generationType: 'template' | 'image' = 'template';
   generatedImages: Array<{url: string, prompt: string}> = [];
   isGeneratingImage = false;
+  // HTML for image gallery preview (rendered in left preview panel when generationType==='image')
+  imageGalleryHtml: string = '';
+  // Fallback placeholder HTML shown before any images are generated
+  // Use the same robot/hero styling as the template preview panel so image mode feels consistent
+  imagePlaceholderHtml: string = `<!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+      html,body{width:100%;height:100%;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center}
+      .container{display:flex;flex-direction:column;align-items:center;gap:12px;color:#475569}
+      .robot{width:120px;height:120px}
+      h2{margin:0;font-size:22px;color:#111827}
+      p{margin:0;color:#6b7280}
+      .badge{display:inline-flex;align-items:center;gap:8px;background:#fff;border-radius:20px;padding:8px 12px;border:1px solid rgba(15,23,42,0.06);box-shadow:0 6px 18px rgba(15,23,42,0.04)}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <svg class="robot" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="60" y="70" width="80" height="70" rx="10" fill="url(#robotGradient)" stroke="currentColor" stroke-width="3"/>
+        <line x1="100" y1="70" x2="100" y2="50" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="100" cy="45" r="5" fill="currentColor"/>
+        <circle cx="80" cy="95" r="8" fill="currentColor"/>
+        <circle cx="120" cy="95" r="8" fill="currentColor"/>
+        <path d="M 75 115 Q 100 125 125 115" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>
+        <path class="sparkle sparkle-1" d="M 145 75 L 147 80 L 152 82 L 147 84 L 145 89 L 143 84 L 138 82 L 143 80 Z" fill="currentColor"/>
+        <path class="sparkle sparkle-2" d="M 48 85 L 50 90 L 55 92 L 50 94 L 48 99 L 46 94 L 41 92 L 46 90 Z" fill="currentColor"/>
+        <defs>
+          <linearGradient id="robotGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#667eea;stop-opacity:0.3" />
+            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:0.3" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <h2>AI-Powered Generation</h2>
+      <p>AI can make mistakes. Please review and verify all generated content carefully before use.</p>
+      <div class="badge">⭐ Always Verify</div>
+    </div>
+  </body>
+  </html>`;
 
   // Website URL Analyzer state
   showUrlAnalyzer = false;
@@ -163,6 +206,14 @@ private sentImages: Array<{name: string, size: number}> = [];
     });
     }
 
+  // Shared assistant welcome text usable for both email template and image modes
+  private sharedAssistantWelcome = `👋 Hi — I can help generate email templates or marketing images. Describe what you'd like and include any exact on-image text in quotes (for example: "BUY ONE GET ONE — $10").
+
+Examples:
+• "Create a welcome email for new subscribers"
+• "Design an Instagram banner featuring a spicy dosa with headline 'TODAY: 20% OFF'"
+• "Make a mobile-first product announcement email"`;
+
   private generateUUID(): string {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
       const r = Math.random() * 16 | 0;
@@ -181,9 +232,43 @@ private sentImages: Array<{name: string, size: number}> = [];
     // Clear any previous generation state when switching
     if (type === 'image') {
       // Optionally clear template-related state
+      // Ensure the image preview shows the shared robot placeholder when no images yet
+      if (!this.imageGalleryHtml || !this.imageGalleryHtml.trim()) {
+        this.imageGalleryHtml = this.imagePlaceholderHtml;
+      }
+      // If there are no existing messages, initialize the shared assistant welcome so the right pane matches
+      const msgs = this.messages$.value || [];
+      if (!msgs || msgs.length === 0) {
+        this.initializeWelcome();
+      } else if (msgs.length === 1 && msgs[0].role === 'assistant') {
+        // If the conversation only contains the original assistant welcome, replace it with the shared message
+        const updated = [{ ...msgs[0], content: this.sharedAssistantWelcome }];
+        this.messages$.next(updated);
+      }
     } else {
       // Optionally clear image-related state
       this.generatedImages = [];
+    }
+  }
+
+  // Open Save Generated Image dialog
+  async openSaveImageDialog(): Promise<void> {
+    // Lazy import dialog component to avoid circular module issues
+    try {
+      const { SaveGeneratedImageDialog } = await import('../save-generated-image-dialog.component');
+      const dialogRef = this.dialog.open(SaveGeneratedImageDialog, {
+        width: '700px',
+        data: { images: this.generatedImages, prompt: this.generatedImages?.[0]?.prompt || '' }
+      });
+
+      dialogRef.afterClosed().subscribe((result: any) => {
+        if (result && result.success) {
+          this.snackBar.open('Image saved!', 'Close', { duration: 3000, panelClass: ['success-snackbar'] });
+        }
+      });
+    } catch (err) {
+      console.error('Failed to open save dialog', err);
+      this.snackBar.open('Failed to open save dialog', 'Close', { duration: 3000, panelClass: ['error-snackbar'] });
     }
   }
 
@@ -834,8 +919,7 @@ canDeactivate(): boolean {
     // Show welcome message
     const welcomeMessage: GenerationMessage = {
       role: 'assistant',
-      content:
-        "👋 Hi! I'm your email template generator. Describe the email template you'd like to create, and I'll generate it for you.\n\nFor example:\n• \"Create a welcome email for new subscribers\"\n• \"Design a product launch announcement\"\n• \"Make a monthly newsletter template\"",
+      content: this.sharedAssistantWelcome,
       timestamp: new Date(),
     };
     this.messages$.next([welcomeMessage]);
@@ -994,10 +1078,30 @@ async onSend(): Promise<void> {
   }
 
   // Route to image generation if image mode is selected
-  if (this.generationType === 'image') {
-    this.generateImage(message);
-    return;
-  }
+    if (this.generationType === 'image') {
+      // Add the user's message to the chat UI so the conversation remains conversational
+      const userMessage: GenerationMessage = {
+        role: 'user',
+        content: message,
+        timestamp: new Date()
+      };
+      this.messages$.next([...this.messages$.value, userMessage]);
+      this.scrollToBottom();
+      // Clear the input box immediately so the user's message doesn't remain in the composer
+      this.userInput = '';
+
+      // If user already has generated images and their message looks like an edit
+      // (e.g. "make it realistic", "change color to #C47A00"), treat this as
+      // a conversational remix request and call the remix endpoint using the
+      // most recent generated image URL. Otherwise, do a fresh generate.
+      if (this.generatedImages && this.generatedImages.length > 0 && this.isEditIntent(message)) {
+        await this.remixLastGeneratedImage(message);
+      } else {
+        this.generateImage(message);
+      }
+
+      return;
+    }
 
   // If there's an attached file, we'll send it directly to the template generation
   // No need to pre-process into a prompt
@@ -1096,6 +1200,70 @@ async onSend(): Promise<void> {
     this.sendChatMessage(finalMessage, imageAttachments);
   }
 }
+
+  // Heuristic to detect if the user's message is a follow-up edit intent
+  private isEditIntent(message: string): boolean {
+    if (!message) return false;
+    const editKeywords = /\b(remix|edit|change|convert|make|recolor|recolour|realistic|photorealistic|tint|warm|cool|saturat|desaturat|replace)\b/i;
+    const colorHex = /#([0-9a-fA-F]{3,6})/;
+    const priceOrText = /\$\s*\d+/;
+    return editKeywords.test(message) || colorHex.test(message) || priceOrText.test(message);
+  }
+
+  // Call Ideogram remix API using the last generated image URL and update the preview
+  private async remixLastGeneratedImage(prompt: string): Promise<void> {
+    if (!this.generatedImages || this.generatedImages.length === 0) {
+      this.snackBar.open('No image available to remix', 'Close', { duration: 3000, panelClass: ['error-snackbar'] });
+      return;
+    }
+
+    const last = this.generatedImages[0] || this.generatedImages[this.generatedImages.length - 1];
+    const imageUrl = last.url;
+    if (!imageUrl) {
+      this.snackBar.open('No image URL found for remix', 'Close', { duration: 3000, panelClass: ['error-snackbar'] });
+      return;
+    }
+
+    this.isGeneratingImage = true;
+    try {
+      // Build a remix prompt that prioritizes the user's edit instruction
+      const remixPrompt = `Edit the existing image: ${prompt}. Preserve composition unless user asks otherwise.`;
+
+      const resp: any = await this.ideogramService.remixImage(imageUrl, remixPrompt, { styleType: 'REALISTIC' }).toPromise();
+
+      // Normalize response similar to generate flow
+      let dataArray: any[] = [];
+      if (resp && Array.isArray(resp)) dataArray = resp as any[];
+      else if (resp && resp.data && Array.isArray(resp.data)) dataArray = resp.data;
+      else if (resp && resp.data) dataArray = Array.isArray(resp.data) ? resp.data : [resp.data];
+
+      if (dataArray.length === 0) throw new Error('No image returned from remix');
+
+      // Replace the first generated image in-place with the remixed result
+      const newUrl = dataArray[0].url || (dataArray[0].images && dataArray[0].images[0]?.url) || null;
+      if (!newUrl) throw new Error('Remix did not return a usable image URL');
+
+      // Update generatedImages array and gallery HTML
+      this.generatedImages[0] = { url: newUrl, prompt: prompt };
+
+      const galleryItems = this.generatedImages.map((g, idx) => `
+          <div style="display:inline-block;margin:8px;text-align:center;">
+            <img src=\"${g.url}\" alt=\"Generated ${idx + 1}\" style=\"max-width:420px;max-height:420px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.08);display:block;margin:0 auto;\" />
+          </div>
+        `).join('');
+
+      this.imageGalleryHtml = `<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a} .gallery{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:12px}</style></head><body><div class=\"gallery\">${galleryItems}</div></body></html>`;
+
+      this.snackBar.open('Image remixed successfully!', 'Close', { duration: 3000, panelClass: ['success-snackbar'] });
+    } catch (err: any) {
+      console.error('Remix error:', err);
+      this.snackBar.open(err?.message || 'Failed to remix image', 'Close', { duration: 5000, panelClass: ['error-snackbar'] });
+    } finally {
+      this.isGeneratingImage = false;
+      try { this.previewPanel?.onRefresh(); } catch { this.cdr.detectChanges(); }
+      this.scrollToBottom();
+    }
+  }
 
 private async sendChatMessage(
   message: string, 
@@ -1368,6 +1536,15 @@ async generateImage(prompt: string): Promise<void> {
   this.isGeneratingImage = true;
   this.userInput = '';
 
+  // Clear any previously generated images so new prompt does not include old results
+  // This ensures the preview only shows images generated for the current prompt.
+  this.generatedImages = [];
+  this.imageGalleryHtml = this.imagePlaceholderHtml;
+  try {
+    // Force refresh of preview panel (OnPush) to clear old images immediately
+    try { this.previewPanel?.onRefresh(); } catch { this.cdr.detectChanges(); }
+  } catch {}
+
   // Add user message to chat
   const userMessage: GenerationMessage = {
     role: 'user',
@@ -1378,22 +1555,67 @@ async generateImage(prompt: string): Promise<void> {
   this.scrollToBottom();
 
   try {
+    // Build a marketing-focused prompt. If the user requested on-image text
+    // (for example a price like "$100"), prefer a prompt that explicitly
+    // instructs Ideogram to render that exact text as an overlay. In that
+    // case we must NOT include the "no text" negative prompt which would
+    // prevent text from being rendered.
+    const priceOrCurrencyMatch = prompt.match(/(?:\$|€|£)\s*\d+/);
+    const explicitTextMatch = prompt.match(/(?:include|with)\s+["']([^"']+)["']/i);
+
+    let finalPrompt = this.buildStrictMarketingPrompt(prompt);
+    let negative = 'watermark, caption, words, logo, signature, subtitle'; // keep watermark/branding blocked
+
+    // If we detect a price/currency token or an explicit include "text" request,
+    // strengthen the instruction to render that text verbatim and avoid blocking text.
+    if (priceOrCurrencyMatch || explicitTextMatch) {
+      const overlayText = (explicitTextMatch && explicitTextMatch[1]) || (priceOrCurrencyMatch && priceOrCurrencyMatch[0]) || '';
+      finalPrompt = this.buildMarketingPromptWithOverlay(prompt, overlayText);
+      // Do not block text rendering when explicit overlay requested
+      negative = 'watermark, caption, logo, signature, subtitle';
+    }
+
     const response = await this.ideogramService.generateImage({
-      prompt: prompt,
+      prompt: finalPrompt,
       aspectRatio: '1:1',
       model: 'V_2',
       magicPromptOption: 'AUTO',
-      styleType: 'GENERAL'
+      styleType: 'DESIGN',
+      negativePrompt: negative
     }).toPromise();
 
-    if (response && response.data && response.data.length > 0) {
+  console.debug('Ideogram generate response (raw):', response);
+  if (response && response.data && response.data.length > 0) {
       // Add generated images to the gallery
-      response.data.forEach(img => {
-        this.generatedImages.push({
-          url: img.url,
-          prompt: img.prompt || prompt
+        response.data.forEach(img => {
+          this.generatedImages.push({
+            url: img.url,
+            prompt: img.prompt || prompt
+          });
         });
-      });
+
+        // Build image gallery HTML for the left preview panel
+        // Only show images (centered). No captions below.
+        const galleryItems = this.generatedImages.map((g, idx) => `
+          <div style="display:inline-block;margin:8px;text-align:center;">
+            <img src=\"${g.url}\" alt=\"Generated ${idx + 1}\" style=\"max-width:420px;max-height:420px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.08);display:block;margin:0 auto;\" />
+          </div>
+        `).join('');
+
+        this.imageGalleryHtml = `<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a} .gallery{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:12px}</style></head><body><div class=\"gallery\">${galleryItems}</div></body></html>`;
+
+        // Trigger change detection if needed
+        // Force the preview panel (OnPush) to refresh its iframe content
+        try {
+          this.previewPanel?.onRefresh();
+        } catch (e) {
+          // fallback to parent change detection
+          this.cdr.detectChanges();
+        }
+
+      // After generation, keep generatedImages array (used for saving)
+      // and offer quick save via dialog. We don't auto-open the save dialog,
+      // but expose a button in the template to let users save the selected image.
 
       // Add assistant response to chat
       const assistantMessage: GenerationMessage = {
@@ -2026,8 +2248,43 @@ private fileToBase64(file: File): Promise<string> {
   trackByIndex(index: number): number {
     return index;
   }
-}
 
+  // Small utility to escape HTML used inside our generated gallery captions
+  private escapeHtml(unsafe: string): string {
+    return unsafe
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // Build a strict marketing prompt wrapper to bias Ideogram toward promotional images
+  // The wrapper is intentionally concise and prescriptive:
+  // - Only marketing/promotional images
+  // - Center the main subject
+  // - No overlay text, captions, watermarks, or logos
+  // - Use a banner/design style suitable for promotions
+  private buildStrictMarketingPrompt(userPrompt: string): string {
+    const base = `Marketing promotional banner only. Center the main subject. No people unless explicitly requested. No overlay text, captions, logos, signatures, or watermarks. High quality, crisp lighting, marketing composition, bright contrast, product-focused.`;
+    // Keep the final prompt compact: wrapper + user content
+    return `${base} ${userPrompt}`;
+  }
+
+  // Build a marketing prompt that explicitly instructs the model to render
+  // an exact overlay text string (useful for prices, promo headlines, etc.).
+  // We keep the marketing constraints but explicitly allow and require the
+  // overlay text to appear verbatim and highly legible.
+  private buildMarketingPromptWithOverlay(userPrompt: string, overlayText: string): string {
+    const base = `Marketing promotional banner only. Center the main subject. No people unless explicitly requested. High quality, crisp lighting, marketing composition, bright contrast, product-focused.`;
+    const overlayInstruction = overlayText
+      ? `IMPORTANT: Render the following text exactly as written as a large, high-contrast overlay on the image: "${overlayText}". Do not paraphrase, move, or remove characters; include currency symbols and punctuation exactly. The text should be legible, centered or top-right as a bold headline.`
+      : `If any on-image text is mentioned in the prompt, render it exactly as written as a large, high-contrast overlay.`;
+
+    return `${base} ${overlayInstruction} ${userPrompt}`;
+  }
+
+}
 // ========================================
 // Confirmation Dialog Component
 // ========================================

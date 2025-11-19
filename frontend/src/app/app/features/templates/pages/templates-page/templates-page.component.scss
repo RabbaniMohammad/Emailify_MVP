@@ -2017,6 +2017,61 @@
   }
 }
 
+/* Edit modal styles (ensure it's on top of iframe preview and interactive) */
+.edit-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000 !important;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.edit-modal-content {
+  width: min(900px, 92vw);
+  max-height: 88vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 20px 60px rgba(2,6,23,0.4);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.edit-modal-header {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:0.75rem;
+}
+
+.edit-tabs {
+  display:flex;
+  gap:0.5rem;
+  margin-bottom:0.75rem;
+}
+.edit-tabs button{
+  padding:0.5rem 0.75rem;
+  border-radius:8px;
+  border:1px solid #e6e6e6;
+  background:#f8f9fb;
+  cursor:pointer;
+}
+.edit-tabs button.active{ background:#6366f1; color:#fff; border-color:transparent }
+
+.edit-body label{ display:block; font-weight:700; margin:0.5rem 0 0.25rem }
+.edit-body input[type="text"], .edit-body textarea{ width:100%; padding:0.5rem; border-radius:8px; border:1px solid #e6e6e6 }
+.edit-actions{ margin-top:0.75rem }
+.edit-actions .primary{ background: linear-gradient(135deg,#6d28d9 0%,#8b5cf6 100%); color:white; padding:0.5rem 0.75rem; border-radius:8px; border:none; cursor:pointer }
+
+.preview-result{ margin-top:1rem }
+.preview-result img{ max-width:100%; height:auto; display:block; border-radius:8px; border:1px solid #eee }
+.preview-actions{ margin-top:0.5rem }
+.preview-actions .btn{ padding:0.5rem 0.75rem; background:#6d28d9; color:#fff; border-radius:8px; text-decoration:none }
+
 @media (max-width: 480px) {
   .layout {
     flex-direction: column;
