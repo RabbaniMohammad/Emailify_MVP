@@ -36,6 +36,11 @@ interface ValidationResult {
     totalInCsv: number;
     totalInMailchimp: number;
   };
+  // Optional Instagram info (added by backend)
+  instagramHandles?: string[];
+  instagramSummary?: {
+    total: number;
+  };
 }
 
 interface ScheduledEmail {

@@ -46,6 +46,15 @@
             <div class="card-label">Total in CSV</div>
           </div>
         </div>
+        <div class="summary-card instagram-card" *ngIf="validationResult?.instagramSummary">
+          <div class="card-icon">
+            <mat-icon>camera_alt</mat-icon>
+          </div>
+          <div class="card-content">
+            <div class="card-value">{{ validationResult.instagramSummary?.total }}</div>
+            <div class="card-label">Instagram Handles</div>
+          </div>
+        </div>
         <div class="summary-card audience-card">
           <div class="card-icon">
             <mat-icon>people</mat-icon>

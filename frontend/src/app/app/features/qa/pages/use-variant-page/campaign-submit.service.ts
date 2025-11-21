@@ -17,6 +17,7 @@ export type MailchimpAudience = {
 export type MasterDocRow = {
   audiences_list: string; // email address
   phone?: string; // ✅ Phone number for SMS/WhatsApp (E.164 format: +1234567890)
+  instagram_handle?: string; // Optional instagram handle (without @)
   scheduled_time: string; // ISO format or parseable date
   test_emails: string; // comma-separated emails
   timezone?: string; // ✅ Optional timezone column

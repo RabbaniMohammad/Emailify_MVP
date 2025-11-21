@@ -29,6 +29,16 @@ import { FormsModule } from '@angular/forms';
 
 type LoadingState = 'idle' | 'loading' | 'success' | 'error';
 
+// Local aliases: augment shared types with component-specific shapes
+type MasterRow = MasterDocRow & { instagram_handle?: string };
+type SelectedChannels = { email: boolean; sms: boolean; whatsapp: boolean; instagram: boolean };
+type RecipientStats = { email: number; sms: number; whatsapp: number; instagram: number };
+type AiPreview = {
+  sms?: { text?: string; lineCount?: number };
+  whatsapp?: { text?: string; lineCount?: number };
+  instagram?: { text?: string; lineCount?: number; imageUrl?: string };
+};
+
 @Component({
   selector: 'app-campaign-submit',
   standalone: true,
@@ -105,7 +115,7 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
   // Data
   audiences: MailchimpAudience[] = [];
   selectedAudience: MailchimpAudience | null = null;
-  masterData: MasterDocRow[] = [];
+  masterData: MasterRow[] = [];
   reconciliation: AudienceReconciliation | null = null;
   scheduleGroups: ScheduleGroup[] = [];
   testEmails: string[] = [];
@@ -126,30 +136,25 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
   // File upload
   uploadedFileName: string = '';
 
-  // ✅ Multi-Channel Support
-  selectedChannels: {
-    email: boolean;
-    sms: boolean;
-    whatsapp: boolean;
-  } = {
-    email: true,  // Default to email
+  // ✅ Multi-Channel Support - explicit shapes so Angular templates can use dot access
+  selectedChannels: SelectedChannels = {
+    email: true, // Default to email
     sms: false,
-    whatsapp: false
+    whatsapp: false,
+    instagram: false
   };
 
-  recipientStats = {
+  recipientStats: RecipientStats = {
     email: 0,
     sms: 0,
-    whatsapp: 0
+    whatsapp: 0,
+    instagram: 0
   };
 
   // AI Preview
   aiPreviewLoading = false;
-  aiPreview: {
-    sms?: { text: string; lineCount: number };
-    whatsapp?: { text: string; lineCount: number };
-    instagram?: { text: string; lineCount: number };
-  } | null = null;
+  // Make aiPreview permissive but typed so template checks for imageUrl, text etc.
+  aiPreview: AiPreview | null = null;
 
   get isAnyLoading(): boolean {
     return (
@@ -883,6 +888,32 @@ isSubjectSelected(subject: string): boolean {
         this.campaignService.uploadMasterDocument(file)
       );
 
+      // If validation dialog reported instagram handles but the uploaded master document
+      // doesn't include them (some CSV flows may only surface them in validation),
+      // merge them into the master data so recipientStats picks them up.
+      if (validationResult && validationResult.instagramHandles && validationResult.instagramHandles.length > 0) {
+        const existingHandles = new Set<string>();
+        data.forEach((r: any) => {
+          const h = (((r as any).instagram_handle) || '').trim().replace(/^@/, '').toLowerCase();
+          if (h) existingHandles.add(h);
+        });
+
+        validationResult.instagramHandles.forEach((h: string) => {
+          const normalized = (h || '').trim().replace(/^@/, '').toLowerCase();
+          if (!normalized) return;
+          if (!existingHandles.has(normalized)) {
+            data.push({
+              audiences_list: '',
+              phone: '',
+              instagram_handle: normalized,
+              scheduled_time: '',
+              test_emails: '',
+              timezone: ''
+            } as any);
+            existingHandles.add(normalized);
+          }
+        });
+      }
       // Merge added emails into master data
       if (addedToMaster.length > 0) {
         const scheduledEmailsMap = new Map(scheduledEmails.map(s => [s.email, s]));
@@ -1093,7 +1124,7 @@ isSubjectSelected(subject: string): boolean {
     }
 
     // Check if any multi-channel selected
-    const isMultiChannel = this.selectedChannels.sms || this.selectedChannels.whatsapp;
+  const isMultiChannel = this.selectedChannels.sms || this.selectedChannels.whatsapp || this.selectedChannels.instagram;
     
     if (isMultiChannel) {
       // ✅ Multi-channel submission
@@ -1170,6 +1201,15 @@ isSubjectSelected(subject: string): boolean {
           .filter(row => row.phone?.trim())
           .map(row => ({
             phone: row.phone!.trim(),
+            name: row.audiences_list?.split('@')[0] || 'Customer'
+          }));
+      }
+      
+      if (this.selectedChannels.instagram) {
+        recipients.instagram = this.masterData
+          .filter((row: any) => (row as any).instagram_handle && (row as any).instagram_handle.trim())
+          .map((row: any) => ({
+            handle: String((row as any).instagram_handle).trim().replace(/^@/, ''),
             name: row.audiences_list?.split('@')[0] || 'Customer'
           }));
       }
@@ -1468,8 +1508,14 @@ isSubjectSelected(subject: string): boolean {
     this.recipientStats = {
       email: this.masterData.filter(row => row.audiences_list?.trim()).length,
       sms: this.masterData.filter(row => row.phone?.trim()).length,
-      whatsapp: this.masterData.filter(row => row.phone?.trim()).length
+      whatsapp: this.masterData.filter(row => row.phone?.trim()).length,
+      instagram: this.masterData.filter((row: MasterRow) => (row.instagram_handle && row.instagram_handle.trim().length > 0)).length
     };
+
+    // Debugging output: helps confirm whether instagram handles are present after upload
+    // Inspect these in the browser console after uploading a CSV
+    console.debug('[campaign-submit] masterData sample:', this.masterData.slice(0,3));
+    console.debug('[campaign-submit] recipientStats updated:', this.recipientStats);
     
     // Auto-disable channels with no recipients
     if (this.recipientStats.sms === 0) {
@@ -1477,6 +1523,9 @@ isSubjectSelected(subject: string): boolean {
     }
     if (this.recipientStats.whatsapp === 0) {
       this.selectedChannels.whatsapp = false;
+    }
+    if (this.recipientStats.instagram === 0) {
+      this.selectedChannels.instagram = false;
     }
     
     this.cdr.markForCheck();
@@ -1486,6 +1535,7 @@ isSubjectSelected(subject: string): boolean {
     const channels = [];
     if (this.selectedChannels.sms) channels.push('SMS');
     if (this.selectedChannels.whatsapp) channels.push('WhatsApp');
+    if (this.selectedChannels.instagram) channels.push('Instagram');
     if (channels.length === 0) return '';
     if (channels.length === 1) return channels[0];
     return channels.join(' and ');
@@ -1539,8 +1589,12 @@ isSubjectSelected(subject: string): boolean {
     }
   }
 
-  formatWhatsAppText(text: string): string {
-    return text.replace(/\n/g, '<br>');
+  formatWhatsAppText(text?: string): string {
+    return (text || '').replace(/\n/g, '<br>');
+  }
+
+  formatInstagramText(text?: string): string {
+    return (text || '').replace(/\n/g, '<br>');
   }
 
   private showSuccess(message: string): void {

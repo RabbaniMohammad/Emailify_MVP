@@ -189,6 +189,9 @@
   <!-- STEP 2.5: CHANNEL SELECTION (Multi-Channel) -->
   <!-- ============================================ -->
   <div class="section-card channel-selection" *ngIf="masterData.length > 0">
+  <!-- STEP 2.5: CHANNEL SELECTION (Multi-Channel) -->
+  <!-- ============================================ -->
+  <div class="section-card channel-selection" *ngIf="masterData.length > 0">
     <div class="card-header">
       <div class="header-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -238,6 +241,18 @@
         </div>
         <div class="check-mark" *ngIf="selectedChannels.whatsapp">✓</div>
       </label>
+
+      <!-- Instagram Channel -->
+      <label class="channel-box" [class.selected]="selectedChannels.instagram" [class.disabled]="recipientStats.instagram === 0">
+        <input type="checkbox" [(ngModel)]="selectedChannels.instagram" [disabled]="recipientStats.instagram === 0" />
+        <div class="channel-icon instagram-icon">📸</div>
+        <div class="channel-info">
+          <h4>Instagram (DM)</h4>
+          <p class="channel-count">{{ recipientStats.instagram | number }} recipients</p>
+          <p class="channel-cost">Free (via Meta APIs)</p>
+        </div>
+        <div class="check-mark" *ngIf="selectedChannels.instagram">✓</div>
+      </label>
     </div>
 
     <!-- AI Adaptation Notice -->
@@ -278,10 +293,10 @@
           <div class="preview-card-header">
             <span class="preview-icon">💬</span>
             <h5>SMS Message</h5>
-            <span class="preview-badge">{{ aiPreview.sms.text.length }} chars</span>
+            <span class="preview-badge">{{ aiPreview.sms?.text?.length }} chars</span>
           </div>
           <div class="preview-content sms-preview">
-            <p>{{ aiPreview.sms.text }}</p>
+            <p>{{ aiPreview.sms?.text }}</p>
           </div>
           <div class="preview-footer">
             <small>✓ Optimized for 160-character SMS limit</small>
@@ -296,12 +311,30 @@
             <span class="preview-badge">{{ aiPreview.whatsapp.lineCount }} lines</span>
           </div>
           <div class="preview-content whatsapp-preview">
-            <p [innerHTML]="formatWhatsAppText(aiPreview.whatsapp.text)"></p>
+            <p [innerHTML]="formatWhatsAppText(aiPreview.whatsapp?.text)"></p>
           </div>
           <div class="preview-footer">
             <small>✓ Will be sent using template: <code>emailify_campaign</code></small>
           </div>
         </div>
+
+          <!-- Instagram Preview -->
+          <div class="preview-card" *ngIf="aiPreview.instagram && selectedChannels.instagram">
+            <div class="preview-card-header">
+              <span class="preview-icon">📸</span>
+              <h5>Instagram Message</h5>
+              <span class="preview-badge">{{ (aiPreview.instagram?.text || '').length }} chars</span>
+            </div>
+            <div class="preview-content instagram-preview">
+              <p [innerHTML]="formatInstagramText(aiPreview.instagram?.text)"></p>
+              <ng-container *ngIf="aiPreview.instagram?.imageUrl">
+                <img class="instagram-preview-image" [src]="aiPreview.instagram.imageUrl" alt="Instagram preview" />
+              </ng-container>
+            </div>
+            <div class="preview-footer">
+              <small>✓ Preview only — Instagram DM will be sent via Meta API</small>
+            </div>
+          </div>
       </div>
     </div>
 
@@ -315,21 +348,7 @@
   </div>
 
   <!-- ============================================ -->
-  <!-- STEP 3: RECONCILIATION RESULTS -->
-  <!-- ============================================ -->
-  <div class="section-card" *ngIf="reconciliation">
-    <div class="card-header">
-      <div class="header-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-      </div>
-      <div class="header-text">
-        <h3>Audience Reconciliation</h3>
-        <p>Comparison with Mailchimp data</p>
-      </div>
-      <div class="step-badge">Step 3</div>
-    </div>
+
 
     <!-- Loading -->
     <div class="loading-state" *ngIf="(reconcileLoading$ | async) === 'loading'">
@@ -348,7 +367,7 @@
             </svg>
           </div>
           <div class="result-content">
-            <div class="result-count">{{ reconciliation.summary.existingCount | number }}</div>
+      <div class="result-count">{{ reconciliation?.summary?.existingCount | number }}</div>
             <div class="result-label">Existing</div>
           </div>
         </div>
@@ -361,7 +380,7 @@
             </svg>
           </div>
           <div class="result-content">
-            <div class="result-count">{{ reconciliation.summary.newCount | number }}</div>
+            <div class="result-count">{{ reconciliation?.summary?.newCount | number }}</div>
             <div class="result-label">New</div>
           </div>
         </div>
@@ -374,7 +393,7 @@
             </svg>
           </div>
           <div class="result-content">
-            <div class="result-count">{{ reconciliation.summary.ignoredCount | number }}</div>
+            <div class="result-count">{{ reconciliation?.summary?.ignoredCount | number }}</div>
             <div class="result-label">Ignored</div>
           </div>
         </div>

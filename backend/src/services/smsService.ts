@@ -1,4 +1,5 @@
-import { SNSClient, PublishCommand, PublishBatchCommand, GetSMSAttributesCommand } from '@aws-sdk/client-sns';
+// Twilio-based SMS Service (preferred)
+// To enable: set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM in your env and run `npm install twilio`
 
 export interface SMSMessage {
   phoneNumber: string; // Format: +1234567890
@@ -21,24 +22,34 @@ export interface SMSBatchResult {
   totalFailed: number;
   totalCost: number;
 }
-
 /**
- * AWS SNS SMS Service
- * Cost: ~$0.00645 per SMS (US numbers)
+ * Twilio SMS Service
+ * Configure via env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM
+ * Optional env: TWILIO_SMS_COST (USD per message estimate)
  */
 export class SMSService {
-  private snsClient: SNSClient;
-  private readonly SMS_COST_PER_MESSAGE = 0.00645; // USD
-  
+  private twilioClient: any | null = null;
+  private readonly SMS_COST_PER_MESSAGE: number;
+  private readonly fromNumber: string;
+
   constructor() {
-    // Initialize AWS SNS client
-    this.snsClient = new SNSClient({
-      region: process.env.AWS_REGION || 'us-east-1',
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-      },
-    });
+    this.SMS_COST_PER_MESSAGE = parseFloat(process.env.TWILIO_SMS_COST || process.env.SMS_COST_PER_MESSAGE || '0.00645');
+    this.fromNumber = process.env.TWILIO_FROM || process.env.SMS_SENDER_ID || '';
+
+    const sid = process.env.TWILIO_ACCOUNT_SID || '';
+    const token = process.env.TWILIO_AUTH_TOKEN || '';
+
+    if (sid && token) {
+      try {
+        // Require dynamically so unit tests or environments without twilio installed don't crash at import time
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const Twilio = require('twilio');
+        this.twilioClient = new Twilio(sid, token);
+      } catch (err) {
+        console.warn('Twilio client not installed. Run `npm install twilio` to enable SMS via Twilio.');
+        this.twilioClient = null;
+      }
+    }
   }
   
   /**
@@ -76,50 +87,41 @@ export class SMSService {
           error: validation.error,
         };
       }
-      
+
       // Validate message length
       if (message.length > 160) {
-        console.warn(`⚠️ SMS message exceeds 160 chars (${message.length}). Will be sent as multiple SMS.`);
+        console.warn(`⚠️ SMS message exceeds 160 chars (${message.length}). May be sent as multiple segments.`);
       }
-      
-      // Send SMS via AWS SNS
-      const command = new PublishCommand({
-        PhoneNumber: phoneNumber,
-        Message: message,
-        MessageAttributes: {
-          'AWS.SNS.SMS.SMSType': {
-            DataType: 'String',
-            StringValue: 'Promotional', // or 'Transactional'
-          },
-          'AWS.SNS.SMS.SenderID': {
-            DataType: 'String',
-            StringValue: process.env.SMS_SENDER_ID || 'Emailify', // Max 11 chars
-          },
-        },
+
+      if (!this.twilioClient) {
+        throw new Error('Twilio client not configured. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and install the twilio package.');
+      }
+
+      // Use Twilio to send SMS
+      const from = this.fromNumber || undefined;
+      const resp = await this.twilioClient.messages.create({
+        body: message,
+        to: phoneNumber,
+        from,
       });
-      
-      const response = await this.snsClient.send(command);
-      
-      // Calculate cost (multiple messages if > 160 chars)
+
       const messageCount = Math.ceil(message.length / 160);
       const cost = messageCount * this.SMS_COST_PER_MESSAGE;
-      
-      console.log(`✅ SMS sent to ${phoneNumber} | MessageId: ${response.MessageId} | Cost: $${cost.toFixed(4)}`);
-      
+
+      console.log(`✅ SMS sent via Twilio to ${phoneNumber} | SID: ${resp.sid} | Cost est: $${cost.toFixed(4)}`);
+
       return {
         success: true,
-        messageId: response.MessageId,
+        messageId: resp.sid,
         phoneNumber,
         cost,
       };
-      
     } catch (error: any) {
-      console.error(`❌ Failed to send SMS to ${phoneNumber}:`, error.message);
-      
+      console.error(`❌ Failed to send SMS to ${phoneNumber}:`, error?.message || error);
       return {
         success: false,
         phoneNumber,
-        error: error.message || 'Unknown error',
+        error: error?.message || 'Unknown error',
       };
     }
   }
@@ -130,12 +132,29 @@ export class SMSService {
    */
   async sendBatchSMS(recipients: SMSMessage[]): Promise<SMSBatchResult> {
     console.log(`📤 Sending SMS batch to ${recipients.length} recipients...`);
-    
-    // Send all in parallel (AWS SNS handles rate limiting)
+
+    if (!this.twilioClient) {
+      // Fall back: attempt to send each (will error) so the caller receives failures
+      const fallbackResults = await Promise.allSettled(
+        recipients.map(r => this.sendSMS(r.phoneNumber, r.message))
+      );
+      const successful: SMSSendResult[] = [];
+      const failed: SMSSendResult[] = [];
+      let totalCost = 0;
+      fallbackResults.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value.success) {
+          successful.push(result.value);
+          totalCost += result.value.cost || 0;
+        } else {
+          failed.push({ success: false, phoneNumber: recipients[index].phoneNumber, error: result.status === 'rejected' ? result.reason : result.value.error });
+        }
+      });
+      return { successful, failed, totalSent: successful.length, totalFailed: failed.length, totalCost };
+    }
+
+    // Twilio supports high-volume sends via Messaging Services; here we parallelize for simplicity
     const results = await Promise.allSettled(
-      recipients.map(recipient =>
-        this.sendSMS(recipient.phoneNumber, recipient.message)
-      )
+      recipients.map(recipient => this.sendSMS(recipient.phoneNumber, recipient.message))
     );
     
     // Categorize results
@@ -149,16 +168,12 @@ export class SMSService {
         totalCost += result.value.cost || 0;
       } else {
         const phoneNumber = recipients[index].phoneNumber;
-        failed.push({
-          success: false,
-          phoneNumber,
-          error: result.status === 'rejected' ? result.reason : result.value.error,
-        });
+        failed.push({ success: false, phoneNumber, error: result.status === 'rejected' ? result.reason : result.value.error });
       }
     });
-    
+
     console.log(`✅ Batch complete: ${successful.length} sent, ${failed.length} failed | Total cost: $${totalCost.toFixed(2)}`);
-    
+
     return {
       successful,
       failed,
@@ -176,19 +191,12 @@ export class SMSService {
     maxPrice: string;
     defaultSMSType: string;
   }> {
-    try {
-      const command = new GetSMSAttributesCommand({});
-      const response = await this.snsClient.send(command);
-      
-      return {
-        monthlySpendLimit: response.attributes?.MonthlySpendLimit || 'Not set',
-        maxPrice: response.attributes?.DefaultSMSType || 'Not set',
-        defaultSMSType: response.attributes?.DefaultSMSType || 'Promotional',
-      };
-    } catch (error: any) {
-      console.error('Failed to get SMS attributes:', error);
-      throw error;
-    }
+    // Twilio does not expose an equivalent GetSMSAttributes API. Return configured values or placeholders.
+    return {
+      monthlySpendLimit: process.env.SMS_MONTHLY_LIMIT || 'Not set',
+      maxPrice: process.env.SMS_MAX_PRICE || String(this.SMS_COST_PER_MESSAGE),
+      defaultSMSType: 'Promotional',
+    };
   }
   
   /**
