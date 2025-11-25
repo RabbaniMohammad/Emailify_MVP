@@ -1,8 +1,8 @@
 <div class="generate-layout">
-<!-- LEFT: Live Preview (60%) -->
-<section class="preview-section">
-  <!-- ONLY Add: Title + Template Name + Save/Run Buttons -->
-  <!-- <div class="generate-custom-header" *ngIf="hasTemplate() && !(isGenerating$ | async)">
+  <!-- LEFT: Live Preview (60%) -->
+  <section class="preview-section">
+    <!-- ONLY Add: Title + Template Name + Save/Run Buttons -->
+    <!-- <div class="generate-custom-header" *ngIf="hasTemplate() && !(isGenerating$ | async)">
     <div class="header-left">
       <h3>Generated Template</h3>
       <span class="status-badge">
@@ -10,7 +10,7 @@
         Ready
       </span>
     </div> -->
-    
+
     <!-- Template Name Input -->
     <!-- <mat-form-field class="template-name-input" appearance="outline">
       <mat-label>Template Name</mat-label>
@@ -42,53 +42,33 @@
     </button>
   </div> -->
 
-  <!-- Preview Wrapper -->
-  <div class="preview-wrapper">
-    <!-- Template Preview (when generationType is 'template') -->
-    <app-template-preview-panel
-      *ngIf="generationType === 'template'"
-      [html]="(currentHtml$ | async) || ''"
-      [(templateName)]="templateName"
-      [loading]="(isGenerating$ | async) ?? false"
-      [showHeader]="true"
-      [allowRefresh]="false"
-      [allowFullscreen]="true"
-      [allowViewModes]="true"
-      [showGenerateActions]="true"
-      [isGeneratePage]="true"
-      (saveTemplate)="onSaveTemplate()"
-      (runTests)="onRunTests()">
-    </app-template-preview-panel>
+    <!-- Preview Wrapper -->
+    <div class="preview-wrapper">
+      <!-- Template Preview (when generationType is 'template') -->
+      <app-template-preview-panel *ngIf="generationType === 'template'" [html]="(currentHtml$ | async) || ''"
+        [(templateName)]="templateName" [loading]="(isGenerating$ | async) ?? false" [showHeader]="true"
+        [allowRefresh]="false" [allowFullscreen]="true" [allowViewModes]="true" [showGenerateActions]="true"
+        [isGeneratePage]="true" (saveTemplate)="onSaveTemplate()" (runTests)="onRunTests()">
+      </app-template-preview-panel>
 
-    <!-- Image Gallery (when generationType is 'image') -->
-    <app-template-preview-panel
-      *ngIf="generationType === 'image'"
-      [html]="imageGalleryHtml || ''"
-      [loading]="isGeneratingImage"
-      [showHeader]="true"
-      [allowRefresh]="false"
-      [allowFullscreen]="true"
-      [allowViewModes]="true"
-      [showGenerateActions]="true"
-      [isGeneratePage]="true"
-      [headerTitle]="'Generated Banner'"
-      [saveActionLabel]="'Save Image'"
-      [(templateName)]="templateName"
-      (saveTemplate)="openSaveImageDialog()"
-      (runTests)="onRunTests()">
-    </app-template-preview-panel>
-  </div>
-</section>
+      <!-- Image Gallery (when generationType is 'image') -->
+      <app-template-preview-panel *ngIf="generationType === 'image'" [html]="imageGalleryHtml || ''"
+        [loading]="isGeneratingImage" [showHeader]="true" [allowRefresh]="false" [allowFullscreen]="true"
+        [allowViewModes]="true" [showGenerateActions]="true" [isGeneratePage]="true" [headerTitle]="'Generated Banner'"
+        [saveActionLabel]="'Save Image'" [(templateName)]="templateName" (saveTemplate)="openSaveImageDialog()"
+        (runTests)="onRunTests()">
+      </app-template-preview-panel>
+    </div>
+  </section>
 
   <!-- RIGHT: Chat Interface (40%) -->
   <section class="chat-section">
     <div class="chat-header">
       <div class="header-content">
         <!-- Email Template Icon -->
-        <svg class="header-icon template-icon" 
-             viewBox="0 0 24 24" 
-             xmlns="http://www.w3.org/2000/svg">
-          <path fill="white" d="M20,8L12,13L4,8V6L12,11L20,6M20,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6C22,4.89 21.1,4 20,4Z"/>
+        <svg class="header-icon template-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path fill="white"
+            d="M20,8L12,13L4,8V6L12,11L20,6M20,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6C22,4.89 21.1,4 20,4Z" />
         </svg>
         <div class="header-text">
           <h3>AI Generator</h3>
@@ -97,245 +77,206 @@
       </div>
 
       <!-- New Conversation Button -->
-      <button
-        mat-icon-button
-        class="new-chat-btn"
-        (click)="onNewConversation()"
-        matTooltip="Start New Conversation"
+      <button mat-icon-button class="new-chat-btn" (click)="onNewConversation()" matTooltip="Start New Conversation"
         [disabled]="(isGenerating$ | async) ?? false">
         <mat-icon>add_circle</mat-icon>
       </button>
       <!-- Usage Tips Button -->
-<button
-  mat-icon-button
-  class="usage-tips-btn"
-  [matMenuTriggerFor]="usageMenu"
-  matTooltip="How to use">
-  <mat-icon>auto_awesome</mat-icon>
-</button>
+      <button mat-icon-button class="usage-tips-btn" [matMenuTriggerFor]="usageMenu" matTooltip="How to use">
+        <mat-icon>auto_awesome</mat-icon>
+      </button>
 
-<!-- Usage Tips Menu -->
-<!-- Usage Tips Menu -->
-<mat-menu #usageMenu="matMenu" class="usage-tips-menu">
-  <div class="usage-tips-content" (click)="$event.stopPropagation()">
-    <h4>💡 How to Use This Generator</h4>
-    
-    <div class="tip-section">
-      <strong>Be Specific & Detailed</strong>
-      <p>Describe what you want clearly - layout, colors, content sections, and purpose. The more details, the better the result.</p>
-    </div>
+      <!-- Usage Tips Menu -->
+      <!-- Usage Tips Menu -->
+      <mat-menu #usageMenu="matMenu" class="usage-tips-menu">
+        <div class="usage-tips-content" (click)="$event.stopPropagation()">
+          <h4>💡 How to Use This Generator</h4>
 
-    <div class="tip-section">
-      <strong>📸 Add Design References</strong>
-      <p>Upload images (max 2) for visual inspiration - colors, layout, style. We'll match the aesthetic while following your text instructions.</p>
-    </div>
+          <div class="tip-section">
+            <strong>Be Specific & Detailed</strong>
+            <p>Describe what you want clearly - layout, colors, content sections, and purpose. The more details, the
+              better the result.</p>
+          </div>
 
-    <div class="tip-section">
-      <strong>🔖 Request Placeholders</strong>
-      <p>Ask for Mailchimp or other placeholders like <code>|*EMAIL*|</code>, <code>|*FNAME*|</code>, <code>|*COMPANY*|</code> - we'll add them where needed.</p>
-    </div>
+          <div class="tip-section">
+            <strong>📸 Add Design References</strong>
+            <p>Upload images (max 2) for visual inspiration - colors, layout, style. We'll match the aesthetic while
+              following your text instructions.</p>
+          </div>
 
-    <div class="tip-section">
-      <strong>✨ Example Prompt:</strong>
-      <p class="example">"Create a product launch email with a hero image, bold headline, 3-column feature grid, and a centered CTA button. Use purple (#6d28d9) and white colors. Add |*FNAME*| placeholder in greeting."</p>
-    </div>
+          <div class="tip-section">
+            <strong>🔖 Request Placeholders</strong>
+            <p>Ask for Mailchimp or other placeholders like <code>|*EMAIL*|</code>, <code>|*FNAME*|</code>,
+              <code>|*COMPANY*|</code> - we'll add them where needed.</p>
+          </div>
 
-    <div class="tip-note">
-      <!-- <mat-icon>mobile_friendly</mat-icon> -->
-      All templates are mobile-first & responsive!
-    </div>
-  </div>
-</mat-menu>
+          <div class="tip-section">
+            <strong>✨ Example Prompt:</strong>
+            <p class="example">"Create a product launch email with a hero image, bold headline, 3-column feature grid,
+              and a centered CTA button. Use purple (#6d28d9) and white colors. Add |*FNAME*| placeholder in greeting."
+            </p>
+          </div>
+
+          <div class="tip-note">
+            <!-- <mat-icon>mobile_friendly</mat-icon> -->
+            All templates are mobile-first & responsive!
+          </div>
+        </div>
+      </mat-menu>
     </div>
 
     <!-- Generation Type Selector -->
     <div class="generation-type-selector">
       <div class="selector-wrapper">
         <label class="radio-option" [class.selected]="generationType === 'template'">
-          <input 
-            type="radio" 
-            name="generationType" 
-            value="template" 
-            [(ngModel)]="generationType"
-            (change)="onGenerationTypeChange('template')"
-            [disabled]="(isGenerating$ | async) ?? false">
+          <input type="radio" name="generationType" value="template" [(ngModel)]="generationType"
+            (change)="onGenerationTypeChange('template')" [disabled]="(isGenerating$ | async) ?? false">
           <div class="option-content">
             <mat-icon>description</mat-icon>
             <span>Email Template</span>
           </div>
         </label>
-        
+
         <label class="radio-option" [class.selected]="generationType === 'image'">
-          <input 
-            type="radio" 
-            name="generationType" 
-            value="image" 
-            [(ngModel)]="generationType"
-            (change)="onGenerationTypeChange('image')"
-            [disabled]="(isGenerating$ | async) ?? false">
-            <div class="option-content">
-              <mat-icon>image</mat-icon>
-              <span>Banner Generation</span>
-            </div>
+          <input type="radio" name="generationType" value="image" [(ngModel)]="generationType"
+            (change)="onGenerationTypeChange('image')" [disabled]="(isGenerating$ | async) ?? false">
+          <div class="option-content">
+            <mat-icon>image</mat-icon>
+            <span>Banner Generation</span>
+          </div>
         </label>
       </div>
     </div>
 
     <!-- Messages Container -->
-<!-- Messages Container -->
-<div
-  #messagesContainer
-  class="chat-messages"
-  (scroll)="onScroll($event)">
-  
-  <!-- Existing messages -->
-  <div
-    *ngFor="let message of messages$ | async; trackBy: trackByIndex"
-    class="chat-msg"
-    [class.user-msg]="message.role === 'user'"
-    [class.assistant-msg]="message.role === 'assistant'">
-    <div class="bubble" [class.user-bubble]="message.role === 'user'">
-      <div class="bubble-header">
-        <span class="role">{{ message.role === 'user' ? 'You' : 'AI Assistant' }}</span>
-        <span class="timestamp">{{ message.timestamp | date: 'short' }}</span>
-      </div>
-      
-      <!-- Images in sent messages -->
-      <div class="message-images" *ngIf="message.images && message.images.length > 0">
-        <img 
-          *ngFor="let img of message.images" 
-          [src]="'data:' + img.mediaType + ';base64,' + img.data"
-          [alt]="img.fileName"
-          class="message-image">
-      </div>
-      
-      <!-- File Attachment in sent messages -->
-      <div class="message-attachment" *ngIf="message.attachment">
-        <div class="attachment-card">
-          <div class="attachment-icon">
-            <mat-icon>{{ getFileIcon(message.attachment.fileName) }}</mat-icon>
+    <!-- Messages Container -->
+    <div #messagesContainer class="chat-messages" (scroll)="onScroll($event)">
+
+      <!-- Existing messages -->
+      <div *ngFor="let message of messages$ | async; trackBy: trackByIndex" class="chat-msg"
+        [class.user-msg]="message.role === 'user'" [class.assistant-msg]="message.role === 'assistant'"
+        [style.display]="!message.type || message.type === generationType ? 'block' : 'none'">
+        <div class="bubble" [class.user-bubble]="message.role === 'user'">
+          <div class="bubble-header">
+            <span class="role">{{ message.role === 'user' ? 'You' : 'AI Assistant' }}</span>
+            <span class="timestamp">{{ message.timestamp | date: 'short' }}</span>
           </div>
-          <div class="attachment-info">
-            <span class="attachment-name">{{ message.attachment.fileName }}</span>
-            <span class="attachment-size">{{ formatFileSize(message.attachment.fileSize) }}</span>
+
+          <!-- Images in sent messages -->
+          <div class="message-images" *ngIf="message.images && message.images.length > 0">
+            <img *ngFor="let img of message.images" [src]="'data:' + img.mediaType + ';base64,' + img.data"
+              [alt]="img.fileName" class="message-image">
+          </div>
+
+          <!-- File Attachment in sent messages -->
+          <div class="message-attachment" *ngIf="message.attachment">
+            <div class="attachment-card">
+              <div class="attachment-icon">
+                <mat-icon>{{ getFileIcon(message.attachment.fileName) }}</mat-icon>
+              </div>
+              <div class="attachment-info">
+                <span class="attachment-name">{{ message.attachment.fileName }}</span>
+                <span class="attachment-size">{{ formatFileSize(message.attachment.fileSize) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bubble-content">
+            {{ message.content }}
           </div>
         </div>
       </div>
-      
-      <div class="bubble-content">
-        {{ message.content }}
-      </div>
-    </div>
-  </div>
 
-  <!-- Image Preview (before sending) -->
-  <div class="chat-msg user-msg" *ngIf="imagePreviewUrls.length > 0 && !(isGenerating$ | async)">
-    <div class="bubble user-bubble">
-      <div class="bubble-header">
-        <span class="role">Image Preview</span>
-      </div>
-      <div class="message-images preview-mode">
-        <div *ngFor="let url of imagePreviewUrls; let i = index" class="image-wrapper">
-          <img [src]="url" [alt]="'Preview ' + (i + 1)" class="message-image">
-          <button class="remove-preview-btn" (click)="removeImage(i)" type="button">
-            <mat-icon>close</mat-icon>
-          </button>
+      <!-- Image Preview (before sending) -->
+      <div class="chat-msg user-msg" *ngIf="imagePreviewUrls.length > 0 && !(isGenerating$ | async)">
+        <div class="bubble user-bubble">
+          <div class="bubble-header">
+            <span class="role">Image Preview</span>
+          </div>
+          <div class="message-images preview-mode">
+            <div *ngFor="let url of imagePreviewUrls; let i = index" class="image-wrapper">
+              <img [src]="url" [alt]="'Preview ' + (i + 1)" class="message-image">
+              <button class="remove-preview-btn" (click)="removeImage(i)" type="button">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- File Attachment Display (in chat) -->
-  <div class="chat-msg user-msg" *ngIf="attachedFile">
-    <div class="bubble user-bubble file-attachment-bubble">
-      <div class="bubble-header">
-        <span class="role">📎 Attached File</span>
-        <button 
-          mat-icon-button 
-          class="remove-attachment-btn-inline"
-          (click)="removeAttachedFile()"
-          matTooltip="Remove attachment">
-          <mat-icon>close</mat-icon>
-        </button>
-      </div>
-      <div class="file-attachment-content">
-        <div class="file-icon-wrapper">
-          <mat-icon class="file-icon">{{ getFileIcon(attachedFile.name) }}</mat-icon>
+      <!-- File Attachment Display (in chat) -->
+      <div class="chat-msg user-msg" *ngIf="attachedFile">
+        <div class="bubble user-bubble file-attachment-bubble">
+          <div class="bubble-header">
+            <span class="role">📎 Attached File</span>
+            <button mat-icon-button class="remove-attachment-btn-inline" (click)="removeAttachedFile()"
+              matTooltip="Remove attachment">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+          <div class="file-attachment-content">
+            <div class="file-icon-wrapper">
+              <mat-icon class="file-icon">{{ getFileIcon(attachedFile.name) }}</mat-icon>
+            </div>
+            <div class="file-info">
+              <span class="file-name">{{ attachedFile.name }}</span>
+              <span class="file-size">{{ formatFileSize(attachedFile.size) }}</span>
+            </div>
+          </div>
         </div>
-        <div class="file-info">
-          <span class="file-name">{{ attachedFile.name }}</span>
-          <span class="file-size">{{ formatFileSize(attachedFile.size) }}</span>
-        </div>
       </div>
-    </div>
-  </div>
 
-  <!-- Generating Indicator -->
-  <div class="chat-msg assistant-msg" *ngIf="isGenerating$ | async">
-    <div class="bubble generating-bubble">
-      <div class="bubble-header">
-        <span class="role">AI Assistant</span>
-      </div>
-      <div class="bubble-content">
-        <div class="typing-indicator">
-          <span></span>
-          <span></span>
-          <span></span>
+      <!-- Generating Indicator -->
+      <div class="chat-msg assistant-msg" *ngIf="isGenerating$ | async">
+        <div class="bubble generating-bubble">
+          <div class="bubble-header">
+            <span class="role">AI Assistant</span>
+          </div>
+          <div class="bubble-content">
+            <div class="typing-indicator">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <span class="generating-text">{{ isRegenerating ? 'Regenerating template...' : 'Generating template...'
+              }}</span>
+          </div>
         </div>
-        <span class="generating-text">{{ isRegenerating ? 'Regenerating template...' : 'Generating template...' }}</span>
       </div>
     </div>
-  </div>
-</div>
 
     <!-- Message Composer -->
-<!-- Message Composer -->
-<!-- Message Composer -->
-<div class="composer">
-  <!-- Hidden file input -->
-  <input 
-    type="file"
-    id="imageUploadInput"
-    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/svg+xml"
-    multiple
-    [attr.max]="maxImages"
-    (change)="onImageSelect($event)"
-    style="display: none;">
+    <!-- Message Composer -->
+    <!-- Message Composer -->
+    <div class="composer">
+      <!-- Hidden file input -->
+      <input type="file" id="imageUploadInput"
+        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/svg+xml" multiple [attr.max]="maxImages"
+        (change)="onImageSelect($event)" style="display: none;">
 
-  <div class="composer-input-row">
-    <!-- Attach Button -->
-    <button
-      mat-icon-button
-      class="attach-btn"
-      (click)="openAttachChoiceBanner()"
-      [disabled]="(isGenerating$ | async) ?? false"
-      matTooltip="Attach file"
-      matTooltipPosition="above"
-      type="button">
-      <svg class="attach-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M16.5 6V17.5C16.5 19.4891 14.9891 21 13 21C11.0109 21 9.5 19.4891 9.5 17.5V5C9.5 3.61929 10.6193 2.5 12 2.5C13.3807 2.5 14.5 3.61929 14.5 5V15.5C14.5 16.0523 14.0523 16.5 13.5 16.5C12.9477 16.5 12.5 16.0523 12.5 15.5V6H11V15.5C11 17.4891 12.5109 19 14.5 19C16.4891 19 18 17.4891 18 15.5V5C18 2.51472 15.9853 0.5 13.5 0.5C11.0147 0.5 9 2.51472 9 5V17.5C9 20.5376 11.4624 23 14.5 23C17.5376 23 20 20.5376 20 17.5V6H18.5Z" fill="currentColor"/>
-      </svg>
-    </button>
+      <div class="composer-input-row">
+        <!-- Attach Button -->
+        <button mat-icon-button class="attach-btn" (click)="openAttachChoiceBanner()"
+          [disabled]="(isGenerating$ | async) ?? false" matTooltip="Attach file" matTooltipPosition="above"
+          type="button">
+          <svg class="attach-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M16.5 6V17.5C16.5 19.4891 14.9891 21 13 21C11.0109 21 9.5 19.4891 9.5 17.5V5C9.5 3.61929 10.6193 2.5 12 2.5C13.3807 2.5 14.5 3.61929 14.5 5V15.5C14.5 16.0523 14.0523 16.5 13.5 16.5C12.9477 16.5 12.5 16.0523 12.5 15.5V6H11V15.5C11 17.4891 12.5109 19 14.5 19C16.4891 19 18 17.4891 18 15.5V5C18 2.51472 15.9853 0.5 13.5 0.5C11.0147 0.5 9 2.51472 9 5V17.5C9 20.5376 11.4624 23 14.5 23C17.5376 23 20 20.5376 20 17.5V6H18.5Z"
+              fill="currentColor" />
+          </svg>
+        </button>
 
-    <textarea
-      #messageInput
-      class="message-input"
-      [(ngModel)]="userInput"
-      (keydown.enter)="onEnterKey($event)"
-      (paste)="onPaste($event)"
-      rows="3">
+        <textarea #messageInput class="message-input" [(ngModel)]="userInput" (keydown.enter)="onEnterKey($event)"
+          (paste)="onPaste($event)" rows="3">
     </textarea>
 
-    <button
-      mat-raised-button
-      class="send-btn"
-      (click)="onSend()"
-      [disabled]="(!userInput.trim() && !attachedFile) || ((isGenerating$ | async) ?? false)">
-      <mat-icon>send</mat-icon>
-      <span>Send</span>
-    </button>
-  </div>
-</div>
+        <button mat-raised-button class="send-btn" (click)="onSend()"
+          [disabled]="(!userInput.trim() && !attachedFile) || ((isGenerating$ | async) ?? false)">
+          <mat-icon>send</mat-icon>
+          <span>Send</span>
+        </button>
+      </div>
+    </div>
   </section>
 </div>
 <!-- Attach Choice Banner -->
@@ -345,33 +286,24 @@
     <button mat-icon-button class="close-btn" (click)="closeAttachChoiceBanner()">
       <mat-icon>close</mat-icon>
     </button>
-    
+
     <!-- Banner Body -->
     <div class="attach-choice-body">
       <h2 class="attach-choice-title">📎 Attach File</h2>
       <p class="attach-choice-subtitle">Choose what you want to attach</p>
-      
+
       <div class="attach-options">
-        <button 
-          mat-raised-button 
-          class="attach-option-btn image-option"
-          (click)="selectImageAttachment()">
+        <button mat-raised-button class="attach-option-btn image-option" (click)="selectImageAttachment()">
           <mat-icon>image</mat-icon>
           <span>Image</span>
         </button>
-        
-        <button 
-          mat-raised-button 
-          class="attach-option-btn document-option"
-          (click)="selectDocumentAttachment()">
+
+        <button mat-raised-button class="attach-option-btn document-option" (click)="selectDocumentAttachment()">
           <mat-icon>description</mat-icon>
           <span>Document</span>
         </button>
-        
-        <button 
-          mat-raised-button 
-          class="attach-option-btn url-option"
-          (click)="selectUrlAttachment()">
+
+        <button mat-raised-button class="attach-option-btn url-option" (click)="selectUrlAttachment()">
           <mat-icon>link</mat-icon>
           <span>Website URL</span>
         </button>
@@ -386,35 +318,28 @@
     <button mat-icon-button class="close-btn" (click)="closeUrlAnalyzer()">
       <mat-icon>close</mat-icon>
     </button>
-    
+
     <!-- Banner Body -->
     <div class="analyzer-body">
       <h2 class="analyzer-title">🌐 Analyze Website</h2>
       <p class="analyzer-subtitle">Enter a website URL to extract brand colors, fonts, images, and content</p>
-      
+
       <!-- URL Input Section -->
       <div *ngIf="!analyzedBrandDNA && !isAnalyzingWebsite" class="url-input-section">
         <mat-form-field class="url-input-field" appearance="outline">
           <mat-label>Website URL</mat-label>
-          <input 
-            matInput 
-            [(ngModel)]="websiteUrl" 
-            placeholder="https://example.com"
-            (keydown.enter)="analyzeWebsite()"
+          <input matInput [(ngModel)]="websiteUrl" placeholder="https://example.com" (keydown.enter)="analyzeWebsite()"
             [disabled]="isAnalyzingWebsite">
           <mat-icon matPrefix>link</mat-icon>
         </mat-form-field>
-        
-        <button 
-          mat-raised-button 
-          class="analyze-btn"
-          (click)="analyzeWebsite()"
+
+        <button mat-raised-button class="analyze-btn" (click)="analyzeWebsite()"
           [disabled]="!websiteUrl || isAnalyzingWebsite">
           <mat-icon>search</mat-icon>
           <span>Analyze Website</span>
         </button>
       </div>
-      
+
       <!-- Analyzing Indicator -->
       <div *ngIf="isAnalyzingWebsite" class="analyzing-section">
         <div class="modern-loader">
@@ -425,14 +350,15 @@
           </div>
           <div class="loader-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+              <path
+                d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
             </svg>
           </div>
         </div>
         <p class="analyzing-text">Analyzing website...</p>
         <p class="analyzing-subtext">Extracting colors, fonts, images, and content</p>
       </div>
-      
+
       <!-- Brand DNA Review Section -->
       <div *ngIf="analyzedBrandDNA && !isAnalyzingWebsite" class="brand-dna-section">
         <div class="brand-dna-header">
@@ -441,7 +367,7 @@
             <mat-icon>refresh</mat-icon>
           </button>
         </div>
-        
+
         <!-- Logo -->
         <div class="dna-group" *ngIf="analyzedBrandDNA.logo">
           <h4>🎨 Brand Logo</h4>
@@ -449,27 +375,25 @@
             <img [src]="analyzedBrandDNA.logo" alt="Brand Logo" class="brand-logo-img" (error)="onImageError($event)" />
             <div class="logo-url">
               <mat-icon class="url-icon">link</mat-icon>
-              <span class="image-url" [title]="analyzedBrandDNA.logo">{{ getTruncatedUrl(analyzedBrandDNA.logo) }}</span>
+              <span class="image-url" [title]="analyzedBrandDNA.logo">{{ getTruncatedUrl(analyzedBrandDNA.logo)
+                }}</span>
             </div>
           </div>
         </div>
-        
+
         <!-- Colors -->
         <div class="dna-group" *ngIf="analyzedBrandDNA.colors && analyzedBrandDNA.colors.length > 0">
           <h4>🎨 Color Palette</h4>
           <div class="color-palette">
-            <div 
-              *ngFor="let color of analyzedBrandDNA.colors; let i = index"
-              class="color-item"
-              [class.selected]="selectedColors.includes(color)"
-              (click)="toggleColorSelection(color)">
+            <div *ngFor="let color of analyzedBrandDNA.colors; let i = index" class="color-item"
+              [class.selected]="selectedColors.includes(color)" (click)="toggleColorSelection(color)">
               <div class="color-swatch" [style.background-color]="color"></div>
               <span class="color-code">{{ color }}</span>
               <mat-icon *ngIf="selectedColors.includes(color)" class="check-icon">check_circle</mat-icon>
             </div>
           </div>
         </div>
-        
+
         <!-- Images -->
         <div class="dna-group">
           <h4 *ngIf="analyzedBrandDNA.images && analyzedBrandDNA.images.length > 0">
@@ -478,13 +402,10 @@
           <h4 *ngIf="!analyzedBrandDNA.images || analyzedBrandDNA.images.length === 0">
             🖼️ Images
           </h4>
-          
+
           <div *ngIf="analyzedBrandDNA.images && analyzedBrandDNA.images.length > 0" class="image-gallery">
-            <div 
-              *ngFor="let image of analyzedBrandDNA.images; let i = index"
-              class="image-item-wrapper"
-              [class.selected]="selectedBrandImages.includes(image)"
-              (click)="toggleImageSelection(image)">
+            <div *ngFor="let image of analyzedBrandDNA.images; let i = index" class="image-item-wrapper"
+              [class.selected]="selectedBrandImages.includes(image)" (click)="toggleImageSelection(image)">
               <div class="image-item">
                 <img [src]="image" [alt]="'Image ' + (i + 1)" (error)="onImageError($event)" />
                 <mat-icon *ngIf="selectedBrandImages.includes(image)" class="check-icon">check_circle</mat-icon>
@@ -495,20 +416,18 @@
               </div>
             </div>
           </div>
-          
+
           <div *ngIf="!analyzedBrandDNA.images || analyzedBrandDNA.images.length === 0" class="no-images-message">
             <mat-icon>image_not_supported</mat-icon>
             <p>No suitable images found on this page (min 100x100px)</p>
           </div>
         </div>
-        
+
         <!-- Content Sections (Full Paragraphs) -->
         <div class="dna-group" *ngIf="analyzedBrandDNA.contentSections && analyzedBrandDNA.contentSections.length > 0">
           <h4>📄 Website Content Sections ({{ analyzedBrandDNA.contentSections.length }} sections found)</h4>
           <div class="content-sections-list">
-            <div 
-              *ngFor="let section of analyzedBrandDNA.contentSections"
-              class="content-section-item">
+            <div *ngFor="let section of analyzedBrandDNA.contentSections" class="content-section-item">
               <div class="section-header">
                 <h5 *ngIf="section.heading">{{ section.heading }}</h5>
                 <span class="section-context">{{ section.context }}</span>
@@ -522,22 +441,19 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Content -->
         <div class="dna-group" *ngIf="analyzedBrandDNA.content && analyzedBrandDNA.content.length > 0">
           <h4>✍️ Brand Voice & Content Snippets</h4>
           <div class="content-snippets">
-            <div 
-              *ngFor="let snippet of analyzedBrandDNA.content"
-              class="snippet-item"
-              [class.selected]="selectedContent.includes(snippet)"
-              (click)="toggleContentSelection(snippet)">
+            <div *ngFor="let snippet of analyzedBrandDNA.content" class="snippet-item"
+              [class.selected]="selectedContent.includes(snippet)" (click)="toggleContentSelection(snippet)">
               <p>{{ snippet }}</p>
               <mat-icon *ngIf="selectedContent.includes(snippet)" class="check-icon">check_circle</mat-icon>
             </div>
           </div>
         </div>
-        
+
         <!-- Fonts -->
         <div class="dna-group" *ngIf="analyzedBrandDNA.fonts">
           <h4>🔤 Typography</h4>
@@ -550,9 +466,10 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Brand Info -->
-        <div class="dna-group" *ngIf="analyzedBrandDNA.brandInfo && (analyzedBrandDNA.brandInfo.tagline || analyzedBrandDNA.brandInfo.mission || analyzedBrandDNA.brandInfo.values?.length > 0)">
+        <div class="dna-group"
+          *ngIf="analyzedBrandDNA.brandInfo && (analyzedBrandDNA.brandInfo.tagline || analyzedBrandDNA.brandInfo.mission || analyzedBrandDNA.brandInfo.values?.length > 0)">
           <h4>💡 Brand Identity</h4>
           <div class="brand-info-display">
             <div class="brand-info-item" *ngIf="analyzedBrandDNA.brandInfo.tagline">
@@ -563,7 +480,8 @@
               <strong>Mission:</strong>
               <p>{{ analyzedBrandDNA.brandInfo.mission }}</p>
             </div>
-            <div class="brand-info-item" *ngIf="analyzedBrandDNA.brandInfo.values && analyzedBrandDNA.brandInfo.values.length > 0">
+            <div class="brand-info-item"
+              *ngIf="analyzedBrandDNA.brandInfo.values && analyzedBrandDNA.brandInfo.values.length > 0">
               <strong>Values:</strong>
               <div class="values-list">
                 <span *ngFor="let value of analyzedBrandDNA.brandInfo.values" class="value-badge">{{ value }}</span>
@@ -571,14 +489,12 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Products -->
         <div class="dna-group" *ngIf="analyzedBrandDNA.products && analyzedBrandDNA.products.length > 0">
           <h4>🛍️ Products ({{ analyzedBrandDNA.products.length }} found)</h4>
           <div class="products-list">
-            <div 
-              *ngFor="let product of analyzedBrandDNA.products"
-              class="product-item">
+            <div *ngFor="let product of analyzedBrandDNA.products" class="product-item">
               <div class="product-image" *ngIf="product.image">
                 <img [src]="product.image" [alt]="product.name" (error)="onImageError($event)" />
               </div>
@@ -590,14 +506,12 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Testimonials -->
         <div class="dna-group" *ngIf="analyzedBrandDNA.testimonials && analyzedBrandDNA.testimonials.length > 0">
           <h4>💬 Testimonials ({{ analyzedBrandDNA.testimonials.length }} found)</h4>
           <div class="testimonials-list">
-            <div 
-              *ngFor="let testimonial of analyzedBrandDNA.testimonials"
-              class="testimonial-item">
+            <div *ngFor="let testimonial of analyzedBrandDNA.testimonials" class="testimonial-item">
               <p class="testimonial-text">"{{ testimonial.text }}"</p>
               <div class="testimonial-meta" *ngIf="testimonial.author || testimonial.company">
                 <span *ngIf="testimonial.author" class="author">— {{ testimonial.author }}</span>
@@ -606,9 +520,10 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Contact Info -->
-        <div class="dna-group" *ngIf="analyzedBrandDNA.contact && (analyzedBrandDNA.contact.email || analyzedBrandDNA.contact.phone || analyzedBrandDNA.contact.address)">
+        <div class="dna-group"
+          *ngIf="analyzedBrandDNA.contact && (analyzedBrandDNA.contact.email || analyzedBrandDNA.contact.phone || analyzedBrandDNA.contact.address)">
           <h4>📞 Contact Information</h4>
           <div class="contact-display">
             <div class="contact-item" *ngIf="analyzedBrandDNA.contact.email">
@@ -625,16 +540,13 @@
             </div>
           </div>
         </div>
-        
+
         <!-- CTAs with Links -->
         <div class="dna-group" *ngIf="analyzedBrandDNA.ctas && analyzedBrandDNA.ctas.length > 0">
           <h4>🎯 Call-to-Actions ({{ analyzedBrandDNA.ctas.length }} found - Click to select)</h4>
           <div class="ctas-list">
-            <div 
-              *ngFor="let cta of analyzedBrandDNA.ctas"
-              class="cta-item"
-              [class.selected]="selectedCTAs.includes(cta)"
-              (click)="toggleCTASelection(cta)">
+            <div *ngFor="let cta of analyzedBrandDNA.ctas" class="cta-item"
+              [class.selected]="selectedCTAs.includes(cta)" (click)="toggleCTASelection(cta)">
               <div class="cta-text-wrapper">
                 <mat-icon class="cta-icon">{{ cta.type === 'button' ? 'smart_button' : 'link' }}</mat-icon>
                 <span class="cta-text">{{ cta.text }}</span>
@@ -647,59 +559,47 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Social Links -->
         <div class="dna-group" *ngIf="analyzedBrandDNA.social && getSocialLinksCount(analyzedBrandDNA.social) > 0">
           <h4>🔗 Social Media ({{ getSocialLinksCount(analyzedBrandDNA.social) }} found - Click to select)</h4>
           <div class="social-links-display">
-            <div 
-              *ngIf="analyzedBrandDNA.social.facebook" 
-              class="social-link facebook"
+            <div *ngIf="analyzedBrandDNA.social.facebook" class="social-link facebook"
               [class.selected]="isSocialLinkSelected('facebook')"
               (click)="toggleSocialLink('facebook', analyzedBrandDNA.social.facebook)">
               <mat-icon>facebook</mat-icon>
               <span>Facebook</span>
               <mat-icon *ngIf="isSocialLinkSelected('facebook')" class="check-icon-small">check_circle</mat-icon>
             </div>
-            <div 
-              *ngIf="analyzedBrandDNA.social.twitter" 
-              class="social-link twitter"
+            <div *ngIf="analyzedBrandDNA.social.twitter" class="social-link twitter"
               [class.selected]="isSocialLinkSelected('twitter')"
               (click)="toggleSocialLink('twitter', analyzedBrandDNA.social.twitter)">
               <mat-icon>close</mat-icon>
               <span>Twitter</span>
               <mat-icon *ngIf="isSocialLinkSelected('twitter')" class="check-icon-small">check_circle</mat-icon>
             </div>
-            <div 
-              *ngIf="analyzedBrandDNA.social.instagram" 
-              class="social-link instagram"
+            <div *ngIf="analyzedBrandDNA.social.instagram" class="social-link instagram"
               [class.selected]="isSocialLinkSelected('instagram')"
               (click)="toggleSocialLink('instagram', analyzedBrandDNA.social.instagram)">
               <mat-icon>camera_alt</mat-icon>
               <span>Instagram</span>
               <mat-icon *ngIf="isSocialLinkSelected('instagram')" class="check-icon-small">check_circle</mat-icon>
             </div>
-            <div 
-              *ngIf="analyzedBrandDNA.social.linkedin" 
-              class="social-link linkedin"
+            <div *ngIf="analyzedBrandDNA.social.linkedin" class="social-link linkedin"
               [class.selected]="isSocialLinkSelected('linkedin')"
               (click)="toggleSocialLink('linkedin', analyzedBrandDNA.social.linkedin)">
               <mat-icon>business</mat-icon>
               <span>LinkedIn</span>
               <mat-icon *ngIf="isSocialLinkSelected('linkedin')" class="check-icon-small">check_circle</mat-icon>
             </div>
-            <div 
-              *ngIf="analyzedBrandDNA.social.youtube" 
-              class="social-link youtube"
+            <div *ngIf="analyzedBrandDNA.social.youtube" class="social-link youtube"
               [class.selected]="isSocialLinkSelected('youtube')"
               (click)="toggleSocialLink('youtube', analyzedBrandDNA.social.youtube)">
               <mat-icon>play_circle</mat-icon>
               <span>YouTube</span>
               <mat-icon *ngIf="isSocialLinkSelected('youtube')" class="check-icon-small">check_circle</mat-icon>
             </div>
-            <div 
-              *ngIf="analyzedBrandDNA.social.tiktok" 
-              class="social-link tiktok"
+            <div *ngIf="analyzedBrandDNA.social.tiktok" class="social-link tiktok"
               [class.selected]="isSocialLinkSelected('tiktok')"
               (click)="toggleSocialLink('tiktok', analyzedBrandDNA.social.tiktok)">
               <mat-icon>music_note</mat-icon>
@@ -708,36 +608,26 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Template Style Selection -->
         <div class="template-style-group">
           <h4>🎯 Select Template Style</h4>
           <div class="style-options">
-            <button 
-              *ngFor="let style of templateStyles"
-              mat-stroked-button
-              class="style-btn"
-              [class.selected]="selectedTemplateStyle === style.value"
-              (click)="selectTemplateStyle(style.value)">
+            <button *ngFor="let style of templateStyles" mat-stroked-button class="style-btn"
+              [class.selected]="selectedTemplateStyle === style.value" (click)="selectTemplateStyle(style.value)">
               <mat-icon>{{ style.icon }}</mat-icon>
               <span>{{ style.label }}</span>
             </button>
           </div>
         </div>
-        
+
         <!-- Action Buttons -->
         <div class="analyzer-actions">
-          <button 
-            mat-stroked-button 
-            class="cancel-btn"
-            (click)="resetAnalyzer()">
+          <button mat-stroked-button class="cancel-btn" (click)="resetAnalyzer()">
             <mat-icon>close</mat-icon>
             Cancel
           </button>
-          <button 
-            mat-raised-button 
-            class="generate-prompt-btn"
-            (click)="generatePromptFromBrandDNA()"
+          <button mat-raised-button class="generate-prompt-btn" (click)="generatePromptFromBrandDNA()"
             [disabled]="!selectedTemplateStyle || isGeneratingPrompt">
             <div class="btn-loader" *ngIf="isGeneratingPrompt">
               <div class="spinner-ring"></div>
@@ -759,30 +649,21 @@
     <button mat-icon-button class="close-btn" (click)="closeCsvBanner()">
       <mat-icon>close</mat-icon>
     </button>
-    
+
     <!-- Banner Body -->
     <div class="banner-body">
       <h2 class="banner-title">📄 Upload Document</h2>
       <p class="banner-subtitle">Upload Excel, CSV, Word, or PDF to generate a smart email template prompt</p>
-      
+
       <!-- File Upload Section (Show when no file uploaded or no prompt generated) -->
       <div *ngIf="!uploadedFile && !generatedPrompt" class="upload-section">
         <!-- Hidden file input -->
-        <input 
-          type="file"
-          #fileInput
-          accept=".xlsx,.xls,.csv,.doc,.docx,.pdf"
-          (change)="onFileSelected($event)"
+        <input type="file" #fileInput accept=".xlsx,.xls,.csv,.doc,.docx,.pdf" (change)="onFileSelected($event)"
           style="display: none;">
-        
+
         <!-- Drag & Drop Zone -->
-        <div 
-          class="drop-zone"
-          (click)="fileInput.click()"
-          (dragover)="onDragOver($event)"
-          (dragleave)="onDragLeave($event)"
-          (drop)="onFileDrop($event)"
-          [class.drag-over]="isDragOver">
+        <div class="drop-zone" (click)="fileInput.click()" (dragover)="onDragOver($event)"
+          (dragleave)="onDragLeave($event)" (drop)="onFileDrop($event)" [class.drag-over]="isDragOver">
           <mat-icon class="upload-icon">cloud_upload</mat-icon>
           <p class="drop-text">Drag & drop your file here</p>
           <p class="drop-subtext">or click to browse</p>
@@ -813,10 +694,7 @@
 
         <!-- Action Buttons -->
         <div class="action-buttons" (click)="$event.stopPropagation()">
-          <button 
-            mat-raised-button 
-            type="button"
-            class="generate-prompt-btn"
+          <button mat-raised-button type="button" class="generate-prompt-btn"
             (click)="generatePromptFromFile(); $event.stopPropagation()"
             [disabled]="isGeneratingPrompt || isAttachingFile">
             <mat-spinner *ngIf="isGeneratingPrompt" diameter="20"></mat-spinner>
@@ -824,12 +702,8 @@
             <span>{{ isGeneratingPrompt ? 'Generating...' : 'Generate Prompt (Recommended)' }}</span>
           </button>
 
-          <button 
-            mat-raised-button 
-            type="button"
-            class="use-in-chat-btn"
-            (click)="useFileInChat(); $event.stopPropagation()"
-            [disabled]="isGeneratingPrompt || isAttachingFile">
+          <button mat-raised-button type="button" class="use-in-chat-btn"
+            (click)="useFileInChat(); $event.stopPropagation()" [disabled]="isGeneratingPrompt || isAttachingFile">
             <mat-spinner *ngIf="isAttachingFile" diameter="20"></mat-spinner>
             <mat-icon *ngIf="!isAttachingFile">attach_file</mat-icon>
             <span>{{ isAttachingFile ? 'Attaching...' : 'Attach Only' }}</span>
@@ -847,26 +721,17 @@
         </div>
 
         <!-- Editable Prompt -->
-        <textarea 
-          class="prompt-textarea"
-          [(ngModel)]="generatedPrompt"
-          rows="10"
+        <textarea class="prompt-textarea" [(ngModel)]="generatedPrompt" rows="10"
           placeholder="Edit your prompt here...">
         </textarea>
 
         <!-- Action Buttons -->
         <div class="prompt-actions">
-          <button 
-            mat-stroked-button 
-            class="cancel-btn"
-            (click)="resetUpload()">
+          <button mat-stroked-button class="cancel-btn" (click)="resetUpload()">
             <mat-icon>close</mat-icon>
             Cancel
           </button>
-          <button 
-            mat-raised-button 
-            class="use-prompt-btn"
-            (click)="useGeneratedPrompt()">
+          <button mat-raised-button class="use-prompt-btn" (click)="useGeneratedPrompt()">
             <mat-icon>check</mat-icon>
             Use This Prompt
           </button>

@@ -45,7 +45,7 @@ interface ImageAttachment {
     MatSnackBarModule,
     MatInputModule,
     MatFormFieldModule,
-    MatTooltipModule, 
+    MatTooltipModule,
     MatMenuModule,
     MatDialogModule,
     TemplatePreviewPanelComponent,
@@ -67,7 +67,7 @@ export class GeneratePageComponent implements OnInit, OnDestroy, AfterViewInit, 
   private scrollAnimation: number | null = null;
   private templateState = inject(TemplateStateService);
   // Add this property at the top of your component class
-private sentImages: Array<{name: string, size: number}> = [];
+  private sentImages: Array<{ name: string, size: number }> = [];
 
   private cdr = inject(ChangeDetectorRef);
 
@@ -89,10 +89,10 @@ private sentImages: Array<{name: string, size: number}> = [];
   templateName = '';
 
   // Image upload state
-    selectedImages: File[] = [];
-    imagePreviewUrls: string[] = [];
-    maxImages = 2;
-    maxSizeBytes = 5 * 1024 * 1024; // 5MB
+  selectedImages: File[] = [];
+  imagePreviewUrls: string[] = [];
+  maxImages = 2;
+  maxSizeBytes = 5 * 1024 * 1024; // 5MB
 
   // Scroll state
   private shouldAutoScroll = true;
@@ -103,7 +103,7 @@ private sentImages: Array<{name: string, size: number}> = [];
 
   // Generation Type Selection
   generationType: 'template' | 'image' = 'template';
-  generatedImages: Array<{url: string, prompt: string}> = [];
+  generatedImages: Array<{ url: string, prompt: string }> = [];
   isGeneratingImage = false;
   // HTML for image gallery preview (rendered in left preview panel when generationType==='image')
   imageGalleryHtml: string = '';
@@ -178,33 +178,33 @@ private sentImages: Array<{name: string, size: number}> = [];
 
   // File attachment state (for chat)
   attachedFile: File | null = null;
-  
+
   // ⭐ Track if file data was already sent to avoid re-sending
   private fileDataAlreadySent = false;
 
 
-    ngOnInit(): void {
+  ngOnInit(): void {
     this.templateName = '';
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
-        const conversationId = params.get('conversationId');
-        
-        if (conversationId && conversationId !== 'new') {
-          // ✅ Only load if this is not the conversation we just created
-          if (conversationId !== this.justCreatedConversationId) {
-            this.loadConversation(conversationId);
-          }
-        } else if (conversationId === 'new') {
-          // Generate a new conversation ID immediately and navigate to it
-          const newConversationId = this.generateUUID();
-          this.conversationId = newConversationId;
-          this.justCreatedConversationId = newConversationId;
-          this.isRegenerating = false;
-          this.initializeWelcome();
-          // Replace URL with actual ID (no component recreation since it's same route)
-          this.router.navigate(['/generate', newConversationId], { replaceUrl: true });
+      const conversationId = params.get('conversationId');
+
+      if (conversationId && conversationId !== 'new') {
+        // ✅ Only load if this is not the conversation we just created
+        if (conversationId !== this.justCreatedConversationId) {
+          this.loadConversation(conversationId);
         }
+      } else if (conversationId === 'new') {
+        // Generate a new conversation ID immediately and navigate to it
+        const newConversationId = this.generateUUID();
+        this.conversationId = newConversationId;
+        this.justCreatedConversationId = newConversationId;
+        this.isRegenerating = false;
+        this.initializeWelcome();
+        // Replace URL with actual ID (no component recreation since it's same route)
+        this.router.navigate(['/generate', newConversationId], { replaceUrl: true });
+      }
     });
-    }
+  }
 
   // Shared assistant welcome text usable for both email template and image modes
   private imageGenerationWelcome = `👋 Hi — I can help generate marketing images. For best results, provide detailed design specifications.
@@ -292,26 +292,37 @@ Examples:
   // Generation Type Selection
   onGenerationTypeChange(type: 'template' | 'image'): void {
     this.generationType = type;
+
+    // Check if we need to add a welcome message for this mode
+    const allMessages = this.messages$.value || [];
+    const hasMessagesForType = allMessages.some(m => (m.type || 'template') === type);
+
+    if (!hasMessagesForType) {
+      // Add welcome message for this mode
+      const welcomeContent = type === 'image' ? this.imageGenerationWelcome : this.templateGenerationWelcome;
+      const welcomeMsg: GenerationMessage = {
+        role: 'assistant',
+        content: welcomeContent,
+        timestamp: new Date(),
+        type: type
+      };
+      this.messages$.next([...allMessages, welcomeMsg]);
+    }
+
     // Clear any previous generation state when switching
     if (type === 'image') {
-      // Optionally clear template-related state
       // Ensure the image preview shows the shared robot placeholder when no images yet
       if (!this.imageGalleryHtml || !this.imageGalleryHtml.trim()) {
         this.imageGalleryHtml = '';
       }
-      // If there are no existing messages, initialize the shared assistant welcome so the right pane matches
-      const msgs = this.messages$.value || [];
-      if (!msgs || msgs.length === 0) {
-        this.initializeWelcome();
-      } else if (msgs.length === 1 && msgs[0].role === 'assistant') {
-        // If the conversation only contains the original assistant welcome, replace it with the shared message
-        const updated = [{ ...msgs[0], content: this.sharedAssistantWelcome }];
-        this.messages$.next(updated);
-      }
     } else {
-      // Optionally clear image-related state
-      this.generatedImages = [];
+      // Keep generated images so remixing works when switching back
+      // this.generatedImages = [];
     }
+
+    // Scroll to bottom to show most recent messages after tab switch
+    this.shouldAutoScroll = true;
+    setTimeout(() => this.scrollToBottom(), 100);
   }
 
   // Open Save Generated Image dialog
@@ -321,7 +332,11 @@ Examples:
       const { SaveGeneratedImageDialog } = await import('../save-generated-image-dialog.component');
       const dialogRef = this.dialog.open(SaveGeneratedImageDialog, {
         width: '700px',
-        data: { images: this.generatedImages, prompt: this.generatedImages?.[0]?.prompt || '' }
+        data: {
+          images: this.generatedImages,
+          prompt: this.generatedImages?.[0]?.prompt || '',
+          templateName: this.templateName // Pass the banner name from the input field
+        }
       });
 
       dialogRef.afterClosed().subscribe((result: any) => {
@@ -667,7 +682,7 @@ Examples:
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
       const file = input.files[0];
-      
+
       // Validate file size (1MB limit)
       const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
       if (file.size > MAX_FILE_SIZE) {
@@ -679,7 +694,7 @@ Examples:
         input.value = ''; // Reset input
         return;
       }
-      
+
       this.uploadedFile = file;
       this.generatedPrompt = ''; // Reset prompt when new file is selected
     }
@@ -704,7 +719,7 @@ Examples:
 
     if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
       const file = event.dataTransfer.files[0];
-      
+
       // Validate file size (1MB limit)
       const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
       if (file.size > MAX_FILE_SIZE) {
@@ -715,11 +730,11 @@ Examples:
         );
         return;
       }
-      
+
       // Validate file type
       const validExtensions = ['.xlsx', '.xls', '.csv', '.txt', '.doc', '.docx', '.pdf'];
       const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-      
+
       if (validExtensions.includes(fileExtension)) {
         this.uploadedFile = file;
         this.generatedPrompt = '';
@@ -821,10 +836,10 @@ Examples:
     if (this.generatedPrompt) {
       // Set the prompt in the message input
       this.userInput = this.generatedPrompt;
-      
+
       // Close the banner
       this.closeCsvBanner();
-      
+
       // Focus on the message input
       setTimeout(() => {
         this.messageInput?.nativeElement.focus();
@@ -847,19 +862,19 @@ Examples:
 
     // Attach the file to the chat
     this.attachedFile = this.uploadedFile;
-    
+
     // Close the banner
     this.closeCsvBanner();
-    
+
     // Enable auto-scroll and scroll to show the attachment
     this.shouldAutoScroll = true;
-    
+
     // Wait for DOM to update with the attachment, then scroll smoothly
     this.cdr.detectChanges();
     setTimeout(() => {
       this.scrollToBottom();
     }, 150);
-    
+
     // Focus after scroll animation completes
     setTimeout(() => {
       this.messageInput?.nativeElement.focus();
@@ -872,48 +887,48 @@ Examples:
   }
 
   ngAfterViewInit() {
-  setTimeout(() => {
-    try {
-      const chatElement = this.messagesContainer?.nativeElement;
-      if (chatElement) {
-        chatElement.addEventListener('wheel', () => {
-          if (this.scrollAnimation) {
-            cancelAnimationFrame(this.scrollAnimation);
-            this.scrollAnimation = null;
-          }
-        });
-        
-        chatElement.addEventListener('touchmove', () => {
-          if (this.scrollAnimation) {
-            cancelAnimationFrame(this.scrollAnimation);
-            this.scrollAnimation = null;
-          }
-        });
+    setTimeout(() => {
+      try {
+        const chatElement = this.messagesContainer?.nativeElement;
+        if (chatElement) {
+          chatElement.addEventListener('wheel', () => {
+            if (this.scrollAnimation) {
+              cancelAnimationFrame(this.scrollAnimation);
+              this.scrollAnimation = null;
+            }
+          });
+
+          chatElement.addEventListener('touchmove', () => {
+            if (this.scrollAnimation) {
+              cancelAnimationFrame(this.scrollAnimation);
+              this.scrollAnimation = null;
+            }
+          });
+        }
+
+        window.scrollTo(0, 0);
+        // ✅ Only position at bottom on initial load, then respect user scroll
+        this.positionChatAtBottom();
+      } catch (error) {
+
       }
+    }, 0);
+  }
 
-      window.scrollTo(0, 0);
-      // ✅ Only position at bottom on initial load, then respect user scroll
-      this.positionChatAtBottom();
-    } catch (error) {
+  private positionChatAtBottom(): void {
+    setTimeout(() => {
+      const element = this.messagesContainer?.nativeElement;
+      if (element && element.scrollHeight > 0) {
+        element.style.scrollBehavior = 'auto'; // No animation on initial load
+        element.scrollTop = element.scrollHeight;
+        this.shouldAutoScroll = true; // ✅ Reset to true when positioned at bottom
 
-    }
-  }, 0);
-}
-
-private positionChatAtBottom(): void {
-  setTimeout(() => {
-    const element = this.messagesContainer?.nativeElement;
-    if (element && element.scrollHeight > 0) {
-      element.style.scrollBehavior = 'auto'; // No animation on initial load
-      element.scrollTop = element.scrollHeight;
-      this.shouldAutoScroll = true; // ✅ Reset to true when positioned at bottom
-      
-      setTimeout(() => {
-        element.style.scrollBehavior = 'smooth'; // Enable smooth scroll after
-      }, 50);
-    }
-  }, 50);
-}
+        setTimeout(() => {
+          element.style.scrollBehavior = 'smooth'; // Enable smooth scroll after
+        }, 50);
+      }
+    }, 50);
+  }
 
   ngOnDestroy(): void {
     this.destroy$.next();
@@ -927,38 +942,38 @@ private positionChatAtBottom(): void {
   /**
  * Handle page refresh (F5) - Show browser confirmation dialog
  */
-@HostListener('window:beforeunload', ['$event'])
-handleBeforeUnload(event: BeforeUnloadEvent): void {
-  if (this.isGenerating$.value) {
-    const message = '⚠️ Your template is still being generated and will be lost if you leave.';
-    event.preventDefault();
-    event.returnValue = message;
-    return;
+  @HostListener('window:beforeunload', ['$event'])
+  handleBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.isGenerating$.value) {
+      const message = '⚠️ Your template is still being generated and will be lost if you leave.';
+      event.preventDefault();
+      event.returnValue = message;
+      return;
+    }
   }
-}
-/**
- * Handle navigation away - Show custom confirmation
- */
-canDeactivate(): boolean {
-  // Allow navigation if not generating
-  if (!this.isGenerating$.value) {
-    return true;
+  /**
+   * Handle navigation away - Show custom confirmation
+   */
+  canDeactivate(): boolean {
+    // Allow navigation if not generating
+    if (!this.isGenerating$.value) {
+      return true;
+    }
+
+    // Show confirmation dialog
+    const confirmed = confirm(
+      '⚠️ Your template is still being generated and will be lost if you leave.\n\n' +
+      'Are you sure you want to leave? All progress will be lost.'
+    );
+
+    if (confirmed) {
+      // Clean up if user confirms
+      this.isGenerating$.next(false);
+
+    }
+
+    return confirmed;
   }
-
-  // Show confirmation dialog
-  const confirmed = confirm(
-    '⚠️ Your template is still being generated and will be lost if you leave.\n\n' +
-    'Are you sure you want to leave? All progress will be lost.'
-  );
-
-  if (confirmed) {
-    // Clean up if user confirms
-    this.isGenerating$.next(false);
-
-  }
-
-  return confirmed;
-}
 
   private initializeWelcome(): void {
     // Show welcome message
@@ -966,9 +981,10 @@ canDeactivate(): boolean {
       role: 'assistant',
       content: this.sharedAssistantWelcome,
       timestamp: new Date(),
+      type: this.generationType
     };
     this.messages$.next([welcomeMessage]);
-    
+
     // ✅ Save welcome message to cache for new conversations
     if (this.conversationId) {
       this.generationService.updateConversationCache(
@@ -985,7 +1001,7 @@ canDeactivate(): boolean {
   private loadConversation(conversationId: string): void {
     this.conversationId = conversationId;
     this.isGenerating$.next(true);
-    
+
     // Reset file data flag when loading a conversation
     this.fileDataAlreadySent = false;
 
@@ -997,12 +1013,12 @@ canDeactivate(): boolean {
           this.messages$.next(conversation.messages);
           this.currentHtml$.next(conversation.currentHtml);
           this.templateName = conversation.templateName || '';
-          
+
           // ✅ Set isRegenerating based on whether there's already generated HTML
           this.isRegenerating = !!conversation.currentHtml;
-          
+
           this.isGenerating$.next(false);
-          
+
           // ✅ Position at bottom initially, then let user control scroll
           this.shouldAutoScroll = true;
           this.scrollToBottom();
@@ -1015,9 +1031,9 @@ canDeactivate(): boolean {
               panelClass: ['error-snackbar'],
             });
           }
-          
+
           this.isGenerating$.next(false);
-          
+
           // Only redirect on non-404 errors
           if (error.status !== 404) {
             this.router.navigate(['/generate/new'], { replaceUrl: true });
@@ -1096,20 +1112,21 @@ canDeactivate(): boolean {
     return !!(this.currentHtml$.value);
   }
 
-async onSend(): Promise<void> {
-  const message = this.userInput.trim();
-  
-  if ((!message && !this.attachedFile) || this.isGenerating$.value) {
-    return;
-  }
+  async onSend(): Promise<void> {
+    const message = this.userInput.trim();
 
-  // Route to image generation if image mode is selected
+    if ((!message && !this.attachedFile) || this.isGenerating$.value) {
+      return;
+    }
+
+    // Route to image generation if image mode is selected
     if (this.generationType === 'image') {
       // Add the user's message to the chat UI so the conversation remains conversational
       const userMessage: GenerationMessage = {
         role: 'user',
         content: message,
-        timestamp: new Date()
+        timestamp: new Date(),
+        type: 'image'
       };
       this.messages$.next([...this.messages$.value, userMessage]);
       this.scrollToBottom();
@@ -1128,98 +1145,99 @@ async onSend(): Promise<void> {
       return;
     }
 
-  // If there's an attached file, we'll send it directly to the template generation
-  // No need to pre-process into a prompt
-  const finalMessage = message || 'Generate an email template based on the attached document data';
-  
-  // Convert selected images to base64 FIRST (before adding user message)
-  const imageAttachments: ImageAttachment[] = await Promise.all(
-    this.selectedImages.map(async (file) => {
-      const base64 = await this.fileToBase64(file);
-      return {
-        data: base64,
-        mediaType: file.type,
-        fileName: file.name,
-      };
-    })
-  );
-  
-  // Store file reference before clearing
-  const fileToSend = this.attachedFile;
-  
-  // Add user message to UI immediately (before API call) WITH images AND attachment
-  const existingMessages = this.messages$.value;
-  const userMessage: GenerationMessage = {
-    role: 'user',
-    content: finalMessage,
-    timestamp: new Date(),
-    images: imageAttachments.length > 0 ? imageAttachments : undefined,
-    attachment: fileToSend ? {
-      fileName: fileToSend.name,
-      fileSize: fileToSend.size,
-      fileType: fileToSend.type
-    } : undefined,
-  };
-  this.messages$.next([...existingMessages, userMessage]);
-  
-  // Store ORIGINAL file metadata (before compression stored the compressed size)
-  this.selectedImages.forEach(file => {
-    const originalSize = (file as any).originalSize || file.size;
-    const originalName = (file as any).originalName || file.name;
-    this.sentImages.push({ name: originalName, size: originalSize });
-  });
-  
-  this.isGenerating$.next(true);
-  this.shouldAutoScroll = true;
-  
-  // Scroll to show the new user message
-  setTimeout(() => this.scrollToBottom(), 50);
-  
-  // Clear input, images, and attached file AFTER storing metadata
-  this.userInput = '';
-  this.selectedImages = [];
-  this.imagePreviewUrls = [];
-  this.attachedFile = null;
+    // If there's an attached file, we'll send it directly to the template generation
+    // No need to pre-process into a prompt
+    const finalMessage = message || 'Generate an email template based on the attached document data';
 
-  // ✅ If there's an attached file, extract its data first, then send to chat
-  if (fileToSend && !this.fileDataAlreadySent) {
-    try {
-      // Extract data from the file using the backend API
-      const formData = new FormData();
-      formData.append('file', fileToSend);
+    // Convert selected images to base64 FIRST (before adding user message)
+    const imageAttachments: ImageAttachment[] = await Promise.all(
+      this.selectedImages.map(async (file) => {
+        const base64 = await this.fileToBase64(file);
+        return {
+          data: base64,
+          mediaType: file.type,
+          fileName: file.name,
+        };
+      })
+    );
 
-      const response = await fetch('/api/csv-to-prompt/extract', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
+    // Store file reference before clearing
+    const fileToSend = this.attachedFile;
 
-      if (!response.ok) {
-        throw new Error('Failed to extract file data');
+    // Add user message to UI immediately (before API call) WITH images AND attachment
+    const existingMessages = this.messages$.value;
+    const userMessage: GenerationMessage = {
+      role: 'user',
+      content: finalMessage,
+      timestamp: new Date(),
+      images: imageAttachments.length > 0 ? imageAttachments : undefined,
+      attachment: fileToSend ? {
+        fileName: fileToSend.name,
+        fileSize: fileToSend.size,
+        fileType: fileToSend.type
+      } : undefined,
+      type: 'template'
+    };
+    this.messages$.next([...existingMessages, userMessage]);
+
+    // Store ORIGINAL file metadata (before compression stored the compressed size)
+    this.selectedImages.forEach(file => {
+      const originalSize = (file as any).originalSize || file.size;
+      const originalName = (file as any).originalName || file.name;
+      this.sentImages.push({ name: originalName, size: originalSize });
+    });
+
+    this.isGenerating$.next(true);
+    this.shouldAutoScroll = true;
+
+    // Scroll to show the new user message
+    setTimeout(() => this.scrollToBottom(), 50);
+
+    // Clear input, images, and attached file AFTER storing metadata
+    this.userInput = '';
+    this.selectedImages = [];
+    this.imagePreviewUrls = [];
+    this.attachedFile = null;
+
+    // ✅ If there's an attached file, extract its data first, then send to chat
+    if (fileToSend && !this.fileDataAlreadySent) {
+      try {
+        // Extract data from the file using the backend API
+        const formData = new FormData();
+        formData.append('file', fileToSend);
+
+        const response = await fetch('/api/csv-to-prompt/extract', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to extract file data');
+        }
+
+        const { extractedData } = await response.json();
+
+        // Mark that file data has been sent
+        this.fileDataAlreadySent = true;
+
+        // Send chat message with the extracted file data
+        this.sendChatMessage(finalMessage, imageAttachments, extractedData);
+      } catch (error) {
+        this.snackBar.open('Failed to process attached file', 'Close', {
+          duration: 4000,
+          panelClass: ['error-snackbar']
+        });
+        this.isGenerating$.next(false);
       }
-
-      const { extractedData } = await response.json();
-
-      // Mark that file data has been sent
-      this.fileDataAlreadySent = true;
-
-      // Send chat message with the extracted file data
-      this.sendChatMessage(finalMessage, imageAttachments, extractedData);
-    } catch (error) {
-      this.snackBar.open('Failed to process attached file', 'Close', { 
-        duration: 4000, 
-        panelClass: ['error-snackbar'] 
-      });
-      this.isGenerating$.next(false);
+    } else if (fileToSend && this.fileDataAlreadySent) {
+      // File data was already sent earlier, don't send it again
+      this.sendChatMessage(finalMessage, imageAttachments);
+    } else {
+      // No file attached, send normal chat message
+      this.sendChatMessage(finalMessage, imageAttachments);
     }
-  } else if (fileToSend && this.fileDataAlreadySent) {
-    // File data was already sent earlier, don't send it again
-    this.sendChatMessage(finalMessage, imageAttachments);
-  } else {
-    // No file attached, send normal chat message
-    this.sendChatMessage(finalMessage, imageAttachments);
   }
-}
 
   // Heuristic to detect if the user's message is a follow-up edit intent
   private isEditIntent(message: string): boolean {
@@ -1233,11 +1251,11 @@ async onSend(): Promise<void> {
     // Color/price indicators
     const colorHex = /#([0-9a-fA-F]{3,6})/;
     const priceOrText = /\$\s*\d+/;
-    
+
     // Check if message contains edit keywords OR (positional + content keywords together)
     const hasEditKeyword = editKeywords.test(message);
     const hasPositionalAndContent = positionalKeywords.test(message) && contentKeywords.test(message);
-    
+
     return hasEditKeyword || hasPositionalAndContent || colorHex.test(message) || priceOrText.test(message);
   }
 
@@ -1261,7 +1279,7 @@ async onSend(): Promise<void> {
       // the original image context. We just pass the user's request directly.
       const remixPrompt = prompt;
 
-      const resp: any = await this.ideogramService.remixImage(imageUrl, remixPrompt, { 
+      const resp: any = await this.ideogramService.remixImage(imageUrl, remixPrompt, {
         styleType: 'REALISTIC'
       }).toPromise();
 
@@ -1299,276 +1317,280 @@ async onSend(): Promise<void> {
     }
   }
 
-private async sendChatMessage(
-  message: string, 
-  imageAttachments: ImageAttachment[], 
-  extractedFileData?: string
-): Promise<void> {
-  // Get current conversation history (excluding the user message we just added)
-  const historyMessages = this.messages$.value.slice(0, -1);
+  private async sendChatMessage(
+    message: string,
+    imageAttachments: ImageAttachment[],
+    extractedFileData?: string
+  ): Promise<void> {
+    // Get current conversation history (excluding the user message we just added)
+    const historyMessages = this.messages$.value.slice(0, -1);
 
-  this.generationService
-    .chat(message, historyMessages, this.currentMjml$.value || undefined, imageAttachments, extractedFileData)
-    .pipe(takeUntil(this.destroy$))
-    .subscribe({
-      next: (response) => {
-        this.currentHtml$.next(response.html);
-        this.currentMjml$.next(response.mjml);  // ✅ Store MJML
+    this.generationService
+      .chat(message, historyMessages, this.currentMjml$.value || undefined, imageAttachments, extractedFileData)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          this.currentHtml$.next(response.html);
+          this.currentMjml$.next(response.mjml);  // ✅ Store MJML
 
-        // Add assistant response to messages
-        const assistantMessage: GenerationMessage = {
-          role: 'assistant',
-          content: response.message ||'✅ Template updated successfully!',
-          timestamp: new Date(),
-        };
-        
-        const updatedMessages = [...this.messages$.value, assistantMessage];
-        this.messages$.next(updatedMessages);
+          // Add assistant response to messages
+          const assistantMessage: GenerationMessage = {
+            role: 'assistant',
+            content: response.message || '✅ Template updated successfully!',
+            timestamp: new Date(),
+            type: 'template'
+          };
 
-        // ✅ Save the complete conversation state back to cache
-        if (this.conversationId) {
+          const updatedMessages = [...this.messages$.value, assistantMessage];
+          this.messages$.next(updatedMessages);
+
+          // ✅ Save the complete conversation state back to cache
+          if (this.conversationId) {
+            this.generationService.updateConversationCache(
+              this.conversationId,
+              updatedMessages,
+              response.html,
+              response.mjml || '',
+              this.templateName
+            );
+          }
+
+          // ✅ Set isRegenerating to true after first successful generation
+          if (!this.isRegenerating) {
+            this.isRegenerating = true;
+          }
+
+          this.isGenerating$.next(false);
+          this.shouldAutoScroll = true;
+          setTimeout(() => {
+            this.scrollToBottom();
+          }, 100);
+
+          if (response.hasErrors) {
+            this.snackBar.open(
+              'Template generated with warnings. Check console for details.',
+              'Close',
+              { duration: 5000, panelClass: ['info-snackbar'] }
+            );
+          }
+        },
+        error: (error) => {
+          this.isGenerating$.next(false);
+          this.snackBar.open(
+            error.error?.message || 'Failed to generate template',
+            'Close',
+            { duration: 5000, panelClass: ['error-snackbar'] }
+          );
+        },
+      });
+  }
+
+  private async startNewConversation(message: string, imageAttachments: ImageAttachment[]): Promise<void> {
+    this.generationService
+      .startGeneration(message, imageAttachments, this.conversationId || undefined)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+          // Update conversationId (should match what we sent, but backend might change it)
+          this.conversationId = response.conversationId;
+          this.generationService.setCurrentConversationId(response.conversationId);
+          this.currentHtml$.next(response.html);
+
+          // Add assistant response to existing messages with dynamic message
+          // Add assistant response to existing messages with dynamic message
+          const defaultMessage = this.isRegenerating
+            ? "✅ Template regenerated successfully!"
+            : "✅ Template generated successfully!";
+
+          const assistantMessage: GenerationMessage = {
+            role: 'assistant',
+            content: response.message || defaultMessage,
+            timestamp: new Date(),
+            type: 'template'
+          };
+
+          const updatedMessages = [...this.messages$.value, assistantMessage];
+
+          this.messages$.next(updatedMessages);
+
+          // ✅ Save the complete conversation state back to cache
           this.generationService.updateConversationCache(
-            this.conversationId,
+            response.conversationId,
             updatedMessages,
             response.html,
             response.mjml || '',
             this.templateName
           );
-        }
 
-        // ✅ Set isRegenerating to true after first successful generation
-        if (!this.isRegenerating) {
-          this.isRegenerating = true;
-        }
+          this.isGenerating$.next(false);
 
-        this.isGenerating$.next(false);
-        this.shouldAutoScroll = true;
-        setTimeout(() => {
-          this.scrollToBottom();
-        }, 100);
+          // Set regenerating flag for NEXT generation in this conversation
+          if (!this.isRegenerating) {
+            this.isRegenerating = true;
+          }
 
-        if (response.hasErrors) {
+          this.shouldAutoScroll = true;
+          setTimeout(() => {
+            this.scrollToBottom();
+          }, 100);
+
+          if (response.hasErrors) {
+
+            this.snackBar.open(
+              'Template generated with warnings. Check console for details.',
+              'Close',
+              { duration: 5000, panelClass: ['info-snackbar'] }
+            );
+
+          }
+        },
+        error: (error) => {
+          this.isGenerating$.next(false);
           this.snackBar.open(
-            'Template generated with warnings. Check console for details.',
+            error.error?.message || 'Failed to generate template',
             'Close',
-            { duration: 5000, panelClass: ['info-snackbar'] }
+            { duration: 5000, panelClass: ['error-snackbar'] }
           );
-        }
-      },
-      error: (error) => {
-        this.isGenerating$.next(false);
-        this.snackBar.open(
-          error.error?.message || 'Failed to generate template',
-          'Close',
-          { duration: 5000, panelClass: ['error-snackbar'] }
-        );
-      },
-    });
-}
-
-private async startNewConversation(message: string, imageAttachments: ImageAttachment[]): Promise<void> {
-  this.generationService
-    .startGeneration(message, imageAttachments, this.conversationId || undefined)
-    .pipe(takeUntil(this.destroy$))
-    .subscribe({
-      next: (response) => {
-        // Update conversationId (should match what we sent, but backend might change it)
-        this.conversationId = response.conversationId;
-        this.generationService.setCurrentConversationId(response.conversationId);
-        this.currentHtml$.next(response.html);
-
-        // Add assistant response to existing messages with dynamic message
-        const defaultMessage = this.isRegenerating 
-          ? "✅ Template regenerated successfully!"
-          : "✅ Template generated successfully!";
-        
-        const assistantMessage: GenerationMessage = {
-          role: 'assistant',
-          content: response.message || defaultMessage,
-          timestamp: new Date(),
-        };
-        
-        const updatedMessages = [...this.messages$.value, assistantMessage];
-
-        this.messages$.next(updatedMessages);
-
-        // ✅ Save the complete conversation state back to cache
-        this.generationService.updateConversationCache(
-          response.conversationId,
-          updatedMessages,
-          response.html,
-          response.mjml || '',
-          this.templateName
-        );
-
-        this.isGenerating$.next(false);
-        
-        // Set regenerating flag for NEXT generation in this conversation
-        if (!this.isRegenerating) {
-          this.isRegenerating = true;
-        }
-        
-        this.shouldAutoScroll = true;
-        setTimeout(() => {
-          this.scrollToBottom();
-        }, 100);
-
-        if (response.hasErrors) {
-
-          this.snackBar.open(
-            'Template generated with warnings. Check console for details.',
-            'Close',
-            { duration: 5000, panelClass: ['info-snackbar'] }
-          );
-
-        }
-      },
-      error: (error) => {
-        this.isGenerating$.next(false);
-        this.snackBar.open(
-          error.error?.message || 'Failed to generate template',
-          'Close',
-          { duration: 5000, panelClass: ['error-snackbar'] }
-        );
-        this.isGenerating$.next(false);
-      },
-    });
-}
-
-private async continueConversation(message: string, imageAttachments: ImageAttachment[]): Promise<void> {
-
-  if (!this.conversationId) {
-
-    return;
+          this.isGenerating$.next(false);
+        },
+      });
   }
 
-  // Images already converted in onSend(), just use them
-  
+  private async continueConversation(message: string, imageAttachments: ImageAttachment[]): Promise<void> {
 
-  // ❌ REMOVED: Don't store here, already stored in onSend()
-  // this.selectedImages.forEach(file => {
-  //   this.sentImages.push({ name: file.name, size: file.size });
-  // });
+    if (!this.conversationId) {
 
-  // ✅ FIX: Don't add user message here - already added in onSend()
-  // User message was already added to messages$ in onSend() before calling this method
-
-  this.generationService
-    .continueConversation(this.conversationId, message, imageAttachments)
-    .pipe(takeUntil(this.destroy$))
-    .subscribe({
-      next: (response) => {
-
-        this.currentHtml$.next(response.html);
-
-        const updatedMessages = this.messages$.value;
-
-        updatedMessages.push({
-          role: 'assistant',
-          content: '✅ Template updated successfully',
-          timestamp: new Date(),
-        });
-        
-
-        this.messages$.next([...updatedMessages]);
-
-        // ✅ Save the complete conversation state back to cache
-        this.generationService.updateConversationCache(
-          this.conversationId!,
-          updatedMessages,
-          response.html,
-          response.mjml || '',
-          this.templateName
-        );
-
-        this.isGenerating$.next(false);
-
-        this.scrollToBottom();
-
-        if (response.hasErrors) {
-
-          this.snackBar.open(
-            'Template updated with warnings. Check console for details.',
-            'Close',
-            { duration: 5000, panelClass: ['info-snackbar'] }
-          );
-
-        } else {
-
-          this.snackBar.open('Template updated!', 'Close', {
-            duration: 3000,
-            panelClass: ['success-snackbar'],
-          });
-        }
-      },
-      error: (error) => {
-
-
-        this.snackBar.open(
-          error.error?.message || 'Failed to update template',
-          'Close',
-          { duration: 5000, panelClass: ['error-snackbar'] }
-        );
-        this.isGenerating$.next(false);
-      },
-    });
-}
-
-// Image Generation Method
-async generateImage(prompt: string): Promise<void> {
-  if (!prompt.trim()) {
-    this.snackBar.open('Please enter a prompt to generate an image', 'Close', {
-      duration: 3000,
-      panelClass: ['error-snackbar']
-    });
-    return;
-  }
-
-  this.isGeneratingImage = true;
-  this.userInput = '';
-
-  // Clear any previously generated images so new prompt does not include old results
-  // This ensures the preview only shows images generated for the current prompt.
-  this.generatedImages = [];
-  this.imageGalleryHtml = '';
-  try {
-    // Force refresh of preview panel (OnPush) to clear old images immediately
-    try { this.previewPanel?.onRefresh(); } catch { this.cdr.detectChanges(); }
-  } catch {}
-
-  try {
-    // Build a marketing-focused prompt. If the user requested on-image text
-    // (for example a price like "$100"), prefer a prompt that explicitly
-    // instructs Ideogram to render that exact text as an overlay. In that
-    // case we must NOT include the "no text" negative prompt which would
-    // prevent text from being rendered.
-    const priceOrCurrencyMatch = prompt.match(/(?:\$|€|£)\s*\d+/);
-    const explicitTextMatch = prompt.match(/(?:include|with)\s+["']([^"']+)["']/i);
-
-    let finalPrompt = this.buildStrictMarketingPrompt(prompt);
-    let negative = 'watermark, caption, words, logo, signature, subtitle'; // keep watermark/branding blocked
-
-    // If we detect a price/currency token or an explicit include "text" request,
-    // strengthen the instruction to render that text verbatim and avoid blocking text.
-    if (priceOrCurrencyMatch || explicitTextMatch) {
-      const overlayText = (explicitTextMatch && explicitTextMatch[1]) || (priceOrCurrencyMatch && priceOrCurrencyMatch[0]) || '';
-      finalPrompt = this.buildMarketingPromptWithOverlay(prompt, overlayText);
-      // Do not block text rendering when explicit overlay requested
-      negative = 'watermark, caption, logo, signature, subtitle';
+      return;
     }
 
-    const response = await this.ideogramService.generateImage({
-      prompt: finalPrompt,
-      aspectRatio: '1:1',
-      model: 'V_2',
-      magicPromptOption: 'AUTO',
-      styleType: 'DESIGN',
-      negativePrompt: negative
-    }).toPromise();
+    // Images already converted in onSend(), just use them
 
-  console.debug('Ideogram generate response (raw):', response);
-  if (response && response.data && response.data.length > 0) {
-      // Add generated images to the gallery
+
+    // ❌ REMOVED: Don't store here, already stored in onSend()
+    // this.selectedImages.forEach(file => {
+    //   this.sentImages.push({ name: file.name, size: file.size });
+    // });
+
+    // ✅ FIX: Don't add user message here - already added in onSend()
+    // User message was already added to messages$ in onSend() before calling this method
+
+    this.generationService
+      .continueConversation(this.conversationId, message, imageAttachments)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+
+          this.currentHtml$.next(response.html);
+
+          const updatedMessages = this.messages$.value;
+
+          updatedMessages.push({
+            role: 'assistant',
+            content: '✅ Template updated successfully',
+            timestamp: new Date(),
+            type: 'template'
+          });
+
+
+          this.messages$.next([...updatedMessages]);
+
+          // ✅ Save the complete conversation state back to cache
+          this.generationService.updateConversationCache(
+            this.conversationId!,
+            updatedMessages,
+            response.html,
+            response.mjml || '',
+            this.templateName
+          );
+
+          this.isGenerating$.next(false);
+
+          this.scrollToBottom();
+
+          if (response.hasErrors) {
+
+            this.snackBar.open(
+              'Template updated with warnings. Check console for details.',
+              'Close',
+              { duration: 5000, panelClass: ['info-snackbar'] }
+            );
+
+          } else {
+
+            this.snackBar.open('Template updated!', 'Close', {
+              duration: 3000,
+              panelClass: ['success-snackbar'],
+            });
+          }
+        },
+        error: (error) => {
+
+
+          this.snackBar.open(
+            error.error?.message || 'Failed to update template',
+            'Close',
+            { duration: 5000, panelClass: ['error-snackbar'] }
+          );
+          this.isGenerating$.next(false);
+        },
+      });
+  }
+
+  // Image Generation Method
+  async generateImage(prompt: string): Promise<void> {
+    if (!prompt.trim()) {
+      this.snackBar.open('Please enter a prompt to generate an image', 'Close', {
+        duration: 3000,
+        panelClass: ['error-snackbar']
+      });
+      return;
+    }
+
+    this.isGeneratingImage = true;
+    this.userInput = '';
+
+    // Clear any previously generated images so new prompt does not include old results
+    // This ensures the preview only shows images generated for the current prompt.
+    this.generatedImages = [];
+    this.imageGalleryHtml = '';
+    try {
+      // Force refresh of preview panel (OnPush) to clear old images immediately
+      try { this.previewPanel?.onRefresh(); } catch { this.cdr.detectChanges(); }
+    } catch { }
+
+    try {
+      // Build a marketing-focused prompt. If the user requested on-image text
+      // (for example a price like "$100"), prefer a prompt that explicitly
+      // instructs Ideogram to render that exact text as an overlay. In that
+      // case we must NOT include the "no text" negative prompt which would
+      // prevent text from being rendered.
+      const priceOrCurrencyMatch = prompt.match(/(?:\$|€|£)\s*\d+/);
+      const explicitTextMatch = prompt.match(/(?:include|with)\s+["']([^"']+)["']/i);
+
+      let finalPrompt = this.buildStrictMarketingPrompt(prompt);
+      let negative = 'watermark, caption, words, logo, signature, subtitle'; // keep watermark/branding blocked
+
+      // If we detect a price/currency token or an explicit include "text" request,
+      // strengthen the instruction to render that text verbatim and avoid blocking text.
+      if (priceOrCurrencyMatch || explicitTextMatch) {
+        const overlayText = (explicitTextMatch && explicitTextMatch[1]) || (priceOrCurrencyMatch && priceOrCurrencyMatch[0]) || '';
+        finalPrompt = this.buildMarketingPromptWithOverlay(prompt, overlayText);
+        // Do not block text rendering when explicit overlay requested
+        negative = 'watermark, caption, logo, signature, subtitle';
+      }
+
+      const response = await this.ideogramService.generateImage({
+        prompt: finalPrompt,
+        aspectRatio: '1:1',
+        model: 'V_2',
+        magicPromptOption: 'AUTO',
+        styleType: 'DESIGN',
+        negativePrompt: negative
+      }).toPromise();
+
+      console.debug('Ideogram generate response (raw):', response);
+      if (response && response.data && response.data.length > 0) {
+        // Add generated images to the gallery
         response.data.forEach(img => {
           this.generatedImages.push({
             url: img.url,
@@ -1595,237 +1617,238 @@ async generateImage(prompt: string): Promise<void> {
           this.cdr.detectChanges();
         }
 
-      // After generation, keep generatedImages array (used for saving)
-      // and offer quick save via dialog. We don't auto-open the save dialog,
-      // but expose a button in the template to let users save the selected image.
+        // After generation, keep generatedImages array (used for saving)
+        // and offer quick save via dialog. We don't auto-open the save dialog,
+        // but expose a button in the template to let users save the selected image.
 
-      // Add assistant response to chat
+        // Add assistant response to chat
+        const assistantMessage: GenerationMessage = {
+          role: 'assistant',
+          content: `✅ Generated ${response.data.length} image(s) successfully!`,
+          timestamp: new Date(),
+          type: 'image'
+        };
+        this.messages$.next([...this.messages$.value, assistantMessage]);
+
+        this.snackBar.open('Image generated successfully!', 'Close', {
+          duration: 3000,
+          panelClass: ['success-snackbar']
+        });
+      } else {
+        throw new Error('No images were generated');
+      }
+
+    } catch (error: any) {
+      console.error('Image generation error:', error);
+
       const assistantMessage: GenerationMessage = {
         role: 'assistant',
-        content: `✅ Generated ${response.data.length} image(s) successfully!`,
+        content: `❌ Failed to generate image: ${error.message || 'Unknown error'}`,
         timestamp: new Date()
       };
       this.messages$.next([...this.messages$.value, assistantMessage]);
 
-      this.snackBar.open('Image generated successfully!', 'Close', {
-        duration: 3000,
-        panelClass: ['success-snackbar']
+      this.snackBar.open('Failed to generate image', 'Close', {
+        duration: 4000,
+        panelClass: ['error-snackbar']
       });
-    } else {
-      throw new Error('No images were generated');
+    } finally {
+      this.isGeneratingImage = false;
+      this.scrollToBottom();
+    }
+  }
+
+  onRunTests(): void {
+
+    if (!this.conversationId) {
+
+      this.snackBar.open('No template to test', 'Close', {
+        duration: 3000,
+        panelClass: ['error-snackbar'],
+      });
+      return;
     }
 
-  } catch (error: any) {
-    console.error('Image generation error:', error);
-    
-    const assistantMessage: GenerationMessage = {
-      role: 'assistant',
-      content: `❌ Failed to generate image: ${error.message || 'Unknown error'}`,
-      timestamp: new Date()
-    };
-    this.messages$.next([...this.messages$.value, assistantMessage]);
+    if (!this.currentHtml$.value) {
 
-    this.snackBar.open('Failed to generate image', 'Close', {
-      duration: 4000,
-      panelClass: ['error-snackbar']
-    });
-  } finally {
-    this.isGeneratingImage = false;
-    this.scrollToBottom();
+      this.snackBar.open('No template to save', 'Close', {
+        duration: 3000,
+        panelClass: ['error-snackbar'],
+      });
+      return;
+    }
+
+    // ✅ Validate template name
+    const name = this.templateName?.trim();
+
+    if (!name) {
+
+      this.snackBar.open('Please enter a template name before running tests', 'Close', {
+        duration: 4000,
+        horizontalPosition: 'center',
+        verticalPosition: 'top',
+      });
+      return;
+    }
+
+
+    this.generationService
+      .saveTemplate(this.conversationId, name)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+
+          this.snackBar.open('Template saved! Redirecting to QA...', 'Close', {
+            duration: 2000,
+            panelClass: ['success-snackbar'],
+          });
+
+          // ✅ Initialize template state with the generated template
+          const currentHtml = this.currentHtml$.value;
+          if (currentHtml && response.templateId) {
+            this.templateState.initializeOriginalTemplate(response.templateId, currentHtml);
+          }
+
+          this.router.navigate(['/qa', response.templateId]);
+
+        },
+        error: (error) => {
+
+
+
+
+          this.snackBar.open('Failed to save template', 'Close', {
+            duration: 5000,
+            panelClass: ['error-snackbar'],
+          });
+        },
+      });
   }
-}
 
-onRunTests(): void {
+  onTemplateNameChange(newName: string): void {
+    this.templateName = newName;
 
-  if (!this.conversationId) {
+    // ✅ Save template name to cache whenever it changes
+    if (this.conversationId) {
+      this.generationService.updateConversationCache(
+        this.conversationId,
+        this.messages$.value,
+        this.currentHtml$.value,
+        '', // mjml not needed for name update
+        newName
+      );
+    }
+  }
+  onSaveTemplate(): void {
 
-    this.snackBar.open('No template to test', 'Close', {
-      duration: 3000,
-      panelClass: ['error-snackbar'],
-    });
-    return;
+    if (!this.conversationId) {
+
+      this.snackBar.open('No template to save', 'Close', {
+        duration: 3000,
+        panelClass: ['error-snackbar'],
+      });
+      return;
+    }
+
+    // ✅ Validate template name
+    const name = this.templateName?.trim();
+
+    if (!name) {
+
+      this.snackBar.open('Please enter a template name', 'Close', {
+        duration: 4000,
+        horizontalPosition: 'center',
+        verticalPosition: 'top',
+      });
+      return;
+    }
+
+
+    this.generationService
+      .saveTemplate(this.conversationId, name)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => {
+
+          // ✅ Production-grade: Add new template directly to cache (no unnecessary API call for 1000 templates)
+          this.templatesService.addTemplateToCache({
+            id: response.templateId,
+            name: response.templateName || name,
+            content: this.currentHtml$.value,
+            source: 'ai-generated',
+            templateType: 'AI Generated',
+          });
+
+          // ✅ Select the saved template so it appears first when we navigate
+          this.templatesService.select(response.templateId, response.templateName || name);
+
+          // Navigate to templates page
+          this.router.navigate(['/']);
+
+
+        },
+        error: (error) => {
+
+
+
+
+          this.snackBar.open(
+            error.error?.message || 'Failed to save template',
+            'Close',
+            { duration: 5000, panelClass: ['error-snackbar'] }
+          );
+        },
+      });
   }
 
-  if (!this.currentHtml$.value) {
+  onNewConversation(): void {
+    // Check if there's an active conversation with unsaved content
+    const hasActiveConversation = this.conversationId && this.currentHtml$.value;
 
-    this.snackBar.open('No template to save', 'Close', {
-      duration: 3000,
-      panelClass: ['error-snackbar'],
-    });
-    return;
-  }
+    if (hasActiveConversation) {
+      // Show confirmation dialog
+      const dialogRef = this.dialog.open(ConfirmNewConversationDialog, {
+        width: '500px',
+        disableClose: false,
+        data: { hasTemplate: true }
+      });
 
-  // ✅ Validate template name
-  const name = this.templateName?.trim();
-
-  if (!name) {
-
-    this.snackBar.open('Please enter a template name before running tests', 'Close', {
-      duration: 4000,
-      horizontalPosition: 'center',
-      verticalPosition: 'top',
-    });
-    return;
-  }
-
-
-  this.generationService
-    .saveTemplate(this.conversationId, name)
-    .pipe(takeUntil(this.destroy$))
-    .subscribe({
-      next: (response) => {
-
-        this.snackBar.open('Template saved! Redirecting to QA...', 'Close', {
-          duration: 2000,
-          panelClass: ['success-snackbar'],
-        });
-
-        // ✅ Initialize template state with the generated template
-        const currentHtml = this.currentHtml$.value;
-        if (currentHtml && response.templateId) {
-          this.templateState.initializeOriginalTemplate(response.templateId, currentHtml);
+      dialogRef.afterClosed().subscribe((result: 'save' | 'discard' | 'cancel') => {
+        if (result === 'save') {
+          // Open save dialog
+          this.onSaveTemplate();
+        } else if (result === 'discard') {
+          // Proceed with clearing conversation
+          this.clearAndStartNew();
         }
-
-        this.router.navigate(['/qa', response.templateId]);
-
-      },
-      error: (error) => {
-
-
-
-
-        this.snackBar.open('Failed to save template', 'Close', {
-          duration: 5000,
-          panelClass: ['error-snackbar'],
-        });
-      },
-    });
-}
-
-onTemplateNameChange(newName: string): void {
-  this.templateName = newName;
-  
-  // ✅ Save template name to cache whenever it changes
-  if (this.conversationId) {
-    this.generationService.updateConversationCache(
-      this.conversationId,
-      this.messages$.value,
-      this.currentHtml$.value,
-      '', // mjml not needed for name update
-      newName
-    );
-  }
-}
-onSaveTemplate(): void {
-
-  if (!this.conversationId) {
-
-    this.snackBar.open('No template to save', 'Close', {
-      duration: 3000,
-      panelClass: ['error-snackbar'],
-    });
-    return;
+        // If 'cancel', do nothing - user stays on current conversation
+      });
+    } else {
+      // No active conversation, just start new
+      this.clearAndStartNew();
+    }
   }
 
-  // ✅ Validate template name
-  const name = this.templateName?.trim();
+  private clearAndStartNew(): void {
+    // Clear current conversation
+    this.conversationId = null;
+    this.generationService.clearCurrentConversationId();
+    this.messages$.next([]);
+    this.currentHtml$.next('');
+    this.templateName = '';
+    this.userInput = '';
 
-  if (!name) {
+    // Clear sent images history
+    this.sentImages = [];
 
-    this.snackBar.open('Please enter a template name', 'Close', {
-      duration: 4000,
-      horizontalPosition: 'center',
-      verticalPosition: 'top',
-    });
-    return;
+    // Clear generated images to allow new image generation in new session
+    this.generatedImages = [];
+    this.imageGalleryHtml = '';
+
+    // Navigate to new conversation
+    this.router.navigate(['/generate/new'], { replaceUrl: true });
+    this.initializeWelcome();
   }
-
-
-  this.generationService
-    .saveTemplate(this.conversationId, name)
-    .pipe(takeUntil(this.destroy$))
-    .subscribe({
-      next: (response) => {
-
-        // ✅ Production-grade: Add new template directly to cache (no unnecessary API call for 1000 templates)
-        this.templatesService.addTemplateToCache({
-          id: response.templateId,
-          name: response.templateName || name,
-          content: this.currentHtml$.value,
-          source: 'ai-generated',
-          templateType: 'AI Generated',
-        });
-        
-        // ✅ Select the saved template so it appears first when we navigate
-        this.templatesService.select(response.templateId, response.templateName || name);
-
-        // Navigate to templates page
-        this.router.navigate(['/']);
-        
-
-      },
-      error: (error) => {
-
-
-
-
-        this.snackBar.open(
-          error.error?.message || 'Failed to save template',
-          'Close',
-          { duration: 5000, panelClass: ['error-snackbar'] }
-        );
-      },
-    });
-}
-
-onNewConversation(): void {
-  // Check if there's an active conversation with unsaved content
-  const hasActiveConversation = this.conversationId && this.currentHtml$.value;
-  
-  if (hasActiveConversation) {
-    // Show confirmation dialog
-    const dialogRef = this.dialog.open(ConfirmNewConversationDialog, {
-      width: '500px',
-      disableClose: false,
-      data: { hasTemplate: true }
-    });
-
-    dialogRef.afterClosed().subscribe((result: 'save' | 'discard' | 'cancel') => {
-      if (result === 'save') {
-        // Open save dialog
-        this.onSaveTemplate();
-      } else if (result === 'discard') {
-        // Proceed with clearing conversation
-        this.clearAndStartNew();
-      }
-      // If 'cancel', do nothing - user stays on current conversation
-    });
-  } else {
-    // No active conversation, just start new
-    this.clearAndStartNew();
-  }
-}
-
-private clearAndStartNew(): void {
-  // Clear current conversation
-  this.conversationId = null;
-  this.generationService.clearCurrentConversationId();
-  this.messages$.next([]);
-  this.currentHtml$.next('');
-  this.templateName = '';
-  this.userInput = '';
-  
-  // Clear sent images history
-  this.sentImages = [];
-  
-  // Clear generated images to allow new image generation in new session
-  this.generatedImages = [];
-  this.imageGalleryHtml = '';
-
-  // Navigate to new conversation
-  this.router.navigate(['/generate/new'], { replaceUrl: true });
-  this.initializeWelcome();
-}
 
   // ⭐ NEW METHOD: Handle preview refresh
   onRefreshPreview(): void {
@@ -1833,76 +1856,76 @@ private clearAndStartNew(): void {
 
   }
 
-private scrollToBottom(): void {
-  // Only auto-scroll if user hasn't manually scrolled up
-  if (!this.shouldAutoScroll) {
+  private scrollToBottom(): void {
+    // Only auto-scroll if user hasn't manually scrolled up
+    if (!this.shouldAutoScroll) {
 
-    return;
-  }
+      return;
+    }
 
-  // Set flag to ignore scroll events during programmatic scrolling
-  this.isProgrammaticScroll = true;
+    // Set flag to ignore scroll events during programmatic scrolling
+    this.isProgrammaticScroll = true;
 
-  // Multiple attempts to ensure we catch the final height
-  setTimeout(() => {
-    const element = this.messagesContainer?.nativeElement;
-    if (element) {
-      this.smoothScrollTo(element.scrollHeight);
-      
-      // Second attempt after render is definitely complete
-      setTimeout(() => {
-        if (element) {
-          this.smoothScrollTo(element.scrollHeight);
-        }
-        
-        // Re-enable scroll event handling after programmatic scroll completes
+    // Multiple attempts to ensure we catch the final height
+    setTimeout(() => {
+      const element = this.messagesContainer?.nativeElement;
+      if (element) {
+        this.smoothScrollTo(element.scrollHeight);
+
+        // Second attempt after render is definitely complete
         setTimeout(() => {
-          this.isProgrammaticScroll = false;
-        }, 100);
-      }, 50);
-    }
-  }, 100);
-}
+          if (element) {
+            this.smoothScrollTo(element.scrollHeight);
+          }
 
-private smoothScrollTo(targetPosition: number): void {
-  const element = this.messagesContainer?.nativeElement;
-  if (!element) return;
-
-  if (this.scrollAnimation) {
-    cancelAnimationFrame(this.scrollAnimation);
+          // Re-enable scroll event handling after programmatic scroll completes
+          setTimeout(() => {
+            this.isProgrammaticScroll = false;
+          }, 100);
+        }, 50);
+      }
+    }, 100);
   }
 
-  const startPosition = element.scrollTop;
-  const distance = targetPosition - startPosition;
-  const duration = 400; // ← Reduced from 800ms to 400ms
-  let startTime: number | null = null;
+  private smoothScrollTo(targetPosition: number): void {
+    const element = this.messagesContainer?.nativeElement;
+    if (!element) return;
 
-  const animateScroll = (currentTime: number) => {
-    if (startTime === null) startTime = currentTime;
-    const timeElapsed = currentTime - startTime;
-    const progress = Math.min(timeElapsed / duration, 1);
-
-    // ✅ Better easing: ease-out (fast start, slow end)
-    const ease = 1 - Math.pow(1 - progress, 3);
-
-    element.scrollTop = startPosition + distance * ease;
-
-    if (progress < 1) {
-      this.scrollAnimation = requestAnimationFrame(animateScroll);
-    } else {
-      this.scrollAnimation = null;
+    if (this.scrollAnimation) {
+      cancelAnimationFrame(this.scrollAnimation);
     }
-  };
 
-  this.scrollAnimation = requestAnimationFrame(animateScroll);
-}
+    const startPosition = element.scrollTop;
+    const distance = targetPosition - startPosition;
+    const duration = 400; // ← Reduced from 800ms to 400ms
+    let startTime: number | null = null;
+
+    const animateScroll = (currentTime: number) => {
+      if (startTime === null) startTime = currentTime;
+      const timeElapsed = currentTime - startTime;
+      const progress = Math.min(timeElapsed / duration, 1);
+
+      // ✅ Better easing: ease-out (fast start, slow end)
+      const ease = 1 - Math.pow(1 - progress, 3);
+
+      element.scrollTop = startPosition + distance * ease;
+
+      if (progress < 1) {
+        this.scrollAnimation = requestAnimationFrame(animateScroll);
+      } else {
+        this.scrollAnimation = null;
+      }
+    };
+
+    this.scrollAnimation = requestAnimationFrame(animateScroll);
+  }
 
   onScroll(event: Event): void {
     // Ignore scroll events triggered by programmatic scrolling
     if (this.isProgrammaticScroll) {
       return;
     }
-    
+
     const element = event.target as HTMLElement;
     const atBottom =
       element.scrollHeight - element.scrollTop <= element.clientHeight + 50;
@@ -1910,314 +1933,314 @@ private smoothScrollTo(targetPosition: number): void {
   }
 
 
-async onImageSelect(event: Event): Promise<void> {
+  async onImageSelect(event: Event): Promise<void> {
 
-  const input = event.target as HTMLInputElement;
+    const input = event.target as HTMLInputElement;
 
-  if (!input.files || input.files.length === 0) {
+    if (!input.files || input.files.length === 0) {
 
-    return;
-  }
+      return;
+    }
 
-  const files = Array.from(input.files);
+    const files = Array.from(input.files);
 
-  // Validate count BEFORE duplicate check
-  if (this.selectedImages.length + files.length > this.maxImages) {
+    // Validate count BEFORE duplicate check
+    if (this.selectedImages.length + files.length > this.maxImages) {
 
-    this.snackBar.open(
-      `Maximum ${this.maxImages} images allowed at a time`,
-      'Close',
-      { duration: 4000, panelClass: ['error-snackbar'] }
-    );
-    input.value = '';
-    return;
-  }
-
-
-  // ✅ Check for duplicates
-  const { duplicates, newFiles } = this.checkDuplicateImages(files);
-  
-
-  if (duplicates.length > 0) {
-
-    // Show confirmation dialog
-    const duplicateNames = duplicates.map(f => `• ${f.name} (${(f.size/1024).toFixed(2)}KB)`).join('\n');
-    const message = duplicates.length === 1
-      ? `⚠️ This image is already uploaded:\n\n${duplicateNames}\n\nWould you like to upload it again?`
-      : `⚠️ These images are already uploaded:\n\n${duplicateNames}\n\nWould you like to upload them again?`;
-    
-    const confirmed = confirm(message);
-    
-    if (!confirmed) {
-
-      // Process only NEW files (non-duplicates)
-      if (newFiles.length > 0) {
-
-        for (const file of newFiles) {
-          await this.processImage(file);
-        }
-      } else {
-
-      }
-      
+      this.snackBar.open(
+        `Maximum ${this.maxImages} images allowed at a time`,
+        'Close',
+        { duration: 4000, panelClass: ['error-snackbar'] }
+      );
       input.value = '';
       return;
     }
-    
 
-  } else {
 
-  }
-  
-  // Process all files (either no duplicates, or user confirmed)
-  for (const file of files) {
+    // ✅ Check for duplicates
+    const { duplicates, newFiles } = this.checkDuplicateImages(files);
 
-    await this.processImage(file);
-  }
-  
-  input.value = ''; // Reset input
 
-}
+    if (duplicates.length > 0) {
 
-// ✅ NEW: Check for duplicate images
-private checkDuplicateImages(newFiles: File[]): { duplicates: File[], newFiles: File[] } {
+      // Show confirmation dialog
+      const duplicateNames = duplicates.map(f => `• ${f.name} (${(f.size / 1024).toFixed(2)}KB)`).join('\n');
+      const message = duplicates.length === 1
+        ? `⚠️ This image is already uploaded:\n\n${duplicateNames}\n\nWould you like to upload it again?`
+        : `⚠️ These images are already uploaded:\n\n${duplicateNames}\n\nWould you like to upload them again?`;
 
-  const duplicates: File[] = [];
-  const newFilesOnly: File[] = [];
-  
-  newFiles.forEach(newFile => {
+      const confirmed = confirm(message);
 
-    // ✅ CHANGED: Check against sentImages instead of selectedImages
-    const isDuplicate = this.sentImages.some(sentImage => {
-      const nameMatch = sentImage.name === newFile.name;
-      const sizeMatch = sentImage.size === newFile.size;
-      
+      if (!confirmed) {
 
-      return nameMatch && sizeMatch;
-    });
-    
-    if (isDuplicate) {
+        // Process only NEW files (non-duplicates)
+        if (newFiles.length > 0) {
 
-      duplicates.push(newFile);
+          for (const file of newFiles) {
+            await this.processImage(file);
+          }
+        } else {
+
+        }
+
+        input.value = '';
+        return;
+      }
+
+
     } else {
 
-      newFilesOnly.push(newFile);
     }
-  });
-  
 
-  return { duplicates, newFiles: newFilesOnly };
-}
+    // Process all files (either no duplicates, or user confirmed)
+    for (const file of files) {
 
-// Add this method to your GeneratePageComponent class
-// Add this method to your GeneratePageComponent class
-toggleFullscreen(): void {
+      await this.processImage(file);
+    }
 
-  const element = document.querySelector('.preview-wrapper') as HTMLElement;
-  
-  if (!element) {
+    input.value = ''; // Reset input
 
-    return;
   }
 
-  if (!document.fullscreenElement) {
+  // ✅ NEW: Check for duplicate images
+  private checkDuplicateImages(newFiles: File[]): { duplicates: File[], newFiles: File[] } {
 
-    element.requestFullscreen().then(() => {
+    const duplicates: File[] = [];
+    const newFilesOnly: File[] = [];
 
-      // 🔍 DEBUG: Check overlay container location
-      setTimeout(() => {
-        const overlayContainer = document.querySelector('.cdk-overlay-container');
+    newFiles.forEach(newFile => {
 
-      }, 100);
+      // ✅ CHANGED: Check against sentImages instead of selectedImages
+      const isDuplicate = this.sentImages.some(sentImage => {
+        const nameMatch = sentImage.name === newFile.name;
+        const sizeMatch = sentImage.size === newFile.size;
+
+
+        return nameMatch && sizeMatch;
+      });
+
+      if (isDuplicate) {
+
+        duplicates.push(newFile);
+      } else {
+
+        newFilesOnly.push(newFile);
+      }
     });
-  } else {
-
-    document.exitFullscreen();
-  }
-}
 
 
-async processImage(file: File): Promise<void> {
-
-  // Validate file type
-  const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-
-  if (!validTypes.includes(file.type)) {
-
-    this.snackBar.open(
-      `Invalid file type: ${file.name}. Please upload images only.`,
-      'Close',
-      { duration: 4000, panelClass: ['error-snackbar'] }
-    );
-    return;
+    return { duplicates, newFiles: newFilesOnly };
   }
 
+  // Add this method to your GeneratePageComponent class
+  // Add this method to your GeneratePageComponent class
+  toggleFullscreen(): void {
 
-  // ✅ NEW: Store original file metadata BEFORE compression
-  const originalName = file.name;
-  const originalSize = file.size;
+    const element = document.querySelector('.preview-wrapper') as HTMLElement;
 
-  try {
-    const processedFile = await this.compressImage(file);
+    if (!element) {
 
-    if (processedFile.size > this.maxSizeBytes) {
+      return;
+    }
+
+    if (!document.fullscreenElement) {
+
+      element.requestFullscreen().then(() => {
+
+        // 🔍 DEBUG: Check overlay container location
+        setTimeout(() => {
+          const overlayContainer = document.querySelector('.cdk-overlay-container');
+
+        }, 100);
+      });
+    } else {
+
+      document.exitFullscreen();
+    }
+  }
+
+
+  async processImage(file: File): Promise<void> {
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+
+    if (!validTypes.includes(file.type)) {
 
       this.snackBar.open(
-        `Image ${file.name} is too large even after compression. Please use a smaller image.`,
+        `Invalid file type: ${file.name}. Please upload images only.`,
         'Close',
         { duration: 4000, panelClass: ['error-snackbar'] }
       );
       return;
     }
-    
-    // ✅ NEW: Attach original metadata to the compressed file
-    (processedFile as any).originalName = originalName;
-    (processedFile as any).originalSize = originalSize;
 
-    // Create preview URL
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
+    // ✅ NEW: Store original file metadata BEFORE compression
+    const originalName = file.name;
+    const originalSize = file.size;
 
-      const previewUrl = e.target?.result as string;
+    try {
+      const processedFile = await this.compressImage(file);
 
-      this.selectedImages.push(processedFile);
-      this.imagePreviewUrls.push(previewUrl);
-      
+      if (processedFile.size > this.maxSizeBytes) {
 
-      // Scroll to show preview
-      setTimeout(() => this.scrollToBottom(), 100);
-    };
-    reader.onerror = (error) => {
+        this.snackBar.open(
+          `Image ${file.name} is too large even after compression. Please use a smaller image.`,
+          'Close',
+          { duration: 4000, panelClass: ['error-snackbar'] }
+        );
+        return;
+      }
 
-    };
-    reader.readAsDataURL(processedFile);
+      // ✅ NEW: Attach original metadata to the compressed file
+      (processedFile as any).originalName = originalName;
+      (processedFile as any).originalSize = originalSize;
 
-  } catch (error) {
+      // Create preview URL
 
-    this.snackBar.open(
-      `Failed to process ${file.name}. Please try another image.`,
-      'Close',
-      { duration: 4000, panelClass: ['error-snackbar'] }
-    );
+      const reader = new FileReader();
+      reader.onload = (e) => {
+
+        const previewUrl = e.target?.result as string;
+
+        this.selectedImages.push(processedFile);
+        this.imagePreviewUrls.push(previewUrl);
+
+
+        // Scroll to show preview
+        setTimeout(() => this.scrollToBottom(), 100);
+      };
+      reader.onerror = (error) => {
+
+      };
+      reader.readAsDataURL(processedFile);
+
+    } catch (error) {
+
+      this.snackBar.open(
+        `Failed to process ${file.name}. Please try another image.`,
+        'Close',
+        { duration: 4000, panelClass: ['error-snackbar'] }
+      );
+    }
   }
-}
-async compressImage(file: File): Promise<File> {
+  async compressImage(file: File): Promise<File> {
 
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
 
-      const img = new Image();
-      
-      img.onload = () => {
+        const img = new Image();
 
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        
-        // Scale down if too large
-        const maxDimension = 2000;
+        img.onload = () => {
 
-        if (width > maxDimension || height > maxDimension) {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
 
-          if (width > height) {
-            height = (height / width) * maxDimension;
-            width = maxDimension;
+          // Scale down if too large
+          const maxDimension = 2000;
+
+          if (width > maxDimension || height > maxDimension) {
+
+            if (width > height) {
+              height = (height / width) * maxDimension;
+              width = maxDimension;
+            } else {
+              width = (width / height) * maxDimension;
+              height = maxDimension;
+            }
+
           } else {
-            width = (width / height) * maxDimension;
-            height = maxDimension;
+
           }
 
-        } else {
+          canvas.width = width;
+          canvas.height = height;
 
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        
-        const ctx = canvas.getContext('2d');
+          const ctx = canvas.getContext('2d');
 
-        ctx?.drawImage(img, 0, 0, width, height);
-        
+          ctx?.drawImage(img, 0, 0, width, height);
 
-        canvas.toBlob(
-          (blob) => {
-            if (blob && blob.size <= this.maxSizeBytes) {
-              const compressedFile = new File([blob], file.name, {
-                type: 'image/jpeg',
-                lastModified: Date.now(),
-              });
 
-              resolve(compressedFile);
-            } else {
+          canvas.toBlob(
+            (blob) => {
+              if (blob && blob.size <= this.maxSizeBytes) {
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
 
-              reject(new Error('Compression failed - file still too large'));
-            }
-          },
-          'image/jpeg',
-          0.8 // 80% quality
-        );
+                resolve(compressedFile);
+              } else {
+
+                reject(new Error('Compression failed - file still too large'));
+              }
+            },
+            'image/jpeg',
+            0.8 // 80% quality
+          );
+        };
+
+        img.onerror = () => {
+
+          reject(new Error('Failed to load image'));
+        };
+
+        img.src = e.target?.result as string;
+
       };
-      
-      img.onerror = () => {
 
-        reject(new Error('Failed to load image'));
+      reader.onerror = () => {
+
+        reject(new Error('Failed to read file'));
       };
-      
-      img.src = e.target?.result as string;
 
-    };
-    
-    reader.onerror = () => {
+      reader.readAsDataURL(file);
 
-      reject(new Error('Failed to read file'));
-    };
-    
-    reader.readAsDataURL(file);
-
-  });
-}
-removeImage(index: number): void {
-
-  this.selectedImages.splice(index, 1);
-  this.imagePreviewUrls.splice(index, 1);
-  
-
-}
-triggerFileInput(): void {
-
-  const fileInput = document.getElementById('imageUploadInput') as HTMLInputElement;
-
-  if (!fileInput) {
-
-    return;
+    });
   }
-  
+  removeImage(index: number): void {
 
-  fileInput?.click();
-}
-private fileToBase64(file: File): Promise<string> {
+    this.selectedImages.splice(index, 1);
+    this.imagePreviewUrls.splice(index, 1);
 
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
 
-      const result = reader.result as string;
+  }
+  triggerFileInput(): void {
 
-      // Remove data URL prefix (e.g., "data:image/jpeg;base64,")
-      const base64 = result.split(',')[1];
+    const fileInput = document.getElementById('imageUploadInput') as HTMLInputElement;
 
-      resolve(base64);
-    };
-    reader.onerror = (error) => {
+    if (!fileInput) {
 
-      reject(error);
-    };
-    reader.readAsDataURL(file);
+      return;
+    }
 
-  });
-}
+
+    fileInput?.click();
+  }
+  private fileToBase64(file: File): Promise<string> {
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+
+        const result = reader.result as string;
+
+        // Remove data URL prefix (e.g., "data:image/jpeg;base64,")
+        const base64 = result.split(',')[1];
+
+        resolve(base64);
+      };
+      reader.onerror = (error) => {
+
+        reject(error);
+      };
+      reader.readAsDataURL(file);
+
+    });
+  }
   trackByIndex(index: number): number {
     return index;
   }

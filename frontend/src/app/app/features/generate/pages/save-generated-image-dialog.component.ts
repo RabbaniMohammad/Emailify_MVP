@@ -13,6 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 export interface SaveDialogData {
   images: Array<{ url: string; prompt?: string }>;
   prompt?: string;
+  templateName?: string;
 }
 
 @Component({
@@ -80,6 +81,11 @@ export class SaveGeneratedImageDialog {
   isSaving = false;
   error: string | null = null;
 
+  constructor() {
+    // Initialize name with templateName from parent if provided
+    this.name = this.data.templateName || '';
+  }
+
   onCancel() {
     this.dialogRef.close(null);
   }
@@ -113,13 +119,13 @@ export class SaveGeneratedImageDialog {
       // Notify other parts of the app that a generated image was saved so lists can refresh
       try {
         window.dispatchEvent(new CustomEvent('generatedImages:updated', { detail: { id: savedId } }));
-      } catch (e) {}
+      } catch (e) { }
 
       // Navigate to templates dashboard and show AI Generated category + scroll/select new image
       try {
         this.dialogRef.close({ success: true, record: res });
-  // Use query params so TemplatesPageComponent can pick them up and select/scroll
-  await this.router.navigate([''], { queryParams: { category: 'ai-generated-images', id: savedId } });
+        // Use query params so TemplatesPageComponent can pick them up and select/scroll
+        await this.router.navigate([''], { queryParams: { category: 'ai-generated-images', id: savedId } });
       } catch (e) {
         // If navigation fails, just close dialog and let user continue
       }

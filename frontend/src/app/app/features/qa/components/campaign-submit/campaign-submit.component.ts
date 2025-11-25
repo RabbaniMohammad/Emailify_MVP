@@ -10,10 +10,10 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { BehaviorSubject, Subject, firstValueFrom, takeUntil, Subscription, debounceTime, take } from 'rxjs';
 import { timeout, catchError, retry } from 'rxjs/operators';
-import { 
-  CampaignSubmitService, 
-  MailchimpAudience, 
-  MasterDocRow, 
+import {
+  CampaignSubmitService,
+  MailchimpAudience,
+  MasterDocRow,
   AudienceReconciliation,
   ScheduleGroup,
   TimezoneAnalysis
@@ -57,10 +57,10 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
   private ar = inject(ActivatedRoute);
   private storageService = inject(CampaignStorageService);
   private currentSelectedSubject: string | null = null;
-  
+
   // ✅ Flag to prevent saving during initial load
   private isInitialized = false;
-  
+
   // Route params for storage key - now also available as inputs
   private _templateId: string = '';
   private _runId: string = '';
@@ -109,12 +109,12 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
   reconciliation: AudienceReconciliation | null = null;
   scheduleGroups: ScheduleGroup[] = [];
   testEmails: string[] = [];
-  
+
   timezoneAnalysis: TimezoneAnalysis | null = null;
-  
+
   // Track ignored emails (excluded from campaign but not added to master)
   ignoredEmails: string[] = [];
-  
+
   // Test email tracking
   testEmailSent = false;
   testEmailSentAt: Date | null = null;
@@ -132,10 +132,10 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
     sms: boolean;
     whatsapp: boolean;
   } = {
-    email: true,  // Default to email
-    sms: false,
-    whatsapp: false
-  };
+      email: true,  // Default to email
+      sms: false,
+      whatsapp: false
+    };
 
   recipientStats = {
     email: 0,
@@ -190,7 +190,7 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
     if (changes['variantNo']) {
       this._variantNo = this.variantNo;
     }
-    
+
     // Save template HTML when it changes (set from parent)
     // Only save if we have valid storage keys
     if (changes['templateHtml'] && changes['templateHtml'].currentValue && this._templateId && this._runId && this._variantNo) {
@@ -207,132 +207,132 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
     private http: HttpClient,
     private router: Router,
     private cacheService: CacheService
-  ) {}
+  ) { }
 
-ngOnInit(): void {
-  // Get route params - prefer @Input over route params for child components
-  this._templateId = this.templateId || this.ar.snapshot.paramMap.get('id') || '';
-  this._runId = this.runId || this.ar.snapshot.paramMap.get('runId') || '';
-  this._variantNo = this.variantNo || this.ar.snapshot.paramMap.get('no') || '';
-  
-  // Check sender settings first - if missing, don't initialize anything else
-  this.checkSenderSettings();
-  
-  // Wait for sender settings check to complete before initializing
-  // This prevents unnecessary API calls and data loading when user is blocked
-  const checkInterval = setInterval(() => {
-    if (!this.checkingSenderSettings) {
-      clearInterval(checkInterval);
-      
-      // Only initialize if sender settings are configured
-      if (this.senderSettingsConfigured) {
-        this.initializeCampaignPage();
+  ngOnInit(): void {
+    // Get route params - prefer @Input over route params for child components
+    this._templateId = this.templateId || this.ar.snapshot.paramMap.get('id') || '';
+    this._runId = this.runId || this.ar.snapshot.paramMap.get('runId') || '';
+    this._variantNo = this.variantNo || this.ar.snapshot.paramMap.get('no') || '';
+
+    // Check sender settings first - if missing, don't initialize anything else
+    this.checkSenderSettings();
+
+    // Wait for sender settings check to complete before initializing
+    // This prevents unnecessary API calls and data loading when user is blocked
+    const checkInterval = setInterval(() => {
+      if (!this.checkingSenderSettings) {
+        clearInterval(checkInterval);
+
+        // Only initialize if sender settings are configured
+        if (this.senderSettingsConfigured) {
+          this.initializeCampaignPage();
+        }
       }
-    }
-  }, 100);
-}
+    }, 100);
+  }
 
-/**
- * Initialize the campaign page - only called if sender settings are configured
- */
-private initializeCampaignPage(): void {
-  // Load saved data if exists
-  this.loadSavedData();
-  
-  this.loadMailchimpAudiences();
-  
-  // Subscribe to service observables
-  this.campaignService.audiences$
-    .pipe(takeUntil(this.destroy$))
-    .subscribe(audiences => {
-      this.audiences = audiences;
-      this.cdr.markForCheck();
-    });
+  /**
+   * Initialize the campaign page - only called if sender settings are configured
+   */
+  private initializeCampaignPage(): void {
+    // Load saved data if exists
+    this.loadSavedData();
 
-  this.campaignService.selectedAudience$
-    .pipe(takeUntil(this.destroy$))
-    .subscribe(audience => {
-      // ✅ Only update if we have new data (don't overwrite restored data with null)
-      if (audience) {
-        this.selectedAudience = audience;
-        this.saveCurrentState();
-      }
-      this.cdr.markForCheck();
-    });
+    this.loadMailchimpAudiences();
 
-  this.campaignService.reconciliation$
-    .pipe(takeUntil(this.destroy$))
-    .subscribe(reconciliation => {
-      // ✅ Only update if we have new data (don't overwrite restored data with null)
-      if (reconciliation) {
-        this.reconciliation = reconciliation;
-        this.saveCurrentState();
-      }
-      this.cdr.markForCheck();
-    });
-
-  this.campaignService.timezoneAnalysis$
-    .pipe(takeUntil(this.destroy$))
-    .subscribe(analysis => {
-      // ✅ Only update if we have new data (don't overwrite restored data with null)
-      if (analysis) {
-        this.timezoneAnalysis = analysis;
-        this.saveCurrentState();
-      }
-      this.cdr.markForCheck();
-    });
-
-  // ✅ Auto-save form controls with debounce
-  this.subjectControl.valueChanges
-    .pipe(
-      debounceTime(500),
-      takeUntil(this.destroy$)
-    )
-    .subscribe(value => {
-      const trimmedValue = value.trim();
-      
-      // If input is now empty AND we had a selected subject
-      if (!trimmedValue && this.currentSelectedSubject) {
-        const subjects = this.subjectsSubject.value || [];
-        
-        // Add the previous subject back to the list
-        this.subjectsSubject.next([...subjects, this.currentSelectedSubject]);
-        
-        // Clear tracking
-        this.currentSelectedSubject = null;
-        
+    // Subscribe to service observables
+    this.campaignService.audiences$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(audiences => {
+        this.audiences = audiences;
         this.cdr.markForCheck();
-      }
-      
-      // Auto-save subject
-      this.saveCurrentState();
-    });
-    
-  this.bodyAdditionControl.valueChanges
-    .pipe(
-      debounceTime(500),
-      takeUntil(this.destroy$)
-    )
-    .subscribe(() => {
-      this.saveCurrentState();
-    });
-  
-  // ✅ Mark as initialized - allow saves from now on
-  // Small delay to ensure all observables have emitted initial values
-  setTimeout(() => {
-    this.isInitialized = true;
-    // Force change detection to update button state
-    this.cdr.markForCheck();
-  }, 100);
-}
+      });
+
+    this.campaignService.selectedAudience$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(audience => {
+        // ✅ Only update if we have new data (don't overwrite restored data with null)
+        if (audience) {
+          this.selectedAudience = audience;
+          this.saveCurrentState();
+        }
+        this.cdr.markForCheck();
+      });
+
+    this.campaignService.reconciliation$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(reconciliation => {
+        // ✅ Only update if we have new data (don't overwrite restored data with null)
+        if (reconciliation) {
+          this.reconciliation = reconciliation;
+          this.saveCurrentState();
+        }
+        this.cdr.markForCheck();
+      });
+
+    this.campaignService.timezoneAnalysis$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(analysis => {
+        // ✅ Only update if we have new data (don't overwrite restored data with null)
+        if (analysis) {
+          this.timezoneAnalysis = analysis;
+          this.saveCurrentState();
+        }
+        this.cdr.markForCheck();
+      });
+
+    // ✅ Auto-save form controls with debounce
+    this.subjectControl.valueChanges
+      .pipe(
+        debounceTime(500),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(value => {
+        const trimmedValue = value.trim();
+
+        // If input is now empty AND we had a selected subject
+        if (!trimmedValue && this.currentSelectedSubject) {
+          const subjects = this.subjectsSubject.value || [];
+
+          // Add the previous subject back to the list
+          this.subjectsSubject.next([...subjects, this.currentSelectedSubject]);
+
+          // Clear tracking
+          this.currentSelectedSubject = null;
+
+          this.cdr.markForCheck();
+        }
+
+        // Auto-save subject
+        this.saveCurrentState();
+      });
+
+    this.bodyAdditionControl.valueChanges
+      .pipe(
+        debounceTime(500),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        this.saveCurrentState();
+      });
+
+    // ✅ Mark as initialized - allow saves from now on
+    // Small delay to ensure all observables have emitted initial values
+    setTimeout(() => {
+      this.isInitialized = true;
+      // Force change detection to update button state
+      this.cdr.markForCheck();
+    }, 100);
+  }
 
   ngOnDestroy(): void {
     // Save current state before destroying
     this.saveCurrentState();
-    
+
     this.destroy$.next();
     this.destroy$.complete();
-    
+
     // ✅ NEW: Cleanup subjects
     if (this.subjectsSub) this.subjectsSub.unsubscribe();
     if (this.subjectsTimeoutId) clearTimeout(this.subjectsTimeoutId);
@@ -354,7 +354,7 @@ private initializeCampaignPage(): void {
       this._runId,
       this._variantNo
     );
-    
+
     if (!savedData || !savedData.savedAt) {
       return;
     }
@@ -365,68 +365,68 @@ private initializeCampaignPage(): void {
     if (savedData.bodyAddition) {
       this.bodyAdditionControl.setValue(savedData.bodyAddition, { emitEvent: false });
     }
-    
+
     // Restore state
     if (savedData.selectedAudience) {
       this.selectedAudience = savedData.selectedAudience;
       this.campaignService.selectAudience(savedData.selectedAudience);
     }
-    
+
     if (savedData.masterData && savedData.masterData.length > 0) {
       this.masterData = savedData.masterData;
       this.uploadedFileName = savedData.uploadedFileName || '';
-      
+
       // Set upload state to success to show the upload status UI
       this.uploadLoadingSubject.next('success');
-      
+
       // Re-extract test emails and schedule groups if not already saved
       if (!savedData.testEmails || savedData.testEmails.length === 0) {
         this.testEmails = this.campaignService.extractTestEmails(savedData.masterData);
       }
-      
+
       if (!savedData.scheduleGroups || savedData.scheduleGroups.length === 0) {
         this.scheduleGroups = this.campaignService.groupByScheduleTime(savedData.masterData);
       }
     }
-    
+
     if (savedData.reconciliation) {
       this.reconciliation = savedData.reconciliation;
       // Set reconciliation state to success to show the reconciliation UI
       this.reconcileLoadingSubject.next('success');
     }
-    
+
     if (savedData.scheduleGroups && savedData.scheduleGroups.length > 0) {
       this.scheduleGroups = savedData.scheduleGroups;
     }
-    
+
     if (savedData.timezoneAnalysis) {
       this.timezoneAnalysis = savedData.timezoneAnalysis;
     }
-    
+
     if (savedData.testEmails && savedData.testEmails.length > 0) {
       this.testEmails = savedData.testEmails;
     }
-    
+
     if (savedData.generatedSubjects && savedData.generatedSubjects.length > 0) {
       this.subjectsSubject.next(savedData.generatedSubjects);
     }
-    
+
     if (savedData.testEmailSent) {
       this.testEmailSent = savedData.testEmailSent;
       this.testEmailSentAt = savedData.testEmailSentAt ? new Date(savedData.testEmailSentAt) : null;
     }
-    
+
     // ✅ Restore template HTML if available
     if (savedData.templateHtml && !this.templateHtml) {
       this.templateHtml = savedData.templateHtml;
     }
-    
+
     this.addNewMembersToAudience = savedData.addNewMembersToAudience || false;
-    
+
     // ✅ Log final state after restoration for debugging
     // Force change detection to ensure UI updates
     this.cdr.markForCheck();
-    
+
     // Double-check after a small delay (ensure all async operations complete)
     setTimeout(() => {
       this.cdr.markForCheck();
@@ -440,46 +440,46 @@ private initializeCampaignPage(): void {
   checkSenderSettings(): void {
     this.checkingSenderSettings = true;
     const wasConfigured = this.senderSettingsConfigured;
-    
+
     // Use take(1) to prevent reloading when auth service updates user status every 30s
     this.authService.currentUser$.pipe(take(1)).subscribe(user => {
       if (user?.organizationId) {
         const orgId = typeof user.organizationId === 'object' ? user.organizationId._id : user.organizationId;
         const cacheKey = `sender_settings_${orgId}`;
-        
+
         // ✅ TRY CACHE FIRST - Session storage persists across refreshes
         const cached = this.cacheService.get<any>(cacheKey);
-        
+
         if (cached) {
           // Use cached data
           console.log('✅ Using cached sender settings');
           this.senderSettingsConfigured = cached.isConfigured || false;
           this.checkingSenderSettings = false;
-          
+
           if (!wasConfigured && this.senderSettingsConfigured) {
             this.initializeCampaignPage();
           }
-          
+
           this.cdr.markForCheck();
           return;
         }
-        
+
         // ✅ NO CACHE - Fetch from API
         console.log('🔍 Fetching sender settings from API');
         this.http.get<any>(`/api/organizations/${orgId}/sender-settings`).subscribe({
           next: (response) => {
             this.senderSettingsConfigured = response.isConfigured || false;
             this.checkingSenderSettings = false;
-            
+
             // ✅ CACHE THE RESULT - 30 minutes TTL (users don't change settings often)
             // Cache cleared on logout via auth.service.ts
             this.cacheService.set(cacheKey, response, 30 * 60 * 1000, 'session');
-            
+
             // If settings just became configured (after clicking "Check Again"), initialize the page
             if (!wasConfigured && this.senderSettingsConfigured) {
               this.initializeCampaignPage();
             }
-            
+
             this.cdr.markForCheck();
           },
           error: (error) => {
@@ -510,11 +510,11 @@ private initializeCampaignPage(): void {
     if (!this.isInitialized) {
       return;
     }
-    
+
     if (!this._templateId || !this._runId || !this._variantNo) {
       return;
     }
-    
+
     const dataToSave = {
       selectedAudience: this.selectedAudience,
       masterData: this.masterData,
@@ -548,7 +548,7 @@ private initializeCampaignPage(): void {
    */
   clearSavedData(): void {
     if (!this._templateId || !this._runId || !this._variantNo) return;
-    
+
     this.storageService.clearCampaignData(
       this._templateId,
       this._runId,
@@ -563,86 +563,86 @@ private initializeCampaignPage(): void {
   /**
    * Generate AI subject line suggestions
    */
-async onGenerateSubjects(): Promise<void> {
-  const templateId = this.ar.snapshot.paramMap.get('id');
-  if (!templateId) {
-    this.showError('Template ID not found');
-    return;
-  }
-  
-  if (this.subjectsLoading) return;
-  
-  // ✅ CLEAR existing subjects before starting new generation
-  this.subjectsSubject.next(null);
-  
-  this.subjectsLoading = true;
-  this.subjectsAborted = false;
-  this.cdr.markForCheck();
-  
-  // Set timeout
-  this.subjectsTimeoutId = window.setTimeout(() => {
-    this.handleSubjectsTimeout();
-  }, this.SUBJECTS_TIMEOUT);
-  
-  // ✅ GET TEMPLATE HTML - Pass actual template content
-  const templateHtml = this.templateHtml || '';
-  
-  this.subjectsSub = this.qa.generateSubjects(templateId, templateHtml, true).pipe(
-    timeout(this.SUBJECTS_TIMEOUT),
-    retry({ count: 2, delay: 2000, resetOnSuccess: true }),
-    catchError(error => {
-      if (error.name === 'TimeoutError') {
-        throw new Error('Subject generation timed out. Please try again.');
-      }
-      throw error;
-    })
-  ).subscribe({
-    next: (subjects) => {
-      if (this.subjectsAborted) return;
-      
-      if (this.subjectsTimeoutId) {
-        clearTimeout(this.subjectsTimeoutId);
-        this.subjectsTimeoutId = undefined;
-      }
-      
-      // ✅ FIX: Set loading to false HERE, before updating subjects
-      this.subjectsLoading = false;
-      
-      // Now update the subjects
-      this.subjectsSubject.next(subjects);
-      
-      // Save generated subjects
-      this.saveCurrentState();
-      
-      this.showSuccess(`Generated ${subjects.length} subject line suggestion${subjects.length > 1 ? 's' : ''}!`);
-      this.cdr.markForCheck();
-    },
-    error: (error) => {
-      if (this.subjectsAborted) return;
-      
-      if (this.subjectsTimeoutId) {
-        clearTimeout(this.subjectsTimeoutId);
-        this.subjectsTimeoutId = undefined;
-      }
-      
-      this.subjectsLoading = false;
-      this.subjectsAborted = true;
-      
-      // ✅ CLEAR subjects on error
-      this.subjectsSubject.next(null);
-      
-      const errorMessage = this.getErrorMessage(error, 'subject generation');
-      this.showError(errorMessage);
-      
-      this.cdr.markForCheck();
-    },
-    complete: () => {
-      if (this.subjectsAborted) return;
-      // Loading already set to false in next handler
-      this.cdr.markForCheck();
+  async onGenerateSubjects(): Promise<void> {
+    const templateId = this.ar.snapshot.paramMap.get('id');
+    if (!templateId) {
+      this.showError('Template ID not found');
+      return;
     }
-  });
-}
+
+    if (this.subjectsLoading) return;
+
+    // ✅ CLEAR existing subjects before starting new generation
+    this.subjectsSubject.next(null);
+
+    this.subjectsLoading = true;
+    this.subjectsAborted = false;
+    this.cdr.markForCheck();
+
+    // Set timeout
+    this.subjectsTimeoutId = window.setTimeout(() => {
+      this.handleSubjectsTimeout();
+    }, this.SUBJECTS_TIMEOUT);
+
+    // ✅ GET TEMPLATE HTML - Pass actual template content
+    const templateHtml = this.templateHtml || '';
+
+    this.subjectsSub = this.qa.generateSubjects(templateId, templateHtml, true).pipe(
+      timeout(this.SUBJECTS_TIMEOUT),
+      retry({ count: 2, delay: 2000, resetOnSuccess: true }),
+      catchError(error => {
+        if (error.name === 'TimeoutError') {
+          throw new Error('Subject generation timed out. Please try again.');
+        }
+        throw error;
+      })
+    ).subscribe({
+      next: (subjects) => {
+        if (this.subjectsAborted) return;
+
+        if (this.subjectsTimeoutId) {
+          clearTimeout(this.subjectsTimeoutId);
+          this.subjectsTimeoutId = undefined;
+        }
+
+        // ✅ FIX: Set loading to false HERE, before updating subjects
+        this.subjectsLoading = false;
+
+        // Now update the subjects
+        this.subjectsSubject.next(subjects);
+
+        // Save generated subjects
+        this.saveCurrentState();
+
+        this.showSuccess(`Generated ${subjects.length} subject line suggestion${subjects.length > 1 ? 's' : ''}!`);
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        if (this.subjectsAborted) return;
+
+        if (this.subjectsTimeoutId) {
+          clearTimeout(this.subjectsTimeoutId);
+          this.subjectsTimeoutId = undefined;
+        }
+
+        this.subjectsLoading = false;
+        this.subjectsAborted = true;
+
+        // ✅ CLEAR subjects on error
+        this.subjectsSubject.next(null);
+
+        const errorMessage = this.getErrorMessage(error, 'subject generation');
+        this.showError(errorMessage);
+
+        this.cdr.markForCheck();
+      },
+      complete: () => {
+        if (this.subjectsAborted) return;
+        // Loading already set to false in next handler
+        this.cdr.markForCheck();
+      }
+    });
+  }
 
   /**
    * Handle subject generation timeout
@@ -650,7 +650,7 @@ async onGenerateSubjects(): Promise<void> {
   private handleSubjectsTimeout(): void {
     this.subjectsLoading = false;
     this.subjectsAborted = true;
-    
+
     this.showError('Subject generation is taking longer than expected. Please try again.');
     this.cdr.markForCheck();
   }
@@ -660,20 +660,20 @@ async onGenerateSubjects(): Promise<void> {
    */
   cancelSubjects(): void {
     if (!this.subjectsLoading) return;
-    
+
     this.subjectsAborted = true;
     this.subjectsLoading = false;
-    
+
     if (this.subjectsSub) {
       this.subjectsSub.unsubscribe();
       this.subjectsSub = undefined;
     }
-    
+
     if (this.subjectsTimeoutId) {
       clearTimeout(this.subjectsTimeoutId);
       this.subjectsTimeoutId = undefined;
     }
-    
+
     this.showError('Subject generation cancelled.');
     this.cdr.markForCheck();
   }
@@ -683,64 +683,64 @@ async onGenerateSubjects(): Promise<void> {
    * - If no current subject: Set as current
    * - If current subject exists: Swap with clicked suggestion
    */
-onSelectSubject(selectedSubject: string): void {
-  const subjects = this.subjectsSubject.value || [];
-  
-  // ✅ FIX: Always get current value from form control
-  const currentFormValue = this.subjectControl.value.trim();
-  
-  // If this subject is already selected (in input), do nothing
-  if (currentFormValue === selectedSubject) {
-    return;
-  }
-  
-  // Get the index of the clicked subject
-  const clickedIndex = subjects.indexOf(selectedSubject);
-  
-  if (clickedIndex === -1) {
+  onSelectSubject(selectedSubject: string): void {
+    const subjects = this.subjectsSubject.value || [];
 
-    return;
+    // ✅ FIX: Always get current value from form control
+    const currentFormValue = this.subjectControl.value.trim();
+
+    // If this subject is already selected (in input), do nothing
+    if (currentFormValue === selectedSubject) {
+      return;
+    }
+
+    // Get the index of the clicked subject
+    const clickedIndex = subjects.indexOf(selectedSubject);
+
+    if (clickedIndex === -1) {
+
+      return;
+    }
+
+    // Create new subjects array
+    const newSubjects = [...subjects];
+
+    // If there's a current subject in the form, swap it back into the list
+    if (currentFormValue) {
+      newSubjects[clickedIndex] = currentFormValue;
+    } else {
+      // Remove the selected subject from the list (first selection)
+      newSubjects.splice(clickedIndex, 1);
+    }
+
+    // ✅ Track the newly selected subject
+    this.currentSelectedSubject = selectedSubject;
+
+    // Update form control with selected subject
+    this.subjectControl.setValue(selectedSubject);
+
+    // Update subjects list
+    this.subjectsSubject.next(newSubjects);
+
+    // Save state after subject selection
+    this.saveCurrentState();
+
+    // Trigger change detection
+    this.cdr.markForCheck();
+
+    // Show success message
+    this.showSuccess(`Subject line selected!`);
+
   }
-  
-  // Create new subjects array
-  const newSubjects = [...subjects];
-  
-  // If there's a current subject in the form, swap it back into the list
-  if (currentFormValue) {
-    newSubjects[clickedIndex] = currentFormValue;
-  } else {
-    // Remove the selected subject from the list (first selection)
-    newSubjects.splice(clickedIndex, 1);
-  }
-  
-  // ✅ Track the newly selected subject
-  this.currentSelectedSubject = selectedSubject;
-  
-  // Update form control with selected subject
-  this.subjectControl.setValue(selectedSubject);
-  
-  // Update subjects list
-  this.subjectsSubject.next(newSubjects);
-  
-  // Save state after subject selection
-  this.saveCurrentState();
-  
-  // Trigger change detection
-  this.cdr.markForCheck();
-  
-  // Show success message
-  this.showSuccess(`Subject line selected!`);
-  
-}
 
 
   /**
    * Check if a subject is currently selected (in the input)
    */
-isSubjectSelected(subject: string): boolean {
-  // ✅ FIX: Always check against form control value
-  return this.subjectControl.value.trim() === subject;
-}
+  isSubjectSelected(subject: string): boolean {
+    // ✅ FIX: Always check against form control value
+    return this.subjectControl.value.trim() === subject;
+  }
 
   /**
    * Track by function for subject chips
@@ -754,19 +754,19 @@ isSubjectSelected(subject: string): boolean {
     if (error?.message?.includes('timeout') || error?.name === 'TimeoutError') {
       return `${operation} timed out. The server might be busy. Please try again.`;
     }
-    
+
     if (error?.status === 0 || error?.message?.includes('Http failure')) {
       return `Cannot connect to server. Please check if the backend is running.`;
     }
-    
+
     if (error?.status === 500) {
       return `Server error during ${operation}. Please try again.`;
     }
-    
+
     if (error?.status === 404) {
       return `Resource not found. Please refresh the page.`;
     }
-    
+
     return error?.message || `An error occurred during ${operation}. Please try again.`;
   }
 
@@ -776,11 +776,11 @@ isSubjectSelected(subject: string): boolean {
 
   async loadMailchimpAudiences(): Promise<void> {
     this.audiencesLoadingSubject.next('loading');
-    
+
     try {
       await firstValueFrom(this.campaignService.fetchMailchimpAudiences());
       this.audiencesLoadingSubject.next('success');
-      
+
       // ✅ Auto-select the user's organization audience if not already selected
       if (!this.selectedAudience && this.audiences.length > 0) {
         // If there's only one audience, auto-select it
@@ -792,7 +792,7 @@ isSubjectSelected(subject: string): boolean {
           const orgAudienceId = typeof currentUser?.organizationId === 'object'
             ? (currentUser?.organizationId as any)?.mailchimpAudienceId
             : null;
-          
+
           if (orgAudienceId) {
             // Find and auto-select the organization's audience
             const orgAudience = this.audiences.find(a => a.id === orgAudienceId);
@@ -820,7 +820,7 @@ isSubjectSelected(subject: string): boolean {
   async onFileUpload(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input?.files?.[0];
-    
+
     if (!file) return;
 
     this.uploadedFileName = file.name;
@@ -832,7 +832,7 @@ isSubjectSelected(subject: string): boolean {
       const organizationId = typeof currentUser?.organizationId === 'string'
         ? currentUser.organizationId
         : (currentUser?.organizationId as any)?._id;
-      
+
       const organizationName = typeof currentUser?.organizationId === 'object'
         ? (currentUser?.organizationId as any)?.name
         : undefined;
@@ -872,7 +872,7 @@ isSubjectSelected(subject: string): boolean {
       // Calculate ignored emails (excluded but NOT added to master)
       const totalExcluded = validationResult?.excludedFromCampaign?.subscribers || [];
       this.ignoredEmails = totalExcluded.filter((email: string) => !addedToMaster.includes(email));
-      
+
       console.log(`📊 Validation Summary:`);
       console.log(`  - Total excluded: ${totalExcluded.length}`);
       console.log(`  - Added to master: ${addedToMaster.length}`);
@@ -886,7 +886,7 @@ isSubjectSelected(subject: string): boolean {
       // Merge added emails into master data
       if (addedToMaster.length > 0) {
         const scheduledEmailsMap = new Map(scheduledEmails.map(s => [s.email, s]));
-        
+
         addedToMaster.forEach(email => {
           const scheduleInfo = scheduledEmailsMap.get(email);
           console.log(`🔍 Adding excluded email to master:`, {
@@ -895,7 +895,7 @@ isSubjectSelected(subject: string): boolean {
             hasTime: !!scheduleInfo?.time,
             hasTimezone: !!scheduleInfo?.timezone
           });
-          
+
           const newRow: MasterDocRow = {
             audiences_list: email,
             phone: '', // ✅ No phone for added emails
@@ -911,20 +911,20 @@ isSubjectSelected(subject: string): boolean {
       }
 
       this.masterData = data;
-      
+
       // ✅ Update recipient stats for multi-channel
       this.updateRecipientStats();
-      
+
       this.uploadLoadingSubject.next('success');
-      
+
       // Extract test emails
       this.testEmails = this.campaignService.extractTestEmails(data);
-      
+
       // Group by schedule - this will include the newly added emails
       this.scheduleGroups = this.campaignService.groupByScheduleTime(data);
 
       this.showSuccess(`Uploaded ${data.length} total recipients (${validationResult?.summary?.totalInCsv || 0} from CSV + ${addedToMaster.length} added)`);
-      
+
       // Save state after upload
       this.saveCurrentState();
 
@@ -969,7 +969,7 @@ isSubjectSelected(subject: string): boolean {
       this.reconciliation = result;
       this.reconcileLoadingSubject.next('success');
       this.cdr.markForCheck(); // Trigger change detection
-      
+
       // Save state after reconciliation
       this.saveCurrentState();
     } catch (error) {
@@ -1012,7 +1012,7 @@ isSubjectSelected(subject: string): boolean {
       this.testEmailLoadingSubject.next('success');
       this.testEmailSent = true;
       this.testEmailSentAt = new Date();
-      
+
       // Save test email state
       this.saveCurrentState();
 
@@ -1039,7 +1039,7 @@ isSubjectSelected(subject: string): boolean {
     }
 
     const summary: { icon: string; text: string; type: 'immediate' | 'timezone' | 'member' | 'warning' }[] = [];
-    
+
     const hasImmediate = this.hasImmediateSends();
     const immediateCount = this.getImmediateSendCount();
     const hasTimezoneIssues = this.shouldShowTimezoneWarning();
@@ -1094,7 +1094,7 @@ isSubjectSelected(subject: string): boolean {
 
     // Check if any multi-channel selected
     const isMultiChannel = this.selectedChannels.sms || this.selectedChannels.whatsapp;
-    
+
     if (isMultiChannel) {
       // ✅ Multi-channel submission
       return this.submitMultiChannelCampaign();
@@ -1122,7 +1122,7 @@ isSubjectSelected(subject: string): boolean {
     const selectedChannelList = Object.entries(this.selectedChannels)
       .filter(([_, selected]) => selected)
       .map(([channel, _]) => channel);
-    
+
     if (selectedChannelList.length === 0) {
       this.showError('Please select at least one channel');
       return;
@@ -1132,7 +1132,7 @@ isSubjectSelected(subject: string): boolean {
     const cost = this.getEstimatedCost();
     const costText = cost > 0 ? `\n💰 Estimated cost: $${cost.toFixed(2)}` : '';
     const totalRecipients = this.scheduleGroups.reduce((total, group) => total + group.count, 0);
-    
+
     if (!confirm(
       `🚀 Send Multi-Channel Campaign?\n\n` +
       `Channels: ${selectedChannelList.join(', ')}\n` +
@@ -1149,13 +1149,13 @@ isSubjectSelected(subject: string): boolean {
     try {
       // Prepare recipients by channel
       const recipients: any = {};
-      
+
       if (this.selectedChannels.email) {
         recipients.email = this.masterData
           .filter(row => row.audiences_list?.trim())
           .map(row => row.audiences_list.trim());
       }
-      
+
       if (this.selectedChannels.sms) {
         recipients.sms = this.masterData
           .filter(row => row.phone?.trim())
@@ -1164,7 +1164,7 @@ isSubjectSelected(subject: string): boolean {
             name: row.audiences_list?.split('@')[0] || 'Customer'
           }));
       }
-      
+
       if (this.selectedChannels.whatsapp) {
         recipients.whatsapp = this.masterData
           .filter(row => row.phone?.trim())
@@ -1189,7 +1189,7 @@ isSubjectSelected(subject: string): boolean {
 
       this.submitLoadingSubject.next('success');
       this.clearSavedData();
-      
+
       this.showSuccess(
         `✅ Multi-channel campaign sent!\n` +
         `${selectedChannelList.join(', ')} messages delivered.`
@@ -1246,7 +1246,7 @@ isSubjectSelected(subject: string): boolean {
             this.reconciliation!.new
           )
         );
-        
+
       }
 
       // ✅ STEP 2: Submit campaign
@@ -1276,45 +1276,47 @@ isSubjectSelected(subject: string): boolean {
             this.reconciliation!.new
           )
         );
-        
+
       }
 
       this.submitLoadingSubject.next('success');
-      
+
       // Clear saved data after successful submission
       this.clearSavedData();
-      
+
       // Show appropriate success message
       let successMsg = '';
       if (result.message && result.message.includes('sent immediately')) {
         successMsg = `⚠️ Campaign sent immediately! (Scheduling not available on your Mailchimp plan)`;
       } else {
-        successMsg = this.addNewMembersToAudience 
+        successMsg = this.addNewMembersToAudience
           ? `✅ Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled.`
           : `✅ Campaign submitted! ${result.campaignIds.length} campaign(s) scheduled. New members will be archived.`;
       }
 
       this.showSuccess(successMsg);
 
-      // Don't auto-close, let user stay on the page to see results
-      // User can manually go back if needed
+      // Navigate to organization page to view campaign
+      setTimeout(() => {
+        this.router.navigate(['/organization']);
+      }, 2000);
 
     } catch (error: any) {
       console.error('Campaign submission error:', error);
       console.error('Error structure:', JSON.stringify(error, null, 2));
       this.submitLoadingSubject.next('error');
-      
+
       // Extract error message and make it customer-friendly
       let errorMessage = 'Campaign submission failed. Please try again.';
-      
+
       // Try different error paths
       const errorData = error?.error || error;
       const errors = errorData?.errors || [];
-      
+
       // Check for specific errors and provide helpful messages
       if (Array.isArray(errors) && errors.length > 0) {
         const fieldErrors = errors;
-        
+
         // Handle schedule_time errors
         const scheduleError = fieldErrors.find((err: any) => err.field === 'schedule_time');
         if (scheduleError) {
@@ -1323,18 +1325,18 @@ isSubjectSelected(subject: string): boolean {
           } else {
             errorMessage = `⏰ Invalid schedule time: ${scheduleError.message}`;
           }
-        } 
+        }
         // Handle email validation errors
-        else if (fieldErrors.some((err: any) => 
-          err.field?.toLowerCase().includes('email') || 
+        else if (fieldErrors.some((err: any) =>
+          err.field?.toLowerCase().includes('email') ||
           err.message?.toLowerCase().includes('email') ||
           err.message?.toLowerCase().includes('invalid address')
         )) {
           errorMessage = '📧 Invalid email address detected. Please check your email list and ensure all addresses are valid.';
         }
         // Handle recipient/list errors
-        else if (fieldErrors.some((err: any) => 
-          err.field?.toLowerCase().includes('recipient') || 
+        else if (fieldErrors.some((err: any) =>
+          err.field?.toLowerCase().includes('recipient') ||
           err.field?.toLowerCase().includes('list')
         )) {
           errorMessage = '👥 Invalid recipient list. Please verify your audience and try again.';
@@ -1359,7 +1361,7 @@ isSubjectSelected(subject: string): boolean {
           .replace(/Mailchimp/gi, 'Email service')
           .replace(/API/gi, 'service');
       }
-      
+
       this.showError(errorMessage);
     }
   }
@@ -1368,15 +1370,15 @@ isSubjectSelected(subject: string): boolean {
     if (this.testEmails.length === 0) {
       return 'No test emails found in uploaded file';
     }
-    
+
     if (!this.subjectControl.valid || !this.subjectControl.value.trim()) {
       return 'Add subject line first';
     }
-    
+
     if (this.testEmailLoadingSubject.value === 'loading') {
       return 'Sending test email...';
     }
-    
+
     return 'Send test email to recipient(s)';
   }
 
@@ -1400,43 +1402,43 @@ isSubjectSelected(subject: string): boolean {
     if (!this.subjectControl.valid || !this.subjectControl.value.trim()) {
       return 'Add subject line first';
     }
-    
+
     if (!this.reconciliation) {
       return 'Upload and reconcile audience data first';
     }
-    
+
     if (this.scheduleGroups.length === 0) {
       return 'No scheduled recipients found';
     }
-    
+
     if (this.submitLoadingSubject.value === 'loading') {
       return 'Submitting campaign...';
     }
-    
+
     return 'Submit campaign to Mailchimp';
   }
 
   getTimezoneWarningMessage(): string {
     if (!this.timezoneAnalysis) return '';
-    
+
     const analysis = this.timezoneAnalysis;
-    
+
     if (!analysis.hasTimezoneColumn || analysis.timezoneMode === 'none') {
       return `No timezone specified. All emails will be scheduled in your local timezone (${this.getBrowserTimezone()})`;
     }
-    
+
     if (analysis.timezoneMode === 'single') {
       return `All emails will be sent in timezone: ${analysis.uniqueTimezones[0]}`;
     }
-    
+
     if (analysis.timezoneMode === 'multiple') {
       return `Using per-customer timezones (${analysis.uniqueTimezones.length} different zones)`;
     }
-    
+
     if (analysis.timezoneMode === 'mixed') {
       return `${analysis.emptyTimezoneCount} email(s) missing timezone will use local time (${this.getBrowserTimezone()})`;
     }
-    
+
     return '';
   }
 
@@ -1446,17 +1448,17 @@ isSubjectSelected(subject: string): boolean {
 
   shouldShowTimezoneWarning(): boolean {
     if (!this.timezoneAnalysis) return false;
-    
+
     return !this.timezoneAnalysis.hasTimezoneColumn ||
-           this.timezoneAnalysis.timezoneMode === 'none' ||
-           this.timezoneAnalysis.timezoneMode === 'mixed';
+      this.timezoneAnalysis.timezoneMode === 'none' ||
+      this.timezoneAnalysis.timezoneMode === 'mixed';
   }
 
   shouldShowTimezoneInfo(): boolean {
     if (!this.timezoneAnalysis) return false;
-    
+
     return this.timezoneAnalysis.timezoneMode === 'single' ||
-           this.timezoneAnalysis.timezoneMode === 'multiple';
+      this.timezoneAnalysis.timezoneMode === 'multiple';
   }
 
   // ============================================
@@ -1470,7 +1472,7 @@ isSubjectSelected(subject: string): boolean {
       sms: this.masterData.filter(row => row.phone?.trim()).length,
       whatsapp: this.masterData.filter(row => row.phone?.trim()).length
     };
-    
+
     // Auto-disable channels with no recipients
     if (this.recipientStats.sms === 0) {
       this.selectedChannels.sms = false;
@@ -1478,7 +1480,7 @@ isSubjectSelected(subject: string): boolean {
     if (this.recipientStats.whatsapp === 0) {
       this.selectedChannels.whatsapp = false;
     }
-    
+
     this.cdr.markForCheck();
   }
 
@@ -1493,15 +1495,15 @@ isSubjectSelected(subject: string): boolean {
 
   getEstimatedCost(): number {
     let total = 0;
-    
+
     if (this.selectedChannels.sms) {
       total += this.recipientStats.sms * 0.00645; // AWS SNS cost
     }
-    
+
     if (this.selectedChannels.whatsapp && this.recipientStats.whatsapp > 1000) {
       total += (this.recipientStats.whatsapp - 1000) * 0.02; // WhatsApp after free tier
     }
-    
+
     return total;
   }
 
@@ -1568,14 +1570,14 @@ isSubjectSelected(subject: string): boolean {
 
   getTestEmailsSentTime(): string {
     if (!this.testEmailSentAt) return '';
-    
+
     const now = new Date();
     const diff = Math.floor((now.getTime() - this.testEmailSentAt.getTime()) / 1000 / 60);
-    
+
     if (diff < 1) return 'Just now';
     if (diff === 1) return '1 min ago';
     if (diff < 60) return `${diff} mins ago`;
-    
+
     const hours = Math.floor(diff / 60);
     if (hours === 1) return '1 hour ago';
     return `${hours} hours ago`;

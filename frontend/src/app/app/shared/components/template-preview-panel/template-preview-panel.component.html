@@ -4,165 +4,152 @@
     <ng-container *ngTemplateOutlet="customHeaderTemplate"></ng-container>
   </ng-container>
 
-    <!-- Ultra Modern Glassmorphic Header -->
-   <!-- Ultra Modern Glassmorphic Header -->
-<!-- Ultra Modern Glassmorphic Header -->
-<!-- Ultra Modern Glassmorphic Header -->
-<div class="preview-header" *ngIf="!customHeaderTemplate && showHeader && !hideHeader">
-  <div class="header-content">
-    <!-- â­ ONE ROW: Left side (Title + Input) | Right side (Menu) -->
-    <div class="header-row-unified" [class.generate-page-header]="isGeneratePage">
-      <!-- LEFT SIDE: Title + Template Name -->
-      <div class="header-left-group" *ngIf="isGeneratePage">
-        <h3 class="template-title">{{ headerTitle || 'Generated Template' }}</h3>
-        
-        <input 
-          type="text"
-          class="template-name-input-compact"
-          [(ngModel)]="templateName"
-          (ngModelChange)="onTemplateNameChange($event)"
-          placeholder="Template Name"
-          maxlength="100">
+  <!-- Ultra Modern Glassmorphic Header -->
+  <!-- Ultra Modern Glassmorphic Header -->
+  <!-- Ultra Modern Glassmorphic Header -->
+  <!-- Ultra Modern Glassmorphic Header -->
+  <div class="preview-header" *ngIf="!customHeaderTemplate && showHeader && !hideHeader">
+    <div class="header-content">
+      <!-- â­ ONE ROW: Left side (Title + Input) | Right side (Menu) -->
+      <div class="header-row-unified" [class.generate-page-header]="isGeneratePage">
+        <!-- LEFT SIDE: Title + Template Name -->
+        <div class="header-left-group" *ngIf="isGeneratePage">
+          <h3 class="template-title">{{ headerTitle || 'Generated Template' }}</h3>
+
+          <input type="text" class="template-name-input-compact" [(ngModel)]="templateName"
+            (ngModelChange)="onTemplateNameChange($event)"
+            [placeholder]="headerTitle === 'Generated Banner' ? 'Banner Name' : 'Template Name'" maxlength="100">
+        </div>
+
+        <!-- LEFT SIDE: For non-generate pages -->
+        <h3 class="template-title" *ngIf="!isGeneratePage">{{ templateName || 'Live Preview' }}</h3>
+
+        <!-- RIGHT SIDE: Menu Dropdown (Generate Page) -->
+        <button *ngIf="showGenerateActions && isGeneratePage" class="actions-menu-btn" mat-icon-button
+          [matMenuTriggerFor]="actionsMenu">
+          <mat-icon>more_vert</mat-icon>
+        </button>
+
+        <!-- Actions Menu -->
+        <mat-menu #actionsMenu="matMenu" class="actions-dropdown-menu">
+          <!-- Save -->
+          <button mat-menu-item (click)="onSaveTemplate()">
+            <mat-icon>save</mat-icon>
+            <span>{{ saveActionLabel || 'Save Template' }}</span>
+          </button>
+
+          <!-- QA Check -->
+          <button mat-menu-item (click)="onRunTests()">
+            <mat-icon>visibility</mat-icon>
+            <span>QA Check</span>
+          </button>
+
+          <mat-divider></mat-divider>
+
+          <!-- Fullscreen -->
+          <button mat-menu-item (click)="toggleFullscreen()" *ngIf="allowFullscreen">
+            <mat-icon>{{ isFullscreen ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
+            <span>{{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}</span>
+          </button>
+
+          <mat-divider *ngIf="allowViewModes"></mat-divider>
+
+          <!-- View Modes Section -->
+          <div class="menu-section-label" *ngIf="allowViewModes">View Mode</div>
+
+          <button mat-menu-item (click)="changeViewMode('desktop')" *ngIf="allowViewModes">
+            <mat-icon [class.active-mode]="viewMode === 'desktop'">computer</mat-icon>
+            <span>Desktop</span>
+            <mat-icon class="check-icon" *ngIf="viewMode === 'desktop'">check</mat-icon>
+          </button>
+
+          <button mat-menu-item (click)="changeViewMode('tablet')" *ngIf="allowViewModes">
+            <mat-icon [class.active-mode]="viewMode === 'tablet'">tablet_mac</mat-icon>
+            <span>Tablet</span>
+            <mat-icon class="check-icon" *ngIf="viewMode === 'tablet'">check</mat-icon>
+          </button>
+
+          <button mat-menu-item (click)="changeViewMode('mobile')" *ngIf="allowViewModes">
+            <mat-icon [class.active-mode]="viewMode === 'mobile'">phone_iphone</mat-icon>
+            <span>Mobile</span>
+            <mat-icon class="check-icon" *ngIf="viewMode === 'mobile'">check</mat-icon>
+          </button>
+        </mat-menu>
+
+        <!-- RIGHT SIDE: Regular Controls (Non-Generate Page) -->
+        <ng-container *ngIf="!isGeneratePage">
+          <div class="template-meta">
+            <span class="status-badge">
+              <span class="status-indicator"></span>
+              Live Preview
+            </span>
+            <span class="template-id" *ngIf="templateId">ID: {{ templateId }}</span>
+            <div class="performance-badge-inline">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+              <span>Optimized</span>
+            </div>
+          </div>
+
+          <div class="header-controls-regular">
+            <button *ngIf="allowFullscreen" class="action-btn fullscreen-btn" (click)="toggleFullscreen()">
+              <svg *ngIf="!isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+              </svg>
+              <svg *ngIf="isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+                <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+                <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+                <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+              </svg>
+              <span>Fullscreen</span>
+            </button>
+
+            <div class="view-mode-toggle" *ngIf="allowViewModes">
+              <button class="mode-btn" [class.active]="viewMode === 'desktop'" (click)="changeViewMode('desktop')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+                <span>Desktop</span>
+              </button>
+              <button class="mode-btn" [class.active]="viewMode === 'tablet'" (click)="changeViewMode('tablet')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+                  <line x1="12" y1="18" x2="12.01" y2="18" />
+                </svg>
+                <span>Tablet</span>
+              </button>
+              <button class="mode-btn" [class.active]="viewMode === 'mobile'" (click)="changeViewMode('mobile')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                  <line x1="12" y1="18" x2="12.01" y2="18" />
+                </svg>
+                <span>Mobile</span>
+              </button>
+            </div>
+
+            <button *ngIf="allowRefresh && !isGeneratePage" class="action-btn refresh-btn" (click)="onRefresh()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+              <span>Refresh</span>
+            </button>
+          </div>
+        </ng-container>
       </div>
-
-      <!-- LEFT SIDE: For non-generate pages -->
-      <h3 class="template-title" *ngIf="!isGeneratePage">{{ templateName || 'Live Preview' }}</h3>
-      
-      <!-- RIGHT SIDE: Menu Dropdown (Generate Page) -->
-      <button 
-        *ngIf="showGenerateActions && isGeneratePage"
-        class="actions-menu-btn"
-        mat-icon-button
-        [matMenuTriggerFor]="actionsMenu">
-        <mat-icon>more_vert</mat-icon>
-      </button>
-
-      <!-- Actions Menu -->
-      <mat-menu #actionsMenu="matMenu" class="actions-dropdown-menu">
-        <!-- Save -->
-        <button mat-menu-item (click)="onSaveTemplate()">
-          <mat-icon>save</mat-icon>
-          <span>{{ saveActionLabel || 'Save Template' }}</span>
-        </button>
-        
-        <!-- QA Check -->
-        <button mat-menu-item (click)="onRunTests()">
-          <mat-icon>visibility</mat-icon>
-          <span>QA Check</span>
-        </button>
-        
-        <mat-divider></mat-divider>
-        
-        <!-- Fullscreen -->
-        <button mat-menu-item (click)="toggleFullscreen()" *ngIf="allowFullscreen">
-          <mat-icon>{{ isFullscreen ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
-          <span>{{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}</span>
-        </button>
-        
-        <mat-divider *ngIf="allowViewModes"></mat-divider>
-        
-        <!-- View Modes Section -->
-        <div class="menu-section-label" *ngIf="allowViewModes">View Mode</div>
-        
-        <button mat-menu-item (click)="changeViewMode('desktop')" *ngIf="allowViewModes">
-          <mat-icon [class.active-mode]="viewMode === 'desktop'">computer</mat-icon>
-          <span>Desktop</span>
-          <mat-icon class="check-icon" *ngIf="viewMode === 'desktop'">check</mat-icon>
-        </button>
-        
-        <button mat-menu-item (click)="changeViewMode('tablet')" *ngIf="allowViewModes">
-          <mat-icon [class.active-mode]="viewMode === 'tablet'">tablet_mac</mat-icon>
-          <span>Tablet</span>
-          <mat-icon class="check-icon" *ngIf="viewMode === 'tablet'">check</mat-icon>
-        </button>
-        
-        <button mat-menu-item (click)="changeViewMode('mobile')" *ngIf="allowViewModes">
-          <mat-icon [class.active-mode]="viewMode === 'mobile'">phone_iphone</mat-icon>
-          <span>Mobile</span>
-          <mat-icon class="check-icon" *ngIf="viewMode === 'mobile'">check</mat-icon>
-        </button>
-      </mat-menu>
-      
-      <!-- RIGHT SIDE: Regular Controls (Non-Generate Page) -->
-      <ng-container *ngIf="!isGeneratePage">
-        <div class="template-meta">
-          <span class="status-badge">
-            <span class="status-indicator"></span>
-            Live Preview
-          </span>
-          <span class="template-id" *ngIf="templateId">ID: {{ templateId }}</span>
-          <div class="performance-badge-inline">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-            </svg>
-            <span>Optimized</span>
-          </div>
-        </div>
-
-        <div class="header-controls-regular">
-          <button 
-            *ngIf="allowFullscreen"
-            class="action-btn fullscreen-btn" 
-            (click)="toggleFullscreen()">
-            <svg *ngIf="!isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
-              <path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
-              <path d="M3 16v3a2 2 0 0 0 2 2h3"/>
-              <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
-            </svg>
-            <svg *ngIf="isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M8 3v3a2 2 0 0 1-2 2H3"/>
-              <path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
-              <path d="M3 16h3a2 2 0 0 1 2 2v3"/>
-              <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
-            </svg>
-            <span>Fullscreen</span>
-          </button>
-
-          <div class="view-mode-toggle" *ngIf="allowViewModes">
-            <button class="mode-btn" [class.active]="viewMode === 'desktop'" (click)="changeViewMode('desktop')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                <line x1="8" y1="21" x2="16" y2="21"/>
-                <line x1="12" y1="17" x2="12" y2="21"/>
-              </svg>
-              <span>Desktop</span>
-            </button>
-            <button class="mode-btn" [class.active]="viewMode === 'tablet'" (click)="changeViewMode('tablet')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
-                <line x1="12" y1="18" x2="12.01" y2="18"/>
-              </svg>
-              <span>Tablet</span>
-            </button>
-            <button class="mode-btn" [class.active]="viewMode === 'mobile'" (click)="changeViewMode('mobile')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
-                <line x1="12" y1="18" x2="12.01" y2="18"/>
-              </svg>
-              <span>Mobile</span>
-            </button>
-          </div>
-
-          <button 
-            *ngIf="allowRefresh && !isGeneratePage"
-            class="action-btn refresh-btn" 
-            (click)="onRefresh()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-              <path d="M21 3v5h-5"/>
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-              <path d="M3 21v-5h5"/>
-            </svg>
-            <span>Refresh</span>
-          </button>
-        </div>
-      </ng-container>
     </div>
   </div>
-</div>
 
-<!-- Next-Gen Empty State -->
+  <!-- Next-Gen Empty State -->
   <div *ngIf="!html && !loading" class="modern-placeholder">
     <div class="placeholder-background">
       <div class="floating-shapes">
@@ -180,19 +167,25 @@
           <div class="ai-robot-icon">
             <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
               <!-- Robot Head -->
-              <rect x="60" y="70" width="80" height="70" rx="10" fill="url(#robotGradient)" stroke="currentColor" stroke-width="3"/>
+              <rect x="60" y="70" width="80" height="70" rx="10" fill="url(#robotGradient)" stroke="currentColor"
+                stroke-width="3" />
               <!-- Antenna -->
-              <line x1="100" y1="70" x2="100" y2="50" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-              <circle cx="100" cy="45" r="5" fill="currentColor"/>
+              <line x1="100" y1="70" x2="100" y2="50" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+              <circle cx="100" cy="45" r="5" fill="currentColor" />
               <!-- Eyes -->
-              <circle cx="80" cy="95" r="8" fill="currentColor" class="eye-left"/>
-              <circle cx="120" cy="95" r="8" fill="currentColor" class="eye-right"/>
+              <circle cx="80" cy="95" r="8" fill="currentColor" class="eye-left" />
+              <circle cx="120" cy="95" r="8" fill="currentColor" class="eye-right" />
               <!-- Smile -->
-              <path d="M 75 115 Q 100 125 125 115" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>
+              <path d="M 75 115 Q 100 125 125 115" stroke="currentColor" stroke-width="3" stroke-linecap="round"
+                fill="none" />
               <!-- Sparkles -->
-              <path class="sparkle sparkle-1" d="M 145 75 L 147 80 L 152 82 L 147 84 L 145 89 L 143 84 L 138 82 L 143 80 Z" fill="currentColor"/>
-              <path class="sparkle sparkle-2" d="M 48 85 L 50 90 L 55 92 L 50 94 L 48 99 L 46 94 L 41 92 L 46 90 Z" fill="currentColor"/>
-              <path class="sparkle sparkle-3" d="M 155 105 L 157 110 L 162 112 L 157 114 L 155 119 L 153 114 L 148 112 L 153 110 Z" fill="currentColor"/>
+              <path class="sparkle sparkle-1"
+                d="M 145 75 L 147 80 L 152 82 L 147 84 L 145 89 L 143 84 L 138 82 L 143 80 Z" fill="currentColor" />
+              <path class="sparkle sparkle-2" d="M 48 85 L 50 90 L 55 92 L 50 94 L 48 99 L 46 94 L 41 92 L 46 90 Z"
+                fill="currentColor" />
+              <path class="sparkle sparkle-3"
+                d="M 155 105 L 157 110 L 162 112 L 157 114 L 155 119 L 153 114 L 148 112 L 153 110 Z"
+                fill="currentColor" />
               <!-- Gradient Definition -->
               <defs>
                 <linearGradient id="robotGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -204,11 +197,13 @@
             <div class="glow-ring"></div>
           </div>
           <h2>AI-Powered Generation</h2>
-          <p class="warning-text">AI can make mistakes. Please review and verify all generated content carefully before use.</p>
+          <p class="warning-text">AI can make mistakes. Please review and verify all generated content carefully before
+            use.</p>
           <div class="info-badges">
             <div class="badge warning">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                <path
+                  d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
               </svg>
               Always Verify
             </div>
@@ -222,8 +217,8 @@
           <div class="icon-backdrop"></div>
           <div class="icon-ring"></div>
           <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="m15 10 4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14"/>
-            <rect x="3" y="6" width="12" height="12" rx="2"/>
+            <path d="m15 10 4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14" />
+            <rect x="3" y="6" width="12" height="12" rx="2" />
           </svg>
         </div>
         <div class="placeholder-text">
@@ -232,21 +227,21 @@
         <div class="feature-pills">
           <div class="pill">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
             Real-time Updates
           </div>
           <div class="pill">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-              <line x1="8" y1="21" x2="16" y2="21"/>
-              <line x1="12" y1="17" x2="12" y2="21"/>
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
             </svg>
             Multi-Device
           </div>
           <div class="pill">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
             Lightning Fast
           </div>
@@ -295,12 +290,8 @@
       'mobile-mode': viewMode === 'mobile'
     }">
       <div class="iframe-container">
-        <iframe
-          class="preview-frame"
-          [attr.srcdoc]="safeSrcdoc"
-          sandbox="allow-same-origin allow-forms"
-          referrerpolicy="no-referrer"
-          (load)="onIframeLoad()">
+        <iframe class="preview-frame" [attr.srcdoc]="safeSrcdoc" sandbox="allow-same-origin allow-forms"
+          referrerpolicy="no-referrer" (load)="onIframeLoad()">
         </iframe>
       </div>
     </div>
@@ -314,9 +305,9 @@
         <div class="error-icon-container">
           <div class="error-icon-backdrop"></div>
           <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
         </div>
         <div class="error-text">
@@ -329,16 +320,16 @@
         <div class="error-actions">
           <button class="retry-btn" (click)="onRefresh()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-              <path d="M21 3v5h-5"/>
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-              <path d="M3 21v-5h5"/>
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+              <path d="M21 3v5h-5" />
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+              <path d="M3 21v-5h5" />
             </svg>
             Try Again
           </button>
           <button class="support-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
             Get Support
           </button>
