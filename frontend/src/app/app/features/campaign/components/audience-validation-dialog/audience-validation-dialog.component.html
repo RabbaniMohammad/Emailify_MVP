@@ -13,28 +13,53 @@
   </div>
 
   <mat-dialog-content class="dialog-body">
-    <!-- Loading State -->
-    <div *ngIf="loading" class="loading-container">
-      <div class="loading-spinner">
-        <mat-spinner diameter="50"></mat-spinner>
-      </div>
-      <p class="loading-text">Validating your audience list...</p>
+    <!-- Consent capture BEFORE processing CSV -->
+    <div *ngIf="!consentSubmitted">
+      <h3>Confirm contacts have opted in</h3>
+      <p>Please confirm that the contacts in the uploaded CSV have explicitly opted in for the channels you will use.</p>
+
+      <form class="consent-form">
+        <mat-checkbox [(ngModel)]="consent.sms_optin" name="sms_optin" required>
+          <span class="required" aria-hidden>*</span>
+          I confirm all uploaded contacts have explicitly opted in to receive <strong>SMS</strong> messages.
+        </mat-checkbox>
+        <mat-checkbox [(ngModel)]="consent.whatsapp_optin" name="whatsapp_optin" required>
+          <span class="required" aria-hidden>*</span>
+          I confirm all uploaded contacts have explicitly opted in to receive <strong>WhatsApp</strong> messages.
+        </mat-checkbox>
+        <mat-checkbox [(ngModel)]="consent.instagram_optin" name="instagram_optin" required>
+          <span class="required" aria-hidden>*</span>
+          I confirm all uploaded contacts have explicitly opted in to receive <strong>Instagram Direct Messages</strong>.
+        </mat-checkbox>
+        <mat-checkbox [(ngModel)]="consent.email_optin" name="email_optin" required>
+          <span class="required" aria-hidden>*</span>
+          I confirm all uploaded contacts have explicitly opted in to receive <strong>Email</strong> marketing.
+        </mat-checkbox>
+        <mat-checkbox [(ngModel)]="consent.understand" name="understand" required>
+          <span class="required" aria-hidden>*</span>
+          I understand that sending messages without proper consent may lead to account suspension.
+        </mat-checkbox>
+
+        <div class="proof-section">
+          <label>Upload proof (image or PDF) <span class="required" aria-hidden>*</span></label>
+          <input type="file" (change)="onProofFileChange($event)" />
+          <div *ngIf="!consent.proof_file" class="proof-hint">Please upload proof before proceeding.</div>
+        </div>
+
+        <mat-form-field appearance="fill" style="width:100%; margin-top:8px;">
+          <mat-label>Opt-in page URL (optional)</mat-label>
+          <input matInput [(ngModel)]="consent.proof_page_url" name="proof_page_url" />
+        </mat-form-field>
+
+        <mat-form-field appearance="fill" style="width:100%; margin-top:8px;">
+          <mat-label>Describe how contacts opted in (optional)</mat-label>
+          <textarea matInput rows="3" [(ngModel)]="consent.description" name="description"></textarea>
+        </mat-form-field>
+      </form>
     </div>
 
-    <!-- Error State -->
-    <div *ngIf="error && !loading" class="error-container">
-      <div class="error-icon">
-        <mat-icon>error_outline</mat-icon>
-      </div>
-      <p class="error-text">{{ error }}</p>
-      <button mat-raised-button color="primary" (click)="validateAudience()">
-        <mat-icon>refresh</mat-icon>
-        Retry Validation
-      </button>
-    </div>
-
-    <!-- Validation Results -->
-    <div *ngIf="validationResult && !loading" class="validation-results">
+    <!-- Validation Results (shown after consent + processing) -->
+    <div *ngIf="consentSubmitted && validationResult && !loading" class="validation-results">
       <!-- Summary Cards -->
       <div class="summary-cards">
         <div class="summary-card csv-card">
@@ -231,7 +256,7 @@
   </mat-dialog-content>
 
   <!-- Modern Footer -->
-  <mat-dialog-actions class="dialog-footer">
+    <mat-dialog-actions class="dialog-footer">
     <button mat-stroked-button (click)="cancel()" class="cancel-btn">
       Cancel
     </button>
@@ -239,7 +264,7 @@
       mat-flat-button 
       color="primary" 
       (click)="proceed()"
-      [disabled]="!validationResult || loading"
+      [disabled]="!canProceed"
       class="proceed-btn">
       <mat-icon>send</mat-icon>
       Proceed with Campaign

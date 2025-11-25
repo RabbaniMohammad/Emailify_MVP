@@ -7,6 +7,7 @@ import Campaign from '@src/models/Campaign';
 import User from '@src/models/User';
 import Organization from '@src/models/Organization';
 import { authenticate } from '@src/middleware/auth';
+import { UploadMaster } from '@src/models/UploadMaster';
 
 const router = Router();
 const MC: any = mailchimp as any;
@@ -499,6 +500,35 @@ router.post('/campaign/upload-master', authenticate, upload.single('file'), asyn
       return hasEmail || hasPhone || hasInstagram;
     });
 
+    // If an uploadId was provided, update UploadMaster with parsing results and validation summary
+    const providedUploadId = (req as any).body?.uploadId || req.query?.uploadId;
+    if (providedUploadId) {
+      try {
+        const existing = await UploadMaster.findOne({ uploadId: providedUploadId });
+        if (existing) {
+          existing.parsedCount = data.length;
+          existing.parsedAt = new Date();
+          existing.rawPreview = data.slice(0, 20);
+          // Basic validation summary captured here. Mailchimp totals are not available in this endpoint.
+          existing.validationSummary = {
+            masterTotal: data.length,
+            instagramTotal: data.filter(r => r.instagram_handle && String(r.instagram_handle).trim() !== '').length,
+            mailchimpTotal: null
+          };
+
+          // Link consent if present
+          const consentRecord = await (await import('@src/models/UploadConsent')).UploadConsent.findOne({ uploadId: providedUploadId }).lean();
+          if (consentRecord) {
+            existing.consentId = consentRecord._id;
+          }
+
+          await existing.save();
+        }
+      } catch (err) {
+        console.warn('Failed to update UploadMaster with parsing results:', err?.message || err);
+      }
+    }
+
     res.json({
       data,
       count: data.length
@@ -510,6 +540,59 @@ router.post('/campaign/upload-master', authenticate, upload.single('file'), asyn
       error: 'Failed to parse file',
       message: error.message || 'Unknown error'
     });
+  }
+});
+
+/**
+ * POST /api/campaign/create-upload
+ * Save raw uploaded file to disk and create an UploadMaster record that returns an uploadId.
+ * This lets the frontend obtain an uploadId before consent is submitted.
+ */
+router.post('/campaign/create-upload', authenticate, upload.single('file'), async (req: MulterRequest, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const userId = (req as any).tokenPayload?.userId;
+    const user = await User.findById(userId);
+    if (!user?.organizationId) return res.status(403).json({ error: 'User not in organization' });
+
+    const clientId = typeof user.organizationId === 'string' ? user.organizationId : (user.organizationId as any)._id;
+  const userName = user.name || user.email || '';
+  const orgRecord = await Organization.findById(user.organizationId);
+  const organizationName = orgRecord?.name || '';
+
+    // Ensure uploads folder exists under public/uploads/master
+    const path = require('path');
+    const fs = require('fs');
+    const uploadsDir = path.join(__dirname, '..', '..', 'public', 'uploads', 'master');
+    fs.mkdirSync(uploadsDir, { recursive: true });
+
+    const storedName = `${Date.now()}-${Math.random().toString(36).slice(2,9)}-${req.file.originalname}`;
+    const storedPath = path.join(uploadsDir, storedName);
+
+    // Save buffer to disk
+    fs.writeFileSync(storedPath, req.file.buffer);
+
+    const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+
+    const previewText = req.file.buffer.toString('utf-8').split('\n').slice(0, 20);
+
+    const record = await UploadMaster.create({
+      clientId,
+      uploadId,
+      userId: userId,
+      userName,
+      organizationName,
+      originalName: req.file.originalname,
+      storedPath: `/uploads/master/${storedName}`,
+      rawPreview: previewText,
+      parsedCount: 0
+    });
+
+    res.json({ success: true, uploadId: record.uploadId });
+  } catch (error: any) {
+    console.error('Failed to create upload record:', error);
+    res.status(500).json({ error: error.message || 'Failed to create upload' });
   }
 });
 

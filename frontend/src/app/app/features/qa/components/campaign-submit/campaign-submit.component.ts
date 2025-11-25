@@ -848,14 +848,19 @@ isSubjectSelected(subject: string): boolean {
         return;
       }
 
-      // Open validation dialog
+      // Create upload record first to get uploadId (no parsing yet) so consent can be linked
+      const uploadResp = await firstValueFrom(this.campaignService.createUploadDocument(file));
+      const uploadId = uploadResp?.uploadId;
+
+      // Open validation dialog and pass uploadId so consent submission can link to this upload
       const dialogRef = this.dialog.open(AudienceValidationDialogComponent, {
         width: '1000px',
         maxWidth: '95vw',
         data: {
           csvFile: file,
           organizationId: organizationId,
-          organizationName: organizationName
+          organizationName: organizationName,
+          uploadId: uploadId
         },
         disableClose: true
       });
@@ -884,9 +889,21 @@ isSubjectSelected(subject: string): boolean {
       console.log(`  - Ignored: ${this.ignoredEmails.length}`);
 
       // Continue with the normal upload flow
-      const data = await firstValueFrom(
-        this.campaignService.uploadMasterDocument(file)
-      );
+      // Prefer parsed/master data returned by the Audience Validation dialog (it now persists the master
+      // inside the dialog after consent). Fall back to calling uploadMasterDocument only if the dialog did
+      // not return parsed data.
+      let data: any[];
+      if (result?.masterData && Array.isArray(result.masterData)) {
+        data = result.masterData;
+      } else if (result?.parsedMaster && Array.isArray(result.parsedMaster)) {
+        data = result.parsedMaster;
+      } else if (result?.uploadMasterData && Array.isArray(result.uploadMasterData)) {
+        data = result.uploadMasterData;
+      } else {
+        data = await firstValueFrom(
+          this.campaignService.uploadMasterDocument(file, uploadId)
+        );
+      }
 
       // If validation dialog reported instagram handles but the uploaded master document
       // doesn't include them (some CSV flows may only surface them in validation),

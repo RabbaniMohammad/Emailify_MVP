@@ -3,6 +3,7 @@ import { whatsappService, WhatsAppMessage, WhatsAppSendResult, WhatsAppBatchResu
 import { instagramService, InstagramMessage, InstagramSendResult, InstagramBatchResult } from './instagramService';
 import MultiChannelCampaign, { IMultiChannelCampaign, CampaignChannel } from '@src/models/MultiChannelCampaign';
 import { adaptEmailToAllChannels } from './contentAdaptationService';
+import { isSubscriberAllowed } from './consentService';
 
 /**
  * Unified interface for sending messages across all channels
@@ -264,17 +265,25 @@ export class MessagingService {
     if (submission.channels.includes('sms') && submission.recipients.sms?.length) {
       console.log(`📱 Sending SMS to ${submission.recipients.sms.length} recipients...`);
       const smsContent = adaptedContent?.sms?.text || submission.emailSubject || '';
-      const smsResults = await this.sendBatchToChannel(
-        'sms',
-        submission.recipients.sms,
-        { text: smsContent }
-      );
+
+      // Filter recipients by opt-in
+      const allowedSms: string[] = [];
+      const skippedSms: UnifiedSendResult[] = [];
+      for (const phone of submission.recipients.sms) {
+        const allowed = await isSubscriberAllowed(submission.organizationId, { phone }, 'sms');
+        if (allowed) allowedSms.push(phone);
+        else skippedSms.push({ channel: 'sms', success: false, recipient: phone, error: 'no_opt_in' });
+      }
+
+      const smsResults = allowedSms.length > 0 ? await this.sendBatchToChannel('sms', allowedSms, { text: smsContent }) : [];
+      // merge skipped with results
+      const finalSmsResults = [...smsResults, ...skippedSms];
       results.push(...smsResults);
       
       // Update campaign metrics
-      const smsSent = smsResults.filter(r => r.success).length;
-      const smsFailed = smsResults.filter(r => !r.success).length;
-      const smsCost = smsResults.reduce((sum, r) => sum + (r.cost || 0), 0);
+  const smsSent = finalSmsResults.filter(r => r.success).length;
+  const smsFailed = finalSmsResults.filter(r => !r.success).length;
+  const smsCost = finalSmsResults.reduce((sum, r) => sum + (r.cost || 0), 0);
       
       campaign.channelMetrics.sms = {
         sent: smsSent,
@@ -285,7 +294,7 @@ export class MessagingService {
       };
       
       // Store external IDs
-      campaign.externalIds.awsSns = smsResults
+      campaign.externalIds.awsSns = (smsResults || [])
         .filter(r => r.messageId)
         .map(r => r.messageId!);
     }
@@ -309,38 +318,29 @@ export class MessagingService {
       console.log(`📝 Message: ${mainMessage}`);
       
       const whatsappResults: UnifiedSendResult[] = [];
-      
-      // Send to each recipient
+      // Check opt-in and send
       for (const phoneNumber of submission.recipients.whatsapp) {
+        const allowed = await isSubscriberAllowed(submission.organizationId, { phone: phoneNumber }, 'whatsapp');
+        if (!allowed) {
+          whatsappResults.push({ channel: 'whatsapp', success: false, recipient: phoneNumber, error: 'no_opt_in' });
+          continue;
+        }
         try {
           const result = await whatsappService.sendTemplateMessage(
             phoneNumber,
             templateName,
             [
-              'Customer',           // {{1}} - Recipient name (you can personalize this)
-              mainMessage,          // {{2}} - Main AI-generated message
-              additionalInfo        // {{3}} - Additional info or CTA
+              'Customer',
+              mainMessage,
+              additionalInfo
             ],
             'en_US'
           );
-          
-          whatsappResults.push({
-            channel: 'whatsapp',
-            success: result.success,
-            recipient: phoneNumber,
-            messageId: result.messageId,
-            error: result.error,
-          });
+          whatsappResults.push({ channel: 'whatsapp', success: result.success, recipient: phoneNumber, messageId: result.messageId, error: result.error });
         } catch (error: any) {
-          whatsappResults.push({
-            channel: 'whatsapp',
-            success: false,
-            recipient: phoneNumber,
-            error: error.message,
-          });
+          whatsappResults.push({ channel: 'whatsapp', success: false, recipient: phoneNumber, error: error.message });
         }
       }
-      
       results.push(...whatsappResults);
       
       // Update campaign metrics
@@ -367,12 +367,16 @@ export class MessagingService {
     if (submission.channels.includes('instagram') && submission.recipients.instagram?.length) {
       console.log(`📸 Sending Instagram DMs to ${submission.recipients.instagram.length} recipients...`);
       const instagramContent = adaptedContent?.instagram?.text || submission.emailSubject || '';
-      const instagramResults = await this.sendBatchToChannel(
-        'instagram',
-        submission.recipients.instagram,
-        { text: instagramContent }
-      );
-      results.push(...instagramResults);
+      // Filter instagram recipients by opt-in
+      const instaAllowed: string[] = [];
+      const instaSkipped: UnifiedSendResult[] = [];
+      for (const id of submission.recipients.instagram) {
+        const allowed = await isSubscriberAllowed(submission.organizationId, { instagram_handle: id }, 'instagram');
+        if (allowed) instaAllowed.push(id);
+        else instaSkipped.push({ channel: 'instagram', success: false, recipient: id, error: 'no_opt_in' });
+      }
+      const instagramResults = instaAllowed.length > 0 ? await this.sendBatchToChannel('instagram', instaAllowed, { text: instagramContent }) : [];
+      results.push(...(instagramResults || []), ...instaSkipped);
       
       // Update campaign metrics
       const instagramSent = instagramResults.filter(r => r.success).length;

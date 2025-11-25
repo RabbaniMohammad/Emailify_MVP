@@ -289,52 +289,58 @@
 
       <div class="preview-grid">
         <!-- SMS Preview -->
-        <div class="preview-card" *ngIf="aiPreview.sms && selectedChannels.sms">
-          <div class="preview-card-header">
-            <span class="preview-icon">💬</span>
-            <h5>SMS Message</h5>
-            <span class="preview-badge">{{ aiPreview.sms?.text?.length }} chars</span>
-          </div>
-          <div class="preview-content sms-preview">
-            <p>{{ aiPreview.sms?.text }}</p>
-          </div>
-          <div class="preview-footer">
-            <small>✓ Optimized for 160-character SMS limit</small>
-          </div>
-        </div>
-
-        <!-- WhatsApp Preview -->
-        <div class="preview-card" *ngIf="aiPreview.whatsapp && selectedChannels.whatsapp">
-          <div class="preview-card-header">
-            <span class="preview-icon">📱</span>
-            <h5>WhatsApp Message</h5>
-            <span class="preview-badge">{{ aiPreview.whatsapp.lineCount }} lines</span>
-          </div>
-          <div class="preview-content whatsapp-preview">
-            <p [innerHTML]="formatWhatsAppText(aiPreview.whatsapp?.text)"></p>
-          </div>
-          <div class="preview-footer">
-            <small>✓ Will be sent using template: <code>emailify_campaign</code></small>
-          </div>
-        </div>
-
-          <!-- Instagram Preview -->
-          <div class="preview-card" *ngIf="aiPreview.instagram && selectedChannels.instagram">
+        <ng-container *ngIf="aiPreview?.sms as smsPreview">
+          <div class="preview-card" *ngIf="selectedChannels.sms">
             <div class="preview-card-header">
-              <span class="preview-icon">📸</span>
-              <h5>Instagram Message</h5>
-              <span class="preview-badge">{{ (aiPreview.instagram?.text || '').length }} chars</span>
+              <span class="preview-icon">💬</span>
+              <h5>SMS Message</h5>
+              <span class="preview-badge">{{ (smsPreview.text || '').length }} chars</span>
             </div>
-            <div class="preview-content instagram-preview">
-              <p [innerHTML]="formatInstagramText(aiPreview.instagram?.text)"></p>
-              <ng-container *ngIf="aiPreview.instagram?.imageUrl">
-                <img class="instagram-preview-image" [src]="aiPreview.instagram.imageUrl" alt="Instagram preview" />
-              </ng-container>
+            <div class="preview-content sms-preview">
+              <p>{{ smsPreview.text || '' }}</p>
             </div>
             <div class="preview-footer">
-              <small>✓ Preview only — Instagram DM will be sent via Meta API</small>
+              <small>✓ Optimized for 160-character SMS limit</small>
             </div>
           </div>
+        </ng-container>
+
+        <!-- WhatsApp Preview -->
+        <ng-container *ngIf="aiPreview?.whatsapp as waPreview">
+          <div class="preview-card" *ngIf="selectedChannels.whatsapp">
+            <div class="preview-card-header">
+              <span class="preview-icon">📱</span>
+              <h5>WhatsApp Message</h5>
+              <span class="preview-badge">{{ waPreview.lineCount || 0 }} lines</span>
+            </div>
+            <div class="preview-content whatsapp-preview">
+              <p [innerHTML]="formatWhatsAppText(waPreview.text || '')"></p>
+            </div>
+            <div class="preview-footer">
+              <small>✓ Will be sent using template: <code>emailify_campaign</code></small>
+            </div>
+          </div>
+        </ng-container>
+
+          <!-- Instagram Preview -->
+          <ng-container *ngIf="aiPreview?.instagram as igPreview">
+            <div class="preview-card" *ngIf="selectedChannels.instagram">
+              <div class="preview-card-header">
+                <span class="preview-icon">📸</span>
+                <h5>Instagram Message</h5>
+                <span class="preview-badge">{{ (igPreview.text || '').length }} chars</span>
+              </div>
+              <div class="preview-content instagram-preview">
+                <p [innerHTML]="formatInstagramText(igPreview.text)"></p>
+                <ng-container *ngIf="igPreview.imageUrl">
+                  <img class="instagram-preview-image" [src]="igPreview.imageUrl" alt="Instagram preview" />
+                </ng-container>
+              </div>
+              <div class="preview-footer">
+                <small>✓ Preview only — Instagram DM will be sent via Meta API</small>
+              </div>
+            </div>
+          </ng-container>
       </div>
     </div>
 

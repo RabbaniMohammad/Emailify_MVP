@@ -24,6 +24,7 @@ import adminRouter from '@src/routes/admin';
 import templateGenerationRouter from '@src/routes/templateGeneration'; // ✅ NEW
 import debugLogsRouter from '@src/routes/debug-logs'; // Debug logging endpoint
 import websiteAnalyzerRouter from '@src/routes/websiteAnalyzer'; // ✅ Website Analyzer
+import uploadsRouter from '@src/routes/uploads.routes';
 
 import Paths from '@src/common/constants/Paths';
 import ENV from '@src/common/constants/ENV';
@@ -135,6 +136,9 @@ app.use('/api/generate', (req, res, next) => {
 
 // Website Analyzer Routes ✅ NEW
 app.use('/api', websiteAnalyzerRouter);
+
+// Uploads / consent routes
+app.use('/api/uploads', uploadsRouter);
 
 // Core API routers
 app.use('/api/templates', templatesRouter);
