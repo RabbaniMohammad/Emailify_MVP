@@ -7,7 +7,7 @@ import logger from 'jet-logger';
 
 const router = Router();
 
-/** POST /api/images - Save a generated image (MVP: stores Ideogram URL and metadata) */
+/** POST /api/images - Save a generated image (stores Gemini-generated image URL and metadata) */
 router.post('/', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     // Accept both `imageUrl` and legacy `url` from clients, and provide server-side defaults
@@ -43,8 +43,8 @@ router.post('/', authenticate, organizationContext, async (req: Request, res: Re
       wrappedPrompt: wrappedPrompt || undefined,
       userId,
       organizationId: organization._id,
-      source: 'ideogram',
-      modelName: metadata?.model || 'v3',
+      source: metadata?.savedFrom || 'gemini', // Use gemini as default (replaced ideogram)
+      modelName: metadata?.model || 'gemini-2.5-flash-image',
       width: metadata?.width || undefined,
       height: metadata?.height || undefined,
       url: String(imageUrl),

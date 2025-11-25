@@ -264,6 +264,44 @@
             <div class="bubble" [class.me]="m.role === 'user'">
               <div class="who">{{ m.role === 'user' ? 'YOU' : 'QA ASSISTANT' }}</div>
               <div class="text" [innerText]="m.text"></div>
+              
+              <!-- Edits from chatbot (uses backend applyContextEdits logic like grammar/variants) -->
+              <div *ngIf="m.role === 'assistant' && m.json && m.json.edits && m.json.edits.length > 0" class="chat-edits-container">
+                <div 
+                  class="suggestion-item"
+                  *ngFor="let edit of m.json.edits; let j = index">
+                  
+                  <div class="suggestion-content">
+                    <!-- Find Text -->
+                    <div class="text-block find-text">
+                      <span class="label">Find:</span>
+                      <code 
+                        class="searchable"
+                        (click)="applyChatEdit(edit, $event)"
+                        title="Click to apply this edit">
+                        {{ edit.find }}
+                      </code>
+                    </div>
+                    
+                    <!-- Replace Text -->
+                    <div class="text-block replace-text">
+                      <span class="label">Replace:</span>
+                      <code 
+                        class="copyable"
+                        (click)="copyTextToClipboard(edit.replace || '', $event)"
+                        title="Click to copy">
+                        {{ edit.replace }}
+                      </code>
+                    </div>
+                    
+                    <!-- Reason -->
+                    <div class="reason" *ngIf="edit.reason">
+                      <mat-icon>info</mat-icon>
+                      {{ edit.reason }}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

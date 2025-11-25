@@ -207,12 +207,75 @@ private sentImages: Array<{name: string, size: number}> = [];
     }
 
   // Shared assistant welcome text usable for both email template and image modes
-  private sharedAssistantWelcome = `👋 Hi — I can help generate email templates or marketing images. Describe what you'd like and include any exact on-image text in quotes (for example: "BUY ONE GET ONE — $10").
+  private imageGenerationWelcome = `👋 Hi — I can help generate marketing images. For best results, provide detailed design specifications.
+
+Example prompt structure:
+
+Create a restaurant promotional poster that matches the following design exactly:
+
+Background:
+Light beige/cream gradient background.
+Soft organic abstract shapes behind the food images.
+Clean, modern Indian-restaurant aesthetic.
+
+Header (top-left):
+Circular restaurant logo placeholder.
+To the right, a green pill-shaped label with the text "Pista House".
+Below that label, the text "Indian Cuisine".
+
+Offer Section (left side):
+Beige rounded rectangle box containing:
+"Buy One Haleem"
+"Get 5$ OFF on any Biryani!"
+Below the offer box, the text "Online Orders Only".
+A dark brown rectangular button with white text that says "ORDER NOW".
+A QR code placed directly under the button.
+Under the QR code, place the contact details exactly in this order:
++1 703-429-1033
+Pista House Indian Cuisine, 3055 Nutley Street,
+Woody Place, Benton, VA 20191
+
+Main Food Image (center-left):
+A large red Haleem bucket container with visible food inside.
+Position matches typical promotional placement: centered left and slightly forward.
+
+Right-Side Image Stack:
+Three separate biryani images stacked vertically.
+Each image should be in a rounded-corner square/rectangle frame.
+Slight tilt or angle to match promotional aesthetics.
+All biryani bowls should be richly styled and realistic.
+
+Connecting Visual Elements:
+Thin curved arrows or connecting lines pointing from offer text to food imagery.
+Maintain a modern, stylish flow.
+
+Color Palette:
+Beige (#f3e8d7) for background.
+Dark brown (#5c3b1e) for button.
+Green (#3fa26f) for the "Pista House" label.
+White for button text.
+Black or dark gray for general text.
+
+Composition:
+Square format (1:1 aspect ratio).
+Maintain spacing, hierarchy, and visual balance similar to a modern Instagram food promotion.
+Keep the Haleem bucket large and prominent.
+Keep the biryani collage aligned vertically on the right.
+
+Output Requirements:
+Generate a high-resolution promotional poster (at least 1500×1500).
+Match the described layout, typography, colors, and placements as closely as possible.`;
+
+  private templateGenerationWelcome = `👋 Hi — I can help generate email templates or marketing images. Describe what you'd like and include any exact on-image text in quotes (for example: "BUY ONE GET ONE — $10").
 
 Examples:
 • "Create a welcome email for new subscribers"
 • "Design an Instagram banner featuring a spicy dosa with headline 'TODAY: 20% OFF'"
 • "Make a mobile-first product announcement email"`;
+
+  private get sharedAssistantWelcome(): string {
+    return this.generationType === 'image' ? this.imageGenerationWelcome : this.templateGenerationWelcome;
+  }
 
   private generateUUID(): string {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -234,7 +297,7 @@ Examples:
       // Optionally clear template-related state
       // Ensure the image preview shows the shared robot placeholder when no images yet
       if (!this.imageGalleryHtml || !this.imageGalleryHtml.trim()) {
-        this.imageGalleryHtml = this.imagePlaceholderHtml;
+        this.imageGalleryHtml = '';
       }
       // If there are no existing messages, initialize the shared assistant welcome so the right pane matches
       const msgs = this.messages$.value || [];
@@ -1090,11 +1153,10 @@ async onSend(): Promise<void> {
       // Clear the input box immediately so the user's message doesn't remain in the composer
       this.userInput = '';
 
-      // If user already has generated images and their message looks like an edit
-      // (e.g. "make it realistic", "change color to #C47A00"), treat this as
-      // a conversational remix request and call the remix endpoint using the
-      // most recent generated image URL. Otherwise, do a fresh generate.
-      if (this.generatedImages && this.generatedImages.length > 0 && this.isEditIntent(message)) {
+      // If user already has generated images in this session, ALWAYS remix the existing image
+      // to maintain continuity throughout the session. Only generate a new image when
+      // the generatedImages array is empty (first message in a new session).
+      if (this.generatedImages && this.generatedImages.length > 0) {
         await this.remixLastGeneratedImage(message);
       } else {
         this.generateImage(message);
@@ -1204,10 +1266,21 @@ async onSend(): Promise<void> {
   // Heuristic to detect if the user's message is a follow-up edit intent
   private isEditIntent(message: string): boolean {
     if (!message) return false;
-    const editKeywords = /\b(remix|edit|change|convert|make|recolor|recolour|realistic|photorealistic|tint|warm|cool|saturat|desaturat|replace)\b/i;
+    // Action words that suggest editing/modifying existing image
+    const editKeywords = /\b(remix|edit|change|convert|make|recolor|recolour|realistic|photorealistic|tint|warm|cool|saturat|desaturat|replace|add|remove|update|modify|adjust|move|position|place|put|insert|delete|shift|reposition)\b/i;
+    // Spatial/positional words that suggest editing layout
+    const positionalKeywords = /\b(next to|beside|near|above|below|on top|under|over|left|right|center|middle|corner|side|top|bottom)\b/i;
+    // Content modification words
+    const contentKeywords = /\b(icon|logo|text|title|banner|image|picture|element|object|item)\b/i;
+    // Color/price indicators
     const colorHex = /#([0-9a-fA-F]{3,6})/;
     const priceOrText = /\$\s*\d+/;
-    return editKeywords.test(message) || colorHex.test(message) || priceOrText.test(message);
+    
+    // Check if message contains edit keywords OR (positional + content keywords together)
+    const hasEditKeyword = editKeywords.test(message);
+    const hasPositionalAndContent = positionalKeywords.test(message) && contentKeywords.test(message);
+    
+    return hasEditKeyword || hasPositionalAndContent || colorHex.test(message) || priceOrText.test(message);
   }
 
   // Call Ideogram remix API using the last generated image URL and update the preview
@@ -1226,10 +1299,13 @@ async onSend(): Promise<void> {
 
     this.isGeneratingImage = true;
     try {
-      // Build a remix prompt that prioritizes the user's edit instruction
-      const remixPrompt = `Edit the existing image: ${prompt}. Preserve composition unless user asks otherwise.`;
+      // The backend will wrap this with remix-specific instructions that maintain
+      // the original image context. We just pass the user's request directly.
+      const remixPrompt = prompt;
 
-      const resp: any = await this.ideogramService.remixImage(imageUrl, remixPrompt, { styleType: 'REALISTIC' }).toPromise();
+      const resp: any = await this.ideogramService.remixImage(imageUrl, remixPrompt, { 
+        styleType: 'REALISTIC'
+      }).toPromise();
 
       // Normalize response similar to generate flow
       let dataArray: any[] = [];
@@ -1539,20 +1615,11 @@ async generateImage(prompt: string): Promise<void> {
   // Clear any previously generated images so new prompt does not include old results
   // This ensures the preview only shows images generated for the current prompt.
   this.generatedImages = [];
-  this.imageGalleryHtml = this.imagePlaceholderHtml;
+  this.imageGalleryHtml = '';
   try {
     // Force refresh of preview panel (OnPush) to clear old images immediately
     try { this.previewPanel?.onRefresh(); } catch { this.cdr.detectChanges(); }
   } catch {}
-
-  // Add user message to chat
-  const userMessage: GenerationMessage = {
-    role: 'user',
-    content: prompt,
-    timestamp: new Date()
-  };
-  this.messages$.next([...this.messages$.value, userMessage]);
-  this.scrollToBottom();
 
   try {
     // Build a marketing-focused prompt. If the user requested on-image text
@@ -1848,6 +1915,10 @@ private clearAndStartNew(): void {
   
   // Clear sent images history
   this.sentImages = [];
+  
+  // Clear generated images to allow new image generation in new session
+  this.generatedImages = [];
+  this.imageGalleryHtml = '';
 
   // Navigate to new conversation
   this.router.navigate(['/generate/new'], { replaceUrl: true });

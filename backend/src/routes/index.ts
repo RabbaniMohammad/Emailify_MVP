@@ -9,6 +9,7 @@ import qaAdvancedRouter from './qa-advanced';
 import organizationRouter from './organization.routes';
 import documentToPromptRouter from './documentToPrompt';
 import ideogramRouter from './ideogram.routes';
+import geminiImageRouter from './gemini-image.routes';
 import generatedImagesRouter from './generatedImages';
 import multiChannelRouter from './multiChannel.routes';
 import contentAdaptationRouter from './contentAdaptation.routes';
@@ -40,7 +41,8 @@ apiRouter.use('/multi-channel', multiChannelRouter); // → /api/multi-channel/.
 apiRouter.use('/content-adaptation', contentAdaptationRouter); // → /api/content-adaptation/...
 apiRouter.use('/test', testRouter);                  // → /api/test/... (NO AUTH)
 apiRouter.use('/', documentToPromptRouter);          // → /api/csv-to-prompt
-apiRouter.use('/ideogram', ideogramRouter);          // → /api/ideogram/...
+apiRouter.use('/ideogram', ideogramRouter);          // → /api/ideogram/... (legacy)
+apiRouter.use('/gemini-image', geminiImageRouter);  // → /api/gemini-image/... (new, replaces Ideogram)
 apiRouter.use('/images', generatedImagesRouter);     // → /api/images/...
 apiRouter.use('/', websiteAnalyzerRouter);           // → /api/analyze-website
 // Note: /generate router is mounted directly in server.ts

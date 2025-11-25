@@ -101,7 +101,7 @@ export class SaveGeneratedImageDialog {
       prompt: (this.prompt && this.prompt.trim()) ? this.prompt.trim() : (image.prompt || this.data.prompt || 'Generated image'),
       // backend expects `imageUrl` (not `url`)
       imageUrl: image.url,
-      metadata: { savedFrom: 'ideogram' }
+      metadata: { savedFrom: 'gemini' }
     } as any;
 
     this.isSaving = true;

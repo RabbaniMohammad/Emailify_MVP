@@ -53,6 +53,32 @@ export function wrapMarketingPrompt(userPrompt: string, opts?: { aspect_ratio?: 
   return constraints.join('\n\n');
 }
 
+/**
+ * Wrap a remix/edit prompt to maintain the original image context
+ * This ensures the AI preserves the original composition, layout, and elements
+ * while only making the specific changes requested by the user.
+ */
+export function wrapRemixPrompt(userPrompt: string, opts?: { aspect_ratio?: string; style_hint?: string; negative_hint?: string; allow_brand_names?: boolean }): string {
+  const p = (userPrompt || '').trim();
+
+  const constraints = [
+    `A. CONTEXT: You are editing an existing marketing image. The user wants to modify the current image while maintaining its core composition, layout, and visual identity.`,
+    `B. PRESERVATION RULES: 
+   - Keep the original layout, positioning, and spatial relationships between elements
+   - Maintain the original color scheme unless the user specifically requests color changes
+   - Preserve the original style, mood, and aesthetic unless explicitly asked to change
+   - Keep all existing elements that are not mentioned in the user's request
+   - Maintain the same aspect ratio and overall composition structure`,
+    `C. USER REQUEST: ${p}`,
+    `D. MODIFICATION SCOPE: Only make the specific changes requested by the user. Do not add new elements, remove existing elements, or change the composition unless explicitly requested.`,
+    `E. STYLE CONSISTENCY: Maintain the same visual style, lighting, and quality as the original image. ${opts?.style_hint ? `Additional style guidance: ${opts.style_hint}` : ''}`,
+    `F. NEGATIVE: ${(opts?.negative_hint) || 'do not change the composition, layout, or remove existing elements unless explicitly requested'}`,
+    `G. OUTPUT: Return the edited image that looks like a natural continuation of the original, with only the requested modifications applied.`
+  ];
+
+  return constraints.join('\n\n');
+}
+
 // Optionally a helper to produce a short preview string (for showing sanitized prompt in UI)
 export function previewWrappedPrompt(userPrompt: string): string {
   const p = (userPrompt || '').trim();
@@ -62,5 +88,6 @@ export function previewWrappedPrompt(userPrompt: string): string {
 export default {
   isPromptAllowed,
   wrapMarketingPrompt,
+  wrapRemixPrompt,
   previewWrappedPrompt
 };

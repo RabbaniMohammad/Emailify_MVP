@@ -27,11 +27,9 @@ export interface IdeogramGenerationResponse {
 })
 export class IdeogramImageService {
   private http = inject(HttpClient);
-  // Prefer using the existing backend Ideogram routes if available (/api/ideogram).
-  // We previously used a separate proxy at /api/ai-image to experiment with v3.
-  // If your Ideogram API key is for v2 (or the app already has working /api/ideogram routes),
-  // switch to '/api/ideogram' so we reuse the existing handlers.
-  private apiUrl = '/api/ideogram'; // use existing backend ideogram routes by default
+  // Using Gemini image generation (Nano Banana Pro) instead of Ideogram
+  // Gemini provides better text rendering and up to 4K resolution for banners
+  private apiUrl = '/api/gemini-image'; // Gemini image generation routes
 
   /**
    * Generate images using Ideogram 2.0 API

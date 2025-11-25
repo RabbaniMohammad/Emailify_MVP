@@ -14,7 +14,7 @@
     <div class="header-row-unified" [class.generate-page-header]="isGeneratePage">
       <!-- LEFT SIDE: Title + Template Name -->
       <div class="header-left-group" *ngIf="isGeneratePage">
-        <h3 class="template-title">Generated Template</h3>
+        <h3 class="template-title">{{ headerTitle || 'Generated Template' }}</h3>
         
         <input 
           type="text"
@@ -42,7 +42,7 @@
         <!-- Save -->
         <button mat-menu-item (click)="onSaveTemplate()">
           <mat-icon>save</mat-icon>
-          <span>Save Template</span>
+          <span>{{ saveActionLabel || 'Save Template' }}</span>
         </button>
         
         <!-- QA Check -->

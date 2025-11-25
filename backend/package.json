@@ -20,6 +20,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
     "@aws-sdk/client-sns": "^3.929.0",
+    "@google/genai": "^1.30.0",
     "@mailchimp/mailchimp_marketing": "^3.0.80",
     "@types/jsdom": "^27.0.0",
     "@types/pdf-parse": "^1.1.5",

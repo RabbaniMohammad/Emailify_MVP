@@ -80,6 +80,8 @@ export class TemplatePreviewPanelComponent implements OnChanges {
   @Input() allowViewModes = true;
   @Input() showGenerateActions = false;  
   @Input() isGeneratePage = false;
+  @Input() headerTitle?: string; // Optional custom header title
+  @Input() saveActionLabel?: string; // Optional custom save action label (defaults to "Save Template")
   
   // Internal loading state (only used when parent doesn't control loading)
   private internalLoading = false; 

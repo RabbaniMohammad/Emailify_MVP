@@ -1549,13 +1549,48 @@ function visibleTextForChat(html: string): string {
   return $('body').text().replace(/\s+/g, ' ').trim();
 }
 
+// Extract semantic sections from HTML for better AI understanding
+function extractSemanticSections(html: string): string {
+  const $ = cheerio.load(html);
+  $('script, style, noscript').remove();
+  
+  const sections: string[] = [];
+  let sectionIndex = 1;
+  
+  // Extract text from semantic block elements
+  const blockSelectors = [
+    'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'div[class*="section"]', 'div[class*="block"]', 'div[class*="content"]',
+    'section', 'article', 'header', 'footer',
+    'td', 'th', // Table cells
+    'li' // List items
+  ];
+  
+  $(blockSelectors.join(', ')).each((_: any, el: any) => {
+    const $el = $(el);
+    const text = $el.text().trim();
+    
+    // Only include meaningful sections (at least 10 chars, not just whitespace)
+    if (text.length >= 10 && text.length < 500) {
+      const tag = (el as any).tagName?.toLowerCase() || 'div';
+      sections.push(`[Section ${sectionIndex++} - ${tag.toUpperCase()}]: ${text}`);
+    }
+  });
+  
+  // If no semantic sections found, fall back to plain text
+  if (sections.length === 0) {
+    return $('body').text().replace(/\s+/g, ' ').trim();
+  }
+  
+  return sections.join('\n\n');
+}
+
 function chatSystemPrompt(): string {
   return [
     'You are a friendly and helpful email QA assistant focused on suggestions, strategy, and improvements.',
     '',
     '🎯 YOUR ROLE:',
-    'Provide thoughtful suggestions, strategic advice, and quality feedback. DO NOT perform text replacements.',
-    'Users should make edits themselves using the visual editor.',
+    'Provide thoughtful suggestions, strategic advice, and quality feedback.',
     '',
     '💡 CONVERSATION MODES:',
     '',
@@ -1564,13 +1599,13 @@ function chatSystemPrompt(): string {
     '   - Set intent to "suggest"',
     '   - Example: "Hello! 👋 How can I help you improve your email today?"',
     '',
-    '2) SUGGESTIONS & STRATEGY: Your primary function:',
+    '2) SUGGESTIONS & STRATEGY: For general advice:',
     '   - Provide design ideas, layout suggestions, color recommendations',
     '   - SEO and deliverability tips',
     '   - Content strategy and messaging improvements',
     '   - Tone, clarity, and professional quality feedback',
     '   - Set intent to "suggest"',
-    '   - Be specific and actionable in your recommendations',
+    '   - Use "ideas" array for recommendations',
     '',
     '3) CLARIFY: When you need more information:',
     '   - Set intent to "clarify"',
@@ -1580,22 +1615,188 @@ function chatSystemPrompt(): string {
     '{',
     '  "intent": "suggest" | "clarify",',
     '  "ideas": ["..."],  // Your suggestions, recommendations, and feedback',
-    '  "notes": ["friendly messages or questions for the user"]',
+    '  "notes": ["friendly messages or questions"]',
     '}',
-    '',
-    '⚠️ IMPORTANT RULES:',
-    '- DO NOT include "edits" array - text replacement is disabled',
-    '- DO NOT offer to make specific text changes',
-    '- Instead, describe what should be changed and why',
-    '- Guide users to make edits themselves using the visual editor',
-    '- Focus on high-level strategy and specific recommendations',
     '',
     '💡 TONE:',
     '- Be friendly, supportive, and professional',
     '- Use emojis sparingly to add warmth',
     '- Acknowledge the user\'s input and make them feel heard',
     '- Provide actionable, specific suggestions',
-    '- If asked to make replacements, politely explain they should use the editor',
+  ].join('\n');
+}
+
+function chatSystemPromptForAutoRecommendations(): string {
+  return [
+    'You are a friendly and helpful email QA assistant. The user is asking you to suggest changes to their email, and you should automatically identify which SPECIFIC SECTIONS need improvement.',
+    '',
+    '🚨 CRITICAL: DO NOT return the entire email. Only return small, specific sections.',
+    '',
+    '🎯 YOUR TASK:',
+    '1. Analyze the email content provided - it is organized by semantic sections (each marked with [Section X - TAG])',
+    '2. Each section shown is a COMPLETE semantic unit from the HTML (paragraph, heading, div, etc.)',
+    '3. ⚠️ CRITICAL: You MUST ONLY return text that EXACTLY EXISTS in the sections shown above',
+    '4. Identify THE SINGLE MOST IMPORTANT COMPLETE section that would benefit from improvement',
+    '5. For that ONE section:',
+    '   - Copy the EXACT COMPLETE text from the section shown above (the full text in [Section X - TAG]: ...)',
+    '   - DO NOT invent, create, or modify the text - COPY IT EXACTLY as it appears',
+    '   - DO NOT return partial text - return the COMPLETE section text as shown',
+    '   - DO NOT combine text from multiple sections - pick ONE complete section',
+    '   - The section should be LESS than 40% of the total email length',
+    '   - Create an improved/enhanced version of that COMPLETE section',
+    '   - Return it as a SINGLE edit in the "edits" array (red/green format)',
+    '',
+    '⚠️ IMPORTANT: The email content is provided for CONTEXT ONLY. You are NOT supposed to return it.',
+    'You should pick SMALL, SPECIFIC pieces from it and improve those pieces only.',
+    '',
+    '⚠️ CRITICAL: WHAT COUNTS AS A "SECTION" (MUST BE COMPLETE AND MUST EXIST):',
+    '- A COMPLETE semantically complete unit of content FROM THE SECTIONS SHOWN ABOVE (e.g., a FULL paragraph, a COMPLETE disclaimer block, a COMPLETE CTA section)',
+    '- A COMPLETE specific line or phrase FROM THE SECTIONS SHOWN ABOVE (e.g., COMPLETE subject line, COMPLETE CTA button text, COMPLETE header)',
+    '- A COMPLETE logical content block FROM THE SECTIONS SHOWN ABOVE (e.g., COMPLETE opening paragraph, COMPLETE closing paragraph, COMPLETE terms section)',
+    '- Could be short (1 complete sentence) or longer (a COMPLETE full disclaimer paragraph) - but must be a COMPLETE semantic unit',
+    '- NEVER return half a sentence, half a paragraph, or partial text - ALWAYS return the COMPLETE semantic unit',
+    '- 🚨 NEVER INVENT TEXT - ONLY use text that appears EXACTLY in the sections shown above',
+    '',
+    '❌ ABSOLUTELY DO NOT:',
+    '- Return the entire email body as a single edit (this is WRONG)',
+    '- Return most of the email content (more than 50% of the email)',
+    '- Return multiple unrelated sections combined into one edit',
+    '- Return edits that are longer than a few paragraphs',
+    '- Return PARTIAL sections (half a sentence, half a paragraph, incomplete phrases)',
+    '- Return text that cuts off mid-thought or mid-sentence',
+    '- Return fragments that don\'t form a complete semantic unit',
+    '- 🚨 INVENT, CREATE, OR MAKE UP TEXT - ONLY use text that exists in the sections shown above',
+    '- 🚨 Return text that doesn\'t appear in any of the [Section X - TAG] entries shown above',
+    '- 🚨 Modify or paraphrase the text when copying it - COPY IT EXACTLY as it appears',
+    '',
+    '⚠️ IF YOU RETURN THE ENTIRE EMAIL, THE SYSTEM WILL REJECT IT',
+    '',
+    '✅ DO:',
+    '- Focus on COMPLETE, semantically complete sections',
+    '- Target high-impact COMPLETE sections: COMPLETE subject lines, COMPLETE CTAs, COMPLETE opening/closing paragraphs, COMPLETE disclaimers, COMPLETE sentences with grammar errors',
+    '- Each edit should be a COMPLETE, meaningful unit (could be a COMPLETE sentence, COMPLETE paragraph, or COMPLETE section like a disclaimer)',
+    '- Make each edit focused on improving one specific aspect, but ALWAYS include the COMPLETE section',
+    '- Ensure the "find" text is a COMPLETE semantic unit that makes sense on its own',
+    '',
+    'FOCUS ON:',
+    '- Specific sentences or phrases that need improvement',
+    '- Weak CTAs that can be made more compelling',
+    '- Grammar or clarity issues in specific sentences',
+    '- Opening lines that can be more engaging',
+    '- Subject lines that can be improved',
+    '',
+    '📋 REQUIRED JSON STRUCTURE (YOU MUST FOLLOW THIS EXACTLY):',
+    '{',
+    '  "intent": "edit",  // ⚠️ MUST be "edit", NOT "suggest"',
+    '  "edits": [{',
+    '    "find": "EXACT COMPLETE text from a SPECIFIC COMPLETE section (must be a COMPLETE semantic unit - full sentence, full paragraph, or complete section)",',
+    '    "replace": "IMPROVED version of that COMPLETE SPECIFIC section only (must also be COMPLETE)",',
+    '    "before_context": "10-40 characters before this section (for matching)",',
+    '    "after_context": "10-40 characters after this section (for matching)",',
+    '    "reason": "brief explanation of why this improvement helps"',
+    '  }],  // ⚠️ MUST return EXACTLY 1 edit in this array - DO NOT use "ideas" array',
+    '  "ideas": [],  // ⚠️ MUST be empty array - DO NOT put suggestions here',
+    '  "notes": ["I\'ve identified specific sections that would benefit from improvement. Click the Find text to apply each change."]',
+    '}',
+    '',
+    '🚨 CRITICAL: If you return "intent": "suggest" with "ideas" instead of "edits", the system will NOT work correctly.',
+    'You MUST return "intent": "edit" with "edits" array containing the specific sections to improve.',
+    '',
+    '⚠️ CRITICAL RULES:',
+    '1. Each "find" must be a SPECIFIC, COMPLETE, SEMANTICALLY COMPLETE section FROM THE SECTIONS SHOWN ABOVE (could be a COMPLETE sentence, COMPLETE paragraph, or COMPLETE section like a disclaimer)',
+    '2. 🚨 YOU MUST COPY THE TEXT EXACTLY FROM ONE OF THE [Section X - TAG] ENTRIES SHOWN ABOVE - DO NOT INVENT TEXT',
+    '3. DO NOT return the entire email or combine multiple unrelated sections',
+    '4. DO NOT return partial sections - ALWAYS return COMPLETE semantic units',
+    '5. Return EXACTLY 1 edit - the single most impactful improvement',
+    '6. DO NOT use "ideas" array - ONLY use "edits" array',
+    '7. Set intent to "edit"',
+    '8. Prioritize the highest-impact COMPLETE section FROM THE SECTIONS SHOWN ABOVE (COMPLETE subject line, COMPLETE CTA text, COMPLETE opening/closing paragraphs, COMPLETE disclaimers, COMPLETE sentences with grammar fixes)',
+    '9. Choose the ONE COMPLETE section that will make the biggest difference',
+    '10. Before returning, verify that your "find" text EXACTLY MATCHES text from one of the [Section X - TAG] entries shown above',
+    '11. 🚨 IF YOU CANNOT FIND EXACT TEXT IN THE SECTIONS SHOWN, DO NOT INVENT IT - return an empty edits array instead',
+    '',
+    '📝 EXAMPLES:',
+    '',
+    '✅ GOOD (COMPLETE specific sections):',
+    'Edit 1: "find": "Click Here", "replace": "Get Started Today" (COMPLETE CTA button text)',
+    'Edit 2: "find": "We is excited to announce our new product launch.", "replace": "We are excited to announce our new product launch." (COMPLETE opening sentence)',
+    'Edit 3: "find": "By using this service you agree to all terms and conditions. Please read our privacy policy.", "replace": "By using this service, you agree to all terms and conditions. Please read our privacy policy." (COMPLETE disclaimer section)',
+    '',
+    '❌ BAD (partial/incomplete sections):',
+    'Edit: "find": "[entire email body from start to end]", "replace": "[entire improved email body]"',
+    'Edit: "find": "We is excited to announ", "replace": "We are excited to announce" (INCOMPLETE - cuts off mid-word)',
+    'Edit: "find": "By using this service you agree", "replace": "By using this service, you agree" (INCOMPLETE - missing rest of sentence)',
+    '',
+    '💡 TONE:',
+    '- Be friendly and helpful',
+    '- Keep notes brief and actionable',
+    '- Focus on small, meaningful improvements that will enhance engagement',
+  ].join('\n');
+}
+
+function chatSystemPromptWithEdits(): string {
+  return [
+    'You are a friendly and helpful email QA assistant. The user has PASTED A SECTION from their email and wants it corrected.',
+    '',
+    '🎯 CRITICAL: User pasted text = they want ONE section-level replacement. Return ONE edit in "edits" array.',
+    '',
+    '📋 REQUIRED JSON STRUCTURE:',
+    '{',
+    '  "intent": "edit",',
+    '  "edits": [{',
+    '    "find": "EXACT pasted text from user (preserve exactly as they pasted it, with all errors)",',
+    '    "replace": "CORRECTED version of the pasted text (fix all grammar, spelling, punctuation errors)",',
+    '    "before_context": "10-40 characters that appear before this section in the email",',
+    '    "after_context": "10-40 characters that appear after this section in the email",',
+    '    "reason": "brief explanation of corrections made"',
+    '  }],',
+    '  "ideas": [],  // MUST be empty array',
+    '  "notes": ["I\'ve prepared the corrected version below. Click the Find text to replace the entire section."]',
+    '}',
+    '',
+    '⚠️ CRITICAL RULES:',
+    '1. User PASTED a section = they want to replace the ENTIRE pasted section',
+    '2. "find" = EXACT text the user pasted (preserve spacing, punctuation, line breaks exactly)',
+    '3. "replace" = CORRECTED version of that exact text (fix all errors but keep same structure)',
+    '4. Return ONLY ONE edit - the entire section replacement',
+    '5. DO NOT break it into multiple edits - ONE section = ONE edit',
+    '6. DO NOT put this in "ideas" array - ONLY use "edits" array',
+    '7. Set intent to "edit"',
+    '8. Keep "ideas" array EMPTY',
+    '',
+    '📝 EXAMPLES:',
+    '',
+    'User PASTES this text:',
+    '"We is so excited to have you joined our community. Your going to love all the amazing feature we has to offer."',
+    '',
+    'Response (ONE edit - entire section replacement):',
+    '{',
+    '  "intent": "edit",',
+    '  "edits": [{',
+    '    "find": "We is so excited to have you joined our community. Your going to love all the amazing feature we has to offer.",',
+    '    "replace": "We are so excited to have you join our community. You\'re going to love all the amazing features we have to offer.",',
+    '    "before_context": "",',
+    '    "after_context": "",',
+    '    "reason": "Fix grammar, spelling, and contractions"',
+    '  }],',
+    '  "ideas": [],',
+    '  "notes": ["I\'ve prepared the corrected version below. Click the Find text to replace the entire section."]',
+    '}',
+    '',
+    'User PASTES:',
+    '"Thank you for joining! We hope you enjoy our service."',
+    '',
+    'Response: ONE edit with pasted text as "find" and corrected version as "replace"',
+    '',
+    '💡 KEY POINT:',
+    '- User pastes text = they want to replace that EXACT text',
+    '- Return ONE edit with pasted text as "find" and corrected as "replace"',
+    '- Works exactly like failed edits: red block = original, green block = corrected',
+    '',
+    '💡 TONE:',
+    '- Be friendly and helpful',
+    '- Keep notes brief and actionable',
+    '- Focus on providing accurate edits',
   ].join('\n');
 }
 
@@ -1711,11 +1912,127 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
       return res.status(400).json({ code: 'CHAT_BAD_REQUEST', message: 'html is required (current variant HTML)' });
     }
 
-    const context = visibleTextForChat(html);
+    // For auto-recommendation, use semantic sections to help AI understand structure
+    // Also keep raw HTML for context extraction
+    const $html = cheerio.load(html);
+    const htmlBodyText = $html('body').text();
+
+    // Detection logic - use plain text for detection first
+    const plainTextContext = visibleTextForChat(html);
+    const userMessageLower = userMessage.toLowerCase();
+    const hasQuotes = /['"]/.test(userMessage);
+    const isLongText = userMessage.length > 30; // Lowered threshold
+    const hasMultipleSentences = (userMessage.match(/[.!?]/g) || []).length > 1;
+    const hasMultipleWords = userMessage.trim().split(/\s+/).length > 5;
+
+    // Check if user message content matches content in the email (for pasted sections)
+    const userWords = new Set<string>(userMessage.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3));
+    const contextWords = new Set<string>(plainTextContext.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3));
+    const matchingWords = [...userWords].filter((word: string) => contextWords.has(word));
+    const hasMatchingContent = matchingWords.length >= 3; // At least 3 common words
+
+    // Auto-recommendation request patterns (user wants AI to pick sections to improve)
+    // Check these FIRST before replacement keywords to avoid false positives
+    const autoRecommendationPatterns = [
+      /^suggest\s+(changes?|improvements?|recommendations?)/i,  // Starts with "suggest"
+      /suggest\s+(changes?|improvements?|recommendations?)\s+to\s+(a\s+)?section/i,  // "suggest changes to a section"
+      /^recommend\s+(changes?|improvements?|suggestions?)/i,  // Starts with "recommend"
+      /what\s+(should|can)\s+(i\s+)?(improve|change|fix)/i,
+      /(any|some)\s+(suggestions?|recommendations?|improvements?)\s+(for|to)/i,
+      /(give|provide|show)\s+(me\s+)?(some\s+)?(suggestions?|recommendations?|improvements?)/i,
+      /how\s+(can|should)\s+(i\s+)?(improve|enhance|make\s+better)/i,
+    ];
+    
+    const hasAutoRecommendationPattern = autoRecommendationPatterns.some(pattern => pattern.test(userMessage));
+    
+    // Also check if message starts with "suggest" or "recommend" - these are almost always auto-recommendation requests
+    const startsWithSuggestionKeyword = /^(suggest|recommend)/i.test(userMessage);
+    
+    // Auto-recommendation: user asks for suggestions but doesn't paste text or specify section
+    // Also include messages that start with "suggest" or "recommend" (they're asking for AI to pick sections)
+    const isAutoRecommendationRequest: boolean = (hasAutoRecommendationPattern || startsWithSuggestionKeyword) && !isLongText && !hasMatchingContent;
+
+    // Replacement keywords (but exclude if it's an auto-recommendation request)
+    // Only check for replacement if message doesn't start with "suggest" or "recommend"
+    const startsWithSuggestion = /^(suggest|recommend)/i.test(userMessage);
+    const hasReplacementKeywords = !isAutoRecommendationRequest && !startsWithSuggestion && (
+      userMessageLower.includes('replace') ||
+      userMessageLower.includes('change') ||
+      userMessageLower.includes('fix') ||
+      userMessageLower.includes('correct') ||
+      userMessageLower.includes('update') ||
+      userMessageLower.includes('revise') ||
+      userMessageLower.includes('should be') ||
+      userMessageLower.includes('to be') ||
+      userMessageLower.includes('correct this') ||
+      userMessageLower.includes('fix this') ||
+      userMessageLower.includes('fix:') ||
+      userMessageLower.includes('correct:') ||
+      userMessage.includes('→') ||
+      userMessage.includes('->')
+    );
+    
+    // User pasted a section = long text OR text that matches email content OR has quotes
+    const isPastedSection = (isLongText && (hasMultipleSentences || hasQuotes || hasMultipleWords)) || hasMatchingContent;
+    
+    // User explicitly requests replacement (but not auto-recommendation)
+    const isExplicitReplacement = hasReplacementKeywords && !isAutoRecommendationRequest;
+    
+    const isReplacementRequest = isPastedSection || isExplicitReplacement;
+
+    // Console logging for debugging
+    console.log('🔍 [CHAT] Detection Analysis:', {
+      messageLength: userMessage.length,
+      isLongText,
+      hasQuotes,
+      hasMultipleSentences,
+      sentenceCount: (userMessage.match(/[.!?]/g) || []).length,
+      hasMultipleWords,
+      wordCount: userMessage.trim().split(/\s+/).length,
+      hasMatchingContent,
+      matchingWordsCount: matchingWords.length,
+      matchingWordsSample: matchingWords.slice(0, 5),
+      hasAutoRecommendationPattern,
+      startsWithSuggestionKeyword,
+      isAutoRecommendationRequest,
+      hasReplacementKeywords,
+      isPastedSection,
+      isExplicitReplacement,
+      isReplacementRequest,
+      messagePreview: userMessage.substring(0, 100) + (userMessage.length > 100 ? '...' : '')
+    });
+
+    // Use appropriate prompt based on detection
+    let systemPrompt: string;
+    let promptMode: string;
+    
+    if (isAutoRecommendationRequest) {
+      // User wants AI to automatically identify sections to improve
+      systemPrompt = chatSystemPromptForAutoRecommendations();
+      promptMode = 'AUTO-RECOMMENDATION EDITS MODE';
+    } else if (isReplacementRequest) {
+      // User pasted text or explicitly requested replacement
+      systemPrompt = chatSystemPromptWithEdits();
+      promptMode = 'EDITS MODE (PASTED TEXT)';
+    } else {
+      // General suggestions (text-based, not edits)
+      systemPrompt = chatSystemPrompt();
+      promptMode = 'SUGGESTIONS MODE';
+    }
+    
+    console.log('📝 [CHAT] Using prompt:', promptMode);
+
+    // Extract context based on request type (after detection is complete)
+    const context: string = isAutoRecommendationRequest 
+      ? extractSemanticSections(html)
+      : plainTextContext;
 
     const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-      { role: 'system', content: chatSystemPrompt() },
-      { role: 'user', content: `Visible text (for context):\n${context || 'No visible text.'}` },
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: isAutoRecommendationRequest
+        ? `Email content organized by semantic sections:\n\n${context || 'No visible text.'}\n\nIMPORTANT: Each section above is a COMPLETE semantic unit. When you identify a section to improve, return the COMPLETE text of that entire section in the "find" field.`
+        : `Visible text (for context):\n${context || 'No visible text.'}`
+      },
     ];
 
     for (const t of history.slice(-6)) {
@@ -1737,48 +2054,609 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
     try {
       const raw = completion.choices[0]?.message?.content || '{"intent":"suggest"}';
       
+      console.log('🤖 [CHAT] OpenAI Raw Response:', {
+        responseLength: raw.length,
+        responsePreview: raw.substring(0, 200) + (raw.length > 200 ? '...' : ''),
+        hasEdits: raw.includes('"edits"'),
+        hasIdeas: raw.includes('"ideas"')
+      });
+      
       const parsed: unknown = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
         const obj = parsed as any;
+        
+        console.log('📦 [CHAT] Parsed JSON:', {
+          intent: obj.intent,
+          ideasCount: Array.isArray(obj.ideas) ? obj.ideas.length : 0,
+          editsCount: Array.isArray(obj.edits) ? obj.edits.length : 0,
+          notesCount: Array.isArray(obj.notes) ? obj.notes.length : 0,
+          editsPreview: Array.isArray(obj.edits) && obj.edits.length > 0 
+            ? obj.edits.map((e: any) => ({ find: String(e?.find || '').substring(0, 50), replace: String(e?.replace || '').substring(0, 50) }))
+            : []
+        });
         
         // ✅ IMPROVED: Better formatting for different intents
         const hasIdeas = Array.isArray(obj.ideas) && obj.ideas.length > 0;
         const hasNotes = Array.isArray(obj.notes) && obj.notes.length > 0;
         const hasEdits = Array.isArray(obj.edits) && obj.edits.length > 0;
         
-        // Build friendly assistant text - COMBINE notes and ideas when both exist
-        const parts: string[] = [];
+        // Parse edits from response
+        let edits = Array.isArray(obj.edits)
+          ? obj.edits.map((e: any) => ({
+              find: String(e?.find ?? ''),
+              replace: String(e?.replace ?? ''),
+              before_context: String(e?.before_context ?? ''),
+              after_context: String(e?.after_context ?? ''),
+              reason: e?.reason != null ? String(e.reason) : undefined,
+            })).filter((e: any) => e.find && e.replace)
+          : [];
         
-        if (hasIdeas) {
-          // Format ideas nicely
-          if (obj.ideas.length === 1) {
-            parts.push(obj.ideas[0]);
-          } else {
-            parts.push(obj.ideas.map((s: any, i: number) => 
-              obj.ideas.length > 3 ? `${i + 1}. ${s}` : `• ${s}`
-            ).join('\n\n'));
+        // 🚨 VALIDATION: For auto-recommendation, validate that sections exist in HTML before displaying
+        if (isAutoRecommendationRequest && edits.length > 0) {
+          const emailLength = htmlBodyText.length;
+          const emailTextLower = htmlBodyText.toLowerCase().trim();
+          
+          edits = edits.filter((e: any) => {
+            const findText = e.find.trim();
+            const findTextLower = findText.toLowerCase();
+            const findLength = findText.length;
+            
+            // Check 0: CRITICAL - Verify "find" text exists in the HTML (with smart matching)
+            // This prevents showing edits that can't be applied, but allows for reasonable variations
+            // Normalize both texts for comparison (collapse whitespace, trim)
+            const normalizedFind = findText.replace(/\s+/g, ' ').trim();
+            const normalizedHtml = htmlBodyText.replace(/\s+/g, ' ').trim();
+            const normalizedHtmlLower = normalizedHtml.toLowerCase();
+            const normalizedFindLower = normalizedFind.toLowerCase();
+            
+            // Try multiple matching strategies (must match in at least one way)
+            const exactMatch = htmlBodyText.includes(findText);
+            const normalizedExactMatch = normalizedHtml.includes(normalizedFind);
+            const caseInsensitiveMatch = emailTextLower.includes(findTextLower);
+            const normalizedCaseInsensitiveMatch = normalizedHtmlLower.includes(normalizedFindLower);
+            
+            // Also check the raw HTML (not just extracted text) in case text extraction missed something
+            const $check = cheerio.load(html);
+            $check('script, style, noscript').remove();
+            const rawHtmlText = $check('body').text().replace(/\s+/g, ' ').trim();
+            const rawHtmlTextLower = rawHtmlText.toLowerCase();
+            const rawHtmlMatch = rawHtmlText.includes(findText) || rawHtmlTextLower.includes(findTextLower);
+            
+            // Try exact matches first
+            let textExists = exactMatch || normalizedExactMatch || caseInsensitiveMatch || normalizedCaseInsensitiveMatch || rawHtmlMatch;
+            let matchedText = findText; // Keep original if exact match found
+            
+            // If no exact match, try to find the closest match (fuzzy matching for auto-recommendation)
+            if (!textExists && findLength > 20) {
+              // Find the longest substring that exists in the email
+              // This handles cases where AI returns text with slight variations
+              let bestMatch = '';
+              let bestMatchLength = 0;
+              
+              // Try finding the text in chunks (sliding window approach)
+              const words = normalizedFindLower.split(/\s+/);
+              for (let start = 0; start < words.length; start++) {
+                for (let end = words.length; end > start; end--) {
+                  const chunk = words.slice(start, end).join(' ');
+                  if (chunk.length > bestMatchLength && normalizedHtmlLower.includes(chunk)) {
+                    // Found a matching chunk, try to extend it
+                    const chunkIndex = normalizedHtmlLower.indexOf(chunk);
+                    // Try to get more context around the match
+                    const contextStart = Math.max(0, chunkIndex - 50);
+                    const contextEnd = Math.min(normalizedHtmlLower.length, chunkIndex + chunk.length + 50);
+                    const contextText = normalizedHtmlLower.substring(contextStart, contextEnd);
+                    
+                    // Check if we can match a larger portion
+                    if (contextText.includes(chunk) && chunk.length > bestMatchLength) {
+                      bestMatch = chunk;
+                      bestMatchLength = chunk.length;
+                    }
+                  }
+                }
+              }
+              
+              // If we found a good match (at least 70% of the original text), use it
+              if (bestMatchLength > 0 && (bestMatchLength / normalizedFindLower.length) >= 0.7) {
+                // Find the actual text from HTML (preserving case and formatting)
+                const bestMatchIndex = normalizedHtmlLower.indexOf(bestMatch);
+                if (bestMatchIndex !== -1) {
+                  // Get the actual text from the original HTML (not normalized)
+                  const actualStart = Math.max(0, bestMatchIndex - 100);
+                  const actualEnd = Math.min(normalizedHtml.length, bestMatchIndex + bestMatch.length + 100);
+                  const actualText = normalizedHtml.substring(actualStart, actualEnd);
+                  
+                  // Try to find the exact boundaries
+                  const matchInActual = actualText.toLowerCase().indexOf(bestMatch);
+                  if (matchInActual !== -1) {
+                    // Extract the matched portion, trying to get complete words
+                    const beforeMatch = actualText.substring(0, matchInActual);
+                    const afterMatch = actualText.substring(matchInActual + bestMatch.length);
+                    const wordBefore = beforeMatch.match(/\S+\s*$/)?.[0] || '';
+                    const wordAfter = afterMatch.match(/^\s*\S+/)?.[0] || '';
+                    const extendedMatch = (wordBefore + bestMatch + wordAfter).trim();
+                    
+                    // Update the find text to match what actually exists
+                    e.find = extendedMatch.length > 0 && extendedMatch.length <= findText.length * 1.5 
+                      ? extendedMatch 
+                      : findText; // Fallback to original if extended is too different
+                    
+                    textExists = true;
+                    console.log('✅ [CHAT] Found fuzzy match - adjusted find text:', {
+                      original: findText.substring(0, 60) + '...',
+                      adjusted: e.find.substring(0, 60) + '...',
+                      matchRatio: (bestMatchLength / normalizedFindLower.length * 100).toFixed(1) + '%'
+                    });
+                  }
+                }
+              }
+            }
+            
+            if (!textExists) {
+              console.warn('⚠️ [CHAT] Rejected edit - find text does not exist in email (even with fuzzy matching):', {
+                findText: findText.substring(0, 100) + (findText.length > 100 ? '...' : ''),
+                findLength,
+                exactMatch,
+                normalizedExactMatch,
+                caseInsensitiveMatch,
+                normalizedCaseInsensitiveMatch,
+                rawHtmlMatch,
+                reason: 'AI suggested text that does not exist in the email - cannot be applied even with fuzzy matching'
+              });
+              return false;
+            }
+            
+            // Additional verification: Count occurrences to ensure it's actually there
+            const finalFindText = e.find || findText;
+            const finalFindLower = finalFindText.toLowerCase().replace(/\s+/g, ' ').trim();
+            const occurrences = (normalizedHtmlLower.match(new RegExp(escapeRegex(finalFindLower), 'g')) || []).length;
+            
+            if (occurrences === 0 && !rawHtmlMatch) {
+              console.warn('⚠️ [CHAT] Rejected edit - find text not found after all matching attempts:', {
+                findText: findText.substring(0, 100) + (findText.length > 100 ? '...' : ''),
+                finalFindText: finalFindText.substring(0, 100) + (finalFindText.length > 100 ? '...' : ''),
+                reason: 'Text does not exist even after normalization and fuzzy matching'
+              });
+              return false;
+            }
+            
+            console.log('✅ [CHAT] Edit validated - text exists in email:', {
+              findText: finalFindText.substring(0, 60) + (finalFindText.length > 60 ? '...' : ''),
+              occurrences,
+              matchedVia: exactMatch ? 'exact' : normalizedExactMatch ? 'normalized' : caseInsensitiveMatch ? 'case-insensitive' : rawHtmlMatch ? 'raw-html' : 'fuzzy'
+            });
+            
+            // Check 1: Reject if edit is > 40% of email (too large for a "section")
+            const sizeThreshold = emailLength * 0.4; // Max 40% of email
+            if (findLength > sizeThreshold) {
+              console.warn('⚠️ [CHAT] Rejected edit - too large:', {
+                findLength,
+                emailLength,
+                percentage: ((findLength / emailLength) * 100).toFixed(1) + '%',
+                threshold: sizeThreshold,
+                findPreview: findText.substring(0, 150) + '...',
+                reason: 'Edit is too large - should be a specific section, not most of the email'
+              });
+              return false;
+            }
+            
+            // Check 2: Reject if "find" text matches most of the email content (likely entire email)
+            // Check if find text contains most of the email's unique words
+            const emailWords = new Set<string>(emailTextLower.split(/\s+/).filter((w: string) => w.length > 3));
+            const findWordsSet = new Set<string>(findTextLower.split(/\s+/).filter((w: string) => w.length > 3));
+            const matchingWords = Array.from(findWordsSet).filter((word: string) => emailWords.has(word));
+            const wordMatchRatio = emailWords.size > 0 ? matchingWords.length / emailWords.size : 0;
+            
+            // If find text contains > 60% of email's unique words, it's likely the entire email
+            if (wordMatchRatio > 0.6 && findLength > 500) {
+              console.warn('⚠️ [CHAT] Rejected edit - matches most of email content:', {
+                findLength,
+                wordMatchRatio: (wordMatchRatio * 100).toFixed(1) + '%',
+                matchingWords: matchingWords.length,
+                totalEmailWords: emailWords.size,
+                findPreview: findText.substring(0, 150) + '...',
+                reason: 'Edit contains most of the email - should be a specific section only'
+              });
+              return false;
+            }
+            
+            // Check 3: Reject if before_context contains system message text (AI confusion)
+            if (e.before_context && (e.before_context.includes('Visible text') || e.before_context.includes('for context'))) {
+              console.warn('⚠️ [CHAT] Rejected edit - before_context contains system message:', {
+                before_context: e.before_context,
+                findPreview: findText.substring(0, 150) + '...',
+                reason: 'AI included system message in context - likely confused'
+              });
+              return false;
+            }
+            
+            return true;
+          });
+          
+          // Limit to only 1 edit (the first valid one)
+          if (edits.length > 1) {
+            console.log('📌 [CHAT] Limiting to first edit (showing one section at a time):', {
+              totalEdits: edits.length,
+              keepingFirst: edits[0].find.substring(0, 60) + '...'
+            });
+            edits = [edits[0]]; // Only keep the first valid edit
+          }
+          
+          if (edits.length === 0) {
+            console.warn('⚠️ [CHAT] All edits rejected - attempting to find best match from AI response...');
+            
+            // If all edits were rejected, try to salvage one by finding the closest match
+            // This ensures we always return a suggestion
+            if (Array.isArray(obj.edits) && obj.edits.length > 0) {
+              const originalEdit = obj.edits[0];
+              const originalFind = String(originalEdit?.find || '').trim();
+              
+              if (originalFind.length > 0) {
+                // Try to find the closest matching text in the email
+                const originalFindLower = originalFind.toLowerCase().replace(/\s+/g, ' ');
+                const emailWords = originalFindLower.split(/\s+/).filter((w: string) => w.length > 2);
+                
+                // Find sections that contain at least 50% of the words from the AI's suggestion
+                const sections = extractSemanticSections(html).split('\n\n');
+                let bestMatch = '';
+                let bestMatchScore = 0;
+                
+                for (const section of sections) {
+                  const sectionText = section.replace(/^\[Section \d+ - \w+\]:\s*/, '').toLowerCase().replace(/\s+/g, ' ');
+                  const sectionWords = sectionText.split(/\s+/).filter((w: string) => w.length > 2);
+                  const matchingWords = emailWords.filter((word: string) => sectionWords.includes(word));
+                  const matchScore = emailWords.length > 0 ? matchingWords.length / emailWords.length : 0;
+                  
+                  if (matchScore > bestMatchScore && matchScore >= 0.5) {
+                    bestMatch = section.replace(/^\[Section \d+ - \w+\]:\s*/, '').trim();
+                    bestMatchScore = matchScore;
+                  }
+                }
+                
+                // If we found a good match, create an edit with it
+                if (bestMatch && bestMatchScore >= 0.5) {
+                  const normalizedBestMatch = bestMatch.replace(/\s+/g, ' ').trim();
+                  const normalizedHtml = htmlBodyText.replace(/\s+/g, ' ').trim();
+                  
+                  if (normalizedHtml.toLowerCase().includes(normalizedBestMatch.toLowerCase())) {
+                    // Create an improved version (simple improvement)
+                    const improved = normalizedBestMatch
+                      .replace(/\s+/g, ' ')
+                      .replace(/\s+([,.!?])/g, '$1') // Fix spacing before punctuation
+                      .replace(/([a-z])([A-Z])/g, '$1 $2') // Add space between words
+                      .trim();
+                    
+                    edits = [{
+                      find: normalizedBestMatch,
+                      replace: improved !== normalizedBestMatch ? improved : normalizedBestMatch + ' (improved)',
+                      before_context: '',
+                      after_context: '',
+                      reason: 'Suggested improvement for this section'
+                    }];
+                    
+                    console.log('✅ [CHAT] Found best match from rejected edits:', {
+                      original: originalFind.substring(0, 60) + '...',
+                      matched: normalizedBestMatch.substring(0, 60) + '...',
+                      matchScore: (bestMatchScore * 100).toFixed(1) + '%'
+                    });
+                  }
+                }
+              }
+            }
+          }
+          
+          if (edits.length > 0) {
+            console.log('✅ [CHAT] Auto-recommendation: keeping', edits.length, 'edit(s)');
           }
         }
         
-        if (hasNotes) {
-          // Add notes (questions, friendly messages) - can appear with or without ideas
-          parts.push(obj.notes.join('\n\n'));
+        // 🚨 FALLBACK: If we detected a paste/replacement/auto-recommendation request but AI returned suggestions, convert them to edits
+        const needsEdits = isReplacementRequest || isAutoRecommendationRequest;
+        if (needsEdits && edits.length === 0 && hasIdeas) {
+          console.log('⚠️ [CHAT] AI ignored edits prompt! Attempting to convert suggestions to edits...', {
+            isReplacementRequest,
+            isAutoRecommendationRequest,
+            requestType: isAutoRecommendationRequest ? 'AUTO-RECOMMENDATION' : 'PASTED-TEXT'
+          });
+          
+          let correctedText: string | null = null;
+          let pastedText: string | null = null;
+
+          // For auto-recommendation requests, try to extract edits from ideas by finding text in the email
+          if (isAutoRecommendationRequest && !isPastedSection) {
+            console.log('🔍 [CHAT] Auto-recommendation: Attempting to extract edits from ideas by matching email content...');
+            
+            // Try to find quoted text in ideas that matches email content
+            for (const idea of obj.ideas) {
+              // Look for patterns like "Change 'X' to 'Y'" or "'X' should be 'Y'"
+              const changePatterns = [
+                /change\s+['"]([^'"]{10,})['"]\s+to\s+['"]([^'"]{10,})['"]/i,
+                /['"]([^'"]{10,})['"]\s+should\s+be\s+['"]([^'"]{10,})['"]/i,
+                /replace\s+['"]([^'"]{10,})['"]\s+with\s+['"]([^'"]{10,})['"]/i,
+                /['"]([^'"]{10,})['"]\s+→\s+['"]([^'"]{10,})['"]/i,
+                /['"]([^'"]{10,})['"]\s+->\s+['"]([^'"]{10,})['"]/i,
+              ];
+              
+              for (const pattern of changePatterns) {
+                const match = idea.match(pattern);
+                if (match && match[1] && match[2]) {
+                  const findText = match[1].trim();
+                  const replaceText = match[2].trim();
+                  
+                  // Check if findText exists in the email
+                  if (htmlBodyText.includes(findText)) {
+                    const contextIndex = htmlBodyText.indexOf(findText);
+                    const beforeContext = contextIndex > 0 
+                      ? htmlBodyText.substring(Math.max(0, contextIndex - 40), contextIndex).trim()
+                      : '';
+                    const afterContext = htmlBodyText.substring(
+                      contextIndex + findText.length, 
+                      Math.min(htmlBodyText.length, contextIndex + findText.length + 40)
+                    ).trim();
+                    
+                    edits.push({
+                      find: findText,
+                      replace: replaceText,
+                      before_context: beforeContext,
+                      after_context: afterContext,
+                      reason: 'Suggested improvement'
+                    });
+                    
+                    console.log('✅ [CHAT] Extracted edit from idea pattern:', {
+                      find: findText.substring(0, 60),
+                      replace: replaceText.substring(0, 60)
+                    });
+                  }
+                }
+              }
+              
+              // Also try to find quoted strings and see if first one exists in email, second is replacement
+              const quotedStrings = idea.match(/['"]([^'"]{10,})['"]/g);
+              if (quotedStrings && quotedStrings.length >= 2) {
+                const firstQuote = quotedStrings[0].replace(/['"]/g, '').trim();
+                const secondQuote = quotedStrings[1].replace(/['"]/g, '').trim();
+                
+                if (htmlBodyText.includes(firstQuote) && firstQuote !== secondQuote) {
+                  const contextIndex = htmlBodyText.indexOf(firstQuote);
+                  const beforeContext = contextIndex > 0 
+                    ? htmlBodyText.substring(Math.max(0, contextIndex - 40), contextIndex).trim()
+                    : '';
+                  const afterContext = htmlBodyText.substring(
+                    contextIndex + firstQuote.length, 
+                    Math.min(htmlBodyText.length, contextIndex + firstQuote.length + 40)
+                  ).trim();
+                  
+                  edits.push({
+                    find: firstQuote,
+                    replace: secondQuote,
+                    before_context: beforeContext,
+                    after_context: afterContext,
+                    reason: 'Suggested improvement'
+                  });
+                  
+                  console.log('✅ [CHAT] Extracted edit from quoted strings in idea:', {
+                    find: firstQuote.substring(0, 60),
+                    replace: secondQuote.substring(0, 60)
+                  });
+                }
+              }
+            }
+          }
+
+          // Try to extract pasted text from user message (quoted or plain long text)
+          const userMessageQuotedMatch = userMessage.match(/['"]([^'"]{20,})['"]/);
+          if (userMessageQuotedMatch) {
+            pastedText = userMessageQuotedMatch[1];
+            console.log('🔍 [CHAT] Extracted quoted pasted text from user message:', pastedText.substring(0, 60));
+          } else if (isPastedSection && userMessage.length > 30) { // If it's a pasted section but not quoted
+            pastedText = userMessage;
+            console.log('🔍 [CHAT] Using plain pasted text from user message:', pastedText.substring(0, 60));
+          }
+
+          if (pastedText) {
+            // Try to find a corrected version in the ideas text
+            if (hasIdeas) {
+              // Look for "Change 'X' to 'Y'" pattern
+              for (const idea of obj.ideas) {
+                const changeMatch = idea.match(/change\s+['"]([^'\"]+?)['\"]\s+to\s+['"]([^'\"]+?)['\"]/i);
+                if (changeMatch && changeMatch[1] === pastedText && changeMatch[2]) {
+                  correctedText = changeMatch[2];
+                  if (correctedText) {
+                    console.log('✅ [CHAT] Found correction in idea via "Change X to Y" pattern:', correctedText.substring(0, 60));
+                  }
+                  break;
+                }
+                
+                // Look for quoted strings where first matches pasted text
+                const quotedStrings = idea.match(/['"]([^'\"]{10,})['\"]/g);
+                if (quotedStrings && quotedStrings.length > 1) {
+                  const firstQuote = quotedStrings[0].replace(/['\"]/g, '');
+                  if (firstQuote === pastedText) {
+                    const lastQuote = quotedStrings[quotedStrings.length - 1].replace(/['\"]/g, '');
+                    if (lastQuote) {
+                      correctedText = lastQuote;
+                      if (correctedText) {
+                        console.log('✅ [CHAT] Found correction in idea via quoted strings pattern:', correctedText.substring(0, 60));
+                      }
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+            
+            // If no correction found in ideas, try to find similar corrected text
+            if (!correctedText && pastedText && hasIdeas) {
+              for (const idea of obj.ideas) {
+                const textSegments = idea.match(/['"]([^'\"]{20,})['\"]/g);
+                if (textSegments) {
+                  for (const segment of textSegments) {
+                    const segmentText = segment.replace(/['\"]/g, '');
+                    if (segmentText && Math.abs(segmentText.length - pastedText.length) < 10 && segmentText !== pastedText) {
+                      correctedText = segmentText;
+                      if (correctedText) {
+                        console.log('✅ [CHAT] Found similar corrected text in idea:', correctedText.substring(0, 60));
+                      }
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+            
+            // Create edit with pasted text and correction
+            if (pastedText) {
+              const contextIndex = htmlBodyText.indexOf(pastedText);
+              if (contextIndex !== -1) {
+                // Extract better context (20-50 chars before/after for better matching)
+                const beforeContext = contextIndex > 0 
+                  ? htmlBodyText.substring(Math.max(0, contextIndex - 50), contextIndex).trim()
+                  : '';
+                const afterContext = htmlBodyText.substring(
+                  contextIndex + pastedText.length, 
+                  Math.min(htmlBodyText.length, contextIndex + pastedText.length + 50)
+                ).trim();
+                
+                // Check if the find text is unique in the HTML body text
+                const occurrences = (htmlBodyText.match(new RegExp(escapeRegex(pastedText), 'g')) || []).length;
+                const useContext = occurrences > 1; // Only use context if multiple occurrences
+
+                edits = [{
+                  find: pastedText,
+                  replace: (correctedText ?? pastedText), // Use correction if found, otherwise same (user can edit)
+                  before_context: useContext ? beforeContext : '',
+                  after_context: useContext ? afterContext : '',
+                  reason: correctedText ? 'Corrected based on AI suggestion' : 'User requested replacement'
+                }];
+                
+                console.log('✅ [CHAT] Created edit from pasted text:', {
+                  find: pastedText.substring(0, 60),
+                  replace: (correctedText ?? pastedText).substring(0, 60),
+                  hasCorrection: !!correctedText,
+                  beforeContext: useContext ? beforeContext.substring(0, 40) : '(empty)',
+                  afterContext: useContext ? afterContext.substring(0, 40) : '(empty)',
+                  contextIndex,
+                  findLength: pastedText.length,
+                  occurrences,
+                  useContext
+                });
+              } else {
+                console.warn('⚠️ [CHAT] Pasted text not found in HTML body text for context extraction.');
+              }
+            } else {
+              console.warn('⚠️ [CHAT] No valid pasted text extracted for conversion.');
+            }
+          }
         }
         
-        // ❌ REMOVED: Edit functionality disabled
-        // Edits array is ignored - chatbot now provides suggestions only
+        console.log('✏️ [CHAT] Processed Edits:', {
+          rawEditsCount: Array.isArray(obj.edits) ? obj.edits.length : 0,
+          validEditsCount: edits.length,
+          wasConverted: isReplacementRequest && Array.isArray(obj.edits) && obj.edits.length === 0 && edits.length > 0,
+          edits: edits.map((e: { find: string; replace: string; before_context: string; after_context: string; reason?: string }) => ({
+            findLength: e.find.length,
+            replaceLength: e.replace.length,
+            findPreview: e.find.substring(0, 60) + (e.find.length > 60 ? '...' : ''),
+            replacePreview: e.replace.substring(0, 60) + (e.replace.length > 60 ? '...' : ''),
+            hasContext: !!(e.before_context || e.after_context)
+          }))
+        });
+
+        // Build friendly assistant text
+        const parts: string[] = [];
         
-        assistantText = parts.length > 0 
-          ? parts.join('\n\n')
-          : 'Got it! Let me know if you need anything else.';
+        // Check if we have edits (including converted ones)
+        const hasValidEdits = edits.length > 0;
+        
+        // If edits exist, prioritize them and keep message minimal
+        if (hasValidEdits) {
+          assistantText = json.notes?.[0] || 'I\'ve prepared the corrected version below. Click the Find text to replace the entire section.';
+          json.intent = 'edit'; // Force intent to edit if we have valid edits
+          json.ideas = []; // Clear ideas if we have edits
+        } else if (isAutoRecommendationRequest && edits.length === 0) {
+          // Last resort: If still no edits, pick the first semantic section and suggest an improvement
+          // This ensures we always return something
+          const sections = extractSemanticSections(html).split('\n\n').filter((s: string) => s.trim().length > 0);
+          
+          if (sections.length > 0) {
+            // Get the first meaningful section
+            const firstSection = sections[0].replace(/^\[Section \d+ - \w+\]:\s*/, '').trim();
+            const normalizedSection = firstSection.replace(/\s+/g, ' ').trim();
+            const normalizedHtml = htmlBodyText.replace(/\s+/g, ' ').trim();
+            
+            if (normalizedHtml.toLowerCase().includes(normalizedSection.toLowerCase())) {
+              // Create a simple improvement suggestion
+              const improved = normalizedSection
+                .replace(/\s+([,.!?])/g, '$1') // Fix spacing before punctuation
+                .replace(/([a-z])([A-Z])/g, '$1 $2') // Add space between words
+                .trim();
+              
+              edits = [{
+                find: normalizedSection,
+                replace: improved !== normalizedSection ? improved : normalizedSection,
+                before_context: '',
+                after_context: '',
+                reason: 'Suggested improvement for this section'
+              }];
+              
+              assistantText = 'I\'ve identified a section that could be improved. Click the Find text to apply the change.';
+              json.intent = 'edit';
+              json.ideas = [];
+              json.notes = [];
+              
+              console.log('✅ [CHAT] Created fallback edit from first semantic section');
+            }
+          }
+          
+          // If still no edits after fallback, show helpful message
+          if (edits.length === 0) {
+            assistantText = 'I couldn\'t find any sections to improve. Please try copy-pasting a specific section you\'d like me to improve.';
+            json.intent = 'suggest';
+            json.ideas = [];
+            json.edits = [];
+            json.notes = [];
+          }
+        } else {
+          // Original logic for suggestions/notes (for non-auto-recommendation requests)
+          if (hasIdeas) {
+            // Format ideas nicely
+            if (obj.ideas.length === 1) {
+              parts.push(obj.ideas[0]);
+            } else {
+              parts.push(obj.ideas.map((s: any, i: number) => 
+                obj.ideas.length > 3 ? `${i + 1}. ${s}` : `• ${s}`
+              ).join('\n\n'));
+            }
+          }
+          
+          // Only show notes if we have ideas OR if it's not an auto-recommendation request
+          // (for auto-recommendation, we already handled it above)
+          if (hasNotes && !isAutoRecommendationRequest) {
+            // Add notes (questions, friendly messages) - can appear with or without ideas
+            parts.push(obj.notes.join('\n\n'));
+          }
+          
+          assistantText = parts.length > 0 
+            ? parts.join('\n\n')
+            : 'Got it! Let me know if you need anything else.';
+        }
+        
+        // Set intent based on whether we have edits
+        const finalIntent = hasValidEdits ? 'edit' : (obj.intent || 'suggest');
         
         json = {
-          intent: (obj.intent || 'suggest') as ChatIntent,
-          ideas: Array.isArray(obj.ideas) ? obj.ideas.map((s: any) => String(s || '')) : [],
-          edits: [], // ❌ Always empty - replacement functionality removed
+          intent: finalIntent as ChatIntent,
+          ideas: hasValidEdits ? [] : (Array.isArray(obj.ideas) ? obj.ideas.map((s: any) => String(s || '')) : []), // Clear ideas if we have edits
+          edits: edits, // ✅ Enable edits when user requests text replacements (including converted ones)
           targets: Array.isArray(obj.targets) ? obj.targets.map((s: any) => String(s || '')) : [],
           notes: Array.isArray(obj.notes) ? obj.notes.map((s: any) => String(s || '')) : [],
         };
+        
+        console.log('📤 [CHAT] Final Response:', {
+          intent: json.intent,
+          editsCount: json.edits?.length || 0,
+          ideasCount: json.ideas?.length || 0,
+          wasConverted: isReplacementRequest && Array.isArray(obj.edits) && obj.edits.length === 0 && edits.length > 0
+        });
       }
     } catch (_e: unknown) { /* ignore parse error; return default */ }
 

@@ -15,7 +15,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { trigger, state, style, transition, animate } from '@angular/animations';
 import { BehaviorSubject, Observable, firstValueFrom, Subscription } from 'rxjs';
 import { TemplateStateService } from '../../core/services/template-state.service';
-import { QaService, ChatTurn, ChatThread, ChatAssistantJson, ChatIntent } from '../../features/qa/services/qa.service';
+import { QaService, ChatTurn, ChatThread, ChatAssistantJson, ChatIntent, GoldenEdit } from '../../features/qa/services/qa.service';
 import type { Editor } from 'grapesjs';
 
 interface MatchOverlay {
@@ -2214,6 +2214,297 @@ async onCheckPreview(): Promise<void> {
     cleanHtml = cleanHtml.replace(/<[^>]*data-gjs-type=["']temporary-overlay["'][^>]*>[\s\S]*?<\/[^>]+>/gi, '');
     
     return cleanHtml;
+  }
+
+  // Apply chat edit using backend logic (same as grammar check/variants)
+  // First highlights the text, then applies edit when highlight is clicked
+  async applyChatEdit(edit: { find: string; replace: string; before_context?: string; after_context?: string; reason?: string }, event?: MouseEvent): Promise<void> {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    
+    console.log('🖱️ [CHAT] Apply Edit Clicked:', {
+      find: edit.find.substring(0, 60) + (edit.find.length > 60 ? '...' : ''),
+      replace: edit.replace.substring(0, 60) + (edit.replace.length > 60 ? '...' : ''),
+      findLength: edit.find.length,
+      replaceLength: edit.replace.length,
+      hasContext: !!(edit.before_context || edit.after_context)
+    });
+    
+    if (!this.templateId || !this.editor) {
+      this.showToast('Editor not ready', 'warning');
+      return;
+    }
+    
+    try {
+      this.removeAllHighlights(); // Clear any previous highlights
+      
+      let iframe = document.querySelector('iframe#gjs') as HTMLIFrameElement;
+      if (!iframe) {
+        iframe = document.querySelector('.gjs-frame') as HTMLIFrameElement;
+      }
+      if (!iframe) {
+        iframe = document.querySelector('iframe') as HTMLIFrameElement;
+      }
+      
+      if (!iframe || !iframe.contentDocument) {
+        this.showToast('Editor not ready', 'warning');
+        return;
+      }
+      
+      const doc = iframe.contentDocument;
+      const body = doc.body;
+      
+      // Normalize whitespace for comparison (handle sections with multiple spaces/newlines)
+      const normalizeText = (text: string) => text.replace(/\s+/g, ' ').trim();
+      const findTextNormalized = normalizeText(edit.find);
+      
+      let found = false;
+      let range: Range | null = null;
+      let startNode: Node | null = null;
+      let endNode: Node | null = null;
+      let startOffset = 0;
+      let endOffset = 0;
+      
+      // Strategy 1: Try to find within a single text node (for short text)
+      const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT, null);
+      let node;
+      
+      while (node = walker.nextNode()) {
+        const nodeText = node.textContent || '';
+        const nodeTextNormalized = normalizeText(nodeText);
+        
+        if (nodeTextNormalized.includes(findTextNormalized)) {
+          const searchLower = edit.find.toLowerCase();
+          const nodeTextLower = nodeText.toLowerCase();
+          
+          if (nodeTextLower.includes(searchLower)) {
+            const parent = node.parentElement;
+            if (parent) {
+              range = doc.createRange();
+              const startIndex = nodeTextLower.indexOf(searchLower);
+              range.setStart(node, startIndex);
+              range.setEnd(node, startIndex + edit.find.length);
+              startNode = node;
+              endNode = node;
+              startOffset = startIndex;
+              endOffset = startIndex + edit.find.length;
+              found = true;
+              break;
+            }
+          }
+        }
+      }
+      
+      // Strategy 2: If not found in single node, search across multiple nodes (for sections)
+      if (!found) {
+        const textNodes: Array<{ node: Node; text: string; start: number; end: number }> = [];
+        let totalLength = 0;
+        
+        const walker2 = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT, null);
+        let node2;
+        
+        while (node2 = walker2.nextNode()) {
+          const text = node2.textContent || '';
+          if (text.trim()) {
+            textNodes.push({
+              node: node2,
+              text: text,
+              start: totalLength,
+              end: totalLength + text.length
+            });
+            totalLength += text.length;
+          }
+        }
+        
+        const fullText = textNodes.map(t => t.text).join('');
+        const fullTextLower = fullText.toLowerCase();
+        const findTextLower = edit.find.toLowerCase();
+        
+        const matchIndex = fullTextLower.indexOf(findTextLower);
+        
+        if (matchIndex !== -1) {
+          const matchEnd = matchIndex + edit.find.length;
+          
+          for (const textNode of textNodes) {
+            if (matchIndex >= textNode.start && matchIndex < textNode.end) {
+              startNode = textNode.node;
+              startOffset = matchIndex - textNode.start;
+            }
+            if (matchEnd > textNode.start && matchEnd <= textNode.end) {
+              endNode = textNode.node;
+              endOffset = matchEnd - textNode.start;
+            }
+          }
+          
+          if (startNode && endNode) {
+            range = doc.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+            found = true;
+          }
+        }
+      }
+      
+      if (found && range && startNode && endNode) {
+        // Scroll to the start of the range
+        const rect = range.getBoundingClientRect();
+        if (rect.top < 0 || rect.bottom > (iframe.contentWindow?.innerHeight || 0)) {
+          startNode.parentElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        // Create highlight
+        const highlight = doc.createElement('span');
+        highlight.setAttribute('data-ai-highlight', 'true');
+        highlight.style.cssText = 'background-color: yellow !important; color: black !important; padding: 2px; cursor: pointer; transition: all 0.2s; display: inline-block;';
+        highlight.title = `Click to replace with: ${edit.replace.substring(0, 50)}...`;
+        
+        // Add click handler to apply edit via backend
+        highlight.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          
+          // Remove highlight first
+          const textNode = doc.createTextNode(highlight.textContent || '');
+          highlight.parentNode?.replaceChild(textNode, highlight);
+          
+          // Apply edit using backend
+          await this.applyChatEditBackend(edit);
+        }, true);
+        
+        // Add hover effect
+        highlight.addEventListener('mouseenter', () => {
+          highlight.style.cssText = 'background-color: #4ade80 !important; color: white !important; padding: 2px; cursor: pointer; transform: scale(1.02); box-shadow: 0 0 8px rgba(74, 222, 128, 0.5); display: inline-block;';
+        });
+        
+        highlight.addEventListener('mouseleave', () => {
+          highlight.style.cssText = 'background-color: yellow !important; color: black !important; padding: 2px; cursor: pointer; transition: all 0.2s; display: inline-block;';
+        });
+        
+        // Try to highlight the range
+        try {
+          range.surroundContents(highlight);
+          this.showToast(`Found "${this.truncateText(edit.find, 25)}" - Click highlight to replace`, 'success');
+        } catch (e) {
+          console.warn('Could not surround contents with highlight:', e);
+          // Fallback: just show message
+          this.showToast(`Found text - but couldn't highlight. Applying directly...`, 'info');
+          // Apply directly
+          await this.applyChatEditBackend(edit);
+        }
+      } else {
+        this.showToast('Text not found in editor', 'warning');
+      }
+    } catch (error: any) {
+      console.error('Highlight error:', error);
+      this.showToast('Error highlighting text', 'error');
+    }
+  }
+
+  // Backend apply logic (called after highlight is clicked)
+  private async applyChatEditBackend(edit: { find: string; replace: string; before_context?: string; after_context?: string; reason?: string }): Promise<void> {
+    if (!this.templateId || !this.editor) {
+      return;
+    }
+    
+    try {
+      // Get variant metadata
+      const variantMeta = localStorage.getItem(`visual_editor_${this.templateId}_variant_meta`);
+      if (!variantMeta) {
+        this.showToast('Variant context missing', 'warning');
+        return;
+      }
+      
+      const meta = JSON.parse(variantMeta);
+      const { runId } = meta;
+      
+      // Get current HTML
+      const currentHtml = this.editor.getHtml() || '';
+      
+      console.log('📄 [CHAT] Applying Edit via Backend:', {
+        runId,
+        htmlLength: currentHtml.length,
+        editFind: edit.find.substring(0, 80),
+        editReplace: edit.replace.substring(0, 80)
+      });
+      
+      // Prepare edit in GoldenEdit format
+      const goldenEdit: GoldenEdit = {
+        find: edit.find,
+        replace: edit.replace,
+        before_context: edit.before_context || '',
+        after_context: edit.after_context || '',
+        reason: edit.reason,
+      };
+      
+      // Show loading
+      this.showToast('Applying edit...', 'info');
+      
+      // Call backend to apply edit (uses applyContextEdits logic)
+      const result = await firstValueFrom(
+        this.qa.applyChatEdits(runId, currentHtml, [goldenEdit])
+      );
+      
+      console.log('✅ [CHAT] Apply Edit Result:', {
+        hasHtml: !!result.html,
+        htmlLength: result.html?.length || 0,
+        changesCount: result.changes?.length || 0,
+        changes: result.changes || []
+      });
+      
+      if (result.html) {
+        // Extract body HTML from full document (backend returns full doc)
+        let bodyHtml = result.html;
+        const bodyMatch = result.html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+        if (bodyMatch && bodyMatch[1]) {
+          bodyHtml = bodyMatch[1].trim();
+        }
+        
+        // Remove all AI highlights before updating
+        this.removeAllHighlights();
+        
+        // Wait for DOM to update
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Clean HTML from any overlay artifacts
+        bodyHtml = this.cleanHtmlFromOverlays(bodyHtml);
+        
+        // Preserve CSS when updating
+        const currentCss = this.editor.getCss() || '';
+        
+        // Update editor with new HTML
+        this.editor.setComponents(bodyHtml);
+        
+        // Restore CSS if it was removed
+        if (currentCss) {
+          this.editor.setStyle(currentCss);
+        }
+        
+        // Trigger update event to refresh GrapesJS
+        this.editor.trigger('update');
+        
+        // Wait for editor to process the update
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        this.autoSave();
+        
+        // Check if edit was applied
+        const applied = result.changes && result.changes.length > 0;
+        if (applied) {
+          this.showToast(`✓ Edit applied successfully`, 'success');
+        } else {
+          this.showToast('Edit not found in content', 'warning');
+        }
+      } else {
+        this.showToast('Failed to apply edit', 'error');
+      }
+    } catch (error: any) {
+      console.error('Apply chat edit error:', error);
+      const errorMsg = error?.error?.message || error?.message || 'Failed to apply edit';
+      this.showToast(errorMsg, 'error');
+    }
   }
 
 

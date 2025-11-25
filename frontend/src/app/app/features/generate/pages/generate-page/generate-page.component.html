@@ -63,22 +63,20 @@
     <!-- Image Gallery (when generationType is 'image') -->
     <app-template-preview-panel
       *ngIf="generationType === 'image'"
-      [html]="imageGalleryHtml || imagePlaceholderHtml"
+      [html]="imageGalleryHtml || ''"
       [loading]="isGeneratingImage"
-      [showHeader]="false"
+      [showHeader]="true"
       [allowRefresh]="false"
       [allowFullscreen]="true"
       [allowViewModes]="true"
-      [showGenerateActions]="false"
-      [isGeneratePage]="false">
+      [showGenerateActions]="true"
+      [isGeneratePage]="true"
+      [headerTitle]="'Generated Banner'"
+      [saveActionLabel]="'Save Image'"
+      [(templateName)]="templateName"
+      (saveTemplate)="openSaveImageDialog()"
+      (runTests)="onRunTests()">
     </app-template-preview-panel>
-    <!-- Save image action shown when images are present -->
-    <div class="image-save-actions" *ngIf="generationType === 'image' && (generatedImages && generatedImages.length > 0)" style="margin:12px 0;display:flex;gap:8px;justify-content:center">
-      <button mat-stroked-button color="primary" (click)="openSaveImageDialog()">
-        <mat-icon>save</mat-icon>
-        Save Image
-      </button>
-    </div>
   </div>
 </section>
 
