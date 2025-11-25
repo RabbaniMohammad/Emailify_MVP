@@ -1,5 +1,6 @@
 import { Component, Inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -8,7 +9,11 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatListModule } from '@angular/material/list';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { OptInPolicyDialogComponent } from '../opt-in-policy-dialog/opt-in-policy-dialog.component';
 import { CampaignService } from '../../../../core/services/campaign.service';
 import { OrganizationService } from '../../../../core/services/organization.service';
 import { ScheduleEmailDialogComponent } from '../schedule-email-dialog/schedule-email-dialog.component';
@@ -17,6 +22,7 @@ interface ValidationData {
   csvFile: File;
   organizationId: string;
   organizationName?: string;
+  uploadId?: string;
 }
 
 interface ValidationResult {
@@ -36,6 +42,11 @@ interface ValidationResult {
     totalInCsv: number;
     totalInMailchimp: number;
   };
+  // Optional Instagram info (added by backend)
+  instagramHandles?: string[];
+  instagramSummary?: {
+    total: number;
+  };
 }
 
 interface ScheduledEmail {
@@ -49,6 +60,7 @@ interface ScheduledEmail {
   standalone: true,
   imports: [
     CommonModule,
+  FormsModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -57,6 +69,7 @@ interface ScheduledEmail {
     MatListModule,
     MatTabsModule,
     MatTooltipModule
+  ,MatCheckboxModule, MatFormFieldModule, MatInputModule
   ],
   templateUrl: './audience-validation-dialog.component.html',
   styleUrls: ['./audience-validation-dialog.component.scss']
@@ -67,6 +80,28 @@ export class AudienceValidationDialogComponent implements OnInit {
   error: string | null = null;
   addingSubscribers = false;
   addingToMaster = false;
+  consentSubmitted = false;
+  savedConsentRecord: any = null;
+
+  // Consent form state
+  consent: any = {
+    sms_optin: false,
+    whatsapp_optin: false,
+    instagram_optin: false,
+    email_optin: false,
+    understand: false,
+    proof_file: null,
+    proof_page_url: '',
+    description: '',
+  };
+
+  get consentComplete(): boolean {
+    return !!this.consent.sms_optin && !!this.consent.whatsapp_optin && !!this.consent.instagram_optin && !!this.consent.email_optin && !!this.consent.understand && !!this.consent.proof_file;
+  }
+
+  get canProceed(): boolean {
+    return !this.loading && this.consentComplete;
+  }
 
   // Track emails added to master document with schedule info
   addedToMaster: Set<string> = new Set();
@@ -91,16 +126,15 @@ export class AudienceValidationDialogComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.validateAudience();
+    // Do not auto-validate CSV here. Consent must be captured first by the client
+    this.loading = false;
   }
 
   validateAudience(): void {
     this.loading = true;
     this.error = null;
-
     const formData = new FormData();
     formData.append('csvFile', this.data.csvFile);
-
     this.campaignService.validateAudience(formData).subscribe({
       next: (result: any) => {
         console.log('✅ Validation result:', result);
@@ -245,6 +279,12 @@ export class AudienceValidationDialogComponent implements OnInit {
     });
   }
 
+  onProofFileChange(ev: Event): void {
+    const input = ev.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    this.consent.proof_file = input.files[0];
+  }
+
   addExcludedToMaster(email: string): void {
     if (this.addedToMaster.has(email)) {
       // Already added, remove it (toggle off)
@@ -307,12 +347,80 @@ export class AudienceValidationDialogComponent implements OnInit {
   }
 
   proceed(): void {
-    // Close dialog and pass validation result + added emails + scheduled emails back
-    this.dialogRef.close({
-      validated: true,
-      result: this.validationResult,
-      addedToMaster: Array.from(this.addedToMaster),
-      scheduledEmails: Array.from(this.scheduledEmails.values())
+    // Two-step proceed logic:
+    // - If consent not yet submitted: open policy dialog, submit consent, and then validate CSV in-place.
+    // - If consent already submitted and we have validation results: final confirmation -> close and return results to caller.
+
+    // Finalize and return if we already validated
+    if (this.consentSubmitted && this.validationResult) {
+      // Return the validation result and any additions the user made in-dialog
+      const addedToMaster = Array.from(this.addedToMaster);
+      const scheduledEmails = Array.from(this.scheduledEmails.values());
+      this.dialogRef.close({ validated: true, consentRecord: this.savedConsentRecord, result: this.validationResult, addedToMaster, scheduledEmails });
+      return;
+    }
+
+    // Ensure all required checkboxes + proof are present before opening policy
+    if (!this.consentComplete) {
+      this.snackBar.open('Please complete all required confirmations and upload proof before continuing.', 'Close', { duration: 5000, panelClass: ['error-snackbar'] });
+      return;
+    }
+
+    const policyRef = this.dialog.open(OptInPolicyDialogComponent, {
+      width: '900px',
+      maxWidth: '95vw',
+      disableClose: true
+    });
+
+    policyRef.afterClosed().subscribe((accepted: boolean) => {
+      if (!accepted) {
+        this.snackBar.open('You must agree to the Messaging & Opt-In Policy to proceed.', 'Close', { duration: 5000, panelClass: ['error-snackbar'] });
+        return;
+      }
+
+      // Submit consent to backend (will store proof_file if provided)
+      const formData = new FormData();
+      formData.append('sms_optin', String(this.consent.sms_optin));
+      formData.append('whatsapp_optin', String(this.consent.whatsapp_optin));
+      formData.append('instagram_optin', String(this.consent.instagram_optin));
+      formData.append('email_optin', String(this.consent.email_optin));
+      formData.append('proof_page_url', this.consent.proof_page_url || '');
+      formData.append('description', this.consent.description || '');
+      // include client-provided upload id if available
+      formData.append('uploadId', ((this.data as any)?.uploadId) || '');
+      if (this.consent.proof_file) {
+        formData.append('proof_file', this.consent.proof_file);
+      }
+
+      this.loading = true;
+      this.campaignService.submitUploadConsent(formData).subscribe({
+        next: (resp: any) => {
+          this.loading = false;
+          this.consentSubmitted = true;
+          this.savedConsentRecord = resp.record;
+
+          // After consent is saved and linked server-side, persist parsed master document to UploadMaster
+          // so the audit chain is complete, then run audience validation to show reconciliation results.
+          this.loading = true;
+          this.campaignService.uploadMasterDocument(this.data.csvFile, (this.data as any)?.uploadId).subscribe({
+            next: (parsed: any) => {
+              // Parsed master persisted to UploadMaster on the server
+              // Now run validation to compute new/existing/excluded lists
+              this.validateAudience();
+            },
+            error: (err: any) => {
+              console.error('Failed to persist master document after consent:', err);
+              this.loading = false;
+              this.snackBar.open('Failed to parse and save the uploaded file. Please try again.', 'Close', { duration: 7000, panelClass: ['error-snackbar'] });
+            }
+          });
+        },
+        error: (err: any) => {
+          console.error('Failed to submit consent:', err);
+          this.loading = false;
+          this.snackBar.open('Failed to save consent. Please try again.', 'Close', { duration: 5000, panelClass: ['error-snackbar'] });
+        }
+      });
     });
   }
 

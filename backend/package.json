@@ -12,7 +12,9 @@
     "test": "NODE_ENV=test vitest",
     "type-check": "tsc --noEmit",
     "cleanup:users": "ts-node -r tsconfig-paths/register scripts/cleanup-duplicate-users.ts",
-    "verify:org": "ts-node -r tsconfig-paths/register scripts/verify-organization-data.ts"
+    "verify:org": "ts-node -r tsconfig-paths/register scripts/verify-organization-data.ts",
+    "print:uploads": "node ./scripts/print_upload_docs.js",
+    "backfill:uploads": "node ./scripts/backfill_upload_master_from_consent.js"
   },
   "engines": {
     "node": ">=16.0.0"

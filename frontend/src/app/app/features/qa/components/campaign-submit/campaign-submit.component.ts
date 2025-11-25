@@ -29,6 +29,16 @@ import { FormsModule } from '@angular/forms';
 
 type LoadingState = 'idle' | 'loading' | 'success' | 'error';
 
+// Local aliases: augment shared types with component-specific shapes
+type MasterRow = MasterDocRow & { instagram_handle?: string };
+type SelectedChannels = { email: boolean; sms: boolean; whatsapp: boolean; instagram: boolean };
+type RecipientStats = { email: number; sms: number; whatsapp: number; instagram: number };
+type AiPreview = {
+  sms?: { text?: string; lineCount?: number };
+  whatsapp?: { text?: string; lineCount?: number };
+  instagram?: { text?: string; lineCount?: number; imageUrl?: string };
+};
+
 @Component({
   selector: 'app-campaign-submit',
   standalone: true,
@@ -105,7 +115,7 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
   // Data
   audiences: MailchimpAudience[] = [];
   selectedAudience: MailchimpAudience | null = null;
-  masterData: MasterDocRow[] = [];
+  masterData: MasterRow[] = [];
   reconciliation: AudienceReconciliation | null = null;
   scheduleGroups: ScheduleGroup[] = [];
   testEmails: string[] = [];
@@ -126,30 +136,25 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
   // File upload
   uploadedFileName: string = '';
 
-  // ✅ Multi-Channel Support
-  selectedChannels: {
-    email: boolean;
-    sms: boolean;
-    whatsapp: boolean;
-  } = {
-      email: true,  // Default to email
-      sms: false,
-      whatsapp: false
-    };
+  // ✅ Multi-Channel Support - explicit shapes so Angular templates can use dot access
+  selectedChannels: SelectedChannels = {
+    email: true, // Default to email
+    sms: false,
+    whatsapp: false,
+    instagram: false
+  };
 
-  recipientStats = {
+  recipientStats: RecipientStats = {
     email: 0,
     sms: 0,
-    whatsapp: 0
+    whatsapp: 0,
+    instagram: 0
   };
 
   // AI Preview
   aiPreviewLoading = false;
-  aiPreview: {
-    sms?: { text: string; lineCount: number };
-    whatsapp?: { text: string; lineCount: number };
-    instagram?: { text: string; lineCount: number };
-  } | null = null;
+  // Make aiPreview permissive but typed so template checks for imageUrl, text etc.
+  aiPreview: AiPreview | null = null;
 
   get isAnyLoading(): boolean {
     return (
@@ -843,14 +848,19 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
         return;
       }
 
-      // Open validation dialog
+      // Create upload record first to get uploadId (no parsing yet) so consent can be linked
+      const uploadResp = await firstValueFrom(this.campaignService.createUploadDocument(file));
+      const uploadId = uploadResp?.uploadId;
+
+      // Open validation dialog and pass uploadId so consent submission can link to this upload
       const dialogRef = this.dialog.open(AudienceValidationDialogComponent, {
         width: '1000px',
         maxWidth: '95vw',
         data: {
           csvFile: file,
           organizationId: organizationId,
-          organizationName: organizationName
+          organizationName: organizationName,
+          uploadId: uploadId
         },
         disableClose: true
       });
@@ -879,10 +889,48 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
       console.log(`  - Ignored: ${this.ignoredEmails.length}`);
 
       // Continue with the normal upload flow
-      const data = await firstValueFrom(
-        this.campaignService.uploadMasterDocument(file)
-      );
+      // Prefer parsed/master data returned by the Audience Validation dialog (it now persists the master
+      // inside the dialog after consent). Fall back to calling uploadMasterDocument only if the dialog did
+      // not return parsed data.
+      let data: any[];
+      if (result?.masterData && Array.isArray(result.masterData)) {
+        data = result.masterData;
+      } else if (result?.parsedMaster && Array.isArray(result.parsedMaster)) {
+        data = result.parsedMaster;
+      } else if (result?.uploadMasterData && Array.isArray(result.uploadMasterData)) {
+        data = result.uploadMasterData;
+      } else {
+        data = await firstValueFrom(
+          this.campaignService.uploadMasterDocument(file, uploadId)
+        );
+      }
 
+      // If validation dialog reported instagram handles but the uploaded master document
+      // doesn't include them (some CSV flows may only surface them in validation),
+      // merge them into the master data so recipientStats picks them up.
+      if (validationResult && validationResult.instagramHandles && validationResult.instagramHandles.length > 0) {
+        const existingHandles = new Set<string>();
+        data.forEach((r: any) => {
+          const h = (((r as any).instagram_handle) || '').trim().replace(/^@/, '').toLowerCase();
+          if (h) existingHandles.add(h);
+        });
+
+        validationResult.instagramHandles.forEach((h: string) => {
+          const normalized = (h || '').trim().replace(/^@/, '').toLowerCase();
+          if (!normalized) return;
+          if (!existingHandles.has(normalized)) {
+            data.push({
+              audiences_list: '',
+              phone: '',
+              instagram_handle: normalized,
+              scheduled_time: '',
+              test_emails: '',
+              timezone: ''
+            } as any);
+            existingHandles.add(normalized);
+          }
+        });
+      }
       // Merge added emails into master data
       if (addedToMaster.length > 0) {
         const scheduledEmailsMap = new Map(scheduledEmails.map(s => [s.email, s]));
@@ -1093,8 +1141,7 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     // Check if any multi-channel selected
-    const isMultiChannel = this.selectedChannels.sms || this.selectedChannels.whatsapp;
-
+    const isMultiChannel = this.selectedChannels.sms || this.selectedChannels.whatsapp || this.selectedChannels.instagram;
     if (isMultiChannel) {
       // ✅ Multi-channel submission
       return this.submitMultiChannelCampaign();
@@ -1170,6 +1217,15 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
           .filter(row => row.phone?.trim())
           .map(row => ({
             phone: row.phone!.trim(),
+            name: row.audiences_list?.split('@')[0] || 'Customer'
+          }));
+      }
+
+      if (this.selectedChannels.instagram) {
+        recipients.instagram = this.masterData
+          .filter((row: any) => (row as any).instagram_handle && (row as any).instagram_handle.trim())
+          .map((row: any) => ({
+            handle: String((row as any).instagram_handle).trim().replace(/^@/, ''),
             name: row.audiences_list?.split('@')[0] || 'Customer'
           }));
       }
@@ -1470,9 +1526,14 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
     this.recipientStats = {
       email: this.masterData.filter(row => row.audiences_list?.trim()).length,
       sms: this.masterData.filter(row => row.phone?.trim()).length,
-      whatsapp: this.masterData.filter(row => row.phone?.trim()).length
+      whatsapp: this.masterData.filter(row => row.phone?.trim()).length,
+      instagram: this.masterData.filter((row: MasterRow) => (row.instagram_handle && row.instagram_handle.trim().length > 0)).length
     };
 
+    // Debugging output: helps confirm whether instagram handles are present after upload
+    // Inspect these in the browser console after uploading a CSV
+    console.debug('[campaign-submit] masterData sample:', this.masterData.slice(0, 3));
+    console.debug('[campaign-submit] recipientStats updated:', this.recipientStats);
     // Auto-disable channels with no recipients
     if (this.recipientStats.sms === 0) {
       this.selectedChannels.sms = false;
@@ -1480,7 +1541,9 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
     if (this.recipientStats.whatsapp === 0) {
       this.selectedChannels.whatsapp = false;
     }
-
+    if (this.recipientStats.instagram === 0) {
+      this.selectedChannels.instagram = false;
+    }
     this.cdr.markForCheck();
   }
 
@@ -1488,6 +1551,7 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
     const channels = [];
     if (this.selectedChannels.sms) channels.push('SMS');
     if (this.selectedChannels.whatsapp) channels.push('WhatsApp');
+    if (this.selectedChannels.instagram) channels.push('Instagram');
     if (channels.length === 0) return '';
     if (channels.length === 1) return channels[0];
     return channels.join(' and ');
@@ -1541,8 +1605,12 @@ export class CampaignSubmitComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  formatWhatsAppText(text: string): string {
-    return text.replace(/\n/g, '<br>');
+  formatWhatsAppText(text?: string): string {
+    return (text || '').replace(/\n/g, '<br>');
+  }
+
+  formatInstagramText(text?: string): string {
+    return (text || '').replace(/\n/g, '<br>');
   }
 
   private showSuccess(message: string): void {

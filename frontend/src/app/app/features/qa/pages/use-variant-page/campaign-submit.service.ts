@@ -17,6 +17,7 @@ export type MailchimpAudience = {
 export type MasterDocRow = {
   audiences_list: string; // email address
   phone?: string; // ✅ Phone number for SMS/WhatsApp (E.164 format: +1234567890)
+  instagram_handle?: string; // Optional instagram handle (without @)
   scheduled_time: string; // ISO format or parseable date
   test_emails: string; // comma-separated emails
   timezone?: string; // ✅ Optional timezone column
@@ -109,11 +110,14 @@ export class CampaignSubmitService {
   // MASTER DOCUMENT UPLOAD & PARSING
   // ============================================
 
-  uploadMasterDocument(file: File): Observable<MasterDocRow[]> {
+  uploadMasterDocument(file: File, uploadId?: string): Observable<MasterDocRow[]> {
     const formData = new FormData();
     formData.append('file', file);
+    if (uploadId) {
+      formData.append('uploadId', uploadId);
+    }
 
-    return this.http.post<{ data: MasterDocRow[] }>('/api/campaign/upload-master', formData).pipe(
+  return this.http.post<{ data: MasterDocRow[] }>('/api/campaign/upload-master', formData).pipe(
       map(response => {
         const data = response.data || [];
         this.masterDataSubject.next(data);
@@ -128,6 +132,16 @@ export class CampaignSubmitService {
         return throwError(() => new Error('Failed to parse master document'));
       })
     );
+  }
+
+  /**
+   * Create a raw upload record and get an uploadId (does not parse CSV).
+   * Used to obtain uploadId before showing consent dialog.
+   */
+  createUploadDocument(file: File): Observable<{ uploadId: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<{ uploadId: string }>('/api/campaign/create-upload', formData);
   }
 
   // ============================================

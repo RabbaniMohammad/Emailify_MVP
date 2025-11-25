@@ -92,6 +92,31 @@
         background: #a8a8a8;
       }
     }
+        .required {
+          color: #d32f2f;
+          margin-right: 6px;
+          font-weight: 700;
+        }
+
+        .proof-section {
+          margin-top: 12px;
+
+          label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+          }
+
+          input[type="file"] {
+            display: inline-block;
+          }
+
+          .proof-hint {
+            color: #d32f2f;
+            font-size: 0.85rem;
+            margin-top: 6px;
+          }
+        }
   }
 
   // Loading State

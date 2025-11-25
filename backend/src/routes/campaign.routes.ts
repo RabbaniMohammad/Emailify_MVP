@@ -7,6 +7,7 @@ import Campaign from '@src/models/Campaign';
 import User from '@src/models/User';
 import Organization from '@src/models/Organization';
 import { authenticate } from '@src/middleware/auth';
+import { UploadMaster } from '@src/models/UploadMaster';
 
 const router = Router();
 const MC: any = mailchimp as any;
@@ -33,6 +34,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 type MasterDocRow = {
   audiences_list: string;
   phone?: string;
+  instagram_handle?: string;
   scheduled_time: string;
   test_emails: string;
   timezone?: string;
@@ -424,6 +426,7 @@ router.post('/campaign/upload-master', authenticate, upload.single('file'), asyn
       const headers = rows[0].map((h: any) => String(h || '').trim().toLowerCase());
       const audienceIdx = headers.findIndex(h => h === 'audiences_list' || h === 'audiences list');
       const phoneIdx = headers.findIndex(h => h === 'phone');
+  const instagramIdx = headers.findIndex(h => h === 'instagram_handle' || h === 'instagram handle' || h === 'instagram');
       const timeIdx = headers.findIndex(h => h === 'scheduled_time' || h === 'scheduled time');
       const testIdx = headers.findIndex(h => h === 'test_emails' || h === 'test emails');
       const timezoneIdx = headers.findIndex(h => h === 'timezone');
@@ -439,6 +442,7 @@ router.post('/campaign/upload-master', authenticate, upload.single('file'), asyn
         data.push({
           audiences_list: String(row[audienceIdx] || '').trim(),
           phone: phoneIdx >= 0 ? String(row[phoneIdx] || '').trim() : '',
+          instagram_handle: instagramIdx >= 0 ? String(row[instagramIdx] || '').trim() : '',
           scheduled_time: timeIdx >= 0 ? String(row[timeIdx] || '').trim() : '',
           test_emails: testIdx >= 0 ? String(row[testIdx] || '').trim() : '',
           timezone: timezoneIdx >= 0 ? String(row[timezoneIdx] || '').trim() : ''
@@ -470,6 +474,7 @@ router.post('/campaign/upload-master', authenticate, upload.single('file'), asyn
       data = (parsed.data as any[]).map((row: any) => ({
         audiences_list: String(row.audiences_list || row['audiences list'] || '').trim(),
         phone: String(row.phone || '').trim(),
+        instagram_handle: String(row.instagram_handle || row['instagram handle'] || row.instagram || '').trim(),
         scheduled_time: String(row.scheduled_time || row['scheduled time'] || '').trim(),
         test_emails: String(row.test_emails || row['test emails'] || '').trim(),
         timezone: String(row.timezone || '').trim()
@@ -480,8 +485,49 @@ router.post('/campaign/upload-master', authenticate, upload.single('file'), asyn
       });
     }
 
-    // Filter out empty rows
-    data = data.filter(row => row.audiences_list && isValidEmail(row.audiences_list));
+    // Filter out empty rows - keep rows that have a valid email OR a phone OR an instagram handle
+    data = data.filter(row => {
+      const hasEmail = row.audiences_list && isValidEmail(String(row.audiences_list));
+      const hasPhone = row.phone && String(row.phone).trim() !== '';
+      const hasInstagram = row.instagram_handle && String(row.instagram_handle).trim() !== '';
+      // Normalize instagram handle (strip leading @)
+      if (hasInstagram) {
+        row.instagram_handle = String(row.instagram_handle).trim();
+        if (row.instagram_handle.startsWith('@')) {
+          row.instagram_handle = row.instagram_handle.slice(1);
+        }
+      }
+      return hasEmail || hasPhone || hasInstagram;
+    });
+
+    // If an uploadId was provided, update UploadMaster with parsing results and validation summary
+    const providedUploadId = (req as any).body?.uploadId || req.query?.uploadId;
+    if (providedUploadId) {
+      try {
+        const existing = await UploadMaster.findOne({ uploadId: providedUploadId });
+        if (existing) {
+          existing.parsedCount = data.length;
+          existing.parsedAt = new Date();
+          existing.rawPreview = data.slice(0, 20);
+          // Basic validation summary captured here. Mailchimp totals are not available in this endpoint.
+          existing.validationSummary = {
+            masterTotal: data.length,
+            instagramTotal: data.filter(r => r.instagram_handle && String(r.instagram_handle).trim() !== '').length,
+            mailchimpTotal: null
+          };
+
+          // Link consent if present
+          const consentRecord = await (await import('@src/models/UploadConsent')).UploadConsent.findOne({ uploadId: providedUploadId }).lean();
+          if (consentRecord) {
+            existing.consentId = consentRecord._id;
+          }
+
+          await existing.save();
+        }
+      } catch (err) {
+        console.warn('Failed to update UploadMaster with parsing results:', err?.message || err);
+      }
+    }
 
     res.json({
       data,
@@ -494,6 +540,59 @@ router.post('/campaign/upload-master', authenticate, upload.single('file'), asyn
       error: 'Failed to parse file',
       message: error.message || 'Unknown error'
     });
+  }
+});
+
+/**
+ * POST /api/campaign/create-upload
+ * Save raw uploaded file to disk and create an UploadMaster record that returns an uploadId.
+ * This lets the frontend obtain an uploadId before consent is submitted.
+ */
+router.post('/campaign/create-upload', authenticate, upload.single('file'), async (req: MulterRequest, res: Response) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const userId = (req as any).tokenPayload?.userId;
+    const user = await User.findById(userId);
+    if (!user?.organizationId) return res.status(403).json({ error: 'User not in organization' });
+
+    const clientId = typeof user.organizationId === 'string' ? user.organizationId : (user.organizationId as any)._id;
+  const userName = user.name || user.email || '';
+  const orgRecord = await Organization.findById(user.organizationId);
+  const organizationName = orgRecord?.name || '';
+
+    // Ensure uploads folder exists under public/uploads/master
+    const path = require('path');
+    const fs = require('fs');
+    const uploadsDir = path.join(__dirname, '..', '..', 'public', 'uploads', 'master');
+    fs.mkdirSync(uploadsDir, { recursive: true });
+
+    const storedName = `${Date.now()}-${Math.random().toString(36).slice(2,9)}-${req.file.originalname}`;
+    const storedPath = path.join(uploadsDir, storedName);
+
+    // Save buffer to disk
+    fs.writeFileSync(storedPath, req.file.buffer);
+
+    const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+
+    const previewText = req.file.buffer.toString('utf-8').split('\n').slice(0, 20);
+
+    const record = await UploadMaster.create({
+      clientId,
+      uploadId,
+      userId: userId,
+      userName,
+      organizationName,
+      originalName: req.file.originalname,
+      storedPath: `/uploads/master/${storedName}`,
+      rawPreview: previewText,
+      parsedCount: 0
+    });
+
+    res.json({ success: true, uploadId: record.uploadId });
+  } catch (error: any) {
+    console.error('Failed to create upload record:', error);
+    res.status(500).json({ error: error.message || 'Failed to create upload' });
   }
 });
 
@@ -1023,7 +1122,10 @@ router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'
 
     // Extract emails from CSV
     const masterEmails: string[] = [];
+  // Also extract Instagram handles if present
+  const masterInstagramHandles: string[] = [];
     const emailColumns = ['email', 'audiences_list', 'email_address', 'subscriber_email'];
+  const instagramColumns = ['instagram_handle', 'instagram handle', 'instagram'];
     
     parseResult.data.forEach((row: any) => {
       // Find email in any of the common column names
@@ -1038,15 +1140,29 @@ router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'
       if (email && isValidEmail(email)) {
         masterEmails.push(email);
       }
+
+      // Find instagram handle in any of the common column names
+      for (const col of instagramColumns) {
+        if (row[col] && typeof row[col] === 'string') {
+          const handle = String(row[col]).trim();
+          if (handle) {
+            // normalize (strip leading @)
+            masterInstagramHandles.push(handle.startsWith('@') ? handle.slice(1) : handle);
+          }
+          break;
+        }
+      }
     });
 
     // Deduplicate master emails
     const uniqueMasterEmails = Array.from(new Set(masterEmails));
 
-    if (uniqueMasterEmails.length === 0) {
+    // If there are no emails AND no instagram handles, return an error
+    const uniqueInstagramHandles = Array.from(new Set(masterInstagramHandles.map(h => h.toLowerCase())));
+    if (uniqueMasterEmails.length === 0 && uniqueInstagramHandles.length === 0) {
       return res.status(400).json({ 
-        error: 'No valid emails found in CSV',
-        hint: 'CSV should have a column named: email, audiences_list, email_address, or subscriber_email'
+        error: 'No valid recipients found in CSV',
+        hint: 'CSV should have email columns (email, audiences_list, email_address) or an instagram_handle column'
       });
     }
 
@@ -1114,6 +1230,10 @@ router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'
         total: uniqueMasterEmails.length,
         new: newSubscribers,
         existing: existingSubscribers
+      },
+      instagramHandles: uniqueInstagramHandles,
+      instagramSummary: {
+        total: uniqueInstagramHandles.length
       },
       excludedFromCampaign: {
         total: filteredExcluded.length,
