@@ -771,17 +771,10 @@ Examples:
   }
 
   async generatePromptFromFile(): Promise<void> {
-    console.log('🔴 generatePromptFromFile called', {
-      hasFile: !!this.uploadedFile,
-      isGenerating: this.isGeneratingPrompt
-    });
-    
     if (!this.uploadedFile || this.isGeneratingPrompt) {
-      console.log('🔴 generatePromptFromFile blocked');
       return;
     }
 
-    console.log('🔴 generatePromptFromFile executing...');
     this.isGeneratingPrompt = true;
 
     try {
@@ -821,7 +814,6 @@ Examples:
       );
     } finally {
       this.isGeneratingPrompt = false;
-      console.log('🔴 generatePromptFromFile finished');
     }
   }
 
@@ -847,18 +839,10 @@ Examples:
   }
 
   async useFileInChat(): Promise<void> {
-    console.log('🟢 useFileInChat called', {
-      hasFile: !!this.uploadedFile,
-      isGenerating: this.isGeneratingPrompt,
-      isAttaching: this.isAttachingFile
-    });
-    
     if (!this.uploadedFile || this.isGeneratingPrompt || this.isAttachingFile) {
-      console.log('🟢 useFileInChat blocked');
       return;
     }
 
-    console.log('🟢 useFileInChat executing...');
     this.isAttachingFile = true;
 
     // Attach the file to the chat
@@ -881,8 +865,6 @@ Examples:
       this.messageInput?.nativeElement.focus();
       this.isAttachingFile = false;
     }, 600);
-    
-    console.log('🟢 useFileInChat finished');
   }
 
   removeAttachedFile(): void {
@@ -1001,7 +983,6 @@ canDeactivate(): boolean {
 
 
   private loadConversation(conversationId: string): void {
-    console.log('🔵 [GENERATE PAGE] Loading conversation:', conversationId);
     this.conversationId = conversationId;
     this.isGenerating$.next(true);
     
@@ -1013,14 +994,6 @@ canDeactivate(): boolean {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (conversation) => {
-          console.log('🔵 [GENERATE PAGE] Conversation loaded:', {
-            conversationId: conversation.conversationId,
-            messagesCount: conversation.messages.length,
-            hasHtml: !!conversation.currentHtml,
-            templateName: conversation.templateName,
-            status: conversation.status
-          });
-          console.log('🔵 [GENERATE PAGE] Messages history:', conversation.messages);
           this.messages$.next(conversation.messages);
           this.currentHtml$.next(conversation.currentHtml);
           this.templateName = conversation.templateName || '';
@@ -1126,17 +1099,7 @@ canDeactivate(): boolean {
 async onSend(): Promise<void> {
   const message = this.userInput.trim();
   
-  console.log('🔵 [GENERATE PAGE] onSend called:', {
-    message: message.substring(0, 50) + '...',
-    conversationId: this.conversationId,
-    currentMessagesCount: this.messages$.value.length,
-    hasTemplate: !!this.currentHtml$.value,
-    isGenerating: this.isGenerating$.value,
-    hasAttachedFile: !!this.attachedFile
-  });
-  
   if ((!message && !this.attachedFile) || this.isGenerating$.value) {
-    console.log('🔵 [GENERATE PAGE] onSend blocked - empty message/no file or already generating');
     return;
   }
 
@@ -1220,8 +1183,6 @@ async onSend(): Promise<void> {
 
   // ✅ If there's an attached file, extract its data first, then send to chat
   if (fileToSend && !this.fileDataAlreadySent) {
-    console.log('📎 [GENERATE PAGE] Processing attached file before sending to chat:', fileToSend.name);
-    
     try {
       // Extract data from the file using the backend API
       const formData = new FormData();
@@ -1238,7 +1199,6 @@ async onSend(): Promise<void> {
       }
 
       const { extractedData } = await response.json();
-      console.log('📎 [GENERATE PAGE] File data extracted successfully, length:', extractedData.length);
 
       // Mark that file data has been sent
       this.fileDataAlreadySent = true;
@@ -1246,7 +1206,6 @@ async onSend(): Promise<void> {
       // Send chat message with the extracted file data
       this.sendChatMessage(finalMessage, imageAttachments, extractedData);
     } catch (error) {
-      console.error('📎 [GENERATE PAGE] Error extracting file data:', error);
       this.snackBar.open('Failed to process attached file', 'Close', { 
         duration: 4000, 
         panelClass: ['error-snackbar'] 
@@ -1254,7 +1213,6 @@ async onSend(): Promise<void> {
       this.isGenerating$.next(false);
     }
   } else if (fileToSend && this.fileDataAlreadySent) {
-    console.log('📎 [GENERATE PAGE] File data already sent in conversation - skipping extraction to save tokens');
     // File data was already sent earlier, don't send it again
     this.sendChatMessage(finalMessage, imageAttachments);
   } else {
@@ -1346,16 +1304,6 @@ private async sendChatMessage(
   imageAttachments: ImageAttachment[], 
   extractedFileData?: string
 ): Promise<void> {
-  console.log('🔵 [GENERATE PAGE] sendChatMessage called:', {
-    messageLength: message.length,
-    imageCount: imageAttachments.length,
-    conversationId: this.conversationId,
-    currentMessagesCount: this.messages$.value.length,
-    hasCurrentMjml: !!this.currentHtml$.value,
-    hasExtractedFileData: !!extractedFileData,
-    extractedFileDataLength: extractedFileData?.length || 0
-  });
-
   // Get current conversation history (excluding the user message we just added)
   const historyMessages = this.messages$.value.slice(0, -1);
 
@@ -1364,13 +1312,6 @@ private async sendChatMessage(
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (response) => {
-        console.log('🔵 [GENERATE PAGE] chat response received:', {
-          hasHtml: !!response.html,
-          hasMjml: !!response.mjml,
-          message: response.message,
-          hasErrors: response.hasErrors
-        });
-
         this.currentHtml$.next(response.html);
         this.currentMjml$.next(response.mjml);  // ✅ Store MJML
 
@@ -1385,12 +1326,6 @@ private async sendChatMessage(
         this.messages$.next(updatedMessages);
 
         // ✅ Save the complete conversation state back to cache
-        console.log('🔵 [GENERATE PAGE] Saving conversation to cache:', {
-          conversationId: this.conversationId,
-          messagesCount: updatedMessages.length,
-          templateName: this.templateName
-        });
-        
         if (this.conversationId) {
           this.generationService.updateConversationCache(
             this.conversationId,
@@ -1432,26 +1367,11 @@ private async sendChatMessage(
 }
 
 private async startNewConversation(message: string, imageAttachments: ImageAttachment[]): Promise<void> {
-  console.log('🔵 [GENERATE PAGE] startNewConversation called:', {
-    messageLength: message.length,
-    imageCount: imageAttachments.length,
-    conversationId: this.conversationId,
-    isRegenerating: this.isRegenerating
-  });
-
   this.generationService
     .startGeneration(message, imageAttachments, this.conversationId || undefined)
     .pipe(takeUntil(this.destroy$))
     .subscribe({
       next: (response) => {
-        console.log('🔵 [GENERATE PAGE] startGeneration response received:', {
-          conversationId: response.conversationId,
-          hasHtml: !!response.html,
-          hasMjml: !!response.mjml,
-          message: response.message,
-          hasErrors: response.hasErrors
-        });
-
         // Update conversationId (should match what we sent, but backend might change it)
         this.conversationId = response.conversationId;
         this.generationService.setCurrentConversationId(response.conversationId);
@@ -1473,11 +1393,6 @@ private async startNewConversation(message: string, imageAttachments: ImageAttac
         this.messages$.next(updatedMessages);
 
         // ✅ Save the complete conversation state back to cache
-        console.log('🔵 [GENERATE PAGE] Saving conversation to cache:', {
-          conversationId: response.conversationId,
-          messagesCount: updatedMessages.length,
-          templateName: this.templateName
-        });
         this.generationService.updateConversationCache(
           response.conversationId,
           updatedMessages,
@@ -1867,16 +1782,8 @@ onNewConversation(): void {
   // Check if there's an active conversation with unsaved content
   const hasActiveConversation = this.conversationId && this.currentHtml$.value;
   
-  console.log('🔵 [GENERATE PAGE] onNewConversation called:', {
-    conversationId: this.conversationId,
-    hasTemplate: !!this.currentHtml$.value,
-    hasActiveConversation,
-    messagesCount: this.messages$.value.length
-  });
-  
   if (hasActiveConversation) {
     // Show confirmation dialog
-    console.log('🔵 [GENERATE PAGE] Opening confirmation dialog');
     const dialogRef = this.dialog.open(ConfirmNewConversationDialog, {
       width: '500px',
       disableClose: false,
@@ -1884,17 +1791,12 @@ onNewConversation(): void {
     });
 
     dialogRef.afterClosed().subscribe((result: 'save' | 'discard' | 'cancel') => {
-      console.log('🔵 [GENERATE PAGE] Dialog closed with result:', result);
       if (result === 'save') {
         // Open save dialog
-        console.log('🔵 [GENERATE PAGE] User chose to save template');
         this.onSaveTemplate();
       } else if (result === 'discard') {
         // Proceed with clearing conversation
-        console.log('🔵 [GENERATE PAGE] User chose to discard and start new');
         this.clearAndStartNew();
-      } else {
-        console.log('🔵 [GENERATE PAGE] User cancelled - staying on current conversation');
       }
       // If 'cancel', do nothing - user stays on current conversation
     });

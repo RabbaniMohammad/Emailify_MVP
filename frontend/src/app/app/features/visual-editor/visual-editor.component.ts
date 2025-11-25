@@ -695,7 +695,6 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
         }
 
         //TEXT SECTION BLOCK OVERRIDE
-        console.log(bm.get('text-section'));
 
         const textSection = bm.get('text-section');
         
@@ -2224,14 +2223,6 @@ async onCheckPreview(): Promise<void> {
       event.preventDefault();
     }
     
-    console.log('🖱️ [CHAT] Apply Edit Clicked:', {
-      find: edit.find.substring(0, 60) + (edit.find.length > 60 ? '...' : ''),
-      replace: edit.replace.substring(0, 60) + (edit.replace.length > 60 ? '...' : ''),
-      findLength: edit.find.length,
-      replaceLength: edit.replace.length,
-      hasContext: !!(edit.before_context || edit.after_context)
-    });
-    
     if (!this.templateId || !this.editor) {
       this.showToast('Editor not ready', 'warning');
       return;
@@ -2423,13 +2414,6 @@ async onCheckPreview(): Promise<void> {
       // Get current HTML
       const currentHtml = this.editor.getHtml() || '';
       
-      console.log('📄 [CHAT] Applying Edit via Backend:', {
-        runId,
-        htmlLength: currentHtml.length,
-        editFind: edit.find.substring(0, 80),
-        editReplace: edit.replace.substring(0, 80)
-      });
-      
       // Prepare edit in GoldenEdit format
       const goldenEdit: GoldenEdit = {
         find: edit.find,
@@ -2446,13 +2430,6 @@ async onCheckPreview(): Promise<void> {
       const result = await firstValueFrom(
         this.qa.applyChatEdits(runId, currentHtml, [goldenEdit])
       );
-      
-      console.log('✅ [CHAT] Apply Edit Result:', {
-        hasHtml: !!result.html,
-        htmlLength: result.html?.length || 0,
-        changesCount: result.changes?.length || 0,
-        changes: result.changes || []
-      });
       
       if (result.html) {
         // Extract body HTML from full document (backend returns full doc)

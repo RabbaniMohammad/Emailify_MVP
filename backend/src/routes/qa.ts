@@ -1980,28 +1980,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
     
     const isReplacementRequest = isPastedSection || isExplicitReplacement;
 
-    // Console logging for debugging
-    console.log('🔍 [CHAT] Detection Analysis:', {
-      messageLength: userMessage.length,
-      isLongText,
-      hasQuotes,
-      hasMultipleSentences,
-      sentenceCount: (userMessage.match(/[.!?]/g) || []).length,
-      hasMultipleWords,
-      wordCount: userMessage.trim().split(/\s+/).length,
-      hasMatchingContent,
-      matchingWordsCount: matchingWords.length,
-      matchingWordsSample: matchingWords.slice(0, 5),
-      hasAutoRecommendationPattern,
-      startsWithSuggestionKeyword,
-      isAutoRecommendationRequest,
-      hasReplacementKeywords,
-      isPastedSection,
-      isExplicitReplacement,
-      isReplacementRequest,
-      messagePreview: userMessage.substring(0, 100) + (userMessage.length > 100 ? '...' : '')
-    });
-
     // Use appropriate prompt based on detection
     let systemPrompt: string;
     let promptMode: string;
@@ -2019,8 +1997,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
       systemPrompt = chatSystemPrompt();
       promptMode = 'SUGGESTIONS MODE';
     }
-    
-    console.log('📝 [CHAT] Using prompt:', promptMode);
 
     // Extract context based on request type (after detection is complete)
     const context: string = isAutoRecommendationRequest 
@@ -2054,26 +2030,9 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
     try {
       const raw = completion.choices[0]?.message?.content || '{"intent":"suggest"}';
       
-      console.log('🤖 [CHAT] OpenAI Raw Response:', {
-        responseLength: raw.length,
-        responsePreview: raw.substring(0, 200) + (raw.length > 200 ? '...' : ''),
-        hasEdits: raw.includes('"edits"'),
-        hasIdeas: raw.includes('"ideas"')
-      });
-      
       const parsed: unknown = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
         const obj = parsed as any;
-        
-        console.log('📦 [CHAT] Parsed JSON:', {
-          intent: obj.intent,
-          ideasCount: Array.isArray(obj.ideas) ? obj.ideas.length : 0,
-          editsCount: Array.isArray(obj.edits) ? obj.edits.length : 0,
-          notesCount: Array.isArray(obj.notes) ? obj.notes.length : 0,
-          editsPreview: Array.isArray(obj.edits) && obj.edits.length > 0 
-            ? obj.edits.map((e: any) => ({ find: String(e?.find || '').substring(0, 50), replace: String(e?.replace || '').substring(0, 50) }))
-            : []
-        });
         
         // ✅ IMPROVED: Better formatting for different intents
         const hasIdeas = Array.isArray(obj.ideas) && obj.ideas.length > 0;
@@ -2181,11 +2140,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
                       : findText; // Fallback to original if extended is too different
                     
                     textExists = true;
-                    console.log('✅ [CHAT] Found fuzzy match - adjusted find text:', {
-                      original: findText.substring(0, 60) + '...',
-                      adjusted: e.find.substring(0, 60) + '...',
-                      matchRatio: (bestMatchLength / normalizedFindLower.length * 100).toFixed(1) + '%'
-                    });
                   }
                 }
               }
@@ -2218,12 +2172,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
               });
               return false;
             }
-            
-            console.log('✅ [CHAT] Edit validated - text exists in email:', {
-              findText: finalFindText.substring(0, 60) + (finalFindText.length > 60 ? '...' : ''),
-              occurrences,
-              matchedVia: exactMatch ? 'exact' : normalizedExactMatch ? 'normalized' : caseInsensitiveMatch ? 'case-insensitive' : rawHtmlMatch ? 'raw-html' : 'fuzzy'
-            });
             
             // Check 1: Reject if edit is > 40% of email (too large for a "section")
             const sizeThreshold = emailLength * 0.4; // Max 40% of email
@@ -2274,10 +2222,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
           
           // Limit to only 1 edit (the first valid one)
           if (edits.length > 1) {
-            console.log('📌 [CHAT] Limiting to first edit (showing one section at a time):', {
-              totalEdits: edits.length,
-              keepingFirst: edits[0].find.substring(0, 60) + '...'
-            });
             edits = [edits[0]]; // Only keep the first valid edit
           }
           
@@ -2332,39 +2276,21 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
                       after_context: '',
                       reason: 'Suggested improvement for this section'
                     }];
-                    
-                    console.log('✅ [CHAT] Found best match from rejected edits:', {
-                      original: originalFind.substring(0, 60) + '...',
-                      matched: normalizedBestMatch.substring(0, 60) + '...',
-                      matchScore: (bestMatchScore * 100).toFixed(1) + '%'
-                    });
                   }
                 }
               }
             }
-          }
-          
-          if (edits.length > 0) {
-            console.log('✅ [CHAT] Auto-recommendation: keeping', edits.length, 'edit(s)');
           }
         }
         
         // 🚨 FALLBACK: If we detected a paste/replacement/auto-recommendation request but AI returned suggestions, convert them to edits
         const needsEdits = isReplacementRequest || isAutoRecommendationRequest;
         if (needsEdits && edits.length === 0 && hasIdeas) {
-          console.log('⚠️ [CHAT] AI ignored edits prompt! Attempting to convert suggestions to edits...', {
-            isReplacementRequest,
-            isAutoRecommendationRequest,
-            requestType: isAutoRecommendationRequest ? 'AUTO-RECOMMENDATION' : 'PASTED-TEXT'
-          });
-          
           let correctedText: string | null = null;
           let pastedText: string | null = null;
 
           // For auto-recommendation requests, try to extract edits from ideas by finding text in the email
           if (isAutoRecommendationRequest && !isPastedSection) {
-            console.log('🔍 [CHAT] Auto-recommendation: Attempting to extract edits from ideas by matching email content...');
-            
             // Try to find quoted text in ideas that matches email content
             for (const idea of obj.ideas) {
               // Look for patterns like "Change 'X' to 'Y'" or "'X' should be 'Y'"
@@ -2400,11 +2326,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
                       after_context: afterContext,
                       reason: 'Suggested improvement'
                     });
-                    
-                    console.log('✅ [CHAT] Extracted edit from idea pattern:', {
-                      find: findText.substring(0, 60),
-                      replace: replaceText.substring(0, 60)
-                    });
                   }
                 }
               }
@@ -2432,11 +2353,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
                     after_context: afterContext,
                     reason: 'Suggested improvement'
                   });
-                  
-                  console.log('✅ [CHAT] Extracted edit from quoted strings in idea:', {
-                    find: firstQuote.substring(0, 60),
-                    replace: secondQuote.substring(0, 60)
-                  });
                 }
               }
             }
@@ -2446,10 +2362,8 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
           const userMessageQuotedMatch = userMessage.match(/['"]([^'"]{20,})['"]/);
           if (userMessageQuotedMatch) {
             pastedText = userMessageQuotedMatch[1];
-            console.log('🔍 [CHAT] Extracted quoted pasted text from user message:', pastedText.substring(0, 60));
           } else if (isPastedSection && userMessage.length > 30) { // If it's a pasted section but not quoted
             pastedText = userMessage;
-            console.log('🔍 [CHAT] Using plain pasted text from user message:', pastedText.substring(0, 60));
           }
 
           if (pastedText) {
@@ -2460,9 +2374,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
                 const changeMatch = idea.match(/change\s+['"]([^'\"]+?)['\"]\s+to\s+['"]([^'\"]+?)['\"]/i);
                 if (changeMatch && changeMatch[1] === pastedText && changeMatch[2]) {
                   correctedText = changeMatch[2];
-                  if (correctedText) {
-                    console.log('✅ [CHAT] Found correction in idea via "Change X to Y" pattern:', correctedText.substring(0, 60));
-                  }
                   break;
                 }
                 
@@ -2474,9 +2385,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
                     const lastQuote = quotedStrings[quotedStrings.length - 1].replace(/['\"]/g, '');
                     if (lastQuote) {
                       correctedText = lastQuote;
-                      if (correctedText) {
-                        console.log('✅ [CHAT] Found correction in idea via quoted strings pattern:', correctedText.substring(0, 60));
-                      }
                       break;
                     }
                   }
@@ -2493,9 +2401,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
                     const segmentText = segment.replace(/['\"]/g, '');
                     if (segmentText && Math.abs(segmentText.length - pastedText.length) < 10 && segmentText !== pastedText) {
                       correctedText = segmentText;
-                      if (correctedText) {
-                        console.log('✅ [CHAT] Found similar corrected text in idea:', correctedText.substring(0, 60));
-                      }
                       break;
                     }
                   }
@@ -2527,18 +2432,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
                   after_context: useContext ? afterContext : '',
                   reason: correctedText ? 'Corrected based on AI suggestion' : 'User requested replacement'
                 }];
-                
-                console.log('✅ [CHAT] Created edit from pasted text:', {
-                  find: pastedText.substring(0, 60),
-                  replace: (correctedText ?? pastedText).substring(0, 60),
-                  hasCorrection: !!correctedText,
-                  beforeContext: useContext ? beforeContext.substring(0, 40) : '(empty)',
-                  afterContext: useContext ? afterContext.substring(0, 40) : '(empty)',
-                  contextIndex,
-                  findLength: pastedText.length,
-                  occurrences,
-                  useContext
-                });
               } else {
                 console.warn('⚠️ [CHAT] Pasted text not found in HTML body text for context extraction.');
               }
@@ -2547,19 +2440,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
             }
           }
         }
-        
-        console.log('✏️ [CHAT] Processed Edits:', {
-          rawEditsCount: Array.isArray(obj.edits) ? obj.edits.length : 0,
-          validEditsCount: edits.length,
-          wasConverted: isReplacementRequest && Array.isArray(obj.edits) && obj.edits.length === 0 && edits.length > 0,
-          edits: edits.map((e: { find: string; replace: string; before_context: string; after_context: string; reason?: string }) => ({
-            findLength: e.find.length,
-            replaceLength: e.replace.length,
-            findPreview: e.find.substring(0, 60) + (e.find.length > 60 ? '...' : ''),
-            replacePreview: e.replace.substring(0, 60) + (e.replace.length > 60 ? '...' : ''),
-            hasContext: !!(e.before_context || e.after_context)
-          }))
-        });
 
         // Build friendly assistant text
         const parts: string[] = [];
@@ -2602,8 +2482,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
               json.intent = 'edit';
               json.ideas = [];
               json.notes = [];
-              
-              console.log('✅ [CHAT] Created fallback edit from first semantic section');
             }
           }
           
@@ -2650,13 +2528,6 @@ router.post('/variants/:runId/chat/message', async (req: Request, res: Response)
           targets: Array.isArray(obj.targets) ? obj.targets.map((s: any) => String(s || '')) : [],
           notes: Array.isArray(obj.notes) ? obj.notes.map((s: any) => String(s || '')) : [],
         };
-        
-        console.log('📤 [CHAT] Final Response:', {
-          intent: json.intent,
-          editsCount: json.edits?.length || 0,
-          ideasCount: json.ideas?.length || 0,
-          wasConverted: isReplacementRequest && Array.isArray(obj.edits) && obj.edits.length === 0 && edits.length > 0
-        });
       }
     } catch (_e: unknown) { /* ignore parse error; return default */ }
 
