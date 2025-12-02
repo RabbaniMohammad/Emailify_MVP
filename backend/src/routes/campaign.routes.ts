@@ -1223,13 +1223,45 @@ router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'
       ? excludedSubscribers.filter(email => email !== ownerEmail)
       : excludedSubscribers;
 
+    // Server-side pagination for each section
+    const newPage = Math.max(1, parseInt(req.body.newPage as string) || 1);
+    const newLimit = Math.min(100, Math.max(1, parseInt(req.body.newLimit as string) || 50));
+    const existingPage = Math.max(1, parseInt(req.body.existingPage as string) || 1);
+    const existingLimit = Math.min(100, Math.max(1, parseInt(req.body.existingLimit as string) || 50));
+    const excludedPage = Math.max(1, parseInt(req.body.excludedPage as string) || 1);
+    const excludedLimit = Math.min(100, Math.max(1, parseInt(req.body.excludedLimit as string) || 50));
+
+    // Paginate each section
+    const newStartIndex = (newPage - 1) * newLimit;
+    const existingStartIndex = (existingPage - 1) * existingLimit;
+    const excludedStartIndex = (excludedPage - 1) * excludedLimit;
+
+    const paginatedNew = newSubscribers.slice(newStartIndex, newStartIndex + newLimit);
+    const paginatedExisting = existingSubscribers.slice(existingStartIndex, existingStartIndex + existingLimit);
+    const paginatedExcluded = filteredExcluded.slice(excludedStartIndex, excludedStartIndex + excludedLimit);
 
     res.json({
       success: true,
       masterDocument: {
         total: uniqueMasterEmails.length,
-        new: newSubscribers,
-        existing: existingSubscribers
+        new: paginatedNew,
+        existing: paginatedExisting,
+        newPagination: {
+          page: newPage,
+          limit: newLimit,
+          totalItems: newSubscribers.length,
+          totalPages: Math.ceil(newSubscribers.length / newLimit),
+          hasNextPage: newPage < Math.ceil(newSubscribers.length / newLimit),
+          hasPreviousPage: newPage > 1
+        },
+        existingPagination: {
+          page: existingPage,
+          limit: existingLimit,
+          totalItems: existingSubscribers.length,
+          totalPages: Math.ceil(existingSubscribers.length / existingLimit),
+          hasNextPage: existingPage < Math.ceil(existingSubscribers.length / existingLimit),
+          hasPreviousPage: existingPage > 1
+        }
       },
       instagramHandles: uniqueInstagramHandles,
       instagramSummary: {
@@ -1237,7 +1269,15 @@ router.post('/campaign/validate-audience', authenticate, upload.single('csvFile'
       },
       excludedFromCampaign: {
         total: filteredExcluded.length,
-        subscribers: filteredExcluded
+        subscribers: paginatedExcluded,
+        pagination: {
+          page: excludedPage,
+          limit: excludedLimit,
+          totalItems: filteredExcluded.length,
+          totalPages: Math.ceil(filteredExcluded.length / excludedLimit),
+          hasNextPage: excludedPage < Math.ceil(filteredExcluded.length / excludedLimit),
+          hasPreviousPage: excludedPage > 1
+        }
       },
       summary: {
         newCount: newSubscribers.length,

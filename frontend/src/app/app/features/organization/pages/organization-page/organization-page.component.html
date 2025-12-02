@@ -233,8 +233,8 @@
         <div class="title-underline variants"></div>
       </div>
       <div class="card-content">
-        <div class="campaigns-list">
-          <div *ngFor="let campaign of paginatedCampaigns" class="campaign-item">
+        <div class="campaigns-list" [class.loading-pagination]="campaignsPaginationLoading">
+          <div *ngFor="let campaign of dashboardData.recentCampaigns" class="campaign-item">
             <div class="campaign-main">
               <div class="campaign-info">
                 <h4 class="campaign-name">{{ campaign.name }}</h4>
@@ -305,6 +305,8 @@
           [currentPage]="campaignsCurrentPage"
           [pageSize]="campaignsPageSize"
           [totalItems]="campaignsTotalItems"
+          [loading]="campaignsPaginationLoading"
+          [config]="{ pageSizeOptions: [5, 10, 25, 50], showPageSizeSelector: true }"
           (pageChange)="onCampaignPageChange($event)">
         </app-pagination>
       </div>

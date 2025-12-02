@@ -5,7 +5,9 @@
     items: (items$ | async) ?? [],
     selectedId: (selectedId$ | async),
     selectedName: (selectedName$ | async),
-    error: (error$ | async)
+    error: (error$ | async),
+    totalItems: (totalItems$ | async) ?? 0,
+    paginationLoading: (paginationLoading$ | async) ?? false
   } as vm"
 >
   <!-- LEFT SIDEBAR: Search + Template List -->
@@ -54,13 +56,34 @@
       <div class="modern-list-wrapper">
         <!-- Template Count Badge and Category Filter -->
         <div class="list-header">
-          <!-- Template Count Badge -->
+          <!-- Template Count Badge with Pagination -->
           <div class="count-badge">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span class="count-number">{{ vm.items.length }}</span>
-            <span class="count-label">templates</span>
+            <button 
+              class="pagination-btn"
+              [disabled]="!hasPreviousPage || vm.paginationLoading"
+              (click)="goToPreviousPage()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <div class="count-center">
+              <div class="icon-container">
+                <svg *ngIf="!vm.paginationLoading" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                <mat-spinner diameter="16" *ngIf="vm.paginationLoading"></mat-spinner>
+              </div>
+              <span class="count-number">{{ startItem }}-{{ endItem }}</span>
+              <span class="count-label">of {{ vm.totalItems }}</span>
+            </div>
+            <button 
+              class="pagination-btn"
+              [disabled]="!hasNextPage || vm.paginationLoading"
+              (click)="goToNextPage()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
           </div>
 
           <!-- Category Dropdown Filter -->
@@ -153,7 +176,7 @@
         </div>
 
         <!-- FIXED HEIGHT SCROLL CONTAINER -->
-        <div class="scroll-container" #scrollContainer>
+        <div class="scroll-container" #scrollContainer [class.loading-pagination]="vm.paginationLoading">
           <mat-nav-list class="tpl-list">
             <mat-list-item
               *ngFor="let item of vm.items; trackBy: trackById"

@@ -956,6 +956,10 @@ router.get('/:id/dashboard', authenticate, strictOrganizationAccess, async (req:
   try {
     const { id } = req.params;
     const userId = (req as any).tokenPayload?.userId;
+    
+    // Parse pagination parameters
+    const page = Math.max(Number(req.query.page ?? 1), 1);
+    const limit = Math.min(Number(req.query.limit ?? 5), 50);
 
 
     // Verify user belongs to this organization
@@ -972,6 +976,9 @@ router.get('/:id/dashboard', authenticate, strictOrganizationAccess, async (req:
       return res.status(404).json({ error: 'Organization not found' });
     }
 
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+
     // Get stats in parallel
     const [
       totalCampaigns,
@@ -985,7 +992,8 @@ router.get('/:id/dashboard', authenticate, strictOrganizationAccess, async (req:
       User.countDocuments({ organizationId: id }),
       Campaign.find({ organizationId: id })
         .sort({ createdAt: -1 })
-        .limit(5)
+        .skip(skip)
+        .limit(limit)
         .populate('createdBy', 'name email')
         .lean(),
       Campaign.aggregate([
@@ -1012,6 +1020,8 @@ router.get('/:id/dashboard', authenticate, strictOrganizationAccess, async (req:
     });
 
 
+    const totalPages = Math.ceil(totalCampaigns / limit);
+
     res.json({
       success: true,
       organization: {
@@ -1022,6 +1032,12 @@ router.get('/:id/dashboard', authenticate, strictOrganizationAccess, async (req:
       },
       stats,
       recentCampaigns,
+      pagination: {
+        page,
+        limit,
+        totalCampaigns,
+        totalPages
+      }
     });
 
   } catch (error: any) {

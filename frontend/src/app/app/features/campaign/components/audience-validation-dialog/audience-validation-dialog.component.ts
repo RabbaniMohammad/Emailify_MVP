@@ -107,11 +107,23 @@ export class AudienceValidationDialogComponent implements OnInit {
   addedToMaster: Set<string> = new Set();
   scheduledEmails: Map<string, ScheduledEmail> = new Map();
 
-  // Pagination
-  newPage = 0;
-  existingPage = 0;
-  excludedPage = 0;
-  pageSize = 50;
+  // Server-side pagination for each section
+  newPage = 1;
+  newTotalItems = 0;
+  newTotalPages = 0;
+  newPaginationLoading = false;
+
+  existingPage = 1;
+  existingTotalItems = 0;
+  existingTotalPages = 0;
+  existingPaginationLoading = false;
+
+  excludedPage = 1;
+  excludedTotalItems = 0;
+  excludedTotalPages = 0;
+  excludedPaginationLoading = false;
+
+  pageSize = 5;
 
   // Make Math available in template
   Math = Math;
@@ -130,83 +142,119 @@ export class AudienceValidationDialogComponent implements OnInit {
     this.loading = false;
   }
 
-  validateAudience(): void {
-    this.loading = true;
+  validateAudience(isPagination: boolean = false, section?: 'new' | 'existing' | 'excluded'): void {
+    if (isPagination) {
+      if (section === 'new') this.newPaginationLoading = true;
+      else if (section === 'existing') this.existingPaginationLoading = true;
+      else if (section === 'excluded') this.excludedPaginationLoading = true;
+    } else {
+      this.loading = true;
+    }
     this.error = null;
+
     const formData = new FormData();
     formData.append('csvFile', this.data.csvFile);
-    this.campaignService.validateAudience(formData).subscribe({
+
+    // Add pagination params for all sections
+    const pagination = {
+      newPage: this.newPage,
+      newLimit: this.pageSize,
+      existingPage: this.existingPage,
+      existingLimit: this.pageSize,
+      excludedPage: this.excludedPage,
+      excludedLimit: this.pageSize
+    };
+
+    this.campaignService.validateAudience(formData, pagination).subscribe({
       next: (result: any) => {
         console.log('✅ Validation result:', result);
         this.validationResult = result;
         this.loading = false;
+        this.newPaginationLoading = false;
+        this.existingPaginationLoading = false;
+        this.excludedPaginationLoading = false;
+
+        // Update pagination metadata from server response
+        if (result.masterDocument?.newPagination) {
+          this.newTotalItems = result.masterDocument.newPagination.totalItems;
+          this.newTotalPages = result.masterDocument.newPagination.totalPages;
+          this.newPage = result.masterDocument.newPagination.page;
+        }
+        if (result.masterDocument?.existingPagination) {
+          this.existingTotalItems = result.masterDocument.existingPagination.totalItems;
+          this.existingTotalPages = result.masterDocument.existingPagination.totalPages;
+          this.existingPage = result.masterDocument.existingPagination.page;
+        }
+        if (result.excludedFromCampaign?.pagination) {
+          this.excludedTotalItems = result.excludedFromCampaign.pagination.totalItems;
+          this.excludedTotalPages = result.excludedFromCampaign.pagination.totalPages;
+          this.excludedPage = result.excludedFromCampaign.pagination.page;
+        }
       },
       error: (err: any) => {
         console.error('❌ Validation failed:', err);
         this.error = err.error?.error || 'Failed to validate audience';
         this.loading = false;
+        this.newPaginationLoading = false;
+        this.existingPaginationLoading = false;
+        this.excludedPaginationLoading = false;
       }
     });
   }
 
-  get paginatedNew(): string[] {
-    if (!this.validationResult) return [];
-    const start = this.newPage * this.pageSize;
-    return this.validationResult.masterDocument.new.slice(start, start + this.pageSize);
-  }
-
-  get paginatedExisting(): string[] {
-    if (!this.validationResult) return [];
-    const start = this.existingPage * this.pageSize;
-    return this.validationResult.masterDocument.existing.slice(start, start + this.pageSize);
-  }
-
-  get paginatedExcluded(): string[] {
-    if (!this.validationResult) return [];
-    const start = this.excludedPage * this.pageSize;
-    return this.validationResult.excludedFromCampaign.subscribers.slice(start, start + this.pageSize);
-  }
-
+  // Server-side pagination - data comes directly from validationResult
   get hasMoreNew(): boolean {
-    return this.validationResult 
-      ? (this.newPage + 1) * this.pageSize < this.validationResult.masterDocument.new.length
-      : false;
+    return this.newPage < this.newTotalPages;
   }
 
   get hasMoreExisting(): boolean {
-    return this.validationResult 
-      ? (this.existingPage + 1) * this.pageSize < this.validationResult.masterDocument.existing.length
-      : false;
+    return this.existingPage < this.existingTotalPages;
   }
 
   get hasMoreExcluded(): boolean {
-    return this.validationResult 
-      ? (this.excludedPage + 1) * this.pageSize < this.validationResult.excludedFromCampaign.subscribers.length
-      : false;
+    return this.excludedPage < this.excludedTotalPages;
   }
 
   nextNewPage(): void {
-    if (this.hasMoreNew) this.newPage++;
+    if (this.hasMoreNew) {
+      this.newPage++;
+      this.validateAudience(true, 'new');
+    }
   }
 
   prevNewPage(): void {
-    if (this.newPage > 0) this.newPage--;
+    if (this.newPage > 1) {
+      this.newPage--;
+      this.validateAudience(true, 'new');
+    }
   }
 
   nextExistingPage(): void {
-    if (this.hasMoreExisting) this.existingPage++;
+    if (this.hasMoreExisting) {
+      this.existingPage++;
+      this.validateAudience(true, 'existing');
+    }
   }
 
   prevExistingPage(): void {
-    if (this.existingPage > 0) this.existingPage--;
+    if (this.existingPage > 1) {
+      this.existingPage--;
+      this.validateAudience(true, 'existing');
+    }
   }
 
   nextExcludedPage(): void {
-    if (this.hasMoreExcluded) this.excludedPage++;
+    if (this.hasMoreExcluded) {
+      this.excludedPage++;
+      this.validateAudience(true, 'excluded');
+    }
   }
 
   prevExcludedPage(): void {
-    if (this.excludedPage > 0) this.excludedPage--;
+    if (this.excludedPage > 1) {
+      this.excludedPage--;
+      this.validateAudience(true, 'excluded');
+    }
   }
 
   addAllNewSubscribers(): void {
