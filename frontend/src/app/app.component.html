@@ -1,2 +1,32 @@
 <app-toolbar *ngIf="showToolbar"></app-toolbar>
 <router-outlet></router-outlet>
+
+<!-- Small site footer (home-only) -->
+<footer *ngIf="showFooter" class="site-footer site-footer--dark" role="contentinfo" aria-label="Site footer">
+	<div class="footer-inner">
+		<div class="footer-col footer-col--brand">
+			<div class="brand">
+				<div class="logo">📧</div>
+				<div class="brand-name">Camply</div>
+			</div>
+			<p class="brand-desc">Empowering businesses with innovative communication solutions.</p>
+
+		</div>
+
+		<div class="footer-col footer-col--links">
+			<h4>Quick Links</h4>
+			<ul>
+				<li><a href="http://localhost:4200/generate/4314852b-8a50-4f48-9887-0189879a2539">Generate Template</a></li>
+				<li><a href="/visual-editor">Visual Editor</a></li>
+				<li><a href="/organization">Campaign Results</a></li>
+			</ul>
+		</div>
+
+		<div class="footer-col footer-col--legal">
+			<div class="bottom-legal">
+				<div class="copyright">© 2025 Camply. All rights reserved.</div>
+				<div class="legal-links"><a href="/privacy">Privacy Policy</a><span> | </span><a href="/terms">Terms of Service</a></div>
+			</div>
+		</div>
+	</div>
+</footer>

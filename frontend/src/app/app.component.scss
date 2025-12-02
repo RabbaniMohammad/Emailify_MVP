@@ -1,0 +1,65 @@
+/* Dark home page footer (Camply) */
+.site-footer--dark {
+    width: 100%;
+    background: #091323;
+    color: #cbd5e1;
+    padding: 20px 16px; /* reduced height per request */
+}
+
+.site-footer--dark .footer-inner {
+	max-width: 1200px;
+	margin: 0 auto;
+	display: grid;
+	grid-template-columns: 1fr 220px 1fr; /* slightly narrower middle column */
+	gap: 16px;
+	align-items: start;
+}
+
+.site-footer--dark .footer-col {
+	color: #cbd5e1;
+}
+
+.footer-col--brand .brand {
+	display:flex;
+	align-items:center;
+	gap:12px;
+}
+
+.logo {
+	width:44px;
+	height:44px;
+	background: linear-gradient(135deg,#6b46c1,#4f46e5);
+	border-radius:10px;
+	display:flex;
+	align-items:center;
+	justify-content:center;
+	color:white;
+	font-weight:700;
+}
+
+.brand-name { font-weight:700; color:#fff; font-size:1.1rem; }
+.brand-desc { color:#94a3b8; margin-top:10px; max-width:360px; }
+
+.social { display:none; }
+.social-icon { display:none; }
+
+.footer-col--links h4 { color:#fff; margin:0 0 8px 0; }
+.footer-col--links ul { list-style:none; padding:0; margin:0; }
+.footer-col--links li { margin:8px 0; }
+.footer-col--links a { color:#94a3b8; text-decoration:none; }
+
+.footer-col--legal { text-align:right; }
+.footer-col--legal .bottom-legal { border-top:1px solid rgba(255,255,255,0.04); padding-top:18px; }
+.footer-col--legal .legal-links a { color:#94a3b8; text-decoration:none; }
+
+@media (max-width: 992px) {
+	.site-footer--dark .footer-inner { grid-template-columns: 1fr 1fr; }
+	.footer-col--legal { grid-column: 1 / -1; text-align:left; }
+}
+
+@media (max-width: 600px) {
+	.site-footer--dark .footer-inner { grid-template-columns: 1fr; }
+	.brand-desc { max-width:100%; }
+	.footer-col--legal { text-align:left; }
+}
+

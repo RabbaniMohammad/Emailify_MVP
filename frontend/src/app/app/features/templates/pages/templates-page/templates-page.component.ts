@@ -145,8 +145,8 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
             return of([] as any[]);
           }),
           map((images: any[]) => images.map(img => ({
-            id: `genimg_${img.id}`,
-            name: img.name || 'Banner Generation',
+              id: `genimg_${img.id}`,
+              name: img.name || 'Generate Flyer',
             originalImageId: img.id,
             imageUrl: img.url,
             thumbnail: img.thumbnail,
@@ -170,7 +170,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
             const mapped = images.map(img => {
               return {
                 id: `genimg_${img.id}`,
-                name: img.name || 'Banner Generation',
+                name: img.name || 'Generate Flyer',
                 // preserve original image id for backend calls
                 originalImageId: img.id,
                 imageUrl: img.url,
@@ -296,9 +296,9 @@ this.svc.state$
       }
       if (itemId) {
         // If an item id is supplied (backend image id), select and scroll to it after short delay
-        setTimeout(() => {
+          setTimeout(() => {
           const genId = `genimg_${itemId}`;
-          try { this.svc.select(genId, 'Banner Generation'); } catch (e) {}
+          try { this.svc.select(genId, 'Generate Flyer'); } catch (e) {}
           this.scrollToItem(genId);
         }, 300);
       }
@@ -925,7 +925,7 @@ this.svc.state$
 
           const imageUrl = item.url;
           // Build a minimal HTML document to display the image centered
-          const imgHtml = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{height:100%;margin:0;background:#fff;display:flex;align-items:center;justify-content:center}img{max-width:100%;max-height:100%;object-fit:contain}</style></head><body><img src="${imageUrl}" alt="${this.escapeHtml(item.name || 'Banner Generation')}"></body></html>`;
+          const imgHtml = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{height:100%;margin:0;background:#fff;display:flex;align-items:center;justify-content:center}img{max-width:100%;max-height:100%;object-fit:contain}</style></head><body><img src="${imageUrl}" alt="${this.escapeHtml(item.name || 'Generate Flyer')}"></body></html>`;
 
           this.safeSrcdoc = this.sanitizer.bypassSecurityTrustHtml(imgHtml);
 

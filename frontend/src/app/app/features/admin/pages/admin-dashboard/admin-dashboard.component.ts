@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { AdminService, AdminUser } from '../../../../core/services/admin.service';
@@ -54,6 +54,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   private adminEventService = inject(AdminEventService);
   private http = inject(HttpClient);
   private cacheService = inject(CacheService);
+  private cdr = inject(ChangeDetectorRef);
 
   private allUsersSubject = new BehaviorSubject<AdminUser[]>([]);
   readonly allUsers$ = this.allUsersSubject.asObservable();
@@ -394,10 +395,12 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
             this.senderSettingsConfigured = response.isConfigured || false;
             this.editingSenderSettings = !this.senderSettingsConfigured; // Auto-edit if not configured
             this.loadingSenderSettings = false;
+            this.cdr.markForCheck();
           },
           error: (error) => {
             console.error('Failed to load sender settings:', error);
             this.loadingSenderSettings = false;
+            this.cdr.markForCheck();
             this.editingSenderSettings = true; // Show form on error
           }
         });
@@ -449,6 +452,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
             this.savingSenderSettings = false;
             this.senderSettingsConfigured = true;
             this.editingSenderSettings = false; // Switch to display mode
+            this.cdr.markForCheck();
             
             // ✅ INVALIDATE SENDER SETTINGS CACHE
             // This ensures campaign pages fetch fresh data after admin updates
@@ -468,6 +472,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
           },
           error: (error) => {
             this.savingSenderSettings = false;
+            this.cdr.markForCheck();
             this.showError(error.error?.message || 'Failed to save sender settings');
           }
         });
