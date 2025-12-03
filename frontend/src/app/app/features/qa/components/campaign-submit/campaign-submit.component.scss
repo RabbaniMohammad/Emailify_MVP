@@ -88,7 +88,7 @@
         svg {
           width: 4rem;
           height: 4rem;
-          color: #f59e0b;
+          color: #E5893F;
           stroke-width: 2.5;
         }
       }
@@ -116,7 +116,7 @@
       
       .modal-instructions {
         background: #f8fafc;
-        border-left: 4px solid #667eea;
+        border-left: 4px solid #E5893F;
         border-radius: 8px;
         padding: 1.5rem;
         margin-bottom: 2rem;
@@ -201,19 +201,19 @@
 // ============================================
 
 .warning-banner {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border: 2px solid #f59e0b;
+  background: linear-gradient(135deg, rgba(229, 137, 63, 0.08) 0%, rgba(229, 137, 63, 0.15) 100%);
+  border: 2px solid #E5893F;
   border-radius: 12px;
   padding: 1.5rem;
   display: flex;
   gap: 1rem;
   align-items: flex-start;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+  box-shadow: 0 4px 12px rgba(229, 137, 63, 0.2);
   animation: slideDown 0.3s ease-out;
   
   .warning-icon {
     flex-shrink: 0;
-    color: #f59e0b;
+    color: #E5893F;
     
     svg {
       width: 2rem;
@@ -409,11 +409,11 @@
   }
   
   &::-webkit-scrollbar-thumb {
-    background: rgba(109, 40, 217, 0.3);
+    background: rgba(229, 137, 63, 0.3);
     border-radius: 3px;
     
     &:hover {
-      background: rgba(109, 40, 217, 0.5);
+      background: rgba(229, 137, 63, 0.5);
     }
   }
 }
@@ -839,8 +839,8 @@
   .cost-summary {
     margin-top: 1rem;
     padding: 1rem;
-    background: #fef3c7;
-    border: 1px solid #fcd34d;
+    background: rgba(229, 137, 63, 0.08);
+    border: 1px solid rgba(229, 137, 63, 0.3);
     border-radius: 8px;
 
     .cost-row {
@@ -900,8 +900,8 @@
   }
   
   &.ignored {
-    background: #fef3c7;
-    border-color: #fde68a;
+    background: rgba(229, 137, 63, 0.08);
+    border-color: rgba(229, 137, 63, 0.15);
   }
   
   .result-icon {
@@ -930,8 +930,8 @@
   }
   
   &.ignored .result-icon {
-    background: #fef3c7;
-    svg { color: #f59e0b; }
+    background: rgba(229, 137, 63, 0.08);
+    svg { color: #E5893F; }
   }
   
   .result-content {
@@ -996,8 +996,8 @@
   }
   
   &:focus {
-    border-color: #8b5cf6;
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    border-color: #E5893F;
+    box-shadow: 0 0 0 3px rgba(229, 137, 63, 0.1);
   }
 }
 
@@ -1043,7 +1043,7 @@
   svg {
     width: 20px;
     height: 20px;
-    color: #667eea;
+    color: #E5893F;
   }
   
   span {
@@ -1071,8 +1071,8 @@
     transition: all 0.2s ease;
     
     &:hover {
-      border-color: #667eea;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+      border-color: #E5893F;
+      box-shadow: 0 4px 12px rgba(229, 137, 63, 0.1);
     }
     
     .summary-count {
@@ -1082,7 +1082,7 @@
       justify-content: center;
       min-width: 80px;
       padding: 0.75rem;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #E5893F 0%, #E5893F 100%);
       border-radius: 8px;
       
       .count-badge {
@@ -1118,7 +1118,7 @@
           width: 20px;
           height: 20px;
           font-size: 20px;
-          color: #667eea;
+          color: #E5893F;
         }
         
         strong {
@@ -1129,11 +1129,11 @@
         
         &.immediate {
           mat-icon {
-            color: #f59e0b;
+            color: #E5893F;
           }
           
           strong {
-            color: #f59e0b;
+            color: #E5893F;
           }
         }
       }
@@ -1155,23 +1155,23 @@
         .timezone-badge {
           padding: 0.25rem 0.625rem;
           background: #ede9fe;
-          color: #7c3aed;
+          color: #E5893F;
           border-radius: 12px;
           font-size: 0.75rem;
           font-weight: 600;
           margin-left: 0.5rem;
           
           &.local {
-            background: #fef3c7;
-            color: #d97706;
+            background: rgba(229, 137, 63, 0.08);
+            color: #E5893F;
           }
         }
         
         &.warning {
-          color: #d97706;
+          color: #E5893F;
           
           mat-icon {
-            color: #f59e0b;
+            color: #E5893F;
           }
         }
       }
@@ -1252,11 +1252,11 @@
   }
   
   &::-webkit-scrollbar-thumb {
-    background: rgba(109, 40, 217, 0.3);
+    background: rgba(229, 137, 63, 0.3);
     border-radius: 3px;
     
     &:hover {
-      background: rgba(109, 40, 217, 0.5);
+      background: rgba(229, 137, 63, 0.5);
     }
   }
   
@@ -1388,11 +1388,11 @@
 // SUBMISSION SUMMARY BANNER
 // ============================================
 .submission-summary-banner {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border: 2px solid #fbbf24;
+  background: linear-gradient(135deg, rgba(229, 137, 63, 0.08) 0%, rgba(229, 137, 63, 0.15) 100%);
+  border: 2px solid rgba(229, 137, 63, 0.25);
   border-radius: 12px;
   padding: 1.5rem;
-  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.2);
+  box-shadow: 0 4px 12px rgba(229, 137, 63, 0.2);
 
   .summary-header {
     display: flex;
@@ -1405,7 +1405,7 @@
     svg {
       width: 24px;
       height: 24px;
-      color: #f59e0b;
+      color: #E5893F;
       flex-shrink: 0;
     }
 
@@ -1464,11 +1464,11 @@
       }
 
       &.summary-item-member {
-        border-left: 3px solid #8b5cf6;
+        border-left: 3px solid #E5893F;
       }
 
       &.summary-item-warning {
-        border-left: 3px solid #f59e0b;
+        border-left: 3px solid #E5893F;
       }
     }
   }
@@ -1520,7 +1520,7 @@
 
 .submit-btn {
   width: 100%;
-  background: #8b5cf6 !important;
+  background: #E5893F !important;
   color: white !important;
   border: none !important;
   font-weight: 700 !important;
@@ -1532,7 +1532,7 @@
   align-items: center !important;
   justify-content: center !important;
   gap: 0.75rem !important;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3) !important;
+  box-shadow: 0 4px 12px rgba(229, 137, 63, 0.3) !important;
   transition: all 0.2s ease !important;
   
   // ✅ Button content wrapper for spinner + text
@@ -1570,8 +1570,8 @@
   }
   
   &:hover:not(:disabled) {
-    background: #7c3aed !important;
-    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4) !important;
+    background: #E5893F !important;
+    box-shadow: 0 6px 16px rgba(229, 137, 63, 0.4) !important;
     transform: translateY(-2px);
   }
   
@@ -1592,15 +1592,15 @@
   align-items: center;
   gap: 0.75rem;
   padding: 1rem;
-  background: #fef3c7;
-  border: 1px solid #fde68a;
+  background: rgba(229, 137, 63, 0.08);
+  border: 1px solid rgba(229, 137, 63, 0.15);
   border-radius: 8px;
   text-align: center;
   
   svg {
     width: 20px;
     height: 20px;
-    color: #f59e0b;
+    color: #E5893F;
     flex-shrink: 0;
     min-width: 20px; 
   }
@@ -1670,14 +1670,14 @@
   flex-direction: row; // ✅ Force horizontal
   gap: 0.75rem;
   padding: 0.875rem 1rem;
-  background: rgba(251, 191, 36, 0.1);
-  border: 1px solid rgba(251, 191, 36, 0.3);
+  background: rgba(229, 137, 63, 0.1);
+  border: 1px solid rgba(229, 137, 63, 0.3);
   border-radius: 8px;
   
   svg {
     width: 20px;
     height: 20px;
-    color: #f59e0b;
+    color: #E5893F;
     flex-shrink: 0;
     min-width: 20px; // ✅ Prevent shrinking
     margin-top: 2px;
@@ -1688,7 +1688,7 @@
     
     strong {
       display: block;
-    //   color: white; // ✅ WHITE, not #fbbf24
+    //   color: white; // ✅ WHITE, not rgba(229, 137, 63, 0.25)
       font-size: 0.9rem;
       font-weight: 700;
       margin-bottom: 0.25rem;
@@ -1808,7 +1808,7 @@
   }
   
   &.local-timezone {
-    border-left: 3px solid #f59e0b;
+    border-left: 3px solid #E5893F;
   }
 }
 
@@ -1835,7 +1835,7 @@
     }
     
     &.local-indicator {
-      color: #fbbf24;
+      color: rgba(229, 137, 63, 0.25);
       font-weight: 500;
     }
   }
@@ -1940,7 +1940,7 @@
         font-family: 'Courier New', monospace;
         font-size: 0.85em;
         color: #991b1b;
-        color: #fbbf24;
+        color: rgba(229, 137, 63, 0.25);
       }
     }
   }
@@ -2022,20 +2022,20 @@
   gap: 0.5rem;
   padding: 0.75rem 1rem;
   margin-top: 0.75rem;
-  background: rgba(251, 191, 36, 0.1);
-  border: 1px solid rgba(251, 191, 36, 0.3);
+  background: rgba(229, 137, 63, 0.1);
+  border: 1px solid rgba(229, 137, 63, 0.3);
   border-radius: 6px;
   
   svg {
     width: 18px;
     height: 18px;
-    color: #fbbf24;
+    color: rgba(229, 137, 63, 0.25);
     flex-shrink: 0;
   }
   
   span {
     font-size: 0.875rem;
-    color: #fbbf24;
+    color: rgba(229, 137, 63, 0.25);
     font-weight: 500;
   }
 }
@@ -2051,8 +2051,8 @@
 
 .subject-generator-section {
   padding: 1.5rem;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(236, 72, 153, 0.08) 100%);
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  background: linear-gradient(135deg, rgba(229, 137, 63, 0.08) 0%, rgba(229, 137, 63, 0.08) 100%);
+  border: 1px solid rgba(229, 137, 63, 0.2);
   border-radius: 12px;
   position: relative;
   overflow: hidden;
@@ -2064,7 +2064,7 @@
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(90deg, #8b5cf6 0%, #ec4899 100%);
+    background: linear-gradient(90deg, #E5893F 0%, rgba(229, 137, 63, 0.25) 100%);
     border-radius: 3px 3px 0 0;
   }
   
@@ -2108,13 +2108,13 @@
   .icon-wrapper {
     width: 44px;
     height: 44px;
-    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+    background: linear-gradient(135deg, #E5893F 0%, rgba(229, 137, 63, 0.25) 100%);
     border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+    box-shadow: 0 4px 12px rgba(229, 137, 63, 0.25);
     
     @media (max-width: 768px) {
       width: 36px;
@@ -2170,14 +2170,14 @@
 
 // Generate Button
 .generate-subjects-btn {
-  background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%) !important;
+  background: linear-gradient(135deg, #E5893F 0%, rgba(229, 137, 63, 0.25) 100%) !important;
   color: white !important;
   border: none !important;
   border-radius: 8px !important;
   font-weight: 600 !important;
   font-size: 0.875rem !important;
   padding: 0.625rem 1.25rem !important;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25) !important;
+  box-shadow: 0 4px 12px rgba(229, 137, 63, 0.25) !important;
   display: inline-flex !important;
   flex-direction: row !important;
   align-items: center !important;
@@ -2221,7 +2221,7 @@
   
   &:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.35) !important;
+    box-shadow: 0 6px 16px rgba(229, 137, 63, 0.35) !important;
   }
   
   &:active:not(:disabled) {
@@ -2250,7 +2250,7 @@
 // Subject Chips
 .subject-chip {
   background: white;
-  border: 2px solid rgba(139, 92, 246, 0.15);
+  border: 2px solid rgba(229, 137, 63, 0.15);
   border-radius: 10px;
   padding: 0.875rem 1rem;
   cursor: pointer;
@@ -2270,14 +2270,14 @@
     left: 0;
     width: 4px;
     height: 100%;
-    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+    background: linear-gradient(135deg, #E5893F 0%, rgba(229, 137, 63, 0.25) 100%);
     opacity: 0;
     transition: opacity 0.2s ease;
   }
   
   &:hover {
-    border-color: rgba(139, 92, 246, 0.4);
-    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.15);
+    border-color: rgba(229, 137, 63, 0.4);
+    box-shadow: 0 4px 16px rgba(229, 137, 63, 0.15);
     transform: translateY(-2px) scale(1.01);
     
     &::before {
@@ -2294,8 +2294,8 @@
   }
   
   &.selected {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%);
-    border-color: rgba(139, 92, 246, 0.5);
+    background: linear-gradient(135deg, rgba(229, 137, 63, 0.1) 0%, rgba(229, 137, 63, 0.1) 100%);
+    border-color: rgba(229, 137, 63, 0.5);
     
     &::before {
       opacity: 1;
@@ -2303,11 +2303,11 @@
     
     .chip-text {
       font-weight: 600;
-      color: #8b5cf6;
+      color: #E5893F;
     }
     
     .chip-icon svg {
-      color: #8b5cf6;
+      color: #E5893F;
     }
   }
 }
@@ -2347,7 +2347,7 @@
   flex-shrink: 0;
   width: 28px;
   height: 28px;
-  background: rgba(139, 92, 246, 0.08);
+  background: rgba(229, 137, 63, 0.08);
   border-radius: 6px;
   display: flex;
   align-items: center;

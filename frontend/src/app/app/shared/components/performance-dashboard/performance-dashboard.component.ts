@@ -121,7 +121,7 @@ export class PerformanceDashboardComponent implements OnInit, OnDestroy {
   get cacheHealthColor(): string {
     const status = this.cacheHealthStatus;
     return status === 'critical' ? '#ef4444' : 
-           status === 'warning' ? '#f59e0b' : 
+           status === 'warning' ? '#E5893F' : 
            '#10b981';
   }
 
@@ -132,7 +132,7 @@ export class PerformanceDashboardComponent implements OnInit, OnDestroy {
   get storageColor(): string {
     const pct = this.storagePercentage;
     return pct > 90 ? '#ef4444' : 
-           pct > 70 ? '#f59e0b' : 
+           pct > 70 ? '#E5893F' : 
            '#10b981';
   }
 

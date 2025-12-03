@@ -227,7 +227,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   editMode: 'deterministic' | 'ai' = 'deterministic';
   // Deterministic edit inputs
   editOverlayText = '';
-  editHexColor = '#C47A00';
+  editHexColor = '#E5893F';
   // AI remix inputs
   editRemixPrompt = '';
   isEditing = false;
@@ -530,7 +530,7 @@ this.svc.state$
     // Pre-fill inputs with existing metadata
     this.editMode = 'deterministic';
     this.editOverlayText = '';
-    this.editHexColor = '#C47A00';
+    this.editHexColor = '#E5893F';
     this.editRemixPrompt = this.templateMetadata?.prompt || '';
     this.editPreviewDataUrl = null;
     this.showEditModal = true;

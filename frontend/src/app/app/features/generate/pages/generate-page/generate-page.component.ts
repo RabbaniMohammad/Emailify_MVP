@@ -136,8 +136,8 @@ export class GeneratePageComponent implements OnInit, OnDestroy, AfterViewInit, 
         <path class="sparkle sparkle-2" d="M 48 85 L 50 90 L 55 92 L 50 94 L 48 99 L 46 94 L 41 92 L 46 90 Z" fill="currentColor"/>
         <defs>
           <linearGradient id="robotGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#667eea;stop-opacity:0.3" />
-            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:0.3" />
+            <stop offset="0%" style="stop-color:#E5893F;stop-opacity:0.3" />
+            <stop offset="100%" style="stop-color:#E5893F;stop-opacity:0.3" />
           </linearGradient>
         </defs>
       </svg>
@@ -2329,7 +2329,7 @@ Examples:
       font-size: 2.5rem;
       width: 2.5rem;
       height: 2.5rem;
-      color: #f59e0b;
+      color: #E5893F;
     }
 
     h2 {
@@ -2369,12 +2369,12 @@ Examples:
     }
 
     .save-btn {
-      background: linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%);
+      background: linear-gradient(135deg, #E5893F 0%, #E5893F 100%);
       color: white;
     }
 
     .save-btn:hover {
-      background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 100%);
+      background: linear-gradient(135deg, #E5893F 0%, #E5893F 100%);
     }
   `]
 })

@@ -3,7 +3,7 @@
   flex-direction: column;
   height: 100%;
   max-height: 90vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #E5893F 0%, #E5893F 100%);
   border-radius: 16px;
   overflow: hidden;
 }
@@ -89,12 +89,12 @@
 
 // Health Card
 .health-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #E5893F 0%, #E5893F 100%);
   color: #fff;
   padding: 32px;
   border-radius: 16px;
   margin-bottom: 24px;
-  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 10px 30px rgba(229, 137, 63, 0.3);
 
   .card-header {
     display: flex;
@@ -106,6 +106,8 @@
       font-size: 32px;
       width: 32px;
       height: 32px;
+      // White outline for better contrast on orange background
+      filter: drop-shadow(0.5px 0.5px 0 rgba(255,255,255,0.8)) drop-shadow(-0.5px -0.5px 0 rgba(255,255,255,0.8));
     }
 
     h3 {
@@ -119,7 +121,11 @@
     font-size: 36px;
     font-weight: 700;
     margin-bottom: 12px;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    // White outline for better contrast on orange background
+    text-shadow: 
+      0.5px 0.5px 0 rgba(255,255,255,0.7),
+      -0.5px -0.5px 0 rgba(255,255,255,0.7),
+      0 2px 10px rgba(0, 0, 0, 0.2);
   }
 
   .health-description {
@@ -145,7 +151,7 @@
     margin-bottom: 20px;
 
     mat-icon {
-      color: #6366f1;
+      color: #E5893F;
       font-size: 24px;
       width: 24px;
       height: 24px;
@@ -209,7 +215,7 @@
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #6366f1;
+      color: #E5893F;
     }
   }
 }
@@ -244,7 +250,7 @@
       font-size: 36px;
       width: 36px;
       height: 36px;
-      color: #6366f1;
+      color: #E5893F;
       margin-bottom: 12px;
     }
   }
@@ -299,7 +305,7 @@
     margin-bottom: 24px;
 
     mat-icon {
-      color: #6366f1;
+      color: #E5893F;
     }
 
     h3 {
@@ -321,7 +327,7 @@
       top: 0;
       bottom: 0;
       width: 2px;
-      background: linear-gradient(180deg, #6366f1, #8b5cf6, #ec4899, #10b981);
+      background: linear-gradient(180deg, #E5893F, #10b981, #E5893F, #10b981);
     }
 
     .timeline-item {
@@ -352,18 +358,18 @@
         }
 
         &.created {
-          border-color: #6366f1;
-          mat-icon { color: #6366f1; }
+          border-color: #E5893F;
+          mat-icon { color: #E5893F; }
         }
 
         &.active {
-          border-color: #8b5cf6;
-          mat-icon { color: #8b5cf6; }
+          border-color: #E5893F;
+          mat-icon { color: #E5893F; }
         }
 
         &.expired {
-          border-color: #ec4899;
-          mat-icon { color: #ec4899; }
+          border-color: #10b981;
+          mat-icon { color: #10b981; }
         }
 
         &.restored {
@@ -387,7 +393,7 @@
           color: #64748b;
 
           strong {
-            color: #6366f1;
+            color: #E5893F;
           }
         }
       }
@@ -409,7 +415,7 @@
     margin-bottom: 20px;
 
     mat-icon {
-      color: #f59e0b;
+      color: #E5893F;
     }
 
     h3 {
@@ -471,7 +477,7 @@
     width: 64px;
     height: 64px;
     margin-bottom: 16px;
-    color: #6366f1;
+    color: #E5893F;
 
     &.spin {
       animation: spin 1s linear infinite;
@@ -510,7 +516,7 @@
       font-size: 18px;
       width: 18px;
       height: 18px;
-      color: #6366f1;
+      color: #E5893F;
     }
   }
 
@@ -561,7 +567,7 @@
       font-size: 48px;
       width: 48px;
       height: 48px;
-      color: #f59e0b;
+      color: #E5893F;
     }
 
     h3 {
@@ -579,8 +585,8 @@
   }
 
   .warning-list {
-    background: #fef3c7;
-    border-left: 4px solid #f59e0b;
+    background: rgba(229, 137, 63, 0.08);
+    border-left: 4px solid #E5893F;
     padding: 16px 20px;
     margin: 16px 0;
     border-radius: 8px;
@@ -606,7 +612,7 @@
     margin-bottom: 24px;
 
     strong {
-      color: #f59e0b;
+      color: #E5893F;
     }
   }
 

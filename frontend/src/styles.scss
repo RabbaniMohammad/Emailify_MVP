@@ -157,3 +157,15 @@ body.validation-modal-open {
     margin-top: 0 !important;
   }
 }
+
+// ============================================
+// GLOBAL MAT-SPINNER ORANGE THEME
+// ============================================
+mat-spinner,
+.mat-mdc-progress-spinner {
+  --mdc-circular-progress-active-indicator-color: #E5893F !important;
+  
+  circle {
+    stroke: #E5893F !important;
+  }
+}

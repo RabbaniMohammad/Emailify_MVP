@@ -4,7 +4,7 @@
 
 .campaign-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #E5893F 0%, #E5893F 100%);
   position: relative;
 }
 
@@ -19,7 +19,7 @@
   background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(20px);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border-bottom: 1px solid rgba(102, 126, 234, 0.15);
+  border-bottom: 1px solid rgba(229, 137, 63, 0.15);
 }
 
 .header-wrapper {
@@ -45,7 +45,7 @@
   width: 42px;
   height: 42px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #E5893F 0%, #E5893F 100%);
   border: none;
   cursor: pointer;
   display: flex;
@@ -53,7 +53,7 @@
   justify-content: center;
   transition: all 0.2s ease;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 8px rgba(229, 137, 63, 0.3);
 
   svg {
     stroke: white;
@@ -61,7 +61,7 @@
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 4px 12px rgba(229, 137, 63, 0.4);
   }
 
   &:active {
@@ -81,7 +81,7 @@
     margin: 0;
     font-size: 1.75rem;
     font-weight: 700;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #E5893F 0%, #E5893F 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -195,7 +195,7 @@
 
     // Card headers
     .card-header {
-      border-bottom: 1px solid rgba(102, 126, 234, 0.1) !important;
+      border-bottom: 1px solid rgba(229, 137, 63, 0.1) !important;
 
       h3 {
         color: #1a202c !important;
@@ -203,22 +203,22 @@
       }
 
       .header-icon {
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%) !important;
+        background: linear-gradient(135deg, rgba(229, 137, 63, 0.1) 0%, rgba(214, 115, 51, 0.1) 100%) !important;
         
         svg {
-          color: #667eea !important;
+          color: #E5893F !important;
         }
       }
     }
 
     // Form inputs
     input, textarea, select {
-      border-color: rgba(102, 126, 234, 0.2) !important;
+      border-color: rgba(229, 137, 63, 0.2) !important;
       transition: all 0.2s ease !important;
 
       &:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+        border-color: #E5893F !important;
+        box-shadow: 0 0 0 3px rgba(229, 137, 63, 0.1) !important;
         outline: none !important;
       }
     }
@@ -294,11 +294,11 @@
 
 @media (prefers-contrast: high) {
   .campaign-header {
-    border-bottom: 2px solid #667eea;
+    border-bottom: 2px solid #E5893F;
   }
 
   ::ng-deep app-campaign-submit .section-card {
-    border: 2px solid rgba(102, 126, 234, 0.5) !important;
+    border: 2px solid rgba(229, 137, 63, 0.5) !important;
   }
 }
 

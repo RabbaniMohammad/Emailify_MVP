@@ -609,7 +609,7 @@
               <input type="text" [(ngModel)]="editOverlayText" placeholder="e.g. $10 — BUY ONE GET ONE" />
 
               <label>Tint color (hex)</label>
-              <input type="text" [(ngModel)]="editHexColor" placeholder="#C47A00" />
+              <input type="text" [(ngModel)]="editHexColor" placeholder="#E5893F" />
 
               <div class="edit-actions">
                 <button class="primary" (click)="applyDeterministicEdit()" [disabled]="isEditing">Apply & Preview</button>
@@ -618,7 +618,7 @@
 
             <div *ngIf="editMode === 'ai'">
               <label>Remix prompt</label>
-              <textarea rows="4" [(ngModel)]="editRemixPrompt" placeholder="E.g. Make this image photorealistic and warm the rice color to saffron #C47A00"></textarea>
+              <textarea rows="4" [(ngModel)]="editRemixPrompt" placeholder="E.g. Make this image photorealistic and warm the rice color to saffron #E5893F"></textarea>
               <div class="edit-actions">
                 <button class="primary" (click)="applyAiRemix()" [disabled]="isEditing">Remix with AI</button>
               </div>

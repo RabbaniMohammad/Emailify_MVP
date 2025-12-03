@@ -204,8 +204,8 @@ goForward(): void {
     const ctx = canvas.getContext('2d')!;
     
     const gradient = ctx.createLinearGradient(0, 0, 80, 80);
-    gradient.addColorStop(0, '#667eea');
-    gradient.addColorStop(1, '#764ba2');
+    gradient.addColorStop(0, '#E5893F');
+    gradient.addColorStop(1, '#E5893F');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 80, 80);
     

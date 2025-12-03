@@ -42,7 +42,7 @@ import { Router } from '@angular/router';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #E5893F 0%, #E5893F 100%);
       padding: 2rem;
     }
 
@@ -66,7 +66,7 @@ import { Router } from '@angular/router';
       .icon-backdrop {
         position: absolute;
         inset: 0;
-        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        background: linear-gradient(135deg, rgba(229, 137, 63, 0.25) 0%, #E5893F 100%);
         border-radius: 50%;
         opacity: 0.15;
         animation: pulse 2s ease-in-out infinite;
@@ -77,8 +77,8 @@ import { Router } from '@angular/router';
         z-index: 2;
         width: 100%;
         height: 100%;
-        color: #f59e0b;
-        filter: drop-shadow(0 4px 12px rgba(245, 158, 11, 0.3));
+        color: #E5893F;
+        filter: drop-shadow(0 4px 12px rgba(229, 137, 63, 0.3));
         animation: rotate 3s linear infinite;
       }
     }
@@ -129,7 +129,7 @@ import { Router } from '@angular/router';
       align-items: center;
       gap: 0.625rem;
       padding: 0.875rem 1.75rem;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #E5893F 0%, #E5893F 100%);
       color: white;
       border: none;
       border-radius: 12px;
@@ -137,7 +137,7 @@ import { Router } from '@angular/router';
       font-weight: 700;
       cursor: pointer;
       transition: all 0.3s ease;
-      box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 4px 16px rgba(229, 137, 63, 0.3);
 
       svg {
         width: 20px;
@@ -146,7 +146,7 @@ import { Router } from '@angular/router';
 
       &:hover {
         transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+        box-shadow: 0 8px 24px rgba(229, 137, 63, 0.4);
       }
 
       &:active {

@@ -301,15 +301,15 @@ export class CampaignDetailPageComponent implements OnInit, OnDestroy {
         {
           label: 'Open Rate (%)',
           data: opensData,
-          borderColor: '#667eea',
-          backgroundColor: 'rgba(102, 126, 234, 0.1)',
+          borderColor: '#E5893F',
+          backgroundColor: 'rgba(229, 137, 63, 0.1)',
           fill: true,
           tension: 0.4
         },
         {
           label: 'Click Rate (%)',
           data: clicksData,
-          borderColor: '#f5576c',
+          borderColor: '#E5893F',
           backgroundColor: 'rgba(245, 87, 108, 0.1)',
           fill: true,
           tension: 0.4
