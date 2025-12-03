@@ -106,8 +106,6 @@
       font-size: 32px;
       width: 32px;
       height: 32px;
-      // White outline for better contrast on orange background
-      filter: drop-shadow(0.5px 0.5px 0 rgba(255,255,255,0.8)) drop-shadow(-0.5px -0.5px 0 rgba(255,255,255,0.8));
     }
 
     h3 {
@@ -121,11 +119,6 @@
     font-size: 36px;
     font-weight: 700;
     margin-bottom: 12px;
-    // White outline for better contrast on orange background
-    text-shadow: 
-      0.5px 0.5px 0 rgba(255,255,255,0.7),
-      -0.5px -0.5px 0 rgba(255,255,255,0.7),
-      0 2px 10px rgba(0, 0, 0, 0.2);
   }
 
   .health-description {
