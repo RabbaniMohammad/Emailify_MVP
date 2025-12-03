@@ -599,6 +599,22 @@
           width: 100%;
         }
 
+        /* External label shown above the custom rounded input panels */
+        .field-with-label {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .field-label {
+          font-size: 0.9rem;
+          font-weight: 700;
+          color: #475569;
+          letter-spacing: 0.02em;
+          text-transform: none;
+          margin: 0 0 0.25rem 0;
+        }
+
         .mat-mdc-text-field-wrapper {
           background: rgba(255, 255, 255, 0.95);
           border-radius: 16px;
@@ -634,6 +650,13 @@
           min-height: 60px;
           display: flex;
           align-items: center;
+        }
+
+        /* When using the .label-above class we hide the internal floating label
+           so the external label sits visually above the rounded input container. */
+        .label-above ::ng-deep .mat-mdc-form-field-label,
+        .label-above ::ng-deep .mdc-floating-label {
+          display: none !important;
         }
 
         input.mat-mdc-input-element {

@@ -19,19 +19,26 @@
       <p>Please confirm that the contacts in the uploaded CSV have explicitly opted in for the channels you will use.</p>
 
       <form class="consent-form">
-        <mat-checkbox [(ngModel)]="consent.sms_optin" name="sms_optin" required>
+        <div class="select-mode">
+          <label class="select-mode-label">Selection mode</label>
+          <mat-radio-group [(ngModel)]="selectMode" name="selectMode" (ngModelChange)="onSelectModeChange($event)">
+            <mat-radio-button value="individual">Choose channels individually</mat-radio-button>
+            <mat-radio-button value="all">Select all channels</mat-radio-button>
+          </mat-radio-group>
+        </div>
+        <mat-checkbox [(ngModel)]="consent.sms_optin" name="sms_optin" required [disabled]="selectMode === 'all'">
           <span class="required" aria-hidden>*</span>
           I confirm all uploaded contacts have explicitly opted in to receive <strong>SMS</strong> messages.
         </mat-checkbox>
-        <mat-checkbox [(ngModel)]="consent.whatsapp_optin" name="whatsapp_optin" required>
+        <mat-checkbox [(ngModel)]="consent.whatsapp_optin" name="whatsapp_optin" required [disabled]="selectMode === 'all'">
           <span class="required" aria-hidden>*</span>
           I confirm all uploaded contacts have explicitly opted in to receive <strong>WhatsApp</strong> messages.
         </mat-checkbox>
-        <mat-checkbox [(ngModel)]="consent.instagram_optin" name="instagram_optin" required>
+        <mat-checkbox [(ngModel)]="consent.instagram_optin" name="instagram_optin" required [disabled]="selectMode === 'all'">
           <span class="required" aria-hidden>*</span>
           I confirm all uploaded contacts have explicitly opted in to receive <strong>Instagram Direct Messages</strong>.
         </mat-checkbox>
-        <mat-checkbox [(ngModel)]="consent.email_optin" name="email_optin" required>
+        <mat-checkbox [(ngModel)]="consent.email_optin" name="email_optin" required [disabled]="selectMode === 'all'">
           <span class="required" aria-hidden>*</span>
           I confirm all uploaded contacts have explicitly opted in to receive <strong>Email</strong> marketing.
         </mat-checkbox>
@@ -43,6 +50,7 @@
         <div class="proof-section">
           <label>Upload proof (image or PDF) <span class="required" aria-hidden>*</span></label>
           <input type="file" (change)="onProofFileChange($event)" />
+          <span *ngIf="consent.proof_file" class="proof-filename">{{ consent.proof_file?.name }}</span>
           <div *ngIf="!consent.proof_file" class="proof-hint">Please upload proof before proceeding.</div>
         </div>
 

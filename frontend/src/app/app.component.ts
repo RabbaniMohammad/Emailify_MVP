@@ -22,6 +22,7 @@ export class AppComponent implements OnInit {
   private cacheMonitor = inject(CacheMonitorService);
   private cdr = inject(ChangeDetectorRef);
   showToolbar = true;
+  showFooter = true;
 
   constructor() {
     // ✅ Set initial toolbar state based on current route
@@ -32,6 +33,7 @@ export class AppComponent implements OnInit {
     ).subscribe((event: any) => {
       const url = event.urlAfterRedirects || event.url;
       this.updateToolbarVisibility(url);
+      this.updateFooterVisibility(url);
     });
   }
   
@@ -42,6 +44,15 @@ export class AppComponent implements OnInit {
       this.showToolbar = shouldShow;
 
       // ✅ Force change detection in next tick to ensure UI updates
+      setTimeout(() => this.cdr.detectChanges(), 0);
+    }
+  }
+
+  private updateFooterVisibility(url: string): void {
+    // Show footer only on the root/home page
+    const show = url === '/' || url === '' || url === '/home';
+    if (this.showFooter !== show) {
+      this.showFooter = show;
       setTimeout(() => this.cdr.detectChanges(), 0);
     }
   }

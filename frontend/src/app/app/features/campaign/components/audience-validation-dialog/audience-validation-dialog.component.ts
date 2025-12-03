@@ -10,6 +10,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatRadioModule } from '@angular/material/radio';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -70,6 +71,7 @@ interface ScheduledEmail {
     MatTabsModule,
     MatTooltipModule
   ,MatCheckboxModule, MatFormFieldModule, MatInputModule
+  ,MatRadioModule
   ],
   templateUrl: './audience-validation-dialog.component.html',
   styleUrls: ['./audience-validation-dialog.component.scss']
@@ -95,12 +97,33 @@ export class AudienceValidationDialogComponent implements OnInit {
     description: '',
   };
 
+  // Selection mode: 'individual' lets user pick any subset; 'all' auto-selects and disables
+  selectMode: 'individual' | 'all' = 'individual';
+
+  get consentChannelsSelectedCount(): number {
+    return [this.consent.sms_optin, this.consent.whatsapp_optin, this.consent.instagram_optin, this.consent.email_optin].filter(Boolean).length;
+  }
+
   get consentComplete(): boolean {
-    return !!this.consent.sms_optin && !!this.consent.whatsapp_optin && !!this.consent.instagram_optin && !!this.consent.email_optin && !!this.consent.understand && !!this.consent.proof_file;
+    // If selectMode is 'all', channels are considered selected. Otherwise require at least one channel selected.
+    const channelsSelected = this.selectMode === 'all' ? true : this.consentChannelsSelectedCount > 0;
+    return !!channelsSelected && !!this.consent.understand && !!this.consent.proof_file;
   }
 
   get canProceed(): boolean {
     return !this.loading && this.consentComplete;
+  }
+
+  onSelectModeChange(value: 'individual' | 'all') {
+    this.selectMode = value;
+    if (this.selectMode === 'all') {
+      // Auto-check all channels when selecting "all"
+      this.consent.sms_optin = true;
+      this.consent.whatsapp_optin = true;
+      this.consent.instagram_optin = true;
+      this.consent.email_optin = true;
+    }
+    // If switching back to individual, keep the current checked state so user can uncheck if desired.
   }
 
   // Track emails added to master document with schedule info

@@ -385,31 +385,35 @@
                   </header>
 
                   <div class="field-group">
-                    <mat-form-field appearance="outline" class="full-width">
-                      <mat-label>Sender Email Address</mat-label>
-                      <input 
-                        matInput 
-                        type="email" 
-                        [(ngModel)]="fromEmail" 
-                        name="fromEmail"
-                        placeholder="marketing@yourcompany.com"
-                        required>
-                      <mat-icon matPrefix>alternate_email</mat-icon>
-                      <mat-hint>Use an email on your verified domain (not Gmail, Yahoo, etc.).</mat-hint>
-                    </mat-form-field>
+                    <div class="field-with-label">
+                      <label class="field-label">Sender Email Address</label>
+                      <mat-form-field appearance="outline" class="full-width label-above">
+                        <input 
+                          matInput 
+                          type="email" 
+                          [(ngModel)]="fromEmail" 
+                          name="fromEmail"
+                          placeholder="marketing@yourcompany.com"
+                          required>
+                        <mat-icon matPrefix>alternate_email</mat-icon>
+                        <mat-hint>Use an email on your verified domain (not Gmail, Yahoo, etc.).</mat-hint>
+                      </mat-form-field>
+                    </div>
 
-                    <mat-form-field appearance="outline" class="full-width">
-                      <mat-label>Sender Name</mat-label>
-                      <input 
-                        matInput 
-                        type="text" 
-                        [(ngModel)]="fromName" 
-                        name="fromName"
-                        placeholder="Your Company Name"
-                        required>
-                      <mat-icon matPrefix>person</mat-icon>
-                      <mat-hint>This name is shown to recipients in their inbox.</mat-hint>
-                    </mat-form-field>
+                    <div class="field-with-label">
+                      <label class="field-label">Sender Name</label>
+                      <mat-form-field appearance="outline" class="full-width label-above">
+                        <input 
+                          matInput 
+                          type="text" 
+                          [(ngModel)]="fromName" 
+                          name="fromName"
+                          placeholder="Your Company Name"
+                          required>
+                        <mat-icon matPrefix>person</mat-icon>
+                        <mat-hint>This name is shown to recipients in their inbox.</mat-hint>
+                      </mat-form-field>
+                    </div>
                   </div>
 
                   <div class="status-banner warning">
