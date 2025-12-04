@@ -90,6 +90,37 @@
   user-select: none;
 }
 
+/* Compact org badge shown inline with the brand */
+.header-org-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.06);
+}
+
+.header-org-label {
+  color: rgba(255,255,255,0.85);
+  font-weight: 700;
+  font-size: 0.8125rem;
+}
+
+.header-org-name {
+  color: white;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+
 .toolbar-spacer {
   flex: 1;
 }

@@ -145,10 +145,25 @@ async function extractFromPDF(buffer: Buffer): Promise<string> {
     return data.text;
   } catch (error: any) {
     console.error('❌ Error extracting from PDF:', error);
+    
+    // Handle specific PDF errors with helpful messages
+    if (error.message && error.message.includes('bad XRef')) {
+      console.warn('⚠️ PDF has corrupted XRef table, attempting text extraction anyway...');
+      // Return a helpful error message instead of crashing
+      return `[PDF Error: This PDF file appears to be corrupted or has an invalid structure. Please try re-saving the PDF or using a different file format like DOCX or TXT. Error details: ${error.message}]`;
+    }
+    
+    if (error.message && error.message.includes('Invalid PDF')) {
+      return `[PDF Error: The uploaded file does not appear to be a valid PDF document. Please verify the file is not corrupted and try again.]`;
+    }
+    
     if (error.message.includes('Cannot find module')) {
       throw new Error('pdf-parse is not installed. Please run: npm install pdf-parse@1.1.1');
     }
-    throw new Error(`Failed to extract text from PDF: ${error.message}`);
+    
+    // For other PDF errors, return a user-friendly message
+    console.warn('⚠️ PDF parsing failed, returning error message to user');
+    return `[PDF Extraction Error: Unable to extract text from this PDF. The file may be image-based (scanned), password-protected, or corrupted. Error: ${error.message}]`;
   }
 }
 
@@ -370,11 +385,17 @@ router.post('/csv-to-prompt/extract', upload.single('file'), async (req: Request
       extractedData = await extractFromWord(req.file.buffer);
     } else if (fileExtension === 'pdf') {
       extractedData = await extractFromPDF(req.file.buffer);
+      // Check if extraction returned an error message
+      if (extractedData.startsWith('[PDF Error:') || extractedData.startsWith('[PDF Extraction Error:')) {
+        console.warn('⚠️ PDF extraction had issues but returning partial result');
+        // Still return the error message so user knows what happened
+      }
     } else {
       return res.status(400).json({ error: 'Unsupported file type' });
     }
 
-
+    // Even if extractedData contains an error message, return it
+    // The AI can work with the error message to explain the issue to the user
     res.json({
       success: true,
       extractedData,

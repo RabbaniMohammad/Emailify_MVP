@@ -3,8 +3,11 @@ import { authenticate } from '@src/middleware/auth';
 import { organizationContext } from '@src/middleware/organizationContext';
 import TemplateConversation from '@src/models/TemplateConversation';
 import GeneratedTemplate from '@src/models/GeneratedTemplate';
+import GeneratedImage from '@src/models/GeneratedImage';
 import User from '@src/models/User';
 import { generateTemplate, refineTemplate } from '@src/services/templateGenerationService';
+import fs from 'fs';
+import path from 'path';
 import { convertMjmlToHtml, validateMjml, getMjmlStarter } from '@src/services/mjmlConversionService';
 import logger from 'jet-logger';
 import { randomUUID } from 'crypto';
@@ -104,7 +107,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
  */
 router.post('/chat', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
-    const { message, conversationHistory = [], currentMjml, images, extractedFileData } = req.body;
+  const { message, conversationHistory = [], currentMjml, images, extractedFileData } = req.body;
     const userId = (req as any).tokenPayload?.userId;
     const organization = (req as any).organization;
     
@@ -140,6 +143,88 @@ router.post('/chat', authenticate, organizationContext, async (req: Request, res
         mediaType: img.mediaType,
         dataLength: img.data?.length
       })));
+    }
+
+    // If the client sent base64 image attachments, save them to disk and build public URLs
+    const uploadedImageUrls: string[] = [];
+    try {
+      if (images && images.length > 0) {
+        // Write into server's served public directory so files are accessible at /uploads/master/<file>
+        const uploadDir = path.join(__dirname, '..', 'public', 'uploads', 'master');
+        try {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        } catch (e) {
+          // ignore
+        }
+
+        const MAX_UPLOAD_BYTES = parseInt(process.env.MAX_UPLOAD_BYTES || String(5 * 1024 * 1024), 10); // default 5MB
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+
+        for (const img of images) {
+          try {
+            // img.data is expected to be base64 (without data: prefix)
+            if (img.data && typeof img.data === 'string') {
+              const buffer = Buffer.from(img.data, 'base64');
+
+              // Server-side validation: size
+              if (buffer.length > MAX_UPLOAD_BYTES) {
+                logger.warn(`⚠️ Uploaded image ${img.fileName || 'unknown'} exceeds max size (${buffer.length} bytes)`);
+                return res.status(400).json({ code: 'FILE_TOO_LARGE', message: `File ${img.fileName || ''} is too large` });
+              }
+
+              // Validate media type if provided
+              if (img.mediaType && !allowedTypes.includes(String(img.mediaType).toLowerCase())) {
+                logger.warn(`⚠️ Uploaded image ${img.fileName || 'unknown'} has disallowed media type: ${img.mediaType}`);
+                return res.status(400).json({ code: 'INVALID_FILE_TYPE', message: `File ${img.fileName || ''} has invalid type` });
+              }
+
+              const ext = (img.mediaType && img.mediaType.split('/')[1]) || (img.fileName && img.fileName.split('.').pop()) || 'jpg';
+              const safeExt = ext.replace(/[^a-z0-9]/gi, '').toLowerCase();
+              const fileName = `attached_${Date.now()}_${Math.random().toString(36).slice(2,8)}.${safeExt}`;
+              const filePath = path.join(uploadDir, fileName);
+              fs.writeFileSync(filePath, buffer);
+
+              const host = req.get('host');
+              const protocol = req.protocol;
+              const publicUrl = `${protocol}://${host}/uploads/master/${fileName}`;
+
+              // Persist metadata to GeneratedImage collection
+              try {
+                const imageId = `img_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+                await GeneratedImage.create({
+                  imageId,
+                  name: img.fileName && String(img.fileName).trim() ? String(img.fileName).trim() : 'uploaded_image',
+                  prompt: 'Uploaded attachment',
+                  wrappedPrompt: undefined,
+                  userId: userId,
+                  organizationId: organization._id,
+                  source: 'upload',
+                  modelName: 'upload',
+                  width: undefined,
+                  height: undefined,
+                  url: publicUrl,
+                  thumbnail: publicUrl,
+                  metadata: { originalName: img.fileName || null },
+                });
+
+                uploadedImageUrls.push(publicUrl);
+              } catch (dbErr) {
+                logger.err('Failed to persist GeneratedImage', dbErr?.message || dbErr);
+                // Still push the URL so generation can proceed, but log error
+                uploadedImageUrls.push(publicUrl);
+              }
+            } else if (img.url) {
+              uploadedImageUrls.push(String(img.url));
+            }
+          } catch (e) {
+            logger.err('Failed to write uploaded image', e?.message || e);
+          }
+        }
+
+        logger.info(`📥 Saved ${uploadedImageUrls.length} attached images to public uploads`);
+      }
+    } catch (e) {
+      logger.err('Error processing attached images', e?.message || e);
     }
 
     // Determine if this is a new template or refinement

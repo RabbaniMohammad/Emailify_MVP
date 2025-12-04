@@ -36,16 +36,12 @@ export function wrapMarketingPrompt(userPrompt: string, opts?: { aspect_ratio?: 
       ? `A. CONSTRAINTS: Strictly produce marketing/promotional imagery. Brand names and product names may be used as requested.`
       : `A. CONSTRAINTS: Strictly produce marketing/promotional imagery. Do not include brand names or copyrighted logos.`,
     "B. PURPOSE: This image will be used as a promotional hero/banner. Keep composition clean, subject centered or following standard marketing layout.",
-    `C. USER DESCRIPTION: ${p}`,
-    // Explicit instruction: include only the exact on-image text requested and do not invent additional textual elements.
-    `D. TEXT POLICY: If the user requests on-image text (headline, price, CTA), include EXACTLY that text only. Do NOT add any extra words, translations, captions, dialogue, speech bubbles, or labels in any language. Do not invent or translate content.`,
-    // If the user prompt contains a short price or headline, reinforce rendering it verbatim as an overlay
-    ...( /\$\s*\d+|\d+\s*\$/i.test(p) || /\b(price|sale|off|discount|\$)\b/i.test(p)
-      ? [`H. ON-IMAGE DIRECTIVE: The user requested promotional text. Render the exact price/headline from the user prompt as a large, readable overlay (bold, high-contrast, sans-serif). The exact text to render is: "${p}".`]
-      : []),
+    "C. USER DESCRIPTION: ${p}",
+    // Explicit instruction: Do NOT add text overlays unless explicitly requested
+    `D. TEXT POLICY: Do NOT add any text, captions, headlines, prices, or labels to the image UNLESS the user explicitly requests "add text" or "include text overlay". Focus on creating a clean product/marketing image based on the description.`,
     `E. STYLE: ${(opts?.style_hint) || 'photorealistic, high-resolution, studio lighting, shallow depth of field, vibrant colors'}`,
-    // Note: we intentionally do NOT ban on-image text or numbers here; clients may request embedded text.
-    `F. NEGATIVE: ${(opts?.negative_hint) || 'logo, watermark, caption, signature, low-res, blurred, deformed, extra limbs, gibberish text, untranslated foreign text'}`,
+    // Note: Clean marketing imagery without text overlays by default
+    `F. NEGATIVE: ${(opts?.negative_hint) || 'logo, watermark, caption, signature, low-res, blurred, deformed, extra limbs, text overlay, price tags, labels'}`,
     `G. OUTPUT: Provide ${opts?.num_images || 1} image(s) suitable for hero marketing; avoid people with identifiable faces if privacy-risk is a concern.`
   ];
 

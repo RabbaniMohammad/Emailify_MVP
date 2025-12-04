@@ -298,12 +298,13 @@
           <span>Image</span>
         </button>
 
-        <button mat-raised-button class="attach-option-btn document-option" (click)="selectDocumentAttachment()">
+        <!-- Document and Website URL only available in Email Template mode -->
+        <button *ngIf="generationType === 'template'" mat-raised-button class="attach-option-btn document-option" (click)="selectDocumentAttachment()">
           <mat-icon>description</mat-icon>
           <span>Document</span>
         </button>
 
-        <button mat-raised-button class="attach-option-btn url-option" (click)="selectUrlAttachment()">
+        <button *ngIf="generationType === 'template'" mat-raised-button class="attach-option-btn url-option" (click)="selectUrlAttachment()">
           <mat-icon>link</mat-icon>
           <span>Website URL</span>
         </button>
@@ -653,7 +654,8 @@
     <!-- Banner Body -->
     <div class="banner-body">
       <h2 class="banner-title">📄 Upload Document</h2>
-      <p class="banner-subtitle">Upload Excel, CSV, Word, or PDF to generate a smart email template prompt</p>
+      <p class="banner-subtitle" *ngIf="generationType === 'template'">Upload Excel, CSV, Word, or PDF to generate a smart email template prompt</p>
+      <p class="banner-subtitle" *ngIf="generationType === 'image'">Upload Excel, CSV, Word, or PDF - data will be included in your banner generation</p>
 
       <!-- File Upload Section (Show when no file uploaded or no prompt generated) -->
       <div *ngIf="!uploadedFile && !generatedPrompt" class="upload-section">
@@ -694,7 +696,8 @@
 
         <!-- Action Buttons -->
         <div class="action-buttons" (click)="$event.stopPropagation()">
-          <button mat-raised-button type="button" class="generate-prompt-btn"
+          <!-- Generate Prompt button - Only show in email template mode -->
+          <button *ngIf="generationType === 'template'" mat-raised-button type="button" class="generate-prompt-btn"
             (click)="generatePromptFromFile(); $event.stopPropagation()"
             [disabled]="isGeneratingPrompt || isAttachingFile">
             <mat-spinner *ngIf="isGeneratingPrompt" diameter="20"></mat-spinner>
