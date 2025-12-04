@@ -24,6 +24,12 @@ export interface TemplatesState {
   selectedId: string | null;
   selectedName: string | null;
   searchQuery: string; // ✅ NEW: Store search query in state
+  // Pagination state
+  currentPage: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  paginationLoading: boolean;
 }
 
 const INITIAL_STATE: TemplatesState = {
@@ -33,6 +39,12 @@ const INITIAL_STATE: TemplatesState = {
   selectedId: null,
   selectedName: null,
   searchQuery: '', // ✅ NEW
+  // Pagination defaults
+  currentPage: 1,
+  pageSize: 25,
+  totalItems: 0,
+  totalPages: 0,
+  paginationLoading: false,
 };
 
 // Cache configuration
@@ -89,67 +101,27 @@ export class TemplatesService {
     }
   }
 
-  search(query: string = ''): void {
+  search(query: string = '', page: number = 1, pageSize: number = 25, isPagination: boolean = false): void {
     const trimmedQuery = query.trim().toLowerCase();
     
-    // ✅ Prevent duplicate searches while loading
-    if (this.currentSearchQuery === trimmedQuery && this.snapshot.status === 'loading') {
+    // ✅ Prevent duplicate searches while loading (but allow pagination)
+    if (!isPagination && this.currentSearchQuery === trimmedQuery && this.snapshot.status === 'loading') {
       return;
     }
 
-    const queryChanged = this.currentSearchQuery !== trimmedQuery;
     this.currentSearchQuery = trimmedQuery;
     
     // ✅ NEW: Persist search query
     this.updateState({ searchQuery: trimmedQuery });
     this.cache.set(CACHE_KEYS.SEARCH_QUERY, trimmedQuery, CACHE_TTL.SEARCH_QUERY, 'local');
-    
-    const cacheKey = trimmedQuery 
-      ? `${CACHE_KEYS.SEARCH_PREFIX}${trimmedQuery}`
-      : CACHE_KEYS.TEMPLATES_LIST;
 
-    // ✅ Check cache FIRST - instant results, no loading state
-    const cached = this.cache.get<TemplateItem[]>(cacheKey);
-    
-    if (cached && cached.length > 0) {
-      // ✅ Reorder to show last selected first
-      const reordered = this.reorderByLastSelected(cached);
-      this.updateState({ items: reordered, status: 'success', error: null });
-      return;
-    }
-
-    // ✅ Try filtering from full list if searching
-    if (trimmedQuery) {
-      const allTemplates = this.cache.get<TemplateItem[]>(CACHE_KEYS.TEMPLATES_LIST);
-      
-      if (allTemplates && allTemplates.length > 0) {
-        // ✅ Filter instantly without loading state
-        const filtered = allTemplates.filter(item => 
-          item.name?.toLowerCase().includes(trimmedQuery) ||
-          item.id?.toLowerCase().includes(trimmedQuery)
-        );
-        
-        // Cache the filtered results
-        this.cache.set(cacheKey, filtered, CACHE_TTL.SEARCH, 'session');
-        
-        // ✅ Reorder to show last selected first
-        const reordered = this.reorderByLastSelected(filtered);
-        this.updateState({ items: reordered, status: 'success', error: null });
-        return;
-      }
-    }
-
-    // ✅ Only show loading if we need to fetch from API
-    this.fetchTemplates(trimmedQuery, cacheKey);
+    // ✅ Always fetch from server for pagination (server-side pagination)
+    this.fetchTemplates(trimmedQuery, page, pageSize, isPagination);
   }
 
   refresh(): void {
-    const cacheKey = this.currentSearchQuery 
-      ? `${CACHE_KEYS.SEARCH_PREFIX}${this.currentSearchQuery}`
-      : CACHE_KEYS.TEMPLATES_LIST;
-    
-    this.cache.invalidate(cacheKey);
-    this.fetchTemplates(this.currentSearchQuery, cacheKey);
+    const state = this.snapshot;
+    this.fetchTemplates(this.currentSearchQuery, state.currentPage, state.pageSize, false);
   }
 
   smartRefresh(): void {
@@ -279,55 +251,52 @@ export class TemplatesService {
     return items;
   }
 
-  private fetchTemplates(query: string, cacheKey: string): void {
-    // ✅ Only set loading state when actually fetching
-    this.updateState({ status: 'loading', error: null });
+  private fetchTemplates(query: string, page: number, pageSize: number, isPagination: boolean = false): void {
+    // ✅ Set appropriate loading state
+    this.updateState({ 
+      status: isPagination ? 'success' : 'loading', // Keep 'success' for pagination to avoid full spinner
+      paginationLoading: isPagination,
+      error: null 
+    });
 
-    this.http.get<{ items: TemplateItem[]; total: number }>('/api/templates', { withCredentials: true })
+    const params: any = { page: page.toString(), limit: pageSize.toString() };
+    if (query) params.query = query;
+
+    this.http.get<{ items: TemplateItem[]; total: number; page: number; limit: number; totalPages: number }>('/api/templates', { params, withCredentials: true })
       .pipe(
         tap(async response => {
           let items = response.items || [];
           console.log(" BACKEND LIST RECEIVED:", items);
-
           
-          // ✅ Filter efficiently
-          if (query) {
-            const lowerQuery = query.toLowerCase();
-            items = items.filter(item => 
-              item.name?.toLowerCase().includes(lowerQuery) ||
-              item.id?.toLowerCase().includes(lowerQuery)
-            );
-          }
-          
-          if (items.length > 0) {
-            const ttl = query ? CACHE_TTL.SEARCH : CACHE_TTL.LIST;
-            this.cache.set(cacheKey, items, ttl, 'session');
-            // 🔥 SAVE TO INDEXEDDB
-            for (const template of items) {
-              await this.db.cacheTemplate({
-                id: template.id,
-                runId: 'template-' + template.id,
-                html: template.content || '',
-                timestamp: Date.now()
-              });
-            }
-          } else {
+          // 🔥 SAVE TO INDEXEDDB
+          for (const template of items) {
+            await this.db.cacheTemplate({
+              id: template.id,
+              runId: 'template-' + template.id,
+              html: template.content || '',
+              timestamp: Date.now()
+            });
           }
           
           // ✅ Reorder to show last selected first
           const reordered = this.reorderByLastSelected(items);
-          this.updateState({ items: reordered, status: 'success', error: null });
+          this.updateState({ 
+            items: reordered, 
+            status: 'success', 
+            error: null,
+            totalItems: response.total,
+            totalPages: response.totalPages,
+            currentPage: response.page,
+            pageSize: response.limit,
+            paginationLoading: false
+          });
         }),
         catchError(error => {
-
-          const stale = this.cache.getStale<TemplateItem[]>(cacheKey);
-          
-          if (stale && stale.length > 0) {
-            const reordered = this.reorderByLastSelected(stale);
-            this.updateState({ items: reordered, status: 'success', error: 'Showing cached data (offline)' });
-          } else {
-            this.updateState({ status: 'error', error: error.message || 'Failed to load templates' });
-          }
+          this.updateState({ 
+            status: 'error', 
+            error: error.message || 'Failed to load templates',
+            paginationLoading: false
+          });
           
           return throwError(() => error);
         })

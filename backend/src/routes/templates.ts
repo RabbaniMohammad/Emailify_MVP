@@ -180,12 +180,12 @@ async function getHtmlForTemplate(id: string, organizationId: any): Promise<{ na
 
 // ---------- Routes ----------
 
-/** GET /api/templates?query=&limit=&offset= → { items:[{id,name,...metadata}], total } */
+/** GET /api/templates?query=&page=&limit= → { items:[{id,name,...metadata}], total, page, limit } */
 router.get('/', authenticate, organizationContext, async (req: Request, res: Response) => {
   try {
     const query  = String(req.query.query ?? '').trim().toLowerCase();
-    const limit  = Math.min(Number(req.query.limit ?? 50), 250);
-    const offset = Number(req.query.offset ?? 0);
+    const page   = Math.max(Number(req.query.page ?? 1), 1);
+    const limit  = Math.min(Number(req.query.limit ?? 25), 250);
     
     const organization = (req as any).organization;
     
@@ -194,13 +194,15 @@ router.get('/', authenticate, organizationContext, async (req: Request, res: Res
       return res.status(403).json({ error: 'Organization context required' });
     }
     
-    logger.info(`🔍 [TEMPLATES] Filtering by org: ${organization.name} (${organization._id})`);
+    logger.info(`🔍 [TEMPLATES] Filtering by org: ${organization.name} (${organization._id}) - Page ${page}, Limit ${limit}`);
     
     // ✅ Fetch Mailchimp templates (filtered by org's folder if configured)
+    // Note: We fetch ALL Mailchimp templates first, then paginate after merging with generated templates
     let mailchimpItems: any[] = [];
     
     try {
-      const mailchimpParams: any = { count: limit, offset, type: 'user' };
+      // Fetch with large limit to get all templates (we'll paginate after merge)
+      const mailchimpParams: any = { count: 1000, offset: 0, type: 'user' };
       
       // ✅ Filter by organization's Mailchimp folder if configured
       if (organization.mailchimpTemplateFolderId) {
@@ -248,12 +250,11 @@ router.get('/', authenticate, organizationContext, async (req: Request, res: Res
       // Continue without Mailchimp templates instead of failing entire request
     }
     
-    // ✅ Fetch Generated templates from MongoDB (filtered by organization)
+    // ✅ Fetch ALL Generated templates from MongoDB (filtered by organization)
     const templateQuery: any = { organizationId: organization._id };
     
     const generatedTemplates = await GeneratedTemplate.find(templateQuery)
       .sort({ createdAt: -1 })
-      .limit(100)
       .lean();
     
     logger.info(`🔍 [TEMPLATES] Found ${generatedTemplates.length} AI-generated templates for this org`);
@@ -279,17 +280,30 @@ router.get('/', authenticate, organizationContext, async (req: Request, res: Res
     });
     
     // ✅ Merge both lists (generated templates first, then Mailchimp)
-    let items = [...generatedItems, ...mailchimpItems];
+    let allItems = [...generatedItems, ...mailchimpItems];
     
     // ✅ Apply search filter if provided
     if (query) {
-      items = items.filter((t) => t.name.toLowerCase().includes(query));
+      allItems = allItems.filter((t) => t.name.toLowerCase().includes(query));
     }
 
-    const total = items.length;
-    logger.info(`✅ [TEMPLATES] Returning ${total} templates total for org: ${organization.name}`);
+    // ✅ Calculate total before pagination
+    const total = allItems.length;
     
-    res.json({ items, total });
+    // ✅ Apply server-side pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedItems = allItems.slice(startIndex, endIndex);
+    
+    logger.info(`✅ [TEMPLATES] Returning ${paginatedItems.length} of ${total} templates (page ${page}) for org: ${organization.name}`);
+    
+    res.json({ 
+      items: paginatedItems, 
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    });
   } catch (err: unknown) {
     const e = err as any;
     const status  = e?.status || e?.statusCode || e?.response?.status || 500;

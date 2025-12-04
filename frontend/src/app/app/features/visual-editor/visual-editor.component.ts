@@ -1054,7 +1054,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
             if (textarea) {
               editor.setComponents(textarea.value);
               applyBtn.textContent = '✓ Applied!';
-              applyBtn.style.background = '#6d28d9';
+              applyBtn.style.background = '#E5893F';
               setTimeout(() => {
                 applyBtn.textContent = '✓ Apply Changes';
                 applyBtn.style.background = '#10b981';
@@ -1820,7 +1820,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       width: ${rect.width}px;
       height: ${rect.height}px;
       background: rgba(255, 235, 59, 0.4);
-      border: 2px solid #ffd700;
+      border: 2px solid rgba(229, 137, 63, 0.8);
       border-radius: 4px;
       pointer-events: none;
       box-sizing: border-box;
@@ -1833,7 +1833,7 @@ private async saveNewTemplate(templateName: string, html: string): Promise<strin
       position: absolute;
       left: ${rect.left - bodyRect.left + rect.width + 4}px;
       top: ${rect.top - bodyRect.top + scrollTop - 12}px;
-      background: #667eea;
+      background: #E5893F;
       color: white;
       font-size: 11px;
       font-weight: bold;
@@ -2738,7 +2738,7 @@ async onCheckPreview(): Promise<void> {
         break;
       case 'warning':
         icon = '⚠';
-        bgColor = '#f59e0b';
+        bgColor = '#E5893F';
         break;
       case 'info':
         icon = 'ℹ';

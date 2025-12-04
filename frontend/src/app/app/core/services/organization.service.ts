@@ -99,6 +99,12 @@ export interface DashboardResponse {
     members: number;
   };
   recentCampaigns: Campaign[];
+  pagination?: {
+    page: number;
+    limit: number;
+    totalCampaigns: number;
+    totalPages: number;
+  };
 }
 
 export interface AudienceStats {
@@ -181,9 +187,9 @@ export class OrganizationService {
     return this.http.post('/api/organizations', data, { withCredentials: true });
   }
 
-  // Get organization dashboard with caching
-  getDashboard(orgId: string, forceRefresh: boolean = false): Observable<DashboardResponse> {
-    const cacheKey = `dashboard_${orgId}`;
+  // Get organization dashboard with caching and pagination
+  getDashboard(orgId: string, page: number = 1, limit: number = 5, forceRefresh: boolean = false): Observable<DashboardResponse> {
+    const cacheKey = `dashboard_${orgId}_p${page}_l${limit}`;
     
     // Clear cache if force refresh
     if (forceRefresh) {
@@ -196,12 +202,15 @@ export class OrganizationService {
       return of(cached);
     }
     
+    // Build query params
+    const params: any = { page: page.toString(), limit: limit.toString() };
+    
     // Fetch fresh data and cache it
     return this.http.get<DashboardResponse>(
       `/api/organizations/${orgId}/dashboard`,
-      { withCredentials: true }
+      { params, withCredentials: true }
     ).pipe(
-      tap(data => this.cache.set(cacheKey, data, 5 * 60 * 1000, 'session')) // Cache for 5 minutes in session storage
+      tap(data => this.cache.set(cacheKey, data, 5 * 60 * 1000, 'session'))
     );
   }
 

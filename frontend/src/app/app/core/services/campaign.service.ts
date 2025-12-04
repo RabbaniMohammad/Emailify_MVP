@@ -12,8 +12,21 @@ export class CampaignService {
   /**
    * Validate uploaded CSV against Mailchimp audience
    * @param formData - FormData containing csvFile
+   * @param pagination - Optional pagination parameters for each section
    */
-  validateAudience(formData: FormData): Observable<any> {
+  validateAudience(formData: FormData, pagination?: {
+    newPage?: number; newLimit?: number;
+    existingPage?: number; existingLimit?: number;
+    excludedPage?: number; excludedLimit?: number;
+  }): Observable<any> {
+    if (pagination) {
+      if (pagination.newPage) formData.append('newPage', pagination.newPage.toString());
+      if (pagination.newLimit) formData.append('newLimit', pagination.newLimit.toString());
+      if (pagination.existingPage) formData.append('existingPage', pagination.existingPage.toString());
+      if (pagination.existingLimit) formData.append('existingLimit', pagination.existingLimit.toString());
+      if (pagination.excludedPage) formData.append('excludedPage', pagination.excludedPage.toString());
+      if (pagination.excludedLimit) formData.append('excludedLimit', pagination.excludedLimit.toString());
+    }
     return this.http.post(`${this.apiUrl}/validate-audience`, formData);
   }
 

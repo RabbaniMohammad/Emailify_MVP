@@ -53,11 +53,12 @@ export class OrganizationPageComponent implements OnInit, OnDestroy {
   syncingCampaigns = new Set<string>(); // Track which campaigns are syncing
   settingUpAudience = false;
   
-  // Pagination for campaigns
+  // Pagination for campaigns (server-side)
   campaignsCurrentPage = 1;
   campaignsPageSize = 5;
   campaignsTotalItems = 0;
-  paginatedCampaigns: Campaign[] = [];
+  campaignsTotalPages = 0;
+  campaignsPaginationLoading = false;
   
   private isInitialized = false; // Prevent multiple initializations
 
@@ -102,15 +103,19 @@ export class OrganizationPageComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  loadDashboardData(): void {
+  loadDashboardData(isPagination: boolean = false): void {
     if (!this.organizationId) return;
 
-    this.loading = true;
+    if (isPagination) {
+      this.campaignsPaginationLoading = true;
+    } else {
+      this.loading = true;
+    }
     console.log(`📊 Loading dashboard for org: ${this.organizationId}`);
 
     // Load dashboard and audience data in parallel using forkJoin
     forkJoin({
-      dashboard: this.orgService.getDashboard(this.organizationId),
+      dashboard: this.orgService.getDashboard(this.organizationId, this.campaignsCurrentPage, this.campaignsPageSize),
       audience: this.orgService.getAudienceStats(this.organizationId)
     })
       .pipe(takeUntil(this.destroy$))
@@ -121,9 +126,15 @@ export class OrganizationPageComponent implements OnInit, OnDestroy {
           this.dashboardData = dashboard;
           this.audienceData = audience;
           this.loading = false;
+          this.campaignsPaginationLoading = false;
           
-          // Initialize campaigns pagination
-          this.updateCampaignsPagination();
+          // Update pagination metadata from server response
+          if (dashboard.pagination) {
+            this.campaignsTotalItems = dashboard.pagination.totalCampaigns;
+            this.campaignsTotalPages = dashboard.pagination.totalPages;
+            this.campaignsCurrentPage = dashboard.pagination.page;
+            this.campaignsPageSize = dashboard.pagination.limit;
+          }
         },
         error: (err) => {
           console.error('❌ Failed to load data:', err);
@@ -136,34 +147,16 @@ export class OrganizationPageComponent implements OnInit, OnDestroy {
           }
 
           this.loading = false;
+          this.campaignsPaginationLoading = false;
         }
       });
   }
   
-  // Update campaigns pagination
-  updateCampaignsPagination(): void {
-    if (!this.dashboardData?.recentCampaigns) {
-      this.paginatedCampaigns = [];
-      this.campaignsTotalItems = 0;
-      return;
-    }
-    
-    const allCampaigns = this.dashboardData.recentCampaigns;
-    this.campaignsTotalItems = allCampaigns.length;
-    
-    // Calculate start and end indices
-    const startIndex = (this.campaignsCurrentPage - 1) * this.campaignsPageSize;
-    const endIndex = startIndex + this.campaignsPageSize;
-    
-    // Get campaigns for current page
-    this.paginatedCampaigns = allCampaigns.slice(startIndex, endIndex);
-  }
-  
-  // Handle campaign page change
+  // Handle campaign page change (server-side pagination)
   onCampaignPageChange(event: PageChangeEvent): void {
     this.campaignsCurrentPage = event.page;
     this.campaignsPageSize = event.pageSize;
-    this.updateCampaignsPagination();
+    this.loadDashboardData(true); // Fetch new page from server
   }
 
   // Manual refresh method
@@ -171,11 +164,11 @@ export class OrganizationPageComponent implements OnInit, OnDestroy {
     if (!this.organizationId) return;
 
     this.loading = true;
-    console.log(`� Refreshing dashboard data for org: ${this.organizationId}`);
+    console.log(`🔄 Refreshing dashboard data for org: ${this.organizationId}`);
 
     // Force refresh by clearing cache
     forkJoin({
-      dashboard: this.orgService.getDashboard(this.organizationId, true), // forceRefresh = true
+      dashboard: this.orgService.getDashboard(this.organizationId, this.campaignsCurrentPage, this.campaignsPageSize, true), // forceRefresh = true
       audience: this.orgService.getAudienceStats(this.organizationId, undefined, true) // forceRefresh = true
     })
       .pipe(takeUntil(this.destroy$))

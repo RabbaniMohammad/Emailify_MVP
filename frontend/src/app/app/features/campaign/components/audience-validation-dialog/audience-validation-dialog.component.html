@@ -126,11 +126,22 @@
               </button>
             </div>
             
-            <div class="email-list">
-              <div *ngFor="let email of paginatedNew" class="email-item new-item">
+            <div class="email-list" [class.loading-pagination]="newPaginationLoading">
+              <div *ngFor="let email of validationResult.masterDocument.new" class="email-item new-item">
                 <mat-icon class="email-icon">fiber_new</mat-icon>
                 <span class="email-address">{{ email }}</span>
               </div>
+            </div>
+            
+            <!-- Pagination for New -->
+            <div class="pagination-controls" *ngIf="newTotalItems > pageSize">
+              <button mat-icon-button [disabled]="newPage === 1 || newPaginationLoading" (click)="prevNewPage()">
+                <mat-icon>chevron_left</mat-icon>
+              </button>
+              <span class="page-info">{{ (newPage - 1) * pageSize + 1 }}-{{ Math.min(newPage * pageSize, newTotalItems) }} of {{ newTotalItems }}</span>
+              <button mat-icon-button [disabled]="!hasMoreNew || newPaginationLoading" (click)="nextNewPage()">
+                <mat-icon>chevron_right</mat-icon>
+              </button>
             </div>
 
             <!-- Pagination -->
@@ -157,11 +168,22 @@
               </div>
             </div>
             
-            <div class="email-list">
-              <div *ngFor="let email of paginatedExisting" class="email-item existing-item">
+            <div class="email-list" [class.loading-pagination]="existingPaginationLoading">
+              <div *ngFor="let email of validationResult.masterDocument.existing" class="email-item existing-item">
                 <mat-icon class="email-icon">verified</mat-icon>
                 <span class="email-address">{{ email }}</span>
               </div>
+            </div>
+            
+            <!-- Pagination for Existing -->
+            <div class="pagination-controls" *ngIf="existingTotalItems > pageSize">
+              <button mat-icon-button [disabled]="existingPage === 1 || existingPaginationLoading" (click)="prevExistingPage()">
+                <mat-icon>chevron_left</mat-icon>
+              </button>
+              <span class="page-info">{{ (existingPage - 1) * pageSize + 1 }}-{{ Math.min(existingPage * pageSize, existingTotalItems) }} of {{ existingTotalItems }}</span>
+              <button mat-icon-button [disabled]="!hasMoreExisting || existingPaginationLoading" (click)="nextExistingPage()">
+                <mat-icon>chevron_right</mat-icon>
+              </button>
             </div>
 
             <!-- Pagination -->
@@ -211,9 +233,9 @@
             </div>
             <p class="info-message">These are in {{ data.organizationName || 'your audience' }} but not in your master document</p>
             
-            <div class="email-list">
+            <div class="email-list" [class.loading-pagination]="excludedPaginationLoading">
               <div 
-                *ngFor="let email of paginatedExcluded" 
+                *ngFor="let email of validationResult.excludedFromCampaign.subscribers" 
                 class="email-item excluded-item"
                 [class.added]="addedToMaster.has(email)"
                 (click)="addExcludedToMaster(email)">
@@ -238,16 +260,16 @@
               </div>
             </div>
 
-            <!-- Pagination -->
-            <div class="pagination" *ngIf="validationResult.excludedFromCampaign.subscribers.length > pageSize">
-              <button mat-icon-button [disabled]="excludedPage === 0" (click)="prevExcludedPage()">
+            <!-- Pagination for Excluded -->
+            <div class="pagination-controls" *ngIf="excludedTotalItems > pageSize">
+              <button mat-icon-button [disabled]="excludedPage === 1 || excludedPaginationLoading" (click)="prevExcludedPage()">
                 <mat-icon>chevron_left</mat-icon>
               </button>
               <span class="page-info">
-                {{ excludedPage * pageSize + 1 }}-{{ Math.min((excludedPage + 1) * pageSize, validationResult.excludedFromCampaign.subscribers.length) }} 
-                of {{ validationResult.excludedFromCampaign.subscribers.length }}
+                {{ (excludedPage - 1) * pageSize + 1 }}-{{ Math.min(excludedPage * pageSize, excludedTotalItems) }} 
+                of {{ excludedTotalItems }}
               </span>
-              <button mat-icon-button [disabled]="!hasMoreExcluded" (click)="nextExcludedPage()">
+              <button mat-icon-button [disabled]="!hasMoreExcluded || excludedPaginationLoading" (click)="nextExcludedPage()">
                 <mat-icon>chevron_right</mat-icon>
               </button>
             </div>

@@ -195,6 +195,8 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   readonly error$ = this.state$.pipe(map((s: TemplatesState) => s.error));
   readonly selectedId$ = this.state$.pipe(map((s: TemplatesState) => s.selectedId));
   readonly selectedName$ = this.state$.pipe(map((s: TemplatesState) => s.selectedName));
+  readonly totalItems$ = this.state$.pipe(map((s: TemplatesState) => s.totalItems));
+  readonly paginationLoading$ = this.state$.pipe(map((s: TemplatesState) => s.paginationLoading));
 
   // Component state
   searchQuery = '';
@@ -227,7 +229,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   editMode: 'deterministic' | 'ai' = 'deterministic';
   // Deterministic edit inputs
   editOverlayText = '';
-  editHexColor = '#C47A00';
+  editHexColor = '#E5893F';
   // AI remix inputs
   editRemixPrompt = '';
   isEditing = false;
@@ -251,6 +253,34 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   
   // Track in-flight requests to prevent duplicate API calls
   private inflightRequests = new Map<string, Subscription>();
+
+  // Pagination getters
+  get hasPreviousPage(): boolean { return this.svc.snapshot.currentPage > 1; }
+  get hasNextPage(): boolean { return this.svc.snapshot.currentPage < this.svc.snapshot.totalPages; }
+  get startItem(): number {
+    const state = this.svc.snapshot;
+    return state.totalItems === 0 ? 0 : (state.currentPage - 1) * state.pageSize + 1;
+  }
+  get endItem(): number {
+    const state = this.svc.snapshot;
+    return Math.min(state.currentPage * state.pageSize, state.totalItems);
+  }
+
+  goToPreviousPage(): void {
+    const state = this.svc.snapshot;
+    if (state.currentPage > 1) {
+      this.svc.search(state.searchQuery, state.currentPage - 1, state.pageSize, true);
+      this.scrollToTop();
+    }
+  }
+
+  goToNextPage(): void {
+    const state = this.svc.snapshot;
+    if (state.currentPage < state.totalPages) {
+      this.svc.search(state.searchQuery, state.currentPage + 1, state.pageSize, true);
+      this.scrollToTop();
+    }
+  }
 
   ngOnInit(): void {
 
@@ -511,7 +541,7 @@ this.svc.state$
     // Pre-fill inputs with existing metadata
     this.editMode = 'deterministic';
     this.editOverlayText = '';
-    this.editHexColor = '#C47A00';
+    this.editHexColor = '#E5893F';
     this.editRemixPrompt = this.templateMetadata?.prompt || '';
     this.editPreviewDataUrl = null;
     this.showEditModal = true;
