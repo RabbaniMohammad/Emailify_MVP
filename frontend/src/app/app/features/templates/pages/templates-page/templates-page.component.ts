@@ -26,11 +26,12 @@ import {
   animate 
 } from '@angular/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { BehaviorSubject, Subject, Subscription, combineLatest, of, forkJoin } from 'rxjs';
+import { BehaviorSubject, Subject, Subscription, combineLatest, of, forkJoin, Observable } from 'rxjs';
 import { takeUntil, map, distinctUntilChanged, switchMap, catchError } from 'rxjs/operators';
 import { TemplatesService, TemplatesState } from '../../../../core/services/templates.service';
 import { PreviewCacheService } from '../../components/template-preview/preview-cache.service';
 import { TemplateStateService } from '../../../../core/services/template-state.service';
+import { AuthService } from '../../../../core/services/auth.service';
 
 // Interfaces
 export interface TemplateItem {
@@ -97,6 +98,7 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private snackBar = inject(MatSnackBar);
   private templateState = inject(TemplateStateService);
+  private authService = inject(AuthService);
 
   // ViewChild references
   @ViewChild('scrollContainer', { static: false }) scrollContainer!: ElementRef<HTMLElement>;
@@ -239,6 +241,15 @@ export class TemplatesPageComponent implements OnInit, OnDestroy {
   private loadingTimer?: any;
 
   isDeleting = false;
+
+  // Organization display (small badge on placeholder)
+  public readonly orgName$: Observable<string | null> = this.authService.currentUser$.pipe(
+    map((u: any) => {
+      // organizationId may be a string or object
+      const orgName = u?.organizationId && typeof u.organizationId === 'object' ? u.organizationId.name : (u?.organizationId || null);
+      return orgName || null;
+    })
+  );
   
   // Track in-flight requests to prevent duplicate API calls
   private inflightRequests = new Map<string, Subscription>();

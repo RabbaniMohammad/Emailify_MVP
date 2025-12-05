@@ -863,8 +863,16 @@ Examples:
     // Attach the file to the chat
     this.attachedFile = this.uploadedFile;
 
-    // Close the banner
-    this.closeCsvBanner();
+    // Close the banner WITHOUT resetting upload state
+    this.showCsvBanner = false;
+    // Note: We keep uploadedFile and don't call resetUpload() so the file remains attached
+
+    // Show success message
+    this.snackBar.open(
+      `${this.uploadedFile.name} attached. Data will be included in your next generation.`,
+      'Close',
+      { duration: 3000, panelClass: ['success-snackbar'] }
+    );
 
     // Enable auto-scroll and scroll to show the attachment
     this.shouldAutoScroll = true;
@@ -1121,25 +1129,99 @@ Examples:
 
     // Route to image generation if image mode is selected
     if (this.generationType === 'image') {
-      // Add the user's message to the chat UI so the conversation remains conversational
+      // Convert selected images to attachments
+      const imageAttachments: ImageAttachment[] = await Promise.all(
+        this.selectedImages.map(async (file) => {
+          const base64 = await this.fileToBase64(file);
+          return {
+            data: base64,
+            mediaType: file.type,
+            fileName: file.name,
+          };
+        })
+      );
+
+      // ✅ NEW: Handle document attachments for banner generation
+      let extractedData: string | undefined;
+      const fileToSend = this.attachedFile;
+      
+      if (fileToSend && !this.fileDataAlreadySent) {
+        try {
+          // Extract data from the file using the backend API
+          const formData = new FormData();
+          formData.append('file', fileToSend);
+
+          const response = await fetch('/api/csv-to-prompt/extract', {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'
+          });
+
+          if (response.ok) {
+            const { extractedData: data } = await response.json();
+            extractedData = data;
+            this.fileDataAlreadySent = true;
+            
+            // Check if extraction returned an error message (PDF issues)
+            if (data && (data.startsWith('[PDF Error:') || data.startsWith('[PDF Extraction Error:'))) {
+              this.snackBar.open('PDF extraction had issues. Please try a different file format.', 'Close', {
+                duration: 5000,
+                panelClass: ['warning-snackbar']
+              });
+              // Continue anyway - AI will see the error message
+            } else {
+              this.snackBar.open('Document data extracted successfully', 'Close', {
+                duration: 2000,
+                panelClass: ['success-snackbar']
+              });
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to extract file data for banner:', error);
+          // Continue without file data
+        }
+      }
+
+      // Build enhanced prompt with document data only (no brand DNA for banner mode)
+      let enhancedMessage = message;
+      
+      // Add document data context if available
+      if (extractedData) {
+        enhancedMessage = `Using this data: ${extractedData.substring(0, 500)}...\n\n${message}`;
+      }
+
+      // Add the user's message to the chat UI
       const userMessage: GenerationMessage = {
         role: 'user',
         content: message,
         timestamp: new Date(),
-        type: 'image'
+        type: 'image',
+        images: imageAttachments.length > 0 ? imageAttachments : undefined,
+        attachment: fileToSend ? {
+          fileName: fileToSend.name,
+          fileSize: fileToSend.size,
+          fileType: fileToSend.type
+        } : undefined
       };
       this.messages$.next([...this.messages$.value, userMessage]);
       this.scrollToBottom();
-      // Clear the input box immediately so the user's message doesn't remain in the composer
+      
+      // Clear the input box immediately
       this.userInput = '';
+      
+      // Clear attachments after attaching
+      const imagesToSend = [...imageAttachments];
+      this.selectedImages = [];
+      this.imagePreviewUrls = [];
+      this.attachedFile = null;
 
       // If user already has generated images in this session, ALWAYS remix the existing image
       // to maintain continuity throughout the session. Only generate a new image when
       // the generatedImages array is empty (first message in a new session).
       if (this.generatedImages && this.generatedImages.length > 0) {
-        await this.remixLastGeneratedImage(message);
+        await this.remixLastGeneratedImage(enhancedMessage, imagesToSend); // Use enhanced message
       } else {
-        this.generateImage(message);
+        this.generateImage(enhancedMessage, imagesToSend); // Use enhanced message
       }
 
       return;
@@ -1218,10 +1300,20 @@ Examples:
 
         const { extractedData } = await response.json();
 
+        // Check if extraction returned an error message (PDF issues)
+        if (extractedData && (extractedData.startsWith('[PDF Error:') || extractedData.startsWith('[PDF Extraction Error:'))) {
+          this.snackBar.open(
+            'PDF extraction had issues. The AI will be notified of the problem.',
+            'Close',
+            { duration: 5000, panelClass: ['warning-snackbar'] }
+          );
+          // Continue anyway - let the AI explain the issue to the user
+        }
+
         // Mark that file data has been sent
         this.fileDataAlreadySent = true;
 
-        // Send chat message with the extracted file data
+        // Send chat message with the extracted file data (even if it contains error message)
         this.sendChatMessage(finalMessage, imageAttachments, extractedData);
       } catch (error) {
         this.snackBar.open('Failed to process attached file', 'Close', {
@@ -1260,7 +1352,7 @@ Examples:
   }
 
   // Call Ideogram remix API using the last generated image URL and update the preview
-  private async remixLastGeneratedImage(prompt: string): Promise<void> {
+  private async remixLastGeneratedImage(prompt: string, referenceImages?: ImageAttachment[]): Promise<void> {
     if (!this.generatedImages || this.generatedImages.length === 0) {
       this.snackBar.open('No image available to remix', 'Close', { duration: 3000, panelClass: ['error-snackbar'] });
       return;
@@ -1537,7 +1629,7 @@ Examples:
   }
 
   // Image Generation Method
-  async generateImage(prompt: string): Promise<void> {
+  async generateImage(prompt: string, referenceImages?: ImageAttachment[]): Promise<void> {
     if (!prompt.trim()) {
       this.snackBar.open('Please enter a prompt to generate an image', 'Close', {
         duration: 3000,
@@ -1585,7 +1677,8 @@ Examples:
         model: 'V_2',
         magicPromptOption: 'AUTO',
         styleType: 'DESIGN',
-        negativePrompt: negative
+        negativePrompt: negative,
+        ...(referenceImages && referenceImages.length > 0 && { referenceImages })
       }).toPromise();
 
       console.debug('Ideogram generate response (raw):', response);

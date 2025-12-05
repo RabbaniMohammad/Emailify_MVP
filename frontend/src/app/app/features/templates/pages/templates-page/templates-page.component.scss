@@ -3377,3 +3377,40 @@
     padding: 0.5rem 0.75rem;
   }
 }
+
+/* Small organization badge shown on the home placeholder */
+.modern-placeholder {
+  .home-org-badge {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: white;
+    border-radius: 10px;
+    border: 1px solid rgba(14, 20, 25, 0.04);
+    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.06);
+    font-weight: 700;
+    font-size: 0.875rem;
+    z-index: 5;
+
+    .home-org-label {
+      color: #64748b;
+      font-weight: 700;
+      font-size: 0.8125rem;
+      margin-right: 2px;
+    }
+
+    .home-org-name {
+      color: #1e293b;
+      white-space: nowrap;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: inline-block;
+      vertical-align: middle;
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../middleware/auth';
-import { isPromptAllowed, wrapMarketingPrompt, wrapRemixPrompt } from '@src/util/ideogramPrompt';
+import { isPromptAllowed } from '@src/util/ideogramPrompt';
 import { GoogleGenAI } from '@google/genai';
 
 const router = Router();
@@ -38,6 +38,11 @@ interface GeminiGenerateRequest {
     resolution?: '1K' | '2K' | '4K'; // For Gemini 3 Pro Image Preview
     style_type?: string; // Not directly supported, but we can add to prompt
     negative_prompt?: string; // Not directly supported, but we can add to prompt
+    referenceImages?: Array<{ // ✅ NEW: Support for reference images
+      data: string; // base64 image data
+      mediaType: string; // e.g., 'image/jpeg'
+      fileName?: string;
+    }>;
   };
   samples?: number;
 }
@@ -71,22 +76,12 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
       });
     }
 
-    // Moderate + wrap the prompt server-side
+    // Basic prompt moderation (content safety only)
     const originalPrompt = requestBody.image_request?.prompt || '';
     const allowed = isPromptAllowed(originalPrompt);
     if (!allowed.ok) {
       return res.status(400).json({ success: false, message: allowed.reason || 'Prompt not allowed' });
     }
-
-    // Wrap prompt for marketing/banner generation
-    const clientOpts = (requestBody.image_request as any)?.options || {};
-    const wrapped = wrapMarketingPrompt(originalPrompt, {
-      aspect_ratio: requestBody.image_request?.aspect_ratio,
-      style_hint: clientOpts.style_hint,
-      negative_hint: clientOpts.negative_hint,
-      num_images: clientOpts.num_images,
-      allow_brand_names: !!clientOpts.allow_brand_names
-    });
 
     // Convert aspect ratio
     const aspectRatio = convertAspectRatio(requestBody.image_request?.aspect_ratio);
@@ -100,13 +95,15 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
     // Resolution: 1K (default), 2K, or 4K for banners
     const resolution = requestBody.image_request?.resolution || '1K';
     
-    // Build the prompt with style hints if provided
-    let finalPrompt = wrapped;
+    // Use the user's prompt directly - no wrapper needed for Gemini
+    let finalPrompt = originalPrompt;
+    
+    // Optionally add style hints if provided
     if (requestBody.image_request?.style_type) {
-      finalPrompt = `${finalPrompt}\n\nStyle: ${requestBody.image_request.style_type.toLowerCase()}, professional marketing banner, high-quality text rendering`;
+      finalPrompt = `${finalPrompt}. Style: ${requestBody.image_request.style_type.toLowerCase()}, professional, high-quality`;
     }
     if (requestBody.image_request?.negative_prompt) {
-      finalPrompt = `${finalPrompt}\n\nAvoid: ${requestBody.image_request.negative_prompt}`;
+      finalPrompt = `${finalPrompt}. Avoid: ${requestBody.image_request.negative_prompt}`;
     }
 
     console.debug('Gemini image generation:', {
@@ -114,14 +111,41 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
       aspectRatio,
       resolution,
       promptLength: finalPrompt.length,
-      promptPreview: finalPrompt.substring(0, 200)
+      promptPreview: finalPrompt.substring(0, 200),
+      hasReferenceImages: !!(requestBody.image_request?.referenceImages && requestBody.image_request.referenceImages.length > 0),
+      referenceImageCount: requestBody.image_request?.referenceImages?.length || 0
     });
+
+    // ✅ NEW: Build content array with reference images if provided
+    const contentParts: any[] = [];
+
+    // Add reference images first (if provided) so Gemini can use them as style/content reference
+    if (requestBody.image_request?.referenceImages && requestBody.image_request.referenceImages.length > 0) {
+      console.debug(`Adding ${requestBody.image_request.referenceImages.length} reference image(s) to generation`);
+      
+      for (const refImage of requestBody.image_request.referenceImages) {
+        contentParts.push({
+          inlineData: {
+            data: refImage.data,
+            mimeType: refImage.mediaType || 'image/png'
+          }
+        });
+      }
+      
+      // Add simple instruction about the reference images
+      contentParts.push({
+        text: `Create an image based on this description: ${finalPrompt}. Use the provided image(s) above as visual reference for style, composition, and aesthetic.`
+      });
+    } else {
+      // No reference images, just text prompt
+      contentParts.push({ text: finalPrompt });
+    }
 
     // Generate image using Gemini
     // API structure based on @google/genai SDK
     const response = await genai.models.generateContent({
       model,
-      contents: finalPrompt, // Can be string or array
+      contents: contentParts.length > 1 ? [{ parts: contentParts }] : finalPrompt, // Use array format if we have images
       config: {
         imageConfig: {
           aspectRatio,
@@ -157,12 +181,12 @@ router.post('/generate', authenticate, async (req: Request, res: Response) => {
     // Convert base64 to data URL for client
     const imageUrl = `data:${mimeType};base64,${imageData}`;
 
-    // Return in Ideogram-compatible format for easy migration
+    // Return in compatible format
     const result = {
       created: new Date().toISOString(),
       data: [{
         url: imageUrl,
-        prompt: wrapped,
+        prompt: originalPrompt, // Return the original user prompt
         resolution: `${resolution} (${aspectRatio})`,
         is_image_safe: true, // Gemini has built-in safety
       }]
@@ -208,15 +232,8 @@ router.post('/remix', authenticate, async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: allowed.reason || 'Prompt not allowed' });
     }
 
-    // Use remix-specific wrapper to maintain original image context
-    // This ensures the AI preserves the original composition while making requested changes
-    const clientOpts = (ir as any)?.options || payload?.options || {};
-    let prompt = wrapRemixPrompt(ir.prompt, {
-      aspect_ratio: ir.aspect_ratio,
-      style_hint: clientOpts.style_hint,
-      negative_hint: clientOpts.negative_hint,
-      allow_brand_names: !!clientOpts.allow_brand_names
-    });
+    // Use the user's prompt directly for Gemini - no wrapper needed
+    const prompt = ir.prompt;
 
     if (!GEMINI_API_KEY || !genai) {
       console.error('GEMINI_API_KEY is not configured');

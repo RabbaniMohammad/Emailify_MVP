@@ -40,6 +40,11 @@
         </svg>
       </div>
       <span class="brand-name">Camply</span>
+      <!-- Small org badge shown in header (uses currentUser$ from AuthService) -->
+      <div class="header-org-badge" *ngIf="currentUser$ | async as user">
+        <span class="header-org-label">org:</span>
+        <span class="header-org-name">{{ (user.organizationId && (user.organizationId.name || user.organizationId)) || 'Camply' }}</span>
+      </div>
     </div>
 
     <div class="toolbar-spacer"></div>

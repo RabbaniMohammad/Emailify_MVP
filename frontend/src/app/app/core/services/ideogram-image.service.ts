@@ -10,6 +10,7 @@ export interface IdeogramGenerationRequest {
   magicPromptOption?: 'AUTO' | 'ON' | 'OFF';
   styleType?: 'GENERAL' | 'REALISTIC' | 'DESIGN' | 'RENDER_3D' | 'ANIME';
   negativePrompt?: string;
+  referenceImages?: Array<{ data: string; mediaType: string; fileName?: string }>;
 }
 
 export interface IdeogramGenerationResponse {
@@ -42,7 +43,8 @@ export class IdeogramImageService {
         model: request.model || 'V_2',
         magic_prompt_option: request.magicPromptOption || 'AUTO',
   style_type: request.styleType || 'REALISTIC',
-        ...(request.negativePrompt && { negative_prompt: request.negativePrompt })
+        ...(request.negativePrompt && { negative_prompt: request.negativePrompt }),
+        ...(request.referenceImages && request.referenceImages.length > 0 && { referenceImages: request.referenceImages })
       }
     };
 

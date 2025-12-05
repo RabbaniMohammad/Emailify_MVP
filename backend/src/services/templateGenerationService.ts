@@ -24,6 +24,7 @@ interface GenerationRequest {
   }>;
   userId: string;
   images?: Array<{ data: string; mediaType: string; fileName: string }>;
+  imageUrls?: string[];
   extractedFileData?: string;
 }
 
@@ -412,6 +413,34 @@ function validateMJML(mjmlCode: string): { isValid: boolean; error?: string; htm
 }
 
 /**
+ * Inject one or more <mj-image> placeholders into the MJML body right after the <mj-body> opening tag.
+ * This is a deterministic fallback to ensure uploaded images appear in the final MJML when the model
+ * did not include them. The function returns the modified MJML string.
+ */
+function injectImagesIntoMjml(mjmlCode: string, urls: string[]): string {
+  if (!urls || urls.length === 0) return mjmlCode;
+
+  try {
+    // Build an image section containing all URLs (stacked vertically)
+    const imagesHtml = urls.map(u => `      <mj-section padding="0">
+        <mj-column>
+          <mj-image src="${u}" alt="Attached image" width="600px" />
+        </mj-column>
+      </mj-section>`).join('\n');
+
+    // Insert right after opening <mj-body ...> tag
+    const replaced = mjmlCode.replace(/<mj-body[^>]*>/i, (match) => {
+      return `${match}\n${imagesHtml}`;
+    });
+
+    return replaced;
+  } catch (e) {
+    logger.err('Failed to inject images into MJML', e?.message || e);
+    return mjmlCode;
+  }
+}
+
+/**
  * Generate fallback template when all retries fail
  */
 function getFallbackTemplate(originalPrompt: string, lastError: string, attemptsUsed: number): string {
@@ -623,7 +652,7 @@ export async function generateTemplate(
     }
 
     // Add current user message with images and/or extracted file data
-    let userPrompt = prompt;
+  let userPrompt = prompt;
     
     // ⭐ OPTIMIZATION: Only add extracted file data if it's NOT already in conversation history
     // This prevents sending the same Excel/CSV data over and over again
@@ -639,9 +668,19 @@ export async function generateTemplate(
       // Don't add the file data again, just use the prompt
       userPrompt = prompt;
     }
-    
+    // If image URLs were provided (saved from incoming attachments), tell the model where to find them
+    if (images && images.length > 0 && (request as any).imageUrls && Array.isArray((request as any).imageUrls) && (request as any).imageUrls.length > 0) {
+      const urls = (request as any).imageUrls as string[];
+      logger.info(`� Providing image URLs to model: ${urls.join(', ')}`);
+      userPrompt = `ATTACHED IMAGES (public URLs):\n${urls.join('\n')}\n\nUSER REQUEST: ${userPrompt}`;
+    } else if ((request as any).imageUrls && Array.isArray((request as any).imageUrls) && (request as any).imageUrls.length > 0) {
+      // No binary images in 'images' but imageUrls exist (already URLs)
+      const urls = (request as any).imageUrls as string[];
+      logger.info(`🔗 Providing image URLs to model: ${urls.join(', ')}`);
+      userPrompt = `ATTACHED IMAGES (public URLs):\n${urls.join('\n')}\n\nUSER REQUEST: ${userPrompt}`;
+    }
     if (images && images.length > 0) {
-      logger.info(`📤 Adding current message with ${images.length} images`);
+      logger.info(`�📤 Adding current message with ${images.length} images`);
       const content: Anthropic.MessageParam['content'] = [
         ...images.map(img => ({
           type: 'image' as const,
@@ -740,13 +779,43 @@ export async function generateTemplate(
           // Create user-friendly message (no technical details about attempts/retries)
           const userMessage = `✅ Template generated successfully! I've created a responsive email template based on your requirements.`;
           
-          return {
-            mjmlCode,
-            assistantMessage: userMessage,
-            conversationId: response.id,
-            attemptsUsed: attempt,
-            hadErrors: attempt > 1,
-          };
+          // If imageUrls were provided but not included in the MJML, inject them deterministically
+          try {
+            const providedUrls = (request as any).imageUrls && Array.isArray((request as any).imageUrls) ? (request as any).imageUrls as string[] : [];
+            let finalMjml = mjmlCode;
+
+            if (providedUrls.length > 0) {
+              const containsAny = providedUrls.some(u => finalMjml.includes(u));
+              if (!containsAny) {
+                logger.info(`🔧 Uploaded image URLs not found in model output, injecting ${providedUrls.length} image(s)`);
+                const injected = injectImagesIntoMjml(finalMjml, providedUrls);
+                const injectedValidation = validateMJML(injected);
+                if (injectedValidation.isValid) {
+                  logger.info('✅ Injected images produced valid MJML; using injected MJML');
+                  finalMjml = injected;
+                } else {
+                  logger.warn('⚠️ Injected MJML failed validation, returning original MJML');
+                }
+              }
+            }
+
+            return {
+              mjmlCode: finalMjml,
+              assistantMessage: userMessage,
+              conversationId: response.id,
+              attemptsUsed: attempt,
+              hadErrors: attempt > 1,
+            };
+          } catch (e) {
+            logger.err('Error during image injection step', e?.message || e);
+            return {
+              mjmlCode,
+              assistantMessage: userMessage,
+              conversationId: response.id,
+              attemptsUsed: attempt,
+              hadErrors: attempt > 1,
+            };
+          }
         } else {
           // ⭐ VALIDATION FAILED - PREPARE ERROR FEEDBACK
           lastError = validationResult.error || 'Unknown validation error';
@@ -850,6 +919,7 @@ export async function refineTemplate(
   }>,
   userId: string,
   images?: Array<{ data: string; mediaType: string; fileName: string }>,
+  imageUrls?: string[],
   extractedFileData?: string
 ): Promise<GenerationResponse> {
   try {
@@ -888,6 +958,7 @@ Please update the template based on the user's feedback. Remember to output ONLY
       conversationHistory,
       userId,
       images: images || undefined,
+      imageUrls: imageUrls || undefined,
       extractedFileData: extractedFileData || undefined,
     });
   } catch (error) {

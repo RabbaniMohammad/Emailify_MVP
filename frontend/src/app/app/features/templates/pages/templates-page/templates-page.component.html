@@ -350,6 +350,11 @@
 
       <!-- Next-Gen Empty State -->
       <div *ngIf="!vm.selectedId" class="modern-placeholder">
+        <!-- Small organization badge (uses AuthService currentUser) -->
+        <div class="home-org-badge" *ngIf="orgName$ | async as orgName">
+          <span class="home-org-label">org:</span>
+          <span class="home-org-name">{{ orgName || 'Camply' }}</span>
+        </div>
         <div class="placeholder-background">
           <div class="floating-shapes">
             <div class="shape shape-1"></div>
