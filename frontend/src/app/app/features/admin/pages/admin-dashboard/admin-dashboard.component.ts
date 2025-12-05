@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, inject, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
-import { AdminService, AdminUser } from '../../../../core/services/admin.service';
+import { AdminService, AdminUser, AuthorizedUserWithStatus } from '../../../../core/services/admin.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTableModule } from '@angular/material/table';
@@ -12,6 +12,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
@@ -21,7 +22,9 @@ import { HttpClient } from '@angular/common/http';
 
 import { AdminEventService } from '../../../../core/services/admin-event.service';
 import { OrganizationManagementComponent } from '../../components/organization-management/organization-management.component';
+import { AddAllowedUserDialogComponent } from '../../components/add-allowed-user-dialog/add-allowed-user-dialog.component';
 import { CacheService } from '../../../../core/services/cache.service';
+import { MatDialog } from '@angular/material/dialog';
 
 @Component({
   selector: 'app-admin-dashboard',
@@ -39,8 +42,10 @@ import { CacheService } from '../../../../core/services/cache.service';
     MatDividerModule,
     MatFormFieldModule,
     MatInputModule,
+    MatTooltipModule,
     FormsModule,
-    OrganizationManagementComponent
+    OrganizationManagementComponent,
+    AddAllowedUserDialogComponent
   ],
   templateUrl: './admin-dashboard.component.html',
   styleUrls: ['./admin-dashboard.component.scss'],
@@ -55,15 +60,16 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private cacheService = inject(CacheService);
   private cdr = inject(ChangeDetectorRef);
+  private dialog = inject(MatDialog);
 
   private allUsersSubject = new BehaviorSubject<AdminUser[]>([]);
   readonly allUsers$ = this.allUsersSubject.asObservable();
 
-  private pendingUsersSubject = new BehaviorSubject<AdminUser[]>([]);
-  readonly pendingUsers$ = this.pendingUsersSubject.asObservable();
+  private authorizedUsersSubject = new BehaviorSubject<AuthorizedUserWithStatus[]>([]);
+  readonly authorizedUsers$ = this.authorizedUsersSubject.asObservable();
   
-  // Expose pending count for template
-  readonly pendingCount$ = new BehaviorSubject<number>(0);
+  // Count of users awaiting signup (for notification dot)
+  readonly awaitingSignupCount$ = new BehaviorSubject<number>(0);
 
   readonly currentUser$ = this.authService.currentUser$;
 
@@ -108,7 +114,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
 
   private loadData(): void {
     this.loadAllUsers();
-    this.loadPendingUsers();
+    this.loadAuthorizedUsers();
   }
 
   loadAllUsers(): void {
@@ -125,14 +131,14 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  loadPendingUsers(): void {
-    this.adminService.getPendingUsers().subscribe({
+  loadAuthorizedUsers(): void {
+    this.adminService.getAuthorizedUsersWithStatus().subscribe({
       next: (response) => {
-        this.pendingUsersSubject.next(response.users);
-        this.pendingCount$.next(response.users.length); // Update count for notification dot
+        this.authorizedUsersSubject.next(response.authorizedUsers);
+        this.awaitingSignupCount$.next(response.stats.awaitingSignup);
       },
       error: (error) => {
-        this.showError('Failed to load pending users');
+        console.error('Failed to load authorized users:', error);
       }
     });
   }
@@ -142,7 +148,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       next: (response) => {
         this.showSuccess(`${user.name} approved successfully`);
         this.loadAllUsers();
-        this.loadPendingUsers();
+        this.loadAuthorizedUsers();
         this.adminEventService.triggerRefresh();
       },
       error: (error) => {
@@ -160,11 +166,27 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       next: (response) => {
         this.showSuccess(`${user.name}'s request rejected`);
         this.loadAllUsers();
-        this.loadPendingUsers();
+        this.loadAuthorizedUsers();
         this.adminEventService.triggerRefresh();
       },
       error: (error) => {
         this.showError(error.error?.error || 'Failed to reject user');
+      }
+    });
+  }
+
+  removeAuthorization(user: AuthorizedUserWithStatus): void {
+    const confirmMsg = `Remove authorization for ${user.email}?${user.hasSignedUp ? ' This will not delete their account but they won\'t be able to sign in again.' : ''}`;
+    
+    if (!confirm(confirmMsg)) return;
+
+    this.adminService.deleteAllowedUser(user._id).subscribe({
+      next: () => {
+        this.showSuccess(`Authorization removed for ${user.email}`);
+        this.loadAuthorizedUsers();
+      },
+      error: (error) => {
+        this.showError(error.error?.error || 'Failed to remove authorization');
       }
     });
   }
@@ -255,7 +277,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       next: (response) => {
         this.showSuccess(`${user.name} permanently deleted`);
         this.loadAllUsers();
-        this.loadPendingUsers();
+        this.loadAuthorizedUsers();
         this.adminEventService.triggerRefresh();
       },
       error: (error) => {
@@ -485,6 +507,22 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
+    });
+  }
+
+  // Open dialog to add authorized user
+  openAddAllowedUserDialog(): void {
+    const dialogRef = this.dialog.open(AddAllowedUserDialogComponent, {
+      width: '480px',
+      panelClass: ['modern-glass-dialog'],
+      backdropClass: 'modern-dialog-backdrop'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        // Refresh the users list after adding
+        this.loadAllUsers();
+      }
     });
   }
 }

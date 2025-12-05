@@ -178,6 +178,12 @@
   }
 }
 
+.tab-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
 .tab-content {
   padding: 2rem;
   min-height: 360px;
@@ -263,15 +269,31 @@
     object-fit: cover;
     object-position: center;
     flex-shrink: 0;
+
+    &.avatar-placeholder {
+      background: linear-gradient(135deg, #E5893F 0%, #f59e0b 100%);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 16px;
+    }
   }
 
   .user-cell {
     display: flex;
     flex-direction: column;
+    gap: 2px;
 
     .user-name-text {
       font-weight: 600;
       color: #1e293b;
+    }
+
+    .user-email-text {
+      font-size: 12px;
+      color: #64748b;
     }
   }
 
@@ -304,6 +326,11 @@
     &.status-pending {
       background: rgba(229, 137, 63, 0.08);
       color: #92400e;
+    }
+
+    &.status-awaiting {
+      background: #dbeafe;
+      color: #1e40af;
     }
 
     &.status-inactive {

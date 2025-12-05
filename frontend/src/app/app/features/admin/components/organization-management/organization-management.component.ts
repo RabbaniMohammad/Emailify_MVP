@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { OrganizationService, Organization } from '@app/app/core/services/organization.service';
+import { AdminService } from '@app/app/core/services/admin.service';
 import { AuthService } from '@app/app/core/services/auth.service';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
@@ -14,6 +15,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatChipsModule } from '@angular/material/chips';
 import { BehaviorSubject } from 'rxjs';
 import { DeleteOrgDialogComponent } from './delete-org-dialog/delete-org-dialog.component';
+import { AddAllowedOrgDialogComponent } from '../add-allowed-org-dialog/add-allowed-org-dialog.component';
 
 @Component({
   selector: 'app-organization-management',
@@ -37,6 +39,7 @@ import { DeleteOrgDialogComponent } from './delete-org-dialog/delete-org-dialog.
 })
 export class OrganizationManagementComponent implements OnInit {
   private organizationService = inject(OrganizationService);
+  private adminService = inject(AdminService);
   private authService = inject(AuthService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
@@ -142,6 +145,22 @@ export class OrganizationManagementComponent implements OnInit {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
+    });
+  }
+
+  // Open dialog to add a new allowed organization
+  openAddAllowedOrgDialog(): void {
+    const dialogRef = this.dialog.open(AddAllowedOrgDialogComponent, {
+      width: '500px',
+      panelClass: ['modern-glass-dialog'],
+      backdropClass: 'modern-dialog-backdrop'
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        // Refresh the organizations list after adding
+        this.loadOrganizations();
+      }
     });
   }
 }

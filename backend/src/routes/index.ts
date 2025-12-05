@@ -15,6 +15,8 @@ import multiChannelRouter from './multiChannel.routes';
 import contentAdaptationRouter from './contentAdaptation.routes';
 import testRouter from './test.routes';
 import websiteAnalyzerRouter from './websiteAnalyzer';
+import allowedOrganizationsRouter from './allowedOrganizations.routes';
+import allowedUsersRouter from './allowedUsers.routes';
 // templateGenerationRouter is mounted directly in server.ts, not here
 
 /******************************************************************************
@@ -46,6 +48,10 @@ apiRouter.use('/gemini-image', geminiImageRouter);  // → /api/gemini-image/...
 apiRouter.use('/images', generatedImagesRouter);     // → /api/images/...
 apiRouter.use('/', websiteAnalyzerRouter);           // → /api/analyze-website
 // Note: /generate router is mounted directly in server.ts
+
+/** Lookup Table Routes (for SSO auth) */
+apiRouter.use('/admin/allowed-orgs', allowedOrganizationsRouter); // → /api/admin/allowed-orgs/...
+apiRouter.use('/org/allowed-users', allowedUsersRouter);          // → /api/org/allowed-users/...
 
 /******************************************************************************
                                 Export default

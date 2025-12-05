@@ -1,4 +1,16 @@
 <div class="organization-management">
+  <!-- Header with Add Button -->
+  <div class="section-header">
+    <div class="header-text">
+      <h3>Organizations</h3>
+      <p>Manage active organizations and authorize new ones</p>
+    </div>
+    <button mat-raised-button color="primary" (click)="openAddAllowedOrgDialog()">
+      <mat-icon>add_business</mat-icon>
+      Add Organization
+    </button>
+  </div>
+
   <div class="loading-state" *ngIf="loading">
     <mat-spinner diameter="48"></mat-spinner>
     <p>Loading organizations...</p>

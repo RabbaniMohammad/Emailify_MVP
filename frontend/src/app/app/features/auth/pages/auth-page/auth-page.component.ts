@@ -89,7 +89,8 @@ export class AuthPageComponent implements OnInit, OnDestroy {
     }
 
   onGoogleLogin(): void {
-    const slug = this.organizationSlug.trim().toLowerCase();
+    // Convert org name to slug: "DBS Services" → "dbs-services"
+    const slug = this.toSlug(this.organizationSlug);
     
     // 🔒 SECURITY: Organization name is mandatory
     if (!slug || slug === '') {
@@ -103,12 +104,6 @@ export class AuthPageComponent implements OnInit, OnDestroy {
       return;
     }
     
-    // Validate slug format
-    if (!/^[a-z0-9-]+$/.test(slug)) {
-      this.errorMessage = 'Organization name can only contain lowercase letters, numbers, and hyphens';
-      return;
-    }
-    
     this.isLoading = true;
     this.errorMessage = '';
     this.authService.loginWithGoogle(slug);
@@ -117,6 +112,21 @@ export class AuthPageComponent implements OnInit, OnDestroy {
     setTimeout(() => {
       this.isLoading = false;
     }, 1000);
+  }
+
+  /**
+   * Convert organization name to URL-friendly slug
+   * "DBS Services" → "dbs-services"
+   * "My Company!" → "my-company"
+   */
+  private toSlug(name: string): string {
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special chars except spaces and hyphens
+      .replace(/\s+/g, '-')          // Replace spaces with hyphens
+      .replace(/-+/g, '-')           // Replace multiple hyphens with single
+      .replace(/^-|-$/g, '');        // Remove leading/trailing hyphens
   }
 
   private getErrorMessage(error: string): string {
@@ -130,7 +140,9 @@ export class AuthPageComponent implements OnInit, OnDestroy {
       'session_expired': 'Your session has expired. Please sign in again.',
       'access_denied': 'Access denied. Contact your administrator.',
       'org_required': 'Organization name is required. Please enter your organization name.',
-      'invalid_org': 'Invalid organization name format. Use only lowercase letters, numbers, and hyphens.',
+      'invalid_org': 'Invalid organization name format.',
+      'user_not_authorized': 'You are not authorized to access this organization. Contact your admin.',
+      'not_org_creator': 'You are not authorized to create this organization.',
     };
     return messages[error] || 'An error occurred during authentication. Please try again.';
   }

@@ -4,27 +4,35 @@ import { generateAccessToken, generateRefreshToken, verifyRefreshToken, TokenPay
 import { authenticate } from '@src/middleware/auth';
 import User from '@src/models/User';
 import Organization from '@src/models/Organization';
+import AllowedUser from '@src/models/AllowedUser';
+import { toSlug } from '@src/utils/slugify';
 import logger from 'jet-logger';
 import { IUser } from '@src/models/User';
 
 const router = Router();
 
 // ==================== Google OAuth Initiation ====================
-// Accept organization slug as query parameter
-router.get('/google', (req: Request, res: Response, next: NextFunction) => {
-  const orgSlug = req.query.org as string;
+// Accept organization slug or name as query parameter
+router.get('/google', async (req: Request, res: Response, next: NextFunction) => {
+  const orgInput = req.query.org as string;
   
-  // 🔒 SECURITY: Organization slug is mandatory
-  if (!orgSlug || orgSlug.trim() === '') {
-    logger.warn('🚫 SECURITY: Login attempt without organization slug');
+  // 🔒 SECURITY: Organization is mandatory
+  if (!orgInput || orgInput.trim() === '') {
+    logger.warn('🚫 SECURITY: Login attempt without organization');
     return res.redirect(`${process.env.FRONTEND_URL}/auth?error=org_required`);
   }
   
-  // Validate slug format
-  if (!/^[a-z0-9-]+$/.test(orgSlug)) {
-    logger.warn(`🚫 SECURITY: Invalid organization slug format: ${orgSlug}`);
+  // Convert org name/slug to valid slug format (handles spaces)
+  // "DBS Services" → "dbs-services"
+  // "dbs-services" → "dbs-services"
+  const orgSlug = toSlug(orgInput);
+  
+  if (!orgSlug) {
+    logger.warn(`🚫 SECURITY: Invalid organization format: ${orgInput}`);
     return res.redirect(`${process.env.FRONTEND_URL}/auth?error=invalid_org`);
   }
+  
+  logger.info(`🔄 Organization input: "${orgInput}" → slug: "${orgSlug}"`);
   
   // Store org slug in session for callback
   (req as any).session = (req as any).session || {};
@@ -60,6 +68,65 @@ router.get(
         return res.redirect(`${process.env.FRONTEND_URL}/auth?error=org_required`);
       }
 
+      // Find or check if organization exists
+      let organization = await Organization.findOne({ slug: orgSlug.toLowerCase() });
+      const organizationId = organization?._id;
+
+      // Check if user already belongs to this organization AND is approved
+      // Only skip AllowedUser check for users who are already approved in this org
+      const userAlreadyApprovedInOrg = user.organizationId && 
+        organizationId && 
+        user.organizationId.toString() === organizationId.toString() &&
+        user.isApproved === true;
+
+      // 🔓 SPECIAL: "camply" is the platform owner org - skip AllowedUser check
+      const isPlatformOwnerOrg = orgSlug.toLowerCase() === 'camply';
+
+      // 🔒 CHECK 2: Verify user is in AllowedUser lookup table for this organization
+      // Skip check if: 
+      //   - org doesn't exist yet (first user creating org)
+      //   - user already APPROVED in this org
+      //   - platform owner org (camply)
+      if (organizationId && !userAlreadyApprovedInOrg && !isPlatformOwnerOrg) {
+        const allowedUser = await AllowedUser.findOne({
+          email: user.email.toLowerCase(),
+          organizationId: organizationId,
+          isActive: true
+        });
+
+        if (!allowedUser) {
+          logger.warn(`🚫 SECURITY: User not authorized for org: ${user.email} -> ${orgSlug}`);
+          return res.redirect(`${process.env.FRONTEND_URL}/auth?error=user_not_authorized`);
+        }
+
+        logger.info(`✅ User authorized: ${user.email} for org: ${orgSlug} (role: ${allowedUser.defaultRole}, autoApprove: ${allowedUser.autoApprove})`);
+        
+        // Store allowed user settings for later use
+        (req as any).allowedUserSettings = {
+          defaultRole: allowedUser.defaultRole,
+          autoApprove: allowedUser.autoApprove
+        };
+
+        // 🔧 FIX: Apply auto-approve immediately for new users
+        // Passport creates users with isApproved=false, we need to update it here
+        if (!user.isApproved && allowedUser.autoApprove) {
+          user.isApproved = true;
+          user.orgRole = allowedUser.defaultRole || user.orgRole;
+          await user.save();
+          logger.info(`✅ Auto-approved new user: ${user.email} as ${user.orgRole}`);
+        }
+      } else if (userAlreadyApprovedInOrg) {
+        logger.info(`✅ User already approved in org: ${user.email} -> ${orgSlug} (skipping AllowedUser check)`);
+      } else if (isPlatformOwnerOrg) {
+        logger.info(`✅ Platform owner org: ${user.email} -> ${orgSlug} (skipping AllowedUser check)`);
+        // Auto-approve camply users (platform owner org doesn't need AllowedUser)
+        if (!user.isApproved) {
+          user.isApproved = true;
+          await user.save();
+          logger.info(`✅ Auto-approved camply user: ${user.email}`);
+        }
+      }
+
       // ==================== Handle Organization Assignment ====================
       // Always process org slug if provided (allows switching organizations)
       if (orgSlug) {
@@ -67,19 +134,25 @@ router.get(
         
         // If organization doesn't exist, create it and make user the owner
         if (!organization) {
+          // Create organization name from slug (capitalize words)
+          const orgName = orgSlug
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+          
           organization = new Organization({
-            name: orgSlug.charAt(0).toUpperCase() + orgSlug.slice(1), // Capitalize first letter
+            name: orgName,
             slug: orgSlug.toLowerCase(),
-            owner: user._id, // Set the creator as owner (for org model requirement)
+            owner: user._id, // Set the creator as owner
             isActive: true,
             maxUsers: 50,
             maxTemplates: 1000,
           });
           await organization.save();
           
-          // Make first user the super_admin of this org
+          // First user to create org = super_admin (forever)
           user.organizationId = organization._id as any;
-          user.orgRole = 'super_admin'; // First user is super_admin
+          user.orgRole = 'super_admin';
           user.isApproved = true; // Super admin is auto-approved
           await user.save();
           
@@ -139,13 +212,17 @@ router.get(
                 }
                 
                 if (canJoin) {
-                  // Update user's organization as member
+                  // Get AllowedUser settings if available
+                  const allowedUserSettings = (req as any).allowedUserSettings;
+                  
+                  // Update user's organization using AllowedUser settings
                   user.organizationId = organization._id as any;
-                  user.orgRole = 'member';
-                  user.isApproved = false; // Requires admin approval when joining new org
+                  user.orgRole = allowedUserSettings?.defaultRole || 'member';
+                  user.isApproved = allowedUserSettings?.autoApprove || false;
                   await user.save();
                   
-                  logger.info(`🔄 User ${user.email} joined ${orgSlug} as member (pending approval)`);
+                  const approvalStatus = user.isApproved ? 'auto-approved' : 'pending approval';
+                  logger.info(`🔄 User ${user.email} joined ${orgSlug} as ${user.orgRole} (${approvalStatus})`);
                 }
               }
             } else {
