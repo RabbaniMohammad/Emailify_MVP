@@ -1,0 +1,350 @@
+// Modern Design System Variables
+:host {
+  display: block;
+  min-height: 100vh;
+  background: var(--theme-background, #f8fafc);
+}
+
+.settings-page {
+  min-height: calc(100vh - 70px);
+  padding: 2rem;
+  background: linear-gradient(135deg, 
+    var(--theme-surface, #f0f9ff) 0%, 
+    var(--theme-background, #ffffff) 100%
+  );
+}
+
+.settings-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+// ============================================
+// HEADER
+// ============================================
+.settings-header {
+  margin-bottom: 3rem;
+  
+  .header-content {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 2rem;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    
+    .header-icon {
+      width: 64px;
+      height: 64px;
+      font-size: 64px;
+      color: var(--theme-primary, #3b82f6);
+      flex-shrink: 0;
+    }
+    
+    .header-text {
+      h1 {
+        margin: 0 0 0.5rem 0;
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--theme-text-primary, #111827);
+        background: var(--theme-gradient, linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      
+      p {
+        margin: 0;
+        font-size: 1rem;
+        color: var(--theme-text-secondary, #6b7280);
+      }
+    }
+  }
+}
+
+// ============================================
+// THEME GRID
+// ============================================
+.themes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.theme-card {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid transparent;
+  
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  }
+  
+  &.active {
+    border-color: var(--theme-primary, #3b82f6);
+    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.25);
+  }
+}
+
+// ============================================
+// THEME PREVIEW
+// ============================================
+.theme-preview {
+  height: 180px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: inherit;
+    opacity: 0.1;
+  }
+  
+  .preview-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+    position: relative;
+    z-index: 1;
+    
+    .preview-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.6);
+    }
+  }
+  
+  .preview-body {
+    flex: 1;
+    padding: 1rem;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    position: relative;
+    z-index: 1;
+    
+    .preview-element {
+      height: 12px;
+      border-radius: 4px;
+      
+      &.primary {
+        width: 70%;
+      }
+    }
+    
+    .preview-element-group {
+      display: flex;
+      gap: 0.5rem;
+      
+      .preview-element {
+        flex: 1;
+        
+        &.secondary {
+          flex: 2;
+        }
+      }
+    }
+  }
+}
+
+// ============================================
+// THEME INFO
+// ============================================
+.theme-info {
+  padding: 1.5rem;
+  
+  .theme-name-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+    
+    .theme-icon {
+      width: 24px;
+      height: 24px;
+      font-size: 24px;
+      color: var(--theme-primary, #3b82f6);
+    }
+    
+    h3 {
+      flex: 1;
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--theme-text-primary, #111827);
+    }
+    
+    .check-icon {
+      width: 24px;
+      height: 24px;
+      font-size: 24px;
+      color: var(--theme-primary, #3b82f6);
+      animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+  }
+  
+  .theme-description {
+    margin: 0 0 1rem 0;
+    font-size: 0.875rem;
+    color: var(--theme-text-secondary, #6b7280);
+  }
+}
+
+// ============================================
+// COLOR SWATCHES
+// ============================================
+.color-swatches {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  
+  .swatch {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    
+    &:hover {
+      transform: scale(1.1);
+    }
+  }
+}
+
+// ============================================
+// APPLY BUTTON
+// ============================================
+.apply-btn {
+  width: 100%;
+  height: 48px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  background: var(--theme-gradient, linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)) !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  transition: all 0.3s ease;
+  
+  mat-icon {
+    margin-right: 0.5rem;
+  }
+  
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+  }
+  
+  &.active {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  }
+  
+  &:disabled {
+    opacity: 0.9;
+    cursor: not-allowed;
+  }
+}
+
+// ============================================
+// INFO BANNER
+// ============================================
+.info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: rgba(59, 130, 246, 0.05);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 12px;
+  
+  mat-icon {
+    width: 24px;
+    height: 24px;
+    font-size: 24px;
+    color: var(--theme-primary, #3b82f6);
+    flex-shrink: 0;
+  }
+  
+  .info-content {
+    flex: 1;
+    
+    h4 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--theme-text-primary, #111827);
+    }
+    
+    p {
+      margin: 0;
+      font-size: 0.875rem;
+      color: var(--theme-text-secondary, #6b7280);
+      line-height: 1.5;
+    }
+  }
+}
+
+// ============================================
+// ANIMATIONS
+// ============================================
+@keyframes scaleIn {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+// ============================================
+// RESPONSIVE
+// ============================================
+@media (max-width: 768px) {
+  .settings-page {
+    padding: 1rem;
+  }
+  
+  .settings-header {
+    margin-bottom: 2rem;
+    
+    .header-content {
+      flex-direction: column;
+      text-align: center;
+      
+      .header-text h1 {
+        font-size: 1.5rem;
+      }
+    }
+  }
+  
+  .themes-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}

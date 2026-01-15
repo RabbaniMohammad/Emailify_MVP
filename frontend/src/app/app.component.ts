@@ -4,6 +4,7 @@ import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { ToolbarComponent } from './app/shared/components/toolbar/toolbar.component'; // ← Add this
 import { CacheMonitorService } from './core/services/cache-monitor.service';
+import { ThemeService } from './core/services/theme.service';
 
 
 @Component({
@@ -20,10 +21,14 @@ import { CacheMonitorService } from './core/services/cache-monitor.service';
 export class AppComponent implements OnInit {
   private router = inject(Router);
   private cacheMonitor = inject(CacheMonitorService);
+  private themeService = inject(ThemeService);
   private cdr = inject(ChangeDetectorRef);
   showToolbar = true;
 
   constructor() {
+    // ✅ Initialize theme service (loads saved theme or default)
+    this.themeService.getCurrentTheme();
+    
     // ✅ Set initial toolbar state based on current route
     this.updateToolbarVisibility(this.router.url);
     

@@ -5,6 +5,7 @@ import { AuthPageComponent } from './app/features/auth/pages/auth-page/auth-page
 import { AuthCallbackComponent } from './app/features/auth/pages/auth-page/auth-callback.component';
 import { PendingApprovalComponent } from './app/features/auth/pages/auth-page/pending-approval.component';
 import { GeneratePageComponent } from './app/features/generate/pages/generate-page/generate-page.component';
+import { SettingsPageComponent } from './features/settings/pages/settings-page/settings-page.component';
 import { authGuard } from './app/core/guards/auth.guard';
 import { adminGuard } from './app/core/guards/admin.guard';
 import { qaDeactivateGuard } from './app/core/guards/qa-deactivate.guard';
@@ -38,6 +39,13 @@ export const routes: Routes = [
         .then(m => m.AdminDashboardComponent),
     canActivate: [authGuard, adminGuard],
     runGuardsAndResolvers: 'always'
+  },
+  
+  // Settings route (all authenticated users)
+  { 
+    path: 'settings', 
+    component: SettingsPageComponent,
+    canActivate: [authGuard]
   },
   
   // Organization route (all authenticated users)

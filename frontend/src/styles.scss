@@ -2,8 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+// ============================================
+// THEME CSS VARIABLES (Dynamic)
+// ============================================
+:root {
+  // Theme colors (set dynamically by ThemeService)
+  --theme-primary: #3b82f6;
+  --theme-secondary: #06b6d4;
+  --theme-accent: #10b981;
+  --theme-background: #ffffff;
+  --theme-surface: #f0f9ff;
+  --theme-text-primary: #111827;
+  --theme-text-secondary: #6b7280;
+  --theme-success: #10b981;
+  --theme-warning: #f59e0b;
+  --theme-error: #ef4444;
+  --theme-info: #3b82f6;
+  --theme-gradient: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+  
+  // Legacy support (backward compatibility)
+  --primary-purple: var(--theme-primary);
+  --primary-purple-dark: #2563eb;
+  --accent-pink: var(--theme-accent);
+  --gradient-primary: var(--theme-gradient);
+}
+
 html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, 'Helvetica Neue', sans-serif; }
+body { 
+  margin: 0; 
+  font-family: Roboto, 'Helvetica Neue', sans-serif;
+  background: var(--theme-background);
+  color: var(--theme-text-primary);
+}
 
 // ============================================
 // TOOLBAR HEIGHT CONSISTENCY FIX

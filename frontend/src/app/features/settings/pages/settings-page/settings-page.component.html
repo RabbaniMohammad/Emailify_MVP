@@ -1,0 +1,76 @@
+<div class="settings-page">
+  <div class="settings-container">
+    <!-- Header -->
+    <div class="settings-header">
+      <div class="header-content">
+        <mat-icon class="header-icon">palette</mat-icon>
+        <div class="header-text">
+          <h1>Theme Settings</h1>
+          <p>Choose your preferred color scheme for the application</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Theme Options -->
+    <div class="themes-grid">
+      <div 
+        *ngFor="let theme of themes" 
+        class="theme-card"
+        [class.active]="isActiveTheme(theme.id)">
+        
+        <!-- Theme Preview -->
+        <div class="theme-preview" [style.background]="theme.gradient">
+          <div class="preview-header" [style.background]="theme.primary">
+            <div class="preview-dot"></div>
+            <div class="preview-dot"></div>
+            <div class="preview-dot"></div>
+          </div>
+          <div class="preview-body" [style.background]="theme.surface">
+            <div class="preview-element primary" [style.background]="theme.primary"></div>
+            <div class="preview-element-group">
+              <div class="preview-element secondary" [style.background]="theme.secondary"></div>
+              <div class="preview-element accent" [style.background]="theme.accent"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Theme Info -->
+        <div class="theme-info">
+          <div class="theme-name-row">
+            <mat-icon class="theme-icon">{{ getThemeIcon(theme.id) }}</mat-icon>
+            <h3>{{ theme.name }}</h3>
+            <mat-icon *ngIf="isActiveTheme(theme.id)" class="check-icon">check_circle</mat-icon>
+          </div>
+          <p class="theme-description">{{ theme.description }}</p>
+
+          <!-- Color Swatches -->
+          <div class="color-swatches">
+            <div class="swatch" [style.background]="theme.primary" [title]="'Primary: ' + theme.primary"></div>
+            <div class="swatch" [style.background]="theme.secondary" [title]="'Secondary: ' + theme.secondary"></div>
+            <div class="swatch" [style.background]="theme.accent" [title]="'Accent: ' + theme.accent"></div>
+          </div>
+
+          <!-- Apply Button -->
+          <button 
+            mat-raised-button 
+            class="apply-btn"
+            [class.active]="isActiveTheme(theme.id)"
+            [disabled]="isActiveTheme(theme.id)"
+            (click)="applyTheme(theme.id)">
+            <mat-icon>{{ isActiveTheme(theme.id) ? 'check' : 'brush' }}</mat-icon>
+            <span>{{ isActiveTheme(theme.id) ? 'Active' : 'Apply Theme' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="info-banner">
+      <mat-icon>info</mat-icon>
+      <div class="info-content">
+        <h4>Theme Preferences</h4>
+        <p>Your selected theme will be saved and applied across all pages. Changes take effect immediately.</p>
+      </div>
+    </div>
+  </div>
+</div>

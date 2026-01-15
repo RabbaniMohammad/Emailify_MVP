@@ -146,6 +146,22 @@
 
           <mat-divider></mat-divider>
 
+          <!-- Settings Button ✨ NEW -->
+          <button 
+            mat-menu-item 
+            class="menu-item settings-item"
+            (click)="navigateTo('/settings')">
+            <div class="menu-item-icon settings-icon">
+              <mat-icon>palette</mat-icon>
+            </div>
+            <div class="menu-item-content">
+              <span class="menu-item-title">Theme Settings</span>
+              <span class="menu-item-subtitle">Customize colors</span>
+            </div>
+          </button>
+
+          <mat-divider></mat-divider>
+
           <!-- Organization Info Section -->
           <button 
             mat-menu-item 
